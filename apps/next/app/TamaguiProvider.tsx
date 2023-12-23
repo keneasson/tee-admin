@@ -43,7 +43,7 @@ export const TamaguiProvider = ({ children }: { children: React.ReactNode }) => 
         />
       </>
     )
-  })
+  });
 
   return (
     <NextThemeProvider

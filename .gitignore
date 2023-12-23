@@ -26,6 +26,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # local env files
+**/.env
 .env.local
 .env.development.local
 .env.test.local
@@ -44,3 +45,4 @@ thumbs.db
 
 # turbo build log
 **/.turbo/*
+/apps/next/tee-services-db47a9e534d3.json

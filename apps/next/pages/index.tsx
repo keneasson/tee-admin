@@ -5,7 +5,7 @@ export default function Page() {
   return (
     <>
       <Head>
-        <title>Home</title>
+        <title>Newsletter builder</title>
       </Head>
       <HomeScreen />
     </>
