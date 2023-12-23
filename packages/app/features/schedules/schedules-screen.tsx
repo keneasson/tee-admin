@@ -54,7 +54,7 @@ export const SchedulesScreen: React.FC<{
 
   const handleSchedules = async (value) => {
     setCurrentSchedule(value)
-    const url = 'http://192.168.2.249:3001/api/google-sheets?sheet=' + value
+    const url = `${process.env.NEXT_PUBLIC_API_PATH}api/google-sheets?sheet=${value}`
     const rawSchedule = await fetch(url, { cache: 'reload' })
     const program = await rawSchedule.json()
     setSchedule(program)
