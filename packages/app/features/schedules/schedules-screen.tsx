@@ -41,7 +41,7 @@ type ProgramTypes = MemorialService | SundaySchoolType | BibleClassType
 
 type Program = {
   title: string
-  type: string
+  type: 'memorial' | 'sundaySchool' | 'bibleClass'
   content: ProgramTypes[]
 }
 
@@ -55,7 +55,7 @@ export const SchedulesScreen: React.FC<{
   const handleSchedules = async (value) => {
     setCurrentSchedule(value)
     const url = 'http://192.168.2.249:3001/api/google-sheets?sheet=' + value
-    const rawSchedule = await fetch(url, { cache: 'force-cache' })
+    const rawSchedule = await fetch(url, { cache: 'reload' })
     const program = await rawSchedule.json()
     setSchedule(program)
   }
