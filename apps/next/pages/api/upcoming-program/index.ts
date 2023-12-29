@@ -6,11 +6,7 @@ import { JWT } from 'google-auth-library'
 const keys = require('../../../tee-services-db47a9e534d3.json')
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log('req.query', req.query.sheet)
-  if (!req.query.sheet) {
-    return res.status(404).json({ failed: 'Schedule Not Found' })
-  }
-  get_google_sheet(req.query.sheet as string)
+  get_upcoming_program()
     .then((result) => {
       res.status(200).json(result)
     })
@@ -23,7 +19,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 const PAGE1 = 0
 const DATE_INDEX = 0
 
-async function get_google_sheet(sheetKey: string) {
+async function get_upcoming_program() {
   try {
     // Initialize auth - see https://theoephraim.github.io/node-google-spreadsheet/#/guides/authentication
     const serviceAccountAuth = new JWT({

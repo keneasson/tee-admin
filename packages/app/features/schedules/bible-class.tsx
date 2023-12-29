@@ -53,7 +53,9 @@ export const BibleClass: React.FC<{
             </XStack>
             <XStack padding={'$2'}>
               <YStack flex={3}>
-                <Text>{service.Topic}</Text>
+                <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                  {service.Topic}
+                </Text>
               </YStack>
             </XStack>
           </YStack>

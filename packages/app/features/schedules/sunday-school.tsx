@@ -48,7 +48,9 @@ export const SundaySchool: React.FC<{
             {service['Holidays and Special Events'] && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  <Text>{service['Holidays and Special Events']}</Text>
+                  <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                    {service['Holidays and Special Events']}
+                  </Text>
                 </YStack>
               </XStack>
             )}
