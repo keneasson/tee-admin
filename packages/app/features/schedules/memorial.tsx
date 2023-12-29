@@ -62,7 +62,9 @@ export const Memorial: React.FC<{
             {service['Fellowship Lunches / Activities'] && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  <Text>{service['Fellowship Lunches / Activities']}</Text>
+                  <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                    {service['Fellowship Lunches / Activities']}
+                  </Text>
                 </YStack>
               </XStack>
             )}
