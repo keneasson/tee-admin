@@ -1,12 +1,11 @@
 import { Text, YStack } from '@my/ui'
 import React from 'react'
 import { TextLink } from 'solito/link'
-import { Banner } from 'app/features/banner'
+import { Wrapper } from 'app/provider/wrapper'
 
 export function HomeScreen() {
   return (
-    <YStack fullscreen paddingHorizontal={'$2'}>
-      <Banner />
+    <Wrapper>
       <YStack space={'$4'}>
         <TextLink href="/newsletter">
           <Text>Create Newsletter</Text>
@@ -15,6 +14,6 @@ export function HomeScreen() {
           <Text>View Schedule</Text>
         </TextLink>
       </YStack>
-    </YStack>
+    </Wrapper>
   )
 }
