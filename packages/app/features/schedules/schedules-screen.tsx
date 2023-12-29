@@ -1,11 +1,11 @@
-import React, { ReactNode, useState } from 'react'
-import { SafeAreaView } from 'react-native'
+import React, { useState } from 'react'
 import { Stack, YStack } from 'tamagui'
-import { ListNavigation, ScrollView, Text } from '@my/ui'
+import { ListNavigation, ListNavigationText, ScrollView } from '@my/ui'
 import { Memorial } from 'app/features/schedules/memorial'
 import { SundaySchool } from 'app/features/schedules/sunday-school'
-import { Banner } from '../banner'
 import { BibleClass } from 'app/features/schedules/bible-class'
+import { ErrorNotFound } from 'app/provider/error-not-found'
+import { Wrapper } from 'app/provider/wrapper'
 
 type GoogleSheets = Record<
   'memorial' | 'sundaySchool' | 'bibleClass',
@@ -66,27 +66,30 @@ export const SchedulesScreen: React.FC<{
   }
 
   return (
-    <Wrapper>
+    <Wrapper subHheader={'Ecclesial Programs'}>
       {googleSheets ? (
         <YStack>
-          {Object.keys(googleSheets).map((value: string, index: number) =>
-            googleSheets[value] && googleSheets[value].key ? (
+          {Object.keys(googleSheets).map((value: string, index: number) => {
+            console.log('toggle', { value, currentSchedule })
+            return googleSheets[value] && googleSheets[value].key ? (
               <ListNavigation
                 key={index}
                 onPress={() => handleSchedules(value)}
-                styles={{
-                  backgroundColor:
-                    currentSchedule && currentSchedule === value ? 'blue' : 'transparent',
-                }}
+                styles={
+                  value === currentSchedule
+                    ? {
+                        backgroundColor: '$blue12Light',
+                        color: '$blue1Light',
+                      }
+                    : {}
+                }
               >
-                <Text color={currentSchedule && currentSchedule === value ? 'white' : 'black'}>
-                  {googleSheets[value].name}
-                </Text>
+                <ListNavigationText>{googleSheets[value].name}</ListNavigationText>
               </ListNavigation>
             ) : (
               <ErrorNotFound message={`Unable to find the Schedule for ${value}`} />
             )
-          )}
+          })}
         </YStack>
       ) : (
         <ErrorNotFound message="No Schedules Found"></ErrorNotFound>
@@ -105,31 +108,5 @@ export const SchedulesScreen: React.FC<{
         </Stack>
       </ScrollView>
     </Wrapper>
-  )
-}
-
-const Wrapper: React.FC<{
-  children: ReactNode
-}> = ({ children }) => {
-  return (
-    <SafeAreaView style={{ height: '100%' }}>
-      <YStack fullscreen paddingHorizontal={'$1'}>
-        <YStack>
-          <Banner pageTitle={'Manage Schedules'} />
-          {children}
-        </YStack>
-      </YStack>
-    </SafeAreaView>
-  )
-}
-
-const ErrorNotFound: React.FC<{
-  message: string
-}> = ({ message }) => {
-  return (
-    <Stack borderStyle={'solid'} borderColor={'red'}>
-      <Text>We've run into some trouble</Text>
-      <Text>{message}</Text>
-    </Stack>
   )
 }

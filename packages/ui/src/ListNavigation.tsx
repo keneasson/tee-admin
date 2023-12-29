@@ -3,7 +3,7 @@ import { Button, styled } from 'tamagui'
 
 type ListSelectorProps = {
   children?: React.ReactNode
-  styles: React.CSSProperties
+  styles?: React.CSSProperties
   onPress: (event?: any) => void
   title?: string
   iconName?: string
@@ -12,7 +12,8 @@ type ListSelectorProps = {
 export const ListNavigation: React.FC<ListSelectorProps> = ({ styles, onPress, children }) => {
   const Selector = styled(Button, {
     display: 'flex',
-    backgroundColor: '#FCFCFC',
+    backgroundColor: '$blue1Light',
+    color: '$blue10Light',
     flexDirection: 'row',
     flexWrap: 'wrap',
     height: 47,
@@ -23,10 +24,7 @@ export const ListNavigation: React.FC<ListSelectorProps> = ({ styles, onPress, c
     ...(styles as object),
   })
   const handlePress = (event?: any) => {
-    console.log('handlePress', event)
-    if (onPress) {
-      onPress(event)
-    }
+    onPress && onPress(event)
   }
 
   return (
