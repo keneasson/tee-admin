@@ -2,8 +2,23 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
+import { ProgramTypeKeys, ProgramTypes } from 'app/types'
 
-const keys = require('../../../tee-services-db47a9e534d3.json')
+import keys from '../../../tee-services-db47a9e534d3.json'
+
+const orderOfKeys: ProgramTypeKeys[] = ['sundaySchool', 'memorial', 'bibleClass']
+
+const secondsOffset = 86400000
+const tzname = 'America/New_York'
+const today = new Date()
+const longOffsetFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: tzname,
+  timeZoneName: 'longOffset',
+})
+const longOffsetString = longOffsetFormatter.format(new Date(today.toISOString())) // '2/28/2013, GMT-05:00'
+const gmtOffset = longOffsetString.split('GMT')[1]
+console.log('longOffsetString', longOffsetString)
+console.log('gmtOffset', gmtOffset)
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   get_upcoming_program()
@@ -29,27 +44,86 @@ async function get_upcoming_program() {
       key: keys.private_key,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     })
-    const sheetId = keys.sheet_ids[sheetKey]?.key
-    const doc = new GoogleSpreadsheet(sheetId, serviceAccountAuth)
 
-    await doc.loadInfo(true) // loads document properties and worksheets
-    const sheet = doc.sheetsByIndex[PAGE1] // or use `doc.sheetsById[id]` or `doc.sheetsByTitle[title]`
-    const rows = await sheet.getRows()
-    const data = rows.map((row) => {
-      const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
-      const date = getDateFromGoogle(cell.value as number).toISOString()
-      // extract the "Google Date" and convert to something readable.
-      const arrangement = row.toObject()
-      arrangement['Date'] = date
-      return arrangement
+    const upcoming = await orderOfKeys.reduce(
+      async (
+        accPromise: Promise<ProgramTypes[]>,
+        sheetKey: ProgramTypeKeys
+      ): Promise<ProgramTypes[]> => {
+        const program = await accPromise
+        const more = await findNextProgram(sheetKey, serviceAccountAuth, today)
+        return [...program, ...more]
+      },
+      Promise.resolve([])
+    )
+    return upcoming.sort((a, b) => {
+      const ad = typeof a.Date === 'string' ? new Date(a.Date) : a.Date
+      const bd = typeof b.Date === 'string' ? new Date(b.Date) : b.Date
+      return ad.getTime() - bd.getTime()
     })
-
-    return { title: doc.title, type: sheetKey, content: data }
   } catch (error) {
     throw error
   }
 }
 
-function getDateFromGoogle(serialNumber: number): Date {
-  return new Date((serialNumber - 25569) * 86400000)
+/**
+ *
+ * @param sheetKey
+ * @param auth
+ * @param today
+ * @TODO - simplify if we can force ProgramTypes to only be Date objects, not | string.
+ */
+async function findNextProgram<FindNextProgramProps>(
+  sheetKey: ProgramTypeKeys,
+  auth: JWT,
+  today: Date
+): Promise<ProgramTypes[]> {
+  const sheetId = keys.sheet_ids[sheetKey]?.key
+
+  const doc = new GoogleSpreadsheet(sheetId, auth)
+  await doc.loadInfo(true) // loads document properties and worksheets
+  const sheet = doc.sheetsByIndex[PAGE1] // or use `doc.sheetsById[id]` or `doc.sheetsByTitle[title]`
+  const rows = await sheet.getRows()
+  const index = rows.findIndex((row) => {
+    const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
+    const date = convertGoogleDate(cell.value as number, sheetKey)
+
+    console.log(`date > today ${doc.title}`, {
+      event: date.getTime(),
+      today: today.getTime(),
+    })
+    return date.getTime() >= today.getTime()
+  })
+  console.log('index found', index)
+  const upcomingRows = rows.slice(index, index + 2)
+  return upcomingRows.map((row): ProgramTypes => {
+    const event = row.toObject() as Omit<ProgramTypes, 'Key'>
+    const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
+    const eventDate = convertGoogleDate(cell.value as number, sheetKey)
+    return {
+      ...event,
+      Date: convertHumanReadableDate(eventDate),
+      Key: sheetKey,
+    } as ProgramTypes
+  })
+}
+
+function convertGoogleDate(serialNumber: number, sheetKey: ProgramTypeKeys): Date {
+  const [hours, minutes] = keys.sheet_ids[sheetKey]?.startTime.split(':')
+  const eventDate = new Date((serialNumber - 25569) * secondsOffset)
+  return new Date(
+    eventDate.toISOString().split('T')[0] + 'T' + hours + ':' + minutes + ':00.000' + gmtOffset
+  )
+}
+
+function convertHumanReadableDate(date: Date): string {
+  const options = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'America/New_York',
+  } as Intl.DateTimeFormatOptions
+
+  return date.toLocaleDateString('en-CA', options)
 }

@@ -1,8 +1,8 @@
 import React from 'react'
-import { View, XStack, YStack } from 'tamagui'
-import { TableBody, Text } from '@my/ui'
-import { SundaySchoolType } from 'app/features/schedules/schedules-screen'
+import { XStack, YStack } from 'tamagui'
+import { TableBody, TableHead, Text } from '@my/ui'
 import { monthDay } from 'app/provider/date-utils'
+import { SundaySchoolType } from 'app/types'
 
 export const SundaySchool: React.FC<{
   schedule: SundaySchoolType[]
@@ -17,12 +17,8 @@ export const SundaySchool: React.FC<{
         backgroundColor={'cornflowerblue'}
       >
         <XStack padding={'$2'}>
-          <View flex={1} flexBasis={0}>
-            <Text fontWeight={'bold'}>Date</Text>
-          </View>
-          <View flex={1} flexBasis={0}>
-            <Text fontWeight={'bold'}>Refreshments</Text>
-          </View>
+          <TableHead>Date</TableHead>
+          <TableHead>Refreshments</TableHead>
         </XStack>
         <XStack padding={'$2'}>
           <YStack flex={6}>

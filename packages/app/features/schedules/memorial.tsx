@@ -1,11 +1,11 @@
 import React from 'react'
 import { View, XStack, YStack } from 'tamagui'
-import { TableBody, Text } from '@my/ui'
-import { MemorialService } from 'app/features/schedules/schedules-screen'
+import { Paragraph, TableBody, TableHead, Text } from '@my/ui'
 import { monthDay } from 'app/provider/date-utils'
+import { MemorialServiceType } from 'app/types'
 
 export const Memorial: React.FC<{
-  schedule: MemorialService[]
+  schedule: MemorialServiceType[]
 }> = ({ schedule }) => {
   const today = new Date()
 
@@ -18,14 +18,15 @@ export const Memorial: React.FC<{
         backgroundColor={'cornflowerblue'}
       >
         <XStack padding={'$2'}>
-          <View flex={1} flexBasis={0}>
-            <Text fontWeight={'bold'}>Date</Text>
-          </View>
+          <TableHead>Date</TableHead>
           <View flex={1} flexBasis={0}>
             <Text fontWeight={'bold'}>Preside</Text>
           </View>
           <View flex={1} flexBasis={0}>
             <Text fontWeight={'bold'}>Exhort</Text>
+          </View>
+          <View flex={1} flexBasis={0}>
+            <Text fontWeight={'bold'}>Organist</Text>
           </View>
           <View flex={1} flexBasis={0}>
             <Text fontWeight={'bold'}>Steward</Text>
@@ -40,7 +41,11 @@ export const Memorial: React.FC<{
           </YStack>
         </XStack>
       </YStack>
-      {schedule.map((service: MemorialService, index) => {
+      {schedule.map((service: MemorialServiceType, index) => {
+        if (!service.Exhort && !service.Activities) {
+          return null
+        }
+
         const date = new Date(service.Date)
         const past = date < today
         const bgColour = past ? '$gray9Dark' : '$gray0Light'
@@ -56,15 +61,23 @@ export const Memorial: React.FC<{
               <TableBody past={past}>{monthDay(date)}</TableBody>
               <TableBody past={past}>{service.Preside}</TableBody>
               <TableBody past={past}>{service.Exhort}</TableBody>
+              <TableBody past={past}>{service.Organist}</TableBody>
               <TableBody past={past}>{service.Steward}</TableBody>
               <TableBody past={past}>{service.Doorkeeper}</TableBody>
             </XStack>
-            {service['Fellowship Lunches / Activities'] && (
+            {(service.Lunch || service.Activities) && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
-                    {service['Fellowship Lunches / Activities']}
-                  </Text>
+                  {service.Lunch && (
+                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                      Lunch will be held at the hall
+                    </Paragraph>
+                  )}
+                  {service.Activities && (
+                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                      {service.Activities}
+                    </Paragraph>
+                  )}
                 </YStack>
               </XStack>
             )}
