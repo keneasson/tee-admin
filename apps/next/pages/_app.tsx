@@ -8,6 +8,7 @@ import { Provider } from 'app/provider'
 import Head from 'next/head'
 import React from 'react'
 import type { SolitoAppProps } from 'solito'
+import { WithNavigation } from 'app/features/with-navigation'
 
 if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
@@ -22,7 +23,9 @@ function MyApp({ Component, pageProps }: SolitoAppProps) {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <ThemeProvider>
-        <Component {...pageProps} />
+        <WithNavigation>
+          <Component {...pageProps} />
+        </WithNavigation>
       </ThemeProvider>
     </>
   )

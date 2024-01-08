@@ -11,7 +11,7 @@ type WrapperType = {
 export const Wrapper: React.FC<WrapperType> = ({ children, subHheader }) => {
   return (
     <SafeAreaView style={{ height: '100%' }}>
-      <YStack fullscreen paddingHorizontal={'$1'}>
+      <YStack fullscreen $lg={{ padding: 5 }} $gtLg={{ padding: 15 }}>
         <YStack>
           <Banner pageTitle={subHheader} />
           {children}

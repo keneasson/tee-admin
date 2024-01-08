@@ -57,10 +57,10 @@ module.exports = function () {
        - Solito doesn't support app dir at the moment - You'll have to remove Solito.
        - The `/app` in this starter has the same routes as the `/pages` directory. You should probably remove `/pages` after enabling this.
       */
-      appDir: false,
+      // appDir: false,
       // optimizeCss: true,
       scrollRestoration: true,
-      legacyBrowsers: false,
+      // legacyBrowsers: false,
     },
   }
 
