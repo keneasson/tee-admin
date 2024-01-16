@@ -19,6 +19,16 @@ export const StudyWeekend2024: React.FC = () => {
         <Paragraph size={'$5'} fontWeight={'bold'}>
           March 2 & 3, 2024 - Study Day
         </Paragraph>
+        <Paragraph>
+          In person at the Toronto East Ecclesia's Hall -{' '}
+          <Anchor
+            href="http://maps.google.com/?q=975 Cosburn Ave, Toronto, Ontario, Canada"
+            target={'_blank'}
+          >
+            975 Cosburn Ave, Toronto ON
+          </Anchor>
+        </Paragraph>
+        <Paragraph>and online - see options below</Paragraph>
         <Paragraph size={'$5'} fontWeight={600}>
           The Epistle of James - A Faith that Works
         </Paragraph>
@@ -28,26 +38,26 @@ export const StudyWeekend2024: React.FC = () => {
           Saturday March 2nd
         </Paragraph>
         <Paragraph>
-          1:00 pm Class 1 <Text fontWeight={600}>Be Doers Of The Word</Text> (Introduction to the
-          Epistle & Chapter 1)
+          1:00 pm <Text fontWeight={600}>Be Doers Of The Word</Text> (Introduction to the Epistle &
+          Chapter 1)
         </Paragraph>
-        <Paragraph marginBottom="2rem">
+        <Paragraph>
           <Anchor href="https://youtube.com/live/JpQmx-rfjrc?feature=share" target={'_blank'}>
             View on YouTube
           </Anchor>
         </Paragraph>
-        <Paragraph>2:00 Break</Paragraph>
+        <Paragraph marginVertical={'1rem'}>2:00 Break</Paragraph>
         <Paragraph>
-          2:30 Class 2 <Text fontWeight={600}>Wisdom from Above</Text> (Chapters 2 & 3)
+          2:30 <Text fontWeight={600}>Wisdom from Above</Text> (Chapters 2 & 3)
         </Paragraph>
-        <Paragraph marginBottom="2rem">
+        <Paragraph>
           <Anchor href="https://youtube.com/live/THucnZsxJjY?feature=share" target={'_blank'}>
             View on YouTube
           </Anchor>
         </Paragraph>
-        <Paragraph>3:30 Break</Paragraph>
+        <Paragraph marginVertical={'1rem'}>3:30 Break</Paragraph>
         <Paragraph>
-          4:00 Class 3 <Text fontWeight={600}>He Shall Lift You Up</Text> (Chapters 4 & 5:1-6)
+          4:00 <Text fontWeight={600}>He Shall Lift You Up</Text> (Chapters 4 & 5:1-6)
         </Paragraph>
         <Paragraph marginBottom="2rem">
           <Anchor href="https://youtube.com/live/Jaq--moaqMI?feature=share" target={'_blank'}>
