@@ -1,5 +1,5 @@
 {
-  "name": "next-expo-solito-monorepo",
+  "name": "tee-admin",
   "private": true,
   "workspaces": [
     "apps/*",

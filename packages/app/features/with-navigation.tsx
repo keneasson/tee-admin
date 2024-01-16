@@ -1,18 +1,39 @@
 import React, { useState } from 'react'
-import { Button, Dialog, Text, useMedia, XStack } from '@my/ui'
-import { useParams, useRouter } from 'solito/navigation'
+import {
+  Button,
+  Dialog,
+  NavigationButtonItem,
+  NavItem,
+  Text,
+  useMedia,
+  XStack,
+  YStack,
+} from '@my/ui'
+import { usePathname, useRouter } from 'solito/navigation'
 import { Menu, X } from '@tamagui/lucide-icons'
-import { styled, YStack } from 'tamagui'
+import { useSession } from 'next-auth/react'
+import { Session } from 'next-auth'
+import { NavitemLogout } from 'app/provider/auth/navItem-logout'
+import { LogInUser } from 'app/provider/auth/log-in-user'
 
 type WithNavigationProps = {
   children: React.ReactNode
 }
 
-export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
-  const params = useParams()
-  const media = useMedia()
+type MainPageType = {
+  path: string
+  label: string
+}
 
-  console.log('solito', params)
+const pages: MainPageType[] = [
+  { path: '/', label: 'Home' },
+  { path: '/newsletter', label: 'Newsletter' },
+  { path: '/schedule', label: 'Schedules' },
+]
+
+export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
+  const media = useMedia()
+  const { data: session } = useSession()
   return (
     <XStack f={1}>
       <XStack
@@ -29,7 +50,7 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
           f: 1,
         }}
       >
-        {media.gtLg ? <MainNavigation /> : <SmallScreenNav />}
+        {media.gtLg ? <MainNavigation session={session} /> : <SmallScreenNav session={session} />}
       </XStack>
       <XStack
         display={'block'}
@@ -47,7 +68,10 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
   )
 }
 
-const SmallScreenNav: React.FC = () => {
+type SmallScreenNavProps = {
+  session: Session | null
+}
+const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
   const [open, setOpen] = useState(false)
 
   const handleOpenChange = () => {
@@ -69,7 +93,7 @@ const SmallScreenNav: React.FC = () => {
       <Dialog.Portal>
         <Dialog.Overlay key="overlay" opacity={10} />
         <Dialog.Content width={'100%'} height={'100%'} borderWidth={1} borderColor={'red'}>
-          <MainNavigation handleOpenChange={handleOpenChange} />
+          <MainNavigation handleOpenChange={handleOpenChange} session={session} />
           <Dialog.Close>
             <Button position="absolute" top="$3" right="$3" size="$2" circular icon={X} />
           </Dialog.Close>
@@ -79,19 +103,14 @@ const SmallScreenNav: React.FC = () => {
   )
 }
 
-const NavItem = styled(XStack, {
-  borderBottomColor: 'grey',
-  borderBottomWidth: 1,
-  alignContent: 'center',
-  margin: 10,
-  padding: 5,
-})
-
 type MainNavigationProps = {
   handleOpenChange?: () => void
+  session?: Session | null
 }
-const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange }) => {
+const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, session }) => {
   const router = useRouter()
+  const path = usePathname()
+  console.log('path', path)
   const linkTo = (route: string) => {
     return () => {
       handleOpenChange && handleOpenChange()
@@ -99,26 +118,22 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange }) => 
     }
   }
   return (
-    <YStack width={'100%'} paddingTop={24} paddingHorizontal={10} gap={25}>
-      <Goto linkTo={linkTo('/')} text={'Home'} />
-      <Goto linkTo={linkTo('/newsletter')} text={'Newsletter'} />
-      <Goto linkTo={linkTo('/schedule')} text="Schedules" />
-    </YStack>
-  )
-}
-
-type GoToProps = {
-  linkTo: () => void
-  text: string
-}
-const Goto: React.FC<GoToProps> = ({ linkTo, text }) => {
-  return (
-    <NavItem
-      onPress={() => {
-        linkTo()
-      }}
-    >
-      <Text>{text}</Text>
-    </NavItem>
+    <>
+      <YStack width={'100%'} paddingTop={24} paddingLeft={10} paddingRight={0} gap={25}>
+        {session && session.user && (
+          <NavItem>
+            <Text>Welcome {session.user.name}</Text>
+          </NavItem>
+        )}
+        {pages.map((page) => (
+          <NavigationButtonItem
+            linkTo={linkTo(page.path)}
+            text={page.label}
+            active={path === page.path}
+          />
+        ))}
+        {session && session.user ? <NavitemLogout /> : <LogInUser />}
+      </YStack>
+    </>
   )
 }

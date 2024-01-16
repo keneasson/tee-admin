@@ -1,13 +1,15 @@
 import '@tamagui/core/reset.css'
 import '@tamagui/font-inter/css/400.css'
 import '@tamagui/font-inter/css/700.css'
-import 'raf/polyfill'
-
 import { NextThemeProvider, useRootTheme } from '@tamagui/next-theme'
-import { Provider } from 'app/provider'
-import Head from 'next/head'
+
 import React from 'react'
+import Head from 'next/head'
+import { SessionProvider } from 'next-auth/react'
+import 'raf/polyfill'
 import type { SolitoAppProps } from 'solito'
+
+import { Provider } from 'app/provider'
 import { WithNavigation } from 'app/features/with-navigation'
 
 if (process.env.NODE_ENV === 'production') {
@@ -19,13 +21,18 @@ function MyApp({ Component, pageProps }: SolitoAppProps) {
     <>
       <Head>
         <title>Tamagui Example App</title>
-        <meta name="description" content="Tamagui, Solito, Expo & Next.js" />
+        <meta
+          name="description"
+          content="Schedules, News and Information about the Christadelphians meeting in Toronto East."
+        />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <ThemeProvider>
-        <WithNavigation>
-          <Component {...pageProps} />
-        </WithNavigation>
+        <SessionProvider>
+          <WithNavigation>
+            <Component {...pageProps} />
+          </WithNavigation>
+        </SessionProvider>
       </ThemeProvider>
     </>
   )

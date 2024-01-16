@@ -15,6 +15,7 @@ import type {
   SundaySchoolType,
 } from 'app/types'
 import { Loading } from 'app/provider/loading'
+import Constants from 'expo-constants'
 
 type Program = {
   title: string
@@ -31,12 +32,14 @@ type Program = {
 export const SchedulesScreen: React.FC<{
   googleSheets: GoogleSheets
 }> = ({ googleSheets }) => {
+  const API_PATH =
+    process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
   const [schedule, setSchedule] = useState<Program>()
   const [currentSchedule, setCurrentSchedule] = useState<string>()
 
   const handleSchedules = async (scheduleKey) => {
     setCurrentSchedule(scheduleKey)
-    const url = `${process.env.NEXT_PUBLIC_API_PATH}api/google-sheets?sheet=${scheduleKey}`
+    const url = `${API_PATH}api/google-sheets?sheet=${scheduleKey}`
     const rawSchedule = await fetch(url, { next: { revalidate: 3600 } })
     const program = await rawSchedule.json()
     setSchedule(program)
@@ -57,10 +60,25 @@ export const SchedulesScreen: React.FC<{
                         backgroundColor: '$blue12Light',
                         color: '$blue1Light',
                       }
-                    : {}
+                    : {
+                        backgroundColor: '$blue1Light',
+                        color: '$blue12Light',
+                      }
                 }
               >
-                <ListNavigationText>{googleSheets[serviceType].name}</ListNavigationText>
+                <ListNavigationText
+                  style={
+                    serviceType === currentSchedule
+                      ? {
+                          color: '$blue1Light',
+                        }
+                      : {
+                          color: '$blue12Light',
+                        }
+                  }
+                >
+                  {googleSheets[serviceType].name}
+                </ListNavigationText>
               </ListNavigation>
             ) : (
               <ErrorNotFound message={`Unable to find the Schedule for ${serviceType}`} />

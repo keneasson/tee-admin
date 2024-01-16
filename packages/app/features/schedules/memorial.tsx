@@ -69,12 +69,12 @@ export const Memorial: React.FC<{
               <XStack padding={'$2'}>
                 <YStack flex={6}>
                   {service.Lunch && (
-                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                       Lunch will be held at the hall
                     </Paragraph>
                   )}
                   {service.Activities && (
-                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                    <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                       {service.Activities}
                     </Paragraph>
                   )}

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Text, View } from '@my/ui'
+import { Text, View } from 'tamagui'
 
 export type TableProps = {
   past?: boolean
