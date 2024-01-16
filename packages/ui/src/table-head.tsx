@@ -1,6 +1,6 @@
 import React from 'react'
-import { Text, View } from '@my/ui'
-import { TableProps } from './TableBody'
+import { Text, View } from 'tamagui'
+import { TableProps } from './table-body'
 
 export const TableHead: React.FC<TableProps> = ({ children, past }) => {
   return (

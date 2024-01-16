@@ -103,14 +103,15 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
             <Paragraph>One tap mobile</Paragraph>
             <Paragraph>
               <Anchor href="tel:+14388097799,,586952386#,,,,*036110# Canada" target={'_blank'}>
-                +14388097799,,586952386#,,,,*036110# Canada
-              </Anchor>
+                +14388097799,,586952386#,,,,*036110#
+              </Anchor>{' '}
+              Canada
             </Paragraph>
             <Paragraph>
               <Anchor href="tel:+15873281099,,586952386#,,,,*036110# Canada" target={'_blank'}>
-                +15873281099,,586952386#,,,,*036110# Canada
-              </Anchor>
-              +15873281099,,586952386#,,,,*036110# Canada
+                +15873281099,,586952386#,,,,*036110#
+              </Anchor>{' '}
+              Canada
             </Paragraph>
             <Separator alignSelf="stretch" borderColor={'$borderColor'} />
             <Paragraph>

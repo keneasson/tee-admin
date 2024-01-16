@@ -3,6 +3,7 @@ import { XStack, YStack } from 'tamagui'
 import { TableBody, TableHead, Text } from '@my/ui'
 import { monthDay } from 'app/provider/date-utils'
 import { SundaySchoolType } from 'app/types'
+import { color } from '@tamagui/themes'
 
 export const SundaySchool: React.FC<{
   schedule: SundaySchoolType[]
@@ -44,7 +45,7 @@ export const SundaySchool: React.FC<{
             {service['Holidays and Special Events'] && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                  <Text fontStyle={'normal'} color={past ? color.gray12Dark : color.gray2Dark}>
                     {service['Holidays and Special Events']}
                   </Text>
                 </YStack>

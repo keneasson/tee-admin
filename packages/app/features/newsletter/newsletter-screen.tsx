@@ -6,13 +6,18 @@ import { Loading } from 'app/provider/loading'
 import { NextBibleClass } from 'app/features/newsletter/bible-class'
 import { NextSundaySchool } from 'app/features/newsletter/sunday-school'
 import { NextMemorial } from 'app/features/newsletter/memorial'
+import Constants from 'expo-constants'
 
 const days15 = 15
 
 export const NewsletterScreen: React.FC = () => {
+  const API_PATH =
+    process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
+  console.log('env', API_PATH)
+
   const [program, setProgram] = useState<ProgramTypes[] | false>(false)
   const getUpcomingPrograms = async () => {
-    const url = `${process.env.NEXT_PUBLIC_API_PATH}api/upcoming-program`
+    const url = `${API_PATH}api/upcoming-program`
     const rawSchedule = await fetch(url, { next: { revalidate: 3600 } })
     const program = await rawSchedule.json()
     setProgram(program)

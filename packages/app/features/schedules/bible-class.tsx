@@ -1,8 +1,8 @@
 import React from 'react'
 import { View, XStack, YStack } from 'tamagui'
 import { TableBody, Text } from '@my/ui'
-import { BibleClassType } from 'app/features/schedules/schedules-screen'
 import { monthDay } from 'app/provider/date-utils'
+import { BibleClassType } from 'app/types'
 
 export const BibleClass: React.FC<{
   schedule: BibleClassType[]
@@ -53,7 +53,7 @@ export const BibleClass: React.FC<{
             </XStack>
             <XStack padding={'$2'}>
               <YStack flex={3}>
-                <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+                <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                   {service.Topic}
                 </Text>
               </YStack>
