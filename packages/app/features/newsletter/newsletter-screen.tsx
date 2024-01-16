@@ -13,7 +13,7 @@ const days15 = 15
 export const NewsletterScreen: React.FC = () => {
   const API_PATH =
     process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
-  console.log('env', API_PATH)
+  console.log('env.API_PATH', API_PATH)
 
   const [program, setProgram] = useState<ProgramTypes[] | false>(false)
   const getUpcomingPrograms = async () => {

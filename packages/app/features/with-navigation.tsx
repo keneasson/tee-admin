@@ -34,6 +34,7 @@ const pages: MainPageType[] = [
 export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
   const media = useMedia()
   const { data: session } = useSession()
+  
   return (
     <XStack f={1}>
       <XStack
