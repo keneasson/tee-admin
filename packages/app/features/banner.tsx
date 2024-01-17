@@ -1,15 +1,38 @@
 import React from 'react'
-import { H1, H2 } from '@my/ui'
+import { H1, H2, Picture, useMedia } from '@my/ui'
 
 type BannerProps = {
   pageTitle?: string
 }
 
 export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
+  const media = useMedia()
+  const sized = media.gtMd
+    ? {
+        width: 74,
+        height: 56,
+      }
+    : {
+        width: 54,
+        height: 41,
+      }
   return (
     <>
-      <H1 ta="center" $md={{ fontSize: 22 }}>
-        Toronto East Ecclesia Assistant
+      <H1
+        ta="center"
+        $md={{ fontSize: 22 }}
+        $sm={{
+          marginTop: 32,
+        }}
+      >
+        <Picture
+          source={{
+            src: 'bible-pages.png',
+            ...sized,
+          }}
+          alt={'Open Bible'}
+        />
+        Toronto East Ecclesia
       </H1>
       {pageTitle && (
         <H2 ta="center" $md={{ fontSize: 18 }}>

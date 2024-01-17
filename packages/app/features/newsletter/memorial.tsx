@@ -1,52 +1,37 @@
 import { MemorialServiceType } from 'app/types'
 import React from 'react'
-import { Accordion, Anchor, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
+import { Accordion, ExtLink, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
 import { XStack } from 'tamagui'
 import { ChevronDown } from '@tamagui/lucide-icons'
+import { Section } from 'app/features/newsletter/Section'
 
 type NextMemorialProps = {
   event: MemorialServiceType
 }
 export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
-  console.log('event', event)
   if (!event.Exhort && event.Activities) {
     return (
-      <YStack
-        borderTopColor={'$grey8Dark'}
-        borderWidth={1}
-        borderBottomColor={'$grey1Dark'}
-        borderBottomWidth={2}
-        marginBottom={'2rem'}
-        padding={'1rem'}
-      >
+      <Section>
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
         <Paragraph>{event.Activities}</Paragraph>
-      </YStack>
+      </Section>
     )
   }
   if (!event.Exhort as boolean) {
     return null
   }
   return (
-    <YStack
-      borderTopColor={'$grey8Dark'}
-      borderWidth={1}
-      borderBottomColor={'$grey1Dark'}
-      borderBottomWidth={2}
-      marginBottom={'2rem'}
-      padding={'1rem'}
-      width="100%"
-    >
+    <Section>
       <Paragraph size={'$5'} fontWeight={600}>
         {event.Date.toString()}
       </Paragraph>
       <Paragraph size={'$5'} fontWeight={600}>
         Memorial Service
       </Paragraph>
-      <XStack $sm={{ flexDirection: 'column' }}>
-        <YStack flex={3} minWidth={400}>
+      <XStack $xs={{ flexDirection: 'column' }}>
+        <YStack flexGrow={1}>
           <Paragraph>
             <Text fontWeight={600}>Presiding:</Text> {event.Preside}
           </Paragraph>
@@ -64,7 +49,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
           </Paragraph>
         </YStack>
         {event['Hymn-opening'] && (
-          <YStack flex={3} minWidth={400}>
+          <YStack flexGrow={1}>
             <Paragraph fontWeight={600}>Hymns:</Paragraph>
             <Paragraph>{event['Hymn-opening']}</Paragraph>
             <Paragraph>{event['Hymn-exhortation']}</Paragraph>
@@ -91,34 +76,31 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
           </Accordion.Trigger>
           <Accordion.Content>
             <Paragraph fontWeight={600}>Join Zoom Meeting</Paragraph>
-            <Anchor
-              href="https://us02web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09"
-              target={'_blank'}
-            >
+            <ExtLink href="https://us02web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09">
               Click to Join Zoom
-            </Anchor>
+            </ExtLink>
             <Paragraph>Meeting ID: 586 952 386</Paragraph>
             <Paragraph>Passcode: 036110</Paragraph>
             <Separator alignSelf="stretch" borderColor={'$borderColor'} />
             <Paragraph>One tap mobile</Paragraph>
             <Paragraph>
-              <Anchor href="tel:+14388097799,,586952386#,,,,*036110# Canada" target={'_blank'}>
+              <ExtLink href="tel:+14388097799,,586952386#,,,,*036110# Canada">
                 +14388097799,,586952386#,,,,*036110#
-              </Anchor>{' '}
+              </ExtLink>{' '}
               Canada
             </Paragraph>
             <Paragraph>
-              <Anchor href="tel:+15873281099,,586952386#,,,,*036110# Canada" target={'_blank'}>
+              <ExtLink href="tel:+15873281099,,586952386#,,,,*036110# Canada">
                 +15873281099,,586952386#,,,,*036110#
-              </Anchor>{' '}
+              </ExtLink>{' '}
               Canada
             </Paragraph>
             <Separator alignSelf="stretch" borderColor={'$borderColor'} />
             <Paragraph>
               Find your local number:{' '}
-              <Anchor href="https://us02web.zoom.us/u/kc1iqj9IRk">
+              <ExtLink href="https://us02web.zoom.us/u/kc1iqj9IRk">
                 https://us02web.zoom.us/u/kc1iqj9IRk
-              </Anchor>
+              </ExtLink>
             </Paragraph>
           </Accordion.Content>
         </Accordion.Item>
@@ -137,25 +119,19 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
           <Accordion.Content>
             <Paragraph fontWeight={600}>Watch on YouTube</Paragraph>
             <Paragraph>
-              YouTube:{' '}
-              <Anchor href={event.YouTube} target={'_blank'}>
-                {event.YouTube}
-              </Anchor>
+              YouTube: <ExtLink href={event.YouTube}>{event.YouTube}</ExtLink>
             </Paragraph>
             <Paragraph>
               Previous recordings are available on the Toronto East Christadelphians YouTube channel
               here:{' '}
-              <Anchor
-                href="https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w"
-                target={'_blank'}
-              >
+              <ExtLink href="https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w">
                 https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w
-              </Anchor>{' '}
+              </ExtLink>{' '}
               The videos can be under either Upload or Live
             </Paragraph>
           </Accordion.Content>
         </Accordion.Item>
       </Accordion>
-    </YStack>
+    </Section>
   )
 }

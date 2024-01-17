@@ -1,8 +1,9 @@
 import React from 'react'
 import { ChevronDown } from '@tamagui/lucide-icons'
-import { Accordion, Anchor, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
+import { Accordion, ExtLink, Paragraph, Separator, Square, Text } from '@my/ui'
 
 import { BibleClassType } from 'app/types'
+import { Section } from 'app/features/newsletter/Section'
 
 type NextBibleClassProps = {
   event: BibleClassType
@@ -10,30 +11,16 @@ type NextBibleClassProps = {
 export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
   if (!event.Speaker) {
     return (
-      <YStack
-        borderTopColor={'$grey8Dark'}
-        borderWidth={1}
-        borderBottomColor={'$grey1Dark'}
-        borderBottomWidth={2}
-        marginBottom={'2rem'}
-        padding={'1rem'}
-      >
+      <Section>
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
         <Paragraph>{event.Topic}</Paragraph>
-      </YStack>
+      </Section>
     )
   }
   return (
-    <YStack
-      borderTopColor={'$grey8Dark'}
-      borderWidth={1}
-      borderBottomColor={'$grey1Dark'}
-      borderBottomWidth={2}
-      marginBottom={'2rem'}
-      padding={'1rem'}
-    >
+    <Section>
       <Paragraph size={'$5'} fontWeight={600}>
         {event.Date.toString()}
       </Paragraph>
@@ -62,38 +49,35 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
           </Accordion.Trigger>
           <Accordion.Content>
             <Paragraph fontWeight={600}>Join Zoom Meeting</Paragraph>
-            <Anchor
-              href="https://us02web.zoom.us/j/932385033?pwd=R1VOR3NDOTk1cXN2ZzFOdW14SnhxZz09"
-              target={'_blank'}
-            >
+            <ExtLink href="https://us02web.zoom.us/j/932385033?pwd=R1VOR3NDOTk1cXN2ZzFOdW14SnhxZz09">
               Click to Join Zoom
-            </Anchor>
+            </ExtLink>
             <Paragraph>Meeting ID: 932 385 033</Paragraph>
             <Paragraph>Passcode: 456345</Paragraph>
             <Separator alignSelf="stretch" borderColor={'$borderColor'} />
             <Paragraph>One tap mobile</Paragraph>
             <Paragraph>
-              <Anchor href="tel:+14388097799,,932385033#,,,,*456345#" target={'_blank'}>
+              <ExtLink href="tel:+14388097799,,932385033#,,,,*456345#">
                 +14388097799,,932385033#,,,,*456345#
-              </Anchor>{' '}
+              </ExtLink>{' '}
               Canada
             </Paragraph>
             <Paragraph>
-              <Anchor href="tel:+15873281099,,932385033#,,,,*456345#" target={'_blank'}>
+              <ExtLink href="tel:+15873281099,,932385033#,,,,*456345#">
                 +15873281099,,932385033#,,,,*456345#
-              </Anchor>{' '}
+              </ExtLink>{' '}
               Canada
             </Paragraph>
             <Separator alignSelf="stretch" borderColor={'$borderColor'} />
             <Paragraph>
               Find your local number:{' '}
-              <Anchor href="https://us02web.zoom.us/u/kbHWW6VEKW">
+              <ExtLink href="https://us02web.zoom.us/u/kbHWW6VEKW">
                 https://us02web.zoom.us/u/kbHWW6VEKW
-              </Anchor>
+              </ExtLink>
             </Paragraph>
           </Accordion.Content>
         </Accordion.Item>
       </Accordion>
-    </YStack>
+    </Section>
   )
 }

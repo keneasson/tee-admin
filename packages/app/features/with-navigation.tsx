@@ -2,8 +2,8 @@ import React, { useState } from 'react'
 import {
   Button,
   Dialog,
+  NavHeading,
   NavigationButtonItem,
-  NavItem,
   Text,
   useMedia,
   XStack,
@@ -34,7 +34,7 @@ const pages: MainPageType[] = [
 export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
   const media = useMedia()
   const { data: session } = useSession()
-  
+
   return (
     <XStack f={1}>
       <XStack
@@ -122,9 +122,9 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
     <>
       <YStack width={'100%'} paddingTop={24} paddingLeft={10} paddingRight={0} gap={25}>
         {session && session.user && (
-          <NavItem>
+          <NavHeading>
             <Text>Welcome {session.user.name}</Text>
-          </NavItem>
+          </NavHeading>
         )}
         {pages.map((page) => (
           <NavigationButtonItem

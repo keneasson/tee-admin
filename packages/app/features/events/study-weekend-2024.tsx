@@ -1,6 +1,6 @@
 import React from 'react'
 import { Wrapper } from 'app/provider/wrapper'
-import { Accordion, Anchor, Heading, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
+import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
 import { ChevronDown } from '@tamagui/lucide-icons'
 
 export const StudyWeekend2024: React.FC = () => {
@@ -21,12 +21,9 @@ export const StudyWeekend2024: React.FC = () => {
         </Paragraph>
         <Paragraph>
           In person at the Toronto East Ecclesia's Hall -{' '}
-          <Anchor
-            href="http://maps.google.com/?q=975 Cosburn Ave, Toronto, Ontario, Canada"
-            target={'_blank'}
-          >
+          <ExtLink href="http://maps.google.com/?q=975 Cosburn Ave, Toronto, Ontario, Canada">
             975 Cosburn Ave, Toronto ON
-          </Anchor>
+          </ExtLink>
         </Paragraph>
         <Paragraph>and online - see options below</Paragraph>
         <Paragraph size={'$5'} fontWeight={600}>
@@ -42,40 +39,27 @@ export const StudyWeekend2024: React.FC = () => {
           Chapter 1)
         </Paragraph>
         <Paragraph>
-          <Anchor href="https://youtube.com/live/JpQmx-rfjrc?feature=share" target={'_blank'}>
+          <ExtLink href="https://youtube.com/live/JpQmx-rfjrc?feature=share">
             View on YouTube
-          </Anchor>
+          </ExtLink>
         </Paragraph>
         <Paragraph marginVertical={'1rem'}>2:00 Break</Paragraph>
         <Paragraph>
           2:30 <Text fontWeight={600}>Wisdom from Above</Text> (Chapters 2 & 3)
         </Paragraph>
         <Paragraph>
-          <Anchor href="https://youtube.com/live/THucnZsxJjY?feature=share" target={'_blank'}>
+          <ExtLink href="https://youtube.com/live/THucnZsxJjY?feature=share">
             View on YouTube
-          </Anchor>
+          </ExtLink>
         </Paragraph>
         <Paragraph marginVertical={'1rem'}>3:30 Break</Paragraph>
         <Paragraph>
           4:00 <Text fontWeight={600}>He Shall Lift You Up</Text> (Chapters 4 & 5:1-6)
         </Paragraph>
-        <Paragraph marginBottom="2rem">
-          <Anchor href="https://youtube.com/live/Jaq--moaqMI?feature=share" target={'_blank'}>
-            View on YouTube
-          </Anchor>
-        </Paragraph>
-        <Separator />
-        <Paragraph size={'$5'} fontWeight={600}>
-          Sunday March 3rd
-        </Paragraph>
-        <Paragraph>11:00 Memorial Worship</Paragraph>
         <Paragraph>
-          Exhortation: <Text fontWeight={600}>The Prayer of Faith</Text> (Chapter 5:7-20)
-        </Paragraph>
-        <Paragraph marginBottom="2rem">
-          <Anchor href="https://youtube.com/live/ki5r0EW-ON0?feature=share" target={'_blank'}>
+          <ExtLink href="https://youtube.com/live/Jaq--moaqMI?feature=share">
             View on YouTube
-          </Anchor>
+          </ExtLink>
         </Paragraph>
         <Accordion overflow="hidden" type="multiple">
           <Accordion.Item value="a1">
@@ -90,38 +74,50 @@ export const StudyWeekend2024: React.FC = () => {
               )}
             </Accordion.Trigger>
             <Accordion.Content>
-              <Anchor
-                fontWeight={600}
-                href="https://us02web.zoom.us/j/82013618309?pwd=U1ZWNzVCVWF2U1g1WWU5eEkvV1dVZz09"
-                target={'_blank'}
-              >
+              <ExtLink href="https://us02web.zoom.us/j/82013618309?pwd=U1ZWNzVCVWF2U1g1WWU5eEkvV1dVZz09">
                 Saturday's Zoom Link
-              </Anchor>
+              </ExtLink>
               <Paragraph>Meeting ID: 820 1361 8309</Paragraph>
               <Paragraph>Passcode: 036110</Paragraph>
               <Separator alignSelf="stretch" borderColor={'$borderColor'} />
               <Paragraph>One tap mobile</Paragraph>
               <Paragraph>
-                <Anchor href="tel:+14388097799,,82013618309#,,,,*036110#" target={'_blank'}>
+                <ExtLink href="tel:+14388097799,,82013618309#,,,,*036110#">
                   +14388097799,,82013618309#,,,,*036110#
-                </Anchor>{' '}
+                </ExtLink>{' '}
                 Canada
               </Paragraph>
               <Paragraph>
-                <Anchor href="tel:+15873281099,,82013618309#,,,,*036110#" target={'_blank'}>
+                <ExtLink href="tel:+15873281099,,82013618309#,,,,*036110#">
                   +15873281099,,82013618309#,,,,*036110#
-                </Anchor>{' '}
+                </ExtLink>{' '}
                 Canada
               </Paragraph>
               <Separator alignSelf="stretch" borderColor={'$borderColor'} />
               <Paragraph>
                 Find your local number:{' '}
-                <Anchor href="https://us02web.zoom.us/u/kbHWW6VEKW">
+                <ExtLink href="https://us02web.zoom.us/u/kbHWW6VEKW">
                   https://us02web.zoom.us/u/kbHWW6VEKW
-                </Anchor>
+                </ExtLink>
               </Paragraph>
             </Accordion.Content>
           </Accordion.Item>
+        </Accordion>
+
+        <Separator marginVertical="1rem" />
+        <Paragraph size={'$5'} fontWeight={600}>
+          Sunday March 3rd
+        </Paragraph>
+        <Paragraph>11:00 Memorial Worship</Paragraph>
+        <Paragraph>
+          Exhortation: <Text fontWeight={600}>The Prayer of Faith</Text> (Chapter 5:7-20)
+        </Paragraph>
+        <Paragraph>
+          <ExtLink href="https://youtube.com/live/ki5r0EW-ON0?feature=share">
+            View on YouTube
+          </ExtLink>
+        </Paragraph>
+        <Accordion overflow="hidden" type="multiple">
           <Accordion.Item value="a2">
             <Accordion.Trigger flexDirection="row" justifyContent="space-between">
               {({ open }) => (
@@ -134,35 +130,31 @@ export const StudyWeekend2024: React.FC = () => {
               )}
             </Accordion.Trigger>
             <Accordion.Content>
-              <Anchor
-                fontWeight={600}
-                href="https://us02web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09"
-                target={'_blank'}
-              >
+              <ExtLink href="https://us02web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09">
                 Click to Join Zoom
-              </Anchor>
+              </ExtLink>
               <Paragraph>Meeting ID: 586 952 386</Paragraph>
               <Paragraph>Passcode: 036110</Paragraph>
               <Separator alignSelf="stretch" borderColor={'$borderColor'} />
               <Paragraph>One tap mobile</Paragraph>
               <Paragraph>
-                <Anchor href="tel:+14388097799,,586952386#,,,,*036110# Canada" target={'_blank'}>
+                <ExtLink href="tel:+14388097799,,586952386#,,,,*036110# Canada">
                   +14388097799,,586952386#,,,,*036110#
-                </Anchor>{' '}
+                </ExtLink>{' '}
                 Canada
               </Paragraph>
               <Paragraph>
-                <Anchor href="tel:+15873281099,,586952386#,,,,*036110# Canada" target={'_blank'}>
+                <ExtLink href="tel:+15873281099,,586952386#,,,,*036110# Canada">
                   +15873281099,,586952386#,,,,*036110#
-                </Anchor>{' '}
+                </ExtLink>{' '}
                 Canada
               </Paragraph>
               <Separator alignSelf="stretch" borderColor={'$borderColor'} />
               <Paragraph>
                 Find your local number:{' '}
-                <Anchor href="https://us02web.zoom.us/u/kc1iqj9IRk">
+                <ExtLink href="https://us02web.zoom.us/u/kc1iqj9IRk">
                   https://us02web.zoom.us/u/kc1iqj9IRk
-                </Anchor>
+                </ExtLink>
               </Paragraph>
             </Accordion.Content>
           </Accordion.Item>
