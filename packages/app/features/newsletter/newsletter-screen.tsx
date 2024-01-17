@@ -33,22 +33,18 @@ export const NewsletterScreen: React.FC = () => {
   if (!program) return <Loading />
 
   return (
-    <Wrapper subHheader={'Upcoming Newsletter'}>
+    <Wrapper subHheader={'Newsletter'}>
       <YStack>
-        <YStack>
-          <Heading size={'$8'}>Upcoming Events</Heading>
-        </YStack>
-        <YStack>
-          {program.map((event: ProgramTypes, index) => {
-            return (
-              <YStack key={index}>
-                {event.Key === 'sundaySchool' && <NextSundaySchool event={event} />}
-                {event.Key === 'memorial' && <NextMemorial event={event} />}
-                {event.Key === 'bibleClass' && <NextBibleClass event={event} />}
-              </YStack>
-            )
-          })}
-        </YStack>
+        <Heading size={'$8'}>Regular Services</Heading>
+        {program.map((event: ProgramTypes, index) => {
+          return (
+            <YStack key={index}>
+              {event.Key === 'sundaySchool' && <NextSundaySchool event={event} />}
+              {event.Key === 'memorial' && <NextMemorial event={event} />}
+              {event.Key === 'bibleClass' && <NextBibleClass event={event} />}
+            </YStack>
+          )
+        })}
       </YStack>
     </Wrapper>
   )
