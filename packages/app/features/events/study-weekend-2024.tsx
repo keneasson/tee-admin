@@ -1,12 +1,42 @@
 import React from 'react'
 import { Wrapper } from 'app/provider/wrapper'
-import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
-import { ChevronDown } from '@tamagui/lucide-icons'
+import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text, View } from '@my/ui'
+import { ChevronDown, Download, Utensils } from '@tamagui/lucide-icons'
+import { Section } from 'app/features/newsletter/Section'
+import { Link } from 'solito/link'
+import { color } from '@tamagui/themes'
+import { XStack } from 'tamagui'
+
+type DownloadLinkProps = { children: React.ReactNode; href: string }
+const DownloadLink: React.FC<DownloadLinkProps> = ({ children, href }) => {
+  return (
+    <Paragraph>
+      <View
+        borderColor={color.blue11Light}
+        borderWidth={1}
+        borderRadius={10}
+        flexDirection={'column'}
+        display="inline-flex"
+        marginVertical={4}
+        backgroundColor={color.blue5Light}
+      >
+        <Link href={href} download target={'_blank'} rel="noopener noreferrer">
+          <XStack paddingHorizontal={6} display="inline-flex" gap={8}>
+            <Download />
+            <Text fontWeight={100} fontSize={'$3'}>
+              {children}
+            </Text>
+          </XStack>
+        </Link>
+      </View>
+    </Paragraph>
+  )
+}
 
 export const StudyWeekend2024: React.FC = () => {
   return (
     <Wrapper subHheader={'Ecclesial Study Day'}>
-      <YStack
+      <Section
         borderTopColor={'$grey8Dark'}
         borderWidth={1}
         borderBottomColor={'$grey1Dark'}
@@ -17,8 +47,9 @@ export const StudyWeekend2024: React.FC = () => {
         <Heading size={5}>Events hosted by the Toronto East Christadelphians</Heading>
         <Separator marginBottom={'2rem'} />
         <Paragraph size={'$5'} fontWeight={'bold'}>
-          March 2 & 3, 2024 - Study Day
-        </Paragraph>
+          March 2 & 3, 2024 - Study Day{' '}
+        </Paragraph>{' '}
+        <DownloadLink href="/pdf/2024-March-Study-Weekend.pdf">Download Flyer</DownloadLink>
         <Paragraph>
           In person at the Toronto East Ecclesia's Hall -{' '}
           <ExtLink href="http://maps.google.com/?q=975 Cosburn Ave, Toronto, Ontario, Canada">
@@ -103,7 +134,9 @@ export const StudyWeekend2024: React.FC = () => {
             </Accordion.Content>
           </Accordion.Item>
         </Accordion>
-
+        <Paragraph size={'$5'} marginVertical={'1rem'} fontWeight={600}>
+          <Utensils size={14} /> Dinner and Fellowship to follow.
+        </Paragraph>
         <Separator marginVertical="1rem" />
         <Paragraph size={'$5'} fontWeight={600}>
           Sunday March 3rd
@@ -159,7 +192,10 @@ export const StudyWeekend2024: React.FC = () => {
             </Accordion.Content>
           </Accordion.Item>
         </Accordion>
-      </YStack>
+        <Paragraph size={'$5'} marginVertical={'1rem'} fontWeight={600}>
+          <Utensils size={14} /> Lunch and Fellowship to follow
+        </Paragraph>
+      </Section>
     </Wrapper>
   )
 }
