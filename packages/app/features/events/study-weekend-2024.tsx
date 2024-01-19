@@ -1,37 +1,9 @@
 import React from 'react'
 import { Wrapper } from 'app/provider/wrapper'
-import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text, View } from '@my/ui'
-import { ChevronDown, Download, Utensils } from '@tamagui/lucide-icons'
+import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text } from '@my/ui'
+import { ChevronDown, Utensils } from '@tamagui/lucide-icons'
 import { Section } from 'app/features/newsletter/Section'
-import { Link } from 'solito/link'
-import { color } from '@tamagui/themes'
-import { XStack } from 'tamagui'
-
-type DownloadLinkProps = { children: React.ReactNode; href: string }
-const DownloadLink: React.FC<DownloadLinkProps> = ({ children, href }) => {
-  return (
-    <Paragraph>
-      <View
-        borderColor={color.blue11Light}
-        borderWidth={1}
-        borderRadius={10}
-        flexDirection={'column'}
-        display="inline-flex"
-        marginVertical={4}
-        backgroundColor={color.blue5Light}
-      >
-        <Link href={href} download target={'_blank'} rel="noopener noreferrer">
-          <XStack paddingHorizontal={6} display="inline-flex" gap={8}>
-            <Download />
-            <Text fontWeight={100} fontSize={'$3'}>
-              {children}
-            </Text>
-          </XStack>
-        </Link>
-      </View>
-    </Paragraph>
-  )
-}
+import { DownloadButton } from '@my/ui/src/download-button'
 
 export const StudyWeekend2024: React.FC = () => {
   return (
@@ -49,7 +21,7 @@ export const StudyWeekend2024: React.FC = () => {
         <Paragraph size={'$5'} fontWeight={'bold'}>
           March 2 & 3, 2024 - Study Day{' '}
         </Paragraph>{' '}
-        <DownloadLink href="/pdf/2024-March-Study-Weekend.pdf">Download Flyer</DownloadLink>
+        <DownloadButton href="/pdf/2024-March-Study-Weekend.pdf">Download Flyer</DownloadButton>
         <Paragraph>
           In person at the Toronto East Ecclesia's Hall -{' '}
           <ExtLink href="http://maps.google.com/?q=975 Cosburn Ave, Toronto, Ontario, Canada">

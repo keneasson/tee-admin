@@ -2,6 +2,7 @@ import '@tamagui/core/reset.css'
 import '@tamagui/font-inter/css/400.css'
 import '@tamagui/font-inter/css/700.css'
 import { NextThemeProvider, useRootTheme } from '@tamagui/next-theme'
+import { Analytics } from '@vercel/analytics/react'
 
 import React from 'react'
 import Head from 'next/head'
@@ -37,6 +38,7 @@ function MyApp({ Component, pageProps }: SolitoAppProps) {
           </WithNavigation>
         </SessionProvider>
       </ThemeProvider>
+      <Analytics />
     </>
   )
 }
