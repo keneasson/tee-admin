@@ -6,7 +6,6 @@ import { ExternalLink } from '@tamagui/lucide-icons'
 const StyledLink = styled(Anchor, {
   fontWeight: 600,
   color: color.blue11Light,
-  target: '_blank',
 })
 
 type ExtLinkProps = {
@@ -15,8 +14,11 @@ type ExtLinkProps = {
 }
 export const ExtLink: React.FC<ExtLinkProps> = ({ href, children }) => {
   return (
-    <StyledLink href={href}>
+    <StyledLink href={href} target="_blank">
       {children} <ExternalLink size={14} />
     </StyledLink>
   )
+}
+export const IntLink: React.FC<ExtLinkProps> = ({ href, children }) => {
+  return <StyledLink href={href}>{children}</StyledLink>
 }

@@ -17,8 +17,6 @@ const longOffsetFormatter = new Intl.DateTimeFormat('en-CA', {
 })
 const longOffsetString = longOffsetFormatter.format(new Date(today.toISOString())) // '2/28/2013, GMT-05:00'
 const gmtOffset = longOffsetString.split('GMT')[1]
-console.log('longOffsetString', longOffsetString)
-console.log('gmtOffset', gmtOffset)
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   get_upcoming_program()
@@ -87,14 +85,8 @@ async function findNextProgram<FindNextProgramProps>(
   const index = rows.findIndex((row) => {
     const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
     const date = convertGoogleDate(cell.value as number, sheetKey)
-
-    console.log(`date > today ${doc.title}`, {
-      event: date.getTime(),
-      today: today.getTime(),
-    })
     return date.getTime() >= today.getTime()
   })
-  console.log('index found', index)
   const upcomingRows = rows.slice(index, index + 2)
   return upcomingRows.map((row): ProgramTypes => {
     const event = row.toObject() as Omit<ProgramTypes, 'Key'>

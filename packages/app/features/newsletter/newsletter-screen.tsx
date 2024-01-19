@@ -13,7 +13,6 @@ const days15 = 15
 export const NewsletterScreen: React.FC = () => {
   const API_PATH =
     process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
-  console.log('env.API_PATH', API_PATH)
 
   const [program, setProgram] = useState<ProgramTypes[] | false>(false)
   const getUpcomingPrograms = async () => {
@@ -35,7 +34,7 @@ export const NewsletterScreen: React.FC = () => {
   return (
     <Wrapper subHheader={'Newsletter'}>
       <YStack>
-        <Heading size={'$8'}>Regular Services</Heading>
+        <Heading size={5}>Regular Services</Heading>
         {program.map((event: ProgramTypes, index) => {
           return (
             <YStack key={index}>

@@ -1,0 +1,2564 @@
+[
+  {
+    "Jan 1": [
+      "Genesis 1-2",
+      "Psalms 1-2",
+      "Matthew 1-2"
+    ]
+  },
+  {
+    "Jan 2": [
+      "Genesis 3-4",
+      "Psalms 3-5",
+      "Matthew 3-4"
+    ]
+  },
+  {
+    "Jan 3": [
+      "Genesis 5-6",
+      "Psalms 6-8",
+      "Matthew 5"
+    ]
+  },
+  {
+    "Jan 4": [
+      "Genesis 7-8",
+      "Psalms 9-10",
+      "Matthew 6"
+    ]
+  },
+  {
+    "Jan 5": [
+      "Genesis 9-10",
+      "Psalms 11-13",
+      "Matthew 7"
+    ]
+  },
+  {
+    "Jan 6": [
+      "Genesis 11-12",
+      "Psalms 14-16",
+      "Matthew 8"
+    ]
+  },
+  {
+    "Jan 7": [
+      "Genesis 13-14",
+      "Psalms 17",
+      "Matthew 9"
+    ]
+  },
+  {
+    "Jan 8": [
+      "Genesis 15-16",
+      "Psalms 18",
+      "Matthew 10"
+    ]
+  },
+  {
+    "Jan 9": [
+      "Genesis 17-18",
+      "Psalms 19-21",
+      "Matthew 11"
+    ]
+  },
+  {
+    "Jan 10": [
+      "Genesis 19",
+      "Psalms 22",
+      "Matthew 12"
+    ]
+  },
+  {
+    "Jan 11": [
+      "Genesis 20-21",
+      "Psalms 23-25",
+      "Matthew 13"
+    ]
+  },
+  {
+    "Jan 12": [
+      "Genesis 22-23",
+      "Psalms 26-29",
+      "Matthew 14"
+    ]
+  },
+  {
+    "Jan 13": [
+      "Genesis 24",
+      "Psalms 30",
+      "Matthew 15"
+    ]
+  },
+  {
+    "Jan 14": [
+      "Genesis 25-26",
+      "Psalms 31",
+      "Matthew 16"
+    ]
+  },
+  {
+    "Jan 15": [
+      "Genesis 27",
+      "Psalms 32",
+      "Matthew 17"
+    ]
+  },
+  {
+    "Jan 16": [
+      "Genesis 28-29",
+      "Psalms 33",
+      "Matthew 18"
+    ]
+  },
+  {
+    "Jan 17": [
+      "Genesis 30",
+      "Psalms 34",
+      "Matthew 19"
+    ]
+  },
+  {
+    "Jan 18": [
+      "Genesis 31",
+      "Psalms 35",
+      "Matthew 20"
+    ]
+  },
+  {
+    "Jan 19": [
+      "Genesis 32-33",
+      "Psalms 36",
+      "Matthew 21"
+    ]
+  },
+  {
+    "Jan 20": [
+      "Genesis 34-35",
+      "Psalms 37",
+      "Matthew 22"
+    ]
+  },
+  {
+    "Jan 21": [
+      "Genesis 36",
+      "Psalms 38",
+      "Matthew 23"
+    ]
+  },
+  {
+    "Jan 22": [
+      "Genesis 37",
+      "Psalms 39-40",
+      "Matthew 24"
+    ]
+  },
+  {
+    "Jan 23": [
+      "Genesis 38",
+      "Psalms 41-43",
+      "Matthew 25"
+    ]
+  },
+  {
+    "Jan 24": [
+      "Genesis 39-40",
+      "Psalms 44",
+      "Matthew 26"
+    ]
+  },
+  {
+    "Jan 25": [
+      "Genesis 41",
+      "Psalms 45",
+      "Matthew 27"
+    ]
+  },
+  {
+    "Jan 26": [
+      "Genesis 42-43",
+      "Psalms 46-48",
+      "Matthew 28"
+    ]
+  },
+  {
+    "Jan 27": [
+      "Genesis 44-45",
+      "Psalms 49",
+      "Romans 1-2"
+    ]
+  },
+  {
+    "Jan 28": [
+      "Genesis 46-47",
+      "Psalms 50",
+      "Romans 3-4"
+    ]
+  },
+  {
+    "Jan 29": [
+      "Genesis 48-50",
+      "Psalms 51-52",
+      "Romans 5-6"
+    ]
+  },
+  {
+    "Jan 30": [
+      "Exodus 1-2",
+      "Psalms 53-55",
+      "Romans 7-8"
+    ]
+  },
+  {
+    "Jan 31": [
+      "Exodus 3-4",
+      "Psalms 56-57",
+      "Romans 9"
+    ]
+  },
+  {
+    "Feb 1": [
+      "Exodus 5-6",
+      "Psalms 58-59",
+      "Romans 10-11"
+    ]
+  },
+  {
+    "Feb 2": [
+      "Exodus 7-8",
+      "Psalms 60-61",
+      "Romans 12"
+    ]
+  },
+  {
+    "Feb 3": [
+      "Exodus 9",
+      "Psalms 62-63",
+      "Romans 13-14"
+    ]
+  },
+  {
+    "Feb 4": [
+      "Exodus 10",
+      "Psalms 64-65",
+      "Romans 15-16"
+    ]
+  },
+  {
+    "Feb 5": [
+      "Exodus 11-12",
+      "Psalms 66-67",
+      "Mark 1"
+    ]
+  },
+  {
+    "Feb 6": [
+      "Exodus 13-14",
+      "Psalms 68",
+      "Mark 2"
+    ]
+  },
+  {
+    "Feb 7": [
+      "Exodus 15",
+      "Psalms 69",
+      "Mark 3"
+    ]
+  },
+  {
+    "Feb 8": [
+      "Exodus 16",
+      "Psalms 70-71",
+      "Mark 4"
+    ]
+  },
+  {
+    "Feb 9": [
+      "Exodus 17-18",
+      "Psalms 72",
+      "Mark 5"
+    ]
+  },
+  {
+    "Feb 10": [
+      "Exodus 19-20",
+      "Psalms 73",
+      "Mark 6"
+    ]
+  },
+  {
+    "Feb 11": [
+      "Exodus 21",
+      "Psalms 74",
+      "Mark 7"
+    ]
+  },
+  {
+    "Feb 12": [
+      "Exodus 22",
+      "Psalms 75-76",
+      "Mark 8"
+    ]
+  },
+  {
+    "Feb 13": [
+      "Exodus 23",
+      "Psalms 77",
+      "Mark 9"
+    ]
+  },
+  {
+    "Feb 14": [
+      "Exodus 24-25",
+      "Psalms 78",
+      "Mark 10"
+    ]
+  },
+  {
+    "Feb 15": [
+      "Exodus 26",
+      "Psalms 79-80",
+      "Mark 11"
+    ]
+  },
+  {
+    "Feb 16": [
+      "Exodus 27",
+      "Psalms 81-82",
+      "Mark 12"
+    ]
+  },
+  {
+    "Feb 17": [
+      "Exodus 28",
+      "Psalms 83-84",
+      "Mark 13"
+    ]
+  },
+  {
+    "Feb 18": [
+      "Exodus 29",
+      "Psalms 85-86",
+      "Mark 14"
+    ]
+  },
+  {
+    "Feb 19": [
+      "Exodus 30",
+      "Psalms 87-88",
+      "Mark 15-16"
+    ]
+  },
+  {
+    "Feb 20": [
+      "Exodus 31-32",
+      "Psalms 89",
+      "Corinthians 1-2"
+    ]
+  },
+  {
+    "Feb 21": [
+      "Exodus 33-34",
+      "Psalms 90-91",
+      "Corinthians 3"
+    ]
+  },
+  {
+    "Feb 22": [
+      "Exodus 35",
+      "Psalms 92-93",
+      "Corinthians 4-5"
+    ]
+  },
+  {
+    "Feb 23": [
+      "Exodus 36",
+      "Psalms 94-95",
+      "Corinthians 6"
+    ]
+  },
+  {
+    "Feb 24": [
+      "Exodus 37",
+      "Psalms 96-99",
+      "Corinthians 7"
+    ]
+  },
+  {
+    "Feb 25": [
+      "Exodus 38",
+      "Psalms 100-101",
+      "Corinthians 8-9"
+    ]
+  },
+  {
+    "Feb 26": [
+      "Exodus 39-40",
+      "Psalms 102",
+      "Corinthians 10"
+    ]
+  },
+  {
+    "Feb 27": [
+      "Leviticus 1-2",
+      "Psalms 103",
+      "Corinthians 11"
+    ]
+  },
+  {
+    "Feb 28": [
+      "Leviticus 3-4",
+      "Psalms 104",
+      "Corinthians 12-13"
+    ]
+  },
+  {
+    "Feb 29": [
+      "Leviticus 3-4",
+      "Psalms 104",
+      "Corinthians 12-13"
+    ]
+  },
+  {
+    "Mar 1": [
+      "Leviticus 5-6",
+      "Psalms 105",
+      "Corinthians 14"
+    ]
+  },
+  {
+    "Mar 2": [
+      "Leviticus 7",
+      "Psalms 106",
+      "Corinthians 15"
+    ]
+  },
+  {
+    "Mar 3": [
+      "Leviticus 8",
+      "Psalms 107",
+      "Corinthians 16"
+    ]
+  },
+  {
+    "Mar 4": [
+      "Leviticus 9-10",
+      "Psalms 108-109",
+      "Corinthians 1-2"
+    ]
+  },
+  {
+    "Mar 5": [
+      "Leviticus 11",
+      "Psalms 110-112",
+      "Corinthians 3-4"
+    ]
+  },
+  {
+    "Mar 6": [
+      "Leviticus 12-13",
+      "Psalms 113-114",
+      "Corinthians 5-7"
+    ]
+  },
+  {
+    "Mar 7": [
+      "Leviticus 14",
+      "Psalms 115-116",
+      "Corinthians 8-9"
+    ]
+  },
+  {
+    "Mar 8": [
+      "Leviticus 15",
+      "Psalms 117-118",
+      "Corinthians 10-11"
+    ]
+  },
+  {
+    "Mar 9": [
+      "Leviticus 16",
+      "Psalms 119",
+      "Corinthians 12-13"
+    ]
+  },
+  {
+    "Mar 10": [
+      "Leviticus 17-18",
+      "Psalms 119",
+      "Luke 1"
+    ]
+  },
+  {
+    "Mar 11": [
+      "Leviticus 19",
+      "Psalms 119",
+      "Luke 2"
+    ]
+  },
+  {
+    "Mar 12": [
+      "Leviticus 20",
+      "Psalms 119",
+      "Luke 3"
+    ]
+  },
+  {
+    "Mar 13": [
+      "Leviticus 21",
+      "Psalms 120-124",
+      "Luke 4"
+    ]
+  },
+  {
+    "Mar 14": [
+      "Leviticus 22",
+      "Psalms 125-127",
+      "Luke 5"
+    ]
+  },
+  {
+    "Mar 15": [
+      "Leviticus 23",
+      "Psalms 128-130",
+      "Luke 6"
+    ]
+  },
+  {
+    "Mar 16": [
+      "Leviticus 24",
+      "Psalms 131-134",
+      "Luke 7"
+    ]
+  },
+  {
+    "Mar 17": [
+      "Leviticus 25",
+      "Psalms 135-136",
+      "Luke 8"
+    ]
+  },
+  {
+    "Mar 18": [
+      "Leviticus 26",
+      "Psalms 137-139",
+      "Luke 9"
+    ]
+  },
+  {
+    "Mar 19": [
+      "Leviticus 27",
+      "Psalms 140-142",
+      "Luke 10"
+    ]
+  },
+  {
+    "Mar 20": [
+      "Numbers 1",
+      "Psalms 143-144",
+      "Luke 11"
+    ]
+  },
+  {
+    "Mar 21": [
+      "Numbers 2",
+      "Psalms 145-147",
+      "Luke 12"
+    ]
+  },
+  {
+    "Mar 22": [
+      "Numbers 3",
+      "Psalms 148-150",
+      "Luke 13-14"
+    ]
+  },
+  {
+    "Mar 23": [
+      "Numbers 4",
+      "Proverbs 1",
+      "Luke 15"
+    ]
+  },
+  {
+    "Mar 24": [
+      "Numbers 5",
+      "Proverbs 2",
+      "Luke 16"
+    ]
+  },
+  {
+    "Mar 25": [
+      "Numbers 6",
+      "Proverbs 3",
+      "Luke 17"
+    ]
+  },
+  {
+    "Mar 26": [
+      "Numbers 7",
+      "Proverbs 4",
+      "Luke 18"
+    ]
+  },
+  {
+    "Mar 27": [
+      "Numbers 8-9",
+      "Proverbs 5",
+      "Luke 19"
+    ]
+  },
+  {
+    "Mar 28": [
+      "Numbers 10",
+      "Proverbs 6",
+      "Luke 20"
+    ]
+  },
+  {
+    "Mar 29": [
+      "Numbers 11",
+      "Proverbs 7",
+      "Luke 21"
+    ]
+  },
+  {
+    "Mar 30": [
+      "Numbers 12-13",
+      "Proverbs 8-9",
+      "Luke 22"
+    ]
+  },
+  {
+    "Mar 31": [
+      "Numbers 14",
+      "Proverbs 10",
+      "Luke 23"
+    ]
+  },
+  {
+    "Apr 1": [
+      "Numbers 15",
+      "Proverbs 11",
+      "Luke 24"
+    ]
+  },
+  {
+    "Apr 2": [
+      "Numbers 16",
+      "Proverbs 12",
+      "Galatians 1-2"
+    ]
+  },
+  {
+    "Apr 3": [
+      "Numbers 17-18",
+      "Proverbs 13",
+      "Galatians 3-4"
+    ]
+  },
+  {
+    "Apr 4": [
+      "Numbers 19",
+      "Proverbs 14",
+      "Galatians 5-6"
+    ]
+  },
+  {
+    "Apr 5": [
+      "Numbers 20-21",
+      "Proverbs 15",
+      "Ephesians 1-2"
+    ]
+  },
+  {
+    "Apr 6": [
+      "Numbers 22-23",
+      "Proverbs 16",
+      "Ephesians 3-4"
+    ]
+  },
+  {
+    "Apr 7": [
+      "Numbers 24-25",
+      "Proverbs 17",
+      "Ephesians 5-6"
+    ]
+  },
+  {
+    "Apr 8": [
+      "Numbers 26",
+      "Proverbs 18",
+      "Philippians 1-2"
+    ]
+  },
+  {
+    "Apr 9": [
+      "Numbers 27",
+      "Proverbs 19",
+      "Philippians 3-4"
+    ]
+  },
+  {
+    "Apr 10": [
+      "Numbers 28",
+      "Proverbs 20",
+      "John 1"
+    ]
+  },
+  {
+    "Apr 11": [
+      "Numbers 29-30",
+      "Proverbs 21",
+      "John 2-3"
+    ]
+  },
+  {
+    "Apr 12": [
+      "Numbers 31",
+      "Proverbs 22",
+      "John 4"
+    ]
+  },
+  {
+    "Apr 13": [
+      "Numbers 32",
+      "Proverbs 23",
+      "John 5"
+    ]
+  },
+  {
+    "Apr 14": [
+      "Numbers 33",
+      "Proverbs 24",
+      "John 6"
+    ]
+  },
+  {
+    "Apr 15": [
+      "Numbers 34",
+      "Proverbs 25",
+      "John 7"
+    ]
+  },
+  {
+    "Apr 16": [
+      "Numbers 35",
+      "Proverbs 26",
+      "John 8"
+    ]
+  },
+  {
+    "Apr 17": [
+      "Numbers 36",
+      "Proverbs 27",
+      "John 9-10"
+    ]
+  },
+  {
+    "Apr 18": [
+      "Deuteronomy 1",
+      "Proverbs 28",
+      "John 11"
+    ]
+  },
+  {
+    "Apr 19": [
+      "Deuteronomy 2",
+      "Proverbs 29",
+      "John 12"
+    ]
+  },
+  {
+    "Apr 20": [
+      "Deuteronomy 3",
+      "Proverbs 30",
+      "John 13-14"
+    ]
+  },
+  {
+    "Apr 21": [
+      "Deuteronomy 4",
+      "Proverbs 31",
+      "John 15-16"
+    ]
+  },
+  {
+    "Apr 22": [
+      "Deuteronomy 5",
+      "Ecclesiastes 1",
+      "John 17-18"
+    ]
+  },
+  {
+    "Apr 23": [
+      "Deuteronomy 6-7",
+      "Ecclesiastes 2",
+      "John 19"
+    ]
+  },
+  {
+    "Apr 24": [
+      "Deuteronomy 8-9",
+      "Ecclesiastes 3",
+      "John 20-21"
+    ]
+  },
+  {
+    "Apr 25": [
+      "Deuteronomy 10-11",
+      "Ecclesiastes 4",
+      "Acts 1"
+    ]
+  },
+  {
+    "Apr 26": [
+      "Deuteronomy 12-13",
+      "Ecclesiastes 5",
+      "Acts 2"
+    ]
+  },
+  {
+    "Apr 27": [
+      "Deuteronomy 13-14",
+      "Ecclesiastes 6",
+      "Acts 3-4"
+    ]
+  },
+  {
+    "Apr 28": [
+      "Deuteronomy 15",
+      "Ecclesiastes 7",
+      "Acts 5-6"
+    ]
+  },
+  {
+    "Apr 29": [
+      "Deuteronomy 16",
+      "Ecclesiastes 8",
+      "Acts 7"
+    ]
+  },
+  {
+    "Apr 30": [
+      "Deuteronomy 17",
+      "Ecclesiastes 9",
+      "Acts 8"
+    ]
+  },
+  {
+    "May 1": [
+      "Deuteronomy 18",
+      "Ecclesiastes 10",
+      "Acts 9"
+    ]
+  },
+  {
+    "May 2": [
+      "Deuteronomy 19",
+      "Ecclesiastes 11",
+      "Acts 10"
+    ]
+  },
+  {
+    "May 3": [
+      "Deuteronomy 20",
+      "Ecclesiastes 12",
+      "Acts 11-12"
+    ]
+  },
+  {
+    "May 4": [
+      "Deuteronomy 21",
+      "Song of Solomon 1",
+      "Acts 13"
+    ]
+  },
+  {
+    "May 5": [
+      "Deuteronomy 22",
+      "Song of Solomon 2",
+      "Acts 14-15"
+    ]
+  },
+  {
+    "May 6": [
+      "Deuteronomy 23",
+      "Song of Solomon 3",
+      "Acts 16-17"
+    ]
+  },
+  {
+    "May 7": [
+      "Deuteronomy 24",
+      "Song of Solomon 4",
+      "Acts 18-19"
+    ]
+  },
+  {
+    "May 8": [
+      "Deuteronomy 25",
+      "Song of Solomon 5",
+      "Acts 20"
+    ]
+  },
+  {
+    "May 9": [
+      "Deuteronomy 26",
+      "Song of Solomon 6",
+      "Acts 21-22"
+    ]
+  },
+  {
+    "May 10": [
+      "Deuteronomy 27",
+      "Song of Solomon 7",
+      "Acts 23-24"
+    ]
+  },
+  {
+    "May 11": [
+      "Deuteronomy 28",
+      "Song of Solomon 8",
+      "Acts 25-26"
+    ]
+  },
+  {
+    "May 12": [
+      "Deuteronomy 29",
+      "Isaiah 1",
+      "Acts 27"
+    ]
+  },
+  {
+    "May 13": [
+      "Deuteronomy 30",
+      "Isaiah 2",
+      "Acts 28"
+    ]
+  },
+  {
+    "May 14": [
+      "Deuteronomy 31",
+      "Isaiah 3-4",
+      "Colossians 1"
+    ]
+  },
+  {
+    "May 15": [
+      "Deuteronomy 32",
+      "Isaiah 5",
+      "Colossians 2"
+    ]
+  },
+  {
+    "May 16": [
+      "Deuteronomy 33-34",
+      "Isaiah 6",
+      "Colossians 3-4"
+    ]
+  },
+  {
+    "May 17": [
+      "Joshua 1",
+      "Isaiah 7",
+      "Thessalonians 1-2"
+    ]
+  },
+  {
+    "May 18": [
+      "Joshua 2",
+      "Isaiah 8",
+      "Thessalonians 3-4"
+    ]
+  },
+  {
+    "May 19": [
+      "Joshua 3-4",
+      "Isaiah 9",
+      "Thessalonians 5"
+    ]
+  },
+  {
+    "May 20": [
+      "Joshua 5-6",
+      "Isaiah 10",
+      "Thessalonians 1-2"
+    ]
+  },
+  {
+    "May 21": [
+      "Joshua 7",
+      "Isaiah 11",
+      "Thessalonians 3"
+    ]
+  },
+  {
+    "May 22": [
+      "Joshua 8",
+      "Isaiah 12",
+      "Timothy 1-3"
+    ]
+  },
+  {
+    "May 23": [
+      "Joshua 9",
+      "Isaiah 13",
+      "Timothy 4-5"
+    ]
+  },
+  {
+    "May 24": [
+      "Joshua 10",
+      "Isaiah 14",
+      "Timothy 6"
+    ]
+  },
+  {
+    "May 25": [
+      "Joshua 11",
+      "Isaiah 15",
+      "Timothy 1"
+    ]
+  },
+  {
+    "May 26": [
+      "Joshua 12",
+      "Isaiah 16",
+      "Timothy 2"
+    ]
+  },
+  {
+    "May 27": [
+      "Joshua 13",
+      "Isaiah 17-18",
+      "Timothy 3-4"
+    ]
+  },
+  {
+    "May 28": [
+      "Joshua 14",
+      "Isaiah 19",
+      "Titus 1-3"
+    ]
+  },
+  {
+    "May 29": [
+      "Joshua 15",
+      "Isaiah 20-21",
+      "Philemon 1"
+    ]
+  },
+  {
+    "May 30": [
+      "Joshua 16",
+      "Isaiah 22",
+      "Hebrews 1-2"
+    ]
+  },
+  {
+    "May 31": [
+      "Joshua 17",
+      "Isaiah 23",
+      "Hebrews 3-5"
+    ]
+  },
+  {
+    "Jun 1": [
+      "Joshua 18",
+      "Isaiah 24",
+      "Hebrews 6-7"
+    ]
+  },
+  {
+    "Jun 2": [
+      "Joshua 19",
+      "Isaiah 25",
+      "Hebrews 8-9"
+    ]
+  },
+  {
+    "Jun 3": [
+      "Joshua 20-21",
+      "Isaiah 26-27",
+      "Hebrews 10"
+    ]
+  },
+  {
+    "Jun 4": [
+      "Joshua 22",
+      "Isaiah 28",
+      "Hebrews 11"
+    ]
+  },
+  {
+    "Jun 5": [
+      "Joshua 23-24",
+      "Isaiah 29",
+      "Hebrews 12"
+    ]
+  },
+  {
+    "Jun 6": [
+      "Judges 1",
+      "Isaiah 30",
+      "Hebrews 13"
+    ]
+  },
+  {
+    "Jun 7": [
+      "Judges 2-3",
+      "Isaiah 31",
+      "James 1"
+    ]
+  },
+  {
+    "Jun 8": [
+      "Judges 4-5",
+      "Isaiah 32",
+      "James 2"
+    ]
+  },
+  {
+    "Jun 9": [
+      "Judges 6",
+      "Isaiah 33",
+      "James 3-4"
+    ]
+  },
+  {
+    "Jun 10": [
+      "Judges 7-8",
+      "Isaiah 34",
+      "James 5"
+    ]
+  },
+  {
+    "Jun 11": [
+      "Judges 9",
+      "Isaiah 35",
+      "Peter 1"
+    ]
+  },
+  {
+    "Jun 12": [
+      "Judges 10-11",
+      "Isaiah 36",
+      "Peter 2"
+    ]
+  },
+  {
+    "Jun 13": [
+      "Judges 12-13",
+      "Isaiah 37",
+      "Peter 3-5"
+    ]
+  },
+  {
+    "Jun 14": [
+      "Judges 14-15",
+      "Isaiah 38",
+      "Peter 1-2"
+    ]
+  },
+  {
+    "Jun 15": [
+      "Judges 16",
+      "Isaiah 39",
+      "Peter 3"
+    ]
+  },
+  {
+    "Jun 16": [
+      "Judges 17-18",
+      "Isaiah 40",
+      "John 1-2"
+    ]
+  },
+  {
+    "Jun 17": [
+      "Judges 19",
+      "Isaiah 41",
+      "John 3-4"
+    ]
+  },
+  {
+    "Jun 18": [
+      "Judges 20",
+      "Isaiah 42",
+      "John 5"
+    ]
+  },
+  {
+    "Jun 19": [
+      "Judges 21",
+      "Isaiah 43",
+      "John -3"
+    ]
+  },
+  {
+    "Jun 20": [
+      "Ruth 1-2",
+      "Isaiah 44",
+      "Jude 1"
+    ]
+  },
+  {
+    "Jun 21": [
+      "Ruth 3-4",
+      "Isaiah 45",
+      "Revelation 1-2"
+    ]
+  },
+  {
+    "Jun 22": [
+      "Samuel 1",
+      "Isaiah 46-47",
+      "Revelation 3-4"
+    ]
+  },
+  {
+    "Jun 23": [
+      "Samuel 2",
+      "Isaiah 48",
+      "Revelation 5-6"
+    ]
+  },
+  {
+    "Jun 24": [
+      "Samuel 3",
+      "Isaiah 49",
+      "Revelation 7-9"
+    ]
+  },
+  {
+    "Jun 25": [
+      "Samuel 4",
+      "Isaiah 50",
+      "Revelation 10-11"
+    ]
+  },
+  {
+    "Jun 26": [
+      "Samuel 5-6",
+      "Isaiah 51",
+      "Revelation 12-13"
+    ]
+  },
+  {
+    "Jun 27": [
+      "Samuel 7-8",
+      "Isaiah 52",
+      "Revelation 14"
+    ]
+  },
+  {
+    "Jun 28": [
+      "Samuel 9",
+      "Isaiah 53",
+      "Revelation 15-16"
+    ]
+  },
+  {
+    "Jun 29": [
+      "Samuel 10",
+      "Isaiah 54",
+      "Revelation 17-18"
+    ]
+  },
+  {
+    "Jun 30": [
+      "Samuel 11-12",
+      "Isaiah 55",
+      "Revelation 19-20"
+    ]
+  },
+  {
+    "Jul 1": [
+      "Samuel 13",
+      "Isaiah 56-57",
+      "Revelation 21-22"
+    ]
+  },
+  {
+    "Jul 2": [
+      "Samuel 14",
+      "Isaiah 58",
+      "Matthew 1-2"
+    ]
+  },
+  {
+    "Jul 3": [
+      "Samuel 15",
+      "Isaiah 59",
+      "Matthew 3-4"
+    ]
+  },
+  {
+    "Jul 4": [
+      "Samuel 16",
+      "Isaiah 60",
+      "Matthew 5"
+    ]
+  },
+  {
+    "Jul 5": [
+      "Samuel 17",
+      "Isaiah 61",
+      "Matthew 6"
+    ]
+  },
+  {
+    "Jul 6": [
+      "Samuel 18",
+      "Isaiah 62",
+      "Matthew 7"
+    ]
+  },
+  {
+    "Jul 7": [
+      "Samuel 19",
+      "Isaiah 63",
+      "Matthew 8"
+    ]
+  },
+  {
+    "Jul 8": [
+      "Samuel 20",
+      "Isaiah 64",
+      "Matthew 9"
+    ]
+  },
+  {
+    "Jul 9": [
+      "Samuel 21-22",
+      "Isaiah 65",
+      "Matthew 10"
+    ]
+  },
+  {
+    "Jul 10": [
+      "Samuel 23",
+      "Isaiah 66",
+      "Matthew 11"
+    ]
+  },
+  {
+    "Jul 11": [
+      "Samuel 24",
+      "Jeremiah 1",
+      "Matthew 12"
+    ]
+  },
+  {
+    "Jul 12": [
+      "Samuel 25",
+      "Jeremiah 2",
+      "Matthew 13"
+    ]
+  },
+  {
+    "Jul 13": [
+      "Samuel 26-27",
+      "Jeremiah 3",
+      "Matthew 14"
+    ]
+  },
+  {
+    "Jul 14": [
+      "Samuel 28",
+      "Jeremiah 4",
+      "Matthew 15"
+    ]
+  },
+  {
+    "Jul 15": [
+      "Samuel 29-30",
+      "Jeremiah 5",
+      "Matthew 16"
+    ]
+  },
+  {
+    "Jul 16": [
+      "Samuel 31",
+      "Jeremiah 6",
+      "Matthew 17"
+    ]
+  },
+  {
+    "Jul 17": [
+      "Samuel 1",
+      "Jeremiah 7",
+      "Matthew 18"
+    ]
+  },
+  {
+    "Jul 18": [
+      "Samuel 2",
+      "Jeremiah 8",
+      "Matthew 19"
+    ]
+  },
+  {
+    "Jul 19": [
+      "Samuel 3",
+      "Jeremiah 9",
+      "Matthew 20"
+    ]
+  },
+  {
+    "Jul 20": [
+      "Samuel 4-5",
+      "Jeremiah 10",
+      "Matthew 21"
+    ]
+  },
+  {
+    "Jul 21": [
+      "Samuel 6",
+      "Jeremiah 11",
+      "Matthew 22"
+    ]
+  },
+  {
+    "Jul 22": [
+      "Samuel 7",
+      "Jeremiah 12",
+      "Matthew 23"
+    ]
+  },
+  {
+    "Jul 23": [
+      "Samuel 8-9",
+      "Jeremiah 13",
+      "Matthew 24"
+    ]
+  },
+  {
+    "Jul 24": [
+      "Samuel 10",
+      "Jeremiah 14",
+      "Matthew 25"
+    ]
+  },
+  {
+    "Jul 25": [
+      "Samuel 11",
+      "Jeremiah 15",
+      "Matthew 26"
+    ]
+  },
+  {
+    "Jul 26": [
+      "Samuel 12",
+      "Jeremiah 16",
+      "Matthew 27"
+    ]
+  },
+  {
+    "Jul 27": [
+      "Samuel 13",
+      "Jeremiah 17",
+      "Matthew 28"
+    ]
+  },
+  {
+    "Jul 28": [
+      "Samuel 14",
+      "Jeremiah 18",
+      "Romans 1-2"
+    ]
+  },
+  {
+    "Jul 29": [
+      "Samuel 15",
+      "Jeremiah 19",
+      "Romans 3-4"
+    ]
+  },
+  {
+    "Jul 30": [
+      "Samuel 16",
+      "Jeremiah 20",
+      "Romans 5-6"
+    ]
+  },
+  {
+    "Jul 31": [
+      "Samuel 17",
+      "Jeremiah 21",
+      "Romans 7-8"
+    ]
+  },
+  {
+    "Aug 1": [
+      "Samuel 18",
+      "Jeremiah 22",
+      "Romans 9"
+    ]
+  },
+  {
+    "Aug 2": [
+      "Samuel 19",
+      "Jeremiah 23",
+      "Romans 10-11"
+    ]
+  },
+  {
+    "Aug 3": [
+      "Samuel 20-21",
+      "Jeremiah 24",
+      "Romans 12"
+    ]
+  },
+  {
+    "Aug 4": [
+      "Samuel 22",
+      "Jeremiah 25",
+      "Romans 13-14"
+    ]
+  },
+  {
+    "Aug 5": [
+      "Samuel 23",
+      "Jeremiah 26",
+      "Romans 15-16"
+    ]
+  },
+  {
+    "Aug 6": [
+      "Samuel 24",
+      "Jeremiah 27",
+      "Mark 1"
+    ]
+  },
+  {
+    "Aug 7": [
+      "Kings 1",
+      "Jeremiah 28",
+      "Mark 2"
+    ]
+  },
+  {
+    "Aug 8": [
+      "Kings 2",
+      "Jeremiah 29",
+      "Mark 3"
+    ]
+  },
+  {
+    "Aug 9": [
+      "Kings 3",
+      "Jeremiah 30",
+      "Mark 4"
+    ]
+  },
+  {
+    "Aug 10": [
+      "Kings 4-5",
+      "Jeremiah 31",
+      "Mark 5"
+    ]
+  },
+  {
+    "Aug 11": [
+      "Kings 6",
+      "Jeremiah 32",
+      "Mark 6"
+    ]
+  },
+  {
+    "Aug 12": [
+      "Kings 7",
+      "Jeremiah 33",
+      "Mark 7"
+    ]
+  },
+  {
+    "Aug 13": [
+      "Kings 8",
+      "Jeremiah 34",
+      "Mark 8"
+    ]
+  },
+  {
+    "Aug 14": [
+      "Kings 9",
+      "Jeremiah 35",
+      "Mark 9"
+    ]
+  },
+  {
+    "Aug 15": [
+      "Kings 10",
+      "Jeremiah 36",
+      "Mark 10"
+    ]
+  },
+  {
+    "Aug 16": [
+      "Kings 11",
+      "Jeremiah 37",
+      "Mark 11"
+    ]
+  },
+  {
+    "Aug 17": [
+      "Kings 12",
+      "Jeremiah 38",
+      "Mark 12"
+    ]
+  },
+  {
+    "Aug 18": [
+      "Kings 13",
+      "Jeremiah 39",
+      "Mark 13"
+    ]
+  },
+  {
+    "Aug 19": [
+      "Kings 14",
+      "Jeremiah 40",
+      "Mark 14"
+    ]
+  },
+  {
+    "Aug 20": [
+      "Kings 15",
+      "Jeremiah 41",
+      "Mark 15"
+    ]
+  },
+  {
+    "Aug 21": [
+      "Kings 16",
+      "Jeremiah 42",
+      "Mark 16"
+    ]
+  },
+  {
+    "Aug 22": [
+      "Kings 17",
+      "Jeremiah 43",
+      "Corinthians 1-2"
+    ]
+  },
+  {
+    "Aug 23": [
+      "Kings 18",
+      "Jeremiah 44",
+      "Corinthians 3"
+    ]
+  },
+  {
+    "Aug 24": [
+      "Kings 19",
+      "Jeremiah 45-46",
+      "Corinthians 4-5"
+    ]
+  },
+  {
+    "Aug 25": [
+      "Kings 20",
+      "Jeremiah 47",
+      "Corinthians 6"
+    ]
+  },
+  {
+    "Aug 26": [
+      "Kings 21",
+      "Jeremiah 48",
+      "Corinthians 7"
+    ]
+  },
+  {
+    "Aug 27": [
+      "Kings 22",
+      "Jeremiah 49",
+      "Corinthians 8-9"
+    ]
+  },
+  {
+    "Aug 28": [
+      "Kings 1-2",
+      "Jeremiah 50",
+      "Corinthians 10"
+    ]
+  },
+  {
+    "Aug 29": [
+      "Kings 3",
+      "Jeremiah 51",
+      "Corinthians 11"
+    ]
+  },
+  {
+    "Aug 30": [
+      "Kings 4",
+      "Jeremiah 52",
+      "Corinthians 12-13"
+    ]
+  },
+  {
+    "Aug 31": [
+      "Kings 5",
+      "Lamentations 1",
+      "Corinthians 14"
+    ]
+  },
+  {
+    "Sep 1": [
+      "Kings 6",
+      "Lamentations 2",
+      "Corinthians 15"
+    ]
+  },
+  {
+    "Sep 2": [
+      "Kings 7",
+      "Lamentations 3",
+      "Corinthians 16"
+    ]
+  },
+  {
+    "Sep 3": [
+      "Kings 8",
+      "Lamentations 4",
+      "Corinthians 1-2"
+    ]
+  },
+  {
+    "Sep 4": [
+      "Kings 9",
+      "Lamentations 5",
+      "Corinthians 3-4"
+    ]
+  },
+  {
+    "Sep 5": [
+      "Kings 10",
+      "Ezekiel 1",
+      "Corinthians 5-7"
+    ]
+  },
+  {
+    "Sep 6": [
+      "Kings 11-12",
+      "Ezekiel 2",
+      "Corinthians 8-9"
+    ]
+  },
+  {
+    "Sep 7": [
+      "Kings 13",
+      "Ezekiel 3",
+      "Corinthians 10-11"
+    ]
+  },
+  {
+    "Sep 8": [
+      "Kings 14",
+      "Ezekiel 4",
+      "Corinthians 12-13"
+    ]
+  },
+  {
+    "Sep 9": [
+      "Kings 15",
+      "Ezekiel 5",
+      "Luke 1"
+    ]
+  },
+  {
+    "Sep 10": [
+      "Kings 16",
+      "Ezekiel 6",
+      "Luke 2"
+    ]
+  },
+  {
+    "Sep 11": [
+      "Kings 17",
+      "Ezekiel 7",
+      "Luke 3"
+    ]
+  },
+  {
+    "Sep 12": [
+      "Kings 18",
+      "Ezekiel 8",
+      "Luke 4"
+    ]
+  },
+  {
+    "Sep 13": [
+      "Kings 19",
+      "Ezekiel 9",
+      "Luke 5"
+    ]
+  },
+  {
+    "Sep 14": [
+      "Kings 20",
+      "Ezekiel 10",
+      "Luke 6"
+    ]
+  },
+  {
+    "Sep 15": [
+      "Kings 21",
+      "Ezekiel 11",
+      "Luke 7"
+    ]
+  },
+  {
+    "Sep 16": [
+      "Kings 22-23",
+      "Ezekiel 12",
+      "Luke 8"
+    ]
+  },
+  {
+    "Sep 17": [
+      "Kings 24-25",
+      "Ezekiel 13",
+      "Luke 9"
+    ]
+  },
+  {
+    "Sep 18": [
+      "Chronicles 1",
+      "Ezekiel 14",
+      "Luke 10"
+    ]
+  },
+  {
+    "Sep 19": [
+      "Chronicles 2",
+      "Ezekiel 15",
+      "Luke 11"
+    ]
+  },
+  {
+    "Sep 20": [
+      "Chronicles 3",
+      "Ezekiel 16",
+      "Luke 12"
+    ]
+  },
+  {
+    "Sep 21": [
+      "Chronicles 4",
+      "Ezekiel 17",
+      "Luke 13-14"
+    ]
+  },
+  {
+    "Sep 22": [
+      "Chronicles 5",
+      "Ezekiel 18",
+      "Luke 15"
+    ]
+  },
+  {
+    "Sep 23": [
+      "Chronicles 6",
+      "Ezekiel 19",
+      "Luke 16"
+    ]
+  },
+  {
+    "Sep 24": [
+      "Chronicles 7",
+      "Ezekiel 20",
+      "Luke 17"
+    ]
+  },
+  {
+    "Sep 25": [
+      "Chronicles 8",
+      "Ezekiel 21",
+      "Luke 18"
+    ]
+  },
+  {
+    "Sep 26": [
+      "Chronicles 9",
+      "Ezekiel 22",
+      "Luke 19"
+    ]
+  },
+  {
+    "Sep 27": [
+      "Chronicles 10",
+      "Ezekiel 23",
+      "Luke 20"
+    ]
+  },
+  {
+    "Sep 28": [
+      "Chronicles 11",
+      "Ezekiel 24",
+      "Luke 21"
+    ]
+  },
+  {
+    "Sep 29": [
+      "Chronicles 12",
+      "Ezekiel 25",
+      "Luke 22"
+    ]
+  },
+  {
+    "Sep 30": [
+      "Chronicles 13-14",
+      "Ezekiel 26",
+      "Luke 23"
+    ]
+  },
+  {
+    "Oct 1": [
+      "Chronicles 15",
+      "Ezekiel 27",
+      "Luke 24"
+    ]
+  },
+  {
+    "Oct 2": [
+      "Chronicles 16",
+      "Ezekiel 28",
+      "Galatians 1-2"
+    ]
+  },
+  {
+    "Oct 3": [
+      "Chronicles 17",
+      "Ezekiel 29",
+      "Galatians 3-4"
+    ]
+  },
+  {
+    "Oct 4": [
+      "Chronicles 18-19",
+      "Ezekiel 30",
+      "Galatians 5-6"
+    ]
+  },
+  {
+    "Oct 5": [
+      "Chronicles 20-21",
+      "Ezekiel 31",
+      "Ephesians 1-2"
+    ]
+  },
+  {
+    "Oct 6": [
+      "Chronicles 22",
+      "Ezekiel 32",
+      "Ephesians 3-4"
+    ]
+  },
+  {
+    "Oct 7": [
+      "Chronicles 23",
+      "Ezekiel 33",
+      "Ephesians 5-6"
+    ]
+  },
+  {
+    "Oct 8": [
+      "Chronicles 24-25",
+      "Ezekiel 34",
+      "Philippians 1-2"
+    ]
+  },
+  {
+    "Oct 9": [
+      "Chronicles 26",
+      "Ezekiel 35",
+      "Philippians 3-4"
+    ]
+  },
+  {
+    "Oct 10": [
+      "Chronicles 27",
+      "Ezekiel 36",
+      "John 1"
+    ]
+  },
+  {
+    "Oct 11": [
+      "Chronicles 28",
+      "Ezekiel 37",
+      "John 2-3"
+    ]
+  },
+  {
+    "Oct 12": [
+      "Chronicles 29",
+      "Ezekiel 38",
+      "John 4"
+    ]
+  },
+  {
+    "Oct 13": [
+      "Chronicles 1-2",
+      "Ezekiel 39",
+      "John 5"
+    ]
+  },
+  {
+    "Oct 14": [
+      "Chronicles 3-4",
+      "Ezekiel 40",
+      "John 6"
+    ]
+  },
+  {
+    "Oct 15": [
+      "Chronicles 5-6",
+      "Ezekiel 41",
+      "John 7"
+    ]
+  },
+  {
+    "Oct 16": [
+      "Chronicles 7",
+      "Ezekiel 42",
+      "John 8"
+    ]
+  },
+  {
+    "Oct 17": [
+      "Chronicles 8",
+      "Ezekiel 43",
+      "John 9-10"
+    ]
+  },
+  {
+    "Oct 18": [
+      "Chronicles 9",
+      "Ezekiel 44",
+      "John 11"
+    ]
+  },
+  {
+    "Oct 19": [
+      "Chronicles 10-11",
+      "Ezekiel 45",
+      "John 12"
+    ]
+  },
+  {
+    "Oct 20": [
+      "Chronicles 12-13",
+      "Ezekiel 46",
+      "John 13-14"
+    ]
+  },
+  {
+    "Oct 21": [
+      "Chronicles 14-15",
+      "Ezekiel 47",
+      "John 15-16"
+    ]
+  },
+  {
+    "Oct 22": [
+      "Chronicles 16-17",
+      "Ezekiel 48",
+      "John 17-18"
+    ]
+  },
+  {
+    "Oct 23": [
+      "Chronicles 18-19",
+      "Daniel 1",
+      "John 19"
+    ]
+  },
+  {
+    "Oct 24": [
+      "Chronicles 20",
+      "Daniel 2",
+      "John 20-21"
+    ]
+  },
+  {
+    "Oct 25": [
+      "Chronicles 21-22",
+      "Daniel 3",
+      "Acts 1"
+    ]
+  },
+  {
+    "Oct 26": [
+      "Chronicles 23",
+      "Daniel 4",
+      "Acts 2"
+    ]
+  },
+  {
+    "Oct 27": [
+      "Chronicles 24",
+      "Daniel 5",
+      "Acts 3-4"
+    ]
+  },
+  {
+    "Oct 28": [
+      "Chronicles 25",
+      "Daniel 6",
+      "Acts 5-6"
+    ]
+  },
+  {
+    "Oct 29": [
+      "Chronicles 26-27",
+      "Daniel 7",
+      "Acts 7"
+    ]
+  },
+  {
+    "Oct 30": [
+      "Chronicles 28",
+      "Daniel 8",
+      "Acts 8"
+    ]
+  },
+  {
+    "Oct 31": [
+      "Chronicles 29",
+      "Daniel 9",
+      "Acts 9"
+    ]
+  },
+  {
+    "Nov 1": [
+      "Chronicles 30",
+      "Daniel 10",
+      "Acts 10"
+    ]
+  },
+  {
+    "Nov 2": [
+      "Chronicles 31",
+      "Daniel 11",
+      "Acts 11-12"
+    ]
+  },
+  {
+    "Nov 3": [
+      "Chronicles 32",
+      "Daniel 12",
+      "Acts 13"
+    ]
+  },
+  {
+    "Nov 4": [
+      "Chronicles 33",
+      "Hosea 1",
+      "Acts 14-15"
+    ]
+  },
+  {
+    "Nov 5": [
+      "Chronicles 34",
+      "Hosea 2",
+      "Acts 16-17"
+    ]
+  },
+  {
+    "Nov 6": [
+      "Chronicles 35",
+      "Hosea 3",
+      "Acts 18-19"
+    ]
+  },
+  {
+    "Nov 7": [
+      "Chronicles 36",
+      "Hosea 4",
+      "Acts 20"
+    ]
+  },
+  {
+    "Nov 8": [
+      "Ezra 1-2",
+      "Hosea 5",
+      "Acts 21-22"
+    ]
+  },
+  {
+    "Nov 9": [
+      "Ezra 3-4",
+      "Hosea 6",
+      "Acts 23-24"
+    ]
+  },
+  {
+    "Nov 10": [
+      "Ezra 5-6",
+      "Hosea 7",
+      "Acts 25-26"
+    ]
+  },
+  {
+    "Nov 11": [
+      "Ezra 7",
+      "Hosea 8",
+      "Acts 27"
+    ]
+  },
+  {
+    "Nov 12": [
+      "Ezra 8",
+      "Hosea 9",
+      "Acts 28"
+    ]
+  },
+  {
+    "Nov 13": [
+      "Ezra 9",
+      "Hosea 10",
+      "Colossians 1"
+    ]
+  },
+  {
+    "Nov 14": [
+      "Ezra 10",
+      "Hosea 11",
+      "Colossians 2"
+    ]
+  },
+  {
+    "Nov 15": [
+      "Nehemiah 1-2",
+      "Hosea 12",
+      "Colossians 3-4"
+    ]
+  },
+  {
+    "Nov 16": [
+      "Nehemiah 3",
+      "Hosea 13",
+      "Thessalonians 1-2"
+    ]
+  },
+  {
+    "Nov 17": [
+      "Nehemiah 4",
+      "Hosea 14",
+      "Thessalonians 3-4"
+    ]
+  },
+  {
+    "Nov 18": [
+      "Nehemiah 5-6",
+      "Joel 1",
+      "Thessalonians 5"
+    ]
+  },
+  {
+    "Nov 19": [
+      "Nehemiah 7",
+      "Joel 2",
+      "Thessalonians 1-2"
+    ]
+  },
+  {
+    "Nov 20": [
+      "Nehemiah 8",
+      "Joel 3",
+      "Thessalonians 3"
+    ]
+  },
+  {
+    "Nov 21": [
+      "Nehemiah 9",
+      "Amos 1",
+      "Timothy 1-3"
+    ]
+  },
+  {
+    "Nov 22": [
+      "Nehemiah 10",
+      "Amos 2",
+      "Timothy 4-5"
+    ]
+  },
+  {
+    "Nov 23": [
+      "Nehemiah 11",
+      "Amos 3",
+      "Timothy 6"
+    ]
+  },
+  {
+    "Nov 24": [
+      "Nehemiah 12",
+      "Amos 4",
+      "Timothy 1"
+    ]
+  },
+  {
+    "Nov 25": [
+      "Nehemiah 13",
+      "Amos 5",
+      "Timothy 2"
+    ]
+  },
+  {
+    "Nov 26": [
+      "Esther 1",
+      "Amos 6",
+      "Timothy 3-4"
+    ]
+  },
+  {
+    "Nov 27": [
+      "Esther 2",
+      "Amos 7",
+      "Titus 1-3"
+    ]
+  },
+  {
+    "Nov 28": [
+      "Esther 3-4",
+      "Amos 8",
+      "Philemon 1"
+    ]
+  },
+  {
+    "Nov 29": [
+      "Esther 5-6",
+      "Amos 9",
+      "Hebrews 1-2"
+    ]
+  },
+  {
+    "Nov 30": [
+      "Esther 7-8",
+      "Obadia 1",
+      "Hebrews 3-5"
+    ]
+  },
+  {
+    "Dec 1": [
+      "Esther 9-10",
+      "Jonah 1",
+      "Hebrews 6-7"
+    ]
+  },
+  {
+    "Dec 2": [
+      "Job 1-2",
+      "Jonah 2-3",
+      "Hebrews 8-9"
+    ]
+  },
+  {
+    "Dec 3": [
+      "Job 3-4",
+      "Jonah 4",
+      "Hebrews 10"
+    ]
+  },
+  {
+    "Dec 4": [
+      "Job 5",
+      "Micah 1",
+      "Hebrews 11"
+    ]
+  },
+  {
+    "Dec 5": [
+      "Job 6-7",
+      "Micah 2",
+      "Hebrews 12"
+    ]
+  },
+  {
+    "Dec 6": [
+      "Job 8",
+      "Micah 3-4",
+      "Hebrews 13"
+    ]
+  },
+  {
+    "Dec 7": [
+      "Job 9",
+      "Micah 5",
+      "James 1"
+    ]
+  },
+  {
+    "Dec 8": [
+      "Job 10",
+      "Micah 6",
+      "James 2"
+    ]
+  },
+  {
+    "Dec 9": [
+      "Job 11",
+      "Micah 7",
+      "James 3-4"
+    ]
+  },
+  {
+    "Dec 10": [
+      "Job 12",
+      "Nahum 1-2",
+      "James 5"
+    ]
+  },
+  {
+    "Dec 11": [
+      "Job 13",
+      "Nahum 3",
+      "Peter 1"
+    ]
+  },
+  {
+    "Dec 12": [
+      "Job 14",
+      "Habbakuk 1",
+      "Peter 2"
+    ]
+  },
+  {
+    "Dec 13": [
+      "Job 15",
+      "Habbakuk 2",
+      "Peter 3-5"
+    ]
+  },
+  {
+    "Dec 14": [
+      "Job 16-17",
+      "Habbakuk 3",
+      "Peter 1-2"
+    ]
+  },
+  {
+    "Dec 15": [
+      "Job 18-19",
+      "Zepheniah 1",
+      "Peter 3"
+    ]
+  },
+  {
+    "Dec 16": [
+      "Job 20",
+      "Zepheniah 2",
+      "John 1-2"
+    ]
+  },
+  {
+    "Dec 17": [
+      "Job 21",
+      "Zepheniah 3",
+      "John 3-4"
+    ]
+  },
+  {
+    "Dec 18": [
+      "Job 22",
+      "Haggia 1",
+      "John 5"
+    ]
+  },
+  {
+    "Dec 19": [
+      "Job 23-24",
+      "Zechariah 1",
+      "John -3"
+    ]
+  },
+  {
+    "Dec 20": [
+      "Job 25-27",
+      "Zechariah 2-3",
+      "Jude 1"
+    ]
+  },
+  {
+    "Dec 21": [
+      "Job 28",
+      "Zechariah 4-5",
+      "Revelation 1-2"
+    ]
+  },
+  {
+    "Dec 22": [
+      "Job 29-30",
+      "Zechariah 6-7",
+      "Revelation 3-4"
+    ]
+  },
+  {
+    "Dec 23": [
+      "Job 31-32",
+      "Zechariah 8",
+      "Revelation 5-6"
+    ]
+  },
+  {
+    "Dec 24": [
+      "Job 33",
+      "Zechariah 9",
+      "Revelation 7-9"
+    ]
+  },
+  {
+    "Dec 25": [
+      "Job 34",
+      "Zechariah 10",
+      "Revelation 10-11"
+    ]
+  },
+  {
+    "Dec 26": [
+      "Job 35-36",
+      "Zechariah 11",
+      "Revelation 12-13"
+    ]
+  },
+  {
+    "Dec 27": [
+      "Job 37",
+      "Zechariah 12",
+      "Revelation 14"
+    ]
+  },
+  {
+    "Dec 28": [
+      "Job 38",
+      "Zechariah 13",
+      "Revelation 15-16"
+    ]
+  },
+  {
+    "Dec 29": [
+      "Job 39",
+      "Malachi 1",
+      "Revelation 17-18"
+    ]
+  },
+  {
+    "Dec 30": [
+      "Job 40",
+      "Malachi 2",
+      "Revelation 19-20"
+    ]
+  },
+  {
+    "Dec 31": [
+      "Job 41-42",
+      "Malachi 3-4",
+      "Revelation 21-22"
+    ]
+  }
+]
