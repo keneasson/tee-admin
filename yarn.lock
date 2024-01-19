@@ -6083,6 +6083,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@vercel/analytics@npm:^1.1.2":
+  version: 1.1.2
+  resolution: "@vercel/analytics@npm:1.1.2"
+  dependencies:
+    server-only: "npm:^0.0.1"
+  checksum: 1b8b98eaed3601d40cd265f8332525bbdb606e4e3545a37a0f1d05b28b84a95e7611ae2c52bf7c23ec6d763c2672ef5f3abf453770326a64e9f313ce2089e266
+  languageName: node
+  linkType: hard
+
 "@vercel/build-utils@npm:6.7.1":
   version: 6.7.1
   resolution: "@vercel/build-utils@npm:6.7.1"
@@ -15106,6 +15115,7 @@ __metadata:
     "@tamagui/next-plugin": "npm:latest"
     "@tamagui/next-theme": "npm:latest"
     "@types/node": "npm:^18.6.4"
+    "@vercel/analytics": "npm:^1.1.2"
     app: "npm:0.0.0"
     eslint-config-next: "npm:^13.0.4"
     google-auth-library: "npm:^9.4.1"
@@ -17965,6 +17975,13 @@ __metadata:
     parseurl: "npm:~1.3.3"
     send: "npm:0.18.0"
   checksum: 699b2d4c29807a51d9b5e0f24955346911437aebb0178b3c4833ad30d3eca93385ff9927254f5c16da345903cad39d9cd4a532198c95a5129cc4ed43911b15a4
+  languageName: node
+  linkType: hard
+
+"server-only@npm:^0.0.1":
+  version: 0.0.1
+  resolution: "server-only@npm:0.0.1"
+  checksum: c432348956641ea3f460af8dc3765f3a1bdbcf7a1e0205b0756d868e6e6fe8934cdee6bff68401a1dd49ba4a831c75916517a877446d54b334f7de36fa273e53
   languageName: node
   linkType: hard
 
