@@ -8,6 +8,7 @@ import { ErrorNotFound } from 'app/provider/error-not-found'
 import { Wrapper } from 'app/provider/wrapper'
 import type {
   BibleClassType,
+  CycType,
   GoogleSheets,
   MemorialServiceType,
   ProgramTypeKeys,
@@ -15,7 +16,9 @@ import type {
   SundaySchoolType,
 } from 'app/types'
 import { Loading } from 'app/provider/loading'
-import Constants from 'expo-constants'
+import { Cyc } from 'app/features/schedules/cyc'
+import { getGoogleSheet } from 'app/provider/get-google-sheet'
+import { getData } from 'app/provider/get-data'
 
 type Program = {
   title: string
@@ -32,25 +35,30 @@ type Program = {
 export const SchedulesScreen: React.FC<{
   googleSheets: GoogleSheets
 }> = ({ googleSheets }) => {
-  const API_PATH =
-    process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
   const [schedule, setSchedule] = useState<Program>()
   const [currentSchedule, setCurrentSchedule] = useState<string>()
 
   const handleSchedules = async (scheduleKey) => {
     setCurrentSchedule(scheduleKey)
-    const url = `${API_PATH}api/google-sheets?sheet=${scheduleKey}`
-    const rawSchedule = await fetch(url, { next: { revalidate: 3600 } })
-    const program = await rawSchedule.json()
+    const program =
+      scheduleKey === 'cyc' ? await getData(scheduleKey) : await getGoogleSheet(scheduleKey)
     setSchedule(program)
+  }
+
+  const allSchedules = {
+    ...googleSheets,
+    cyc: {
+      name: 'Toronto CYC',
+      key: 'cyc',
+    },
   }
 
   return (
     <Wrapper subHheader={'Ecclesial Programs'}>
-      {googleSheets ? (
+      {allSchedules ? (
         <YStack>
-          {Object.keys(googleSheets).map((serviceType: string, index: number) => {
-            return googleSheets[serviceType] && googleSheets[serviceType].key ? (
+          {Object.keys(allSchedules).map((serviceType: string, index: number) => {
+            return allSchedules[serviceType] && allSchedules[serviceType].key ? (
               <ListNavigation
                 key={index}
                 onPress={() => handleSchedules(serviceType)}
@@ -77,7 +85,7 @@ export const SchedulesScreen: React.FC<{
                         }
                   }
                 >
-                  {googleSheets[serviceType].name}
+                  {allSchedules[serviceType].name}
                 </ListNavigationText>
               </ListNavigation>
             ) : (
@@ -101,6 +109,9 @@ export const SchedulesScreen: React.FC<{
             )}
             {schedule?.content && schedule.type === 'bibleClass' && (
               <BibleClass schedule={schedule.content as BibleClassType[]} />
+            )}
+            {schedule?.content && schedule.type === 'cyc' && (
+              <Cyc schedule={schedule.content as CycType[]} />
             )}
           </Stack>
         </ScrollView>

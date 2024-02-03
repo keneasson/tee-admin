@@ -7,8 +7,9 @@ import { Section } from 'app/features/newsletter/Section'
 
 type NextMemorialProps = {
   event: MemorialServiceType
+  isSameDay: boolean
 }
-export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
+export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) => {
   if (!event.Exhort && event.Activities) {
     return (
       <Section>
@@ -24,9 +25,11 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
   }
   return (
     <Section>
-      <Paragraph size={'$5'} fontWeight={600}>
-        {event.Date.toString()}
-      </Paragraph>
+      {!isSameDay && (
+        <Paragraph size={'$5'} fontWeight={600}>
+          {event.Date.toString()}
+        </Paragraph>
+      )}
       <Paragraph size={'$5'} fontWeight={600}>
         Memorial Service
       </Paragraph>
@@ -77,7 +80,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
           <Accordion.Content>
             <Paragraph fontWeight={600}>Join Zoom Meeting</Paragraph>
             <ExtLink href="https://us02web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09">
-              Click to Join Zoom
+              <Text>Click to Join Zoom</Text>
             </ExtLink>
             <Paragraph>Meeting ID: 586 952 386</Paragraph>
             <Paragraph>Passcode: 036110</Paragraph>
@@ -85,13 +88,13 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
             <Paragraph>One tap mobile</Paragraph>
             <Paragraph>
               <ExtLink href="tel:+14388097799,,586952386#,,,,*036110# Canada">
-                +14388097799,,586952386#,,,,*036110#
+                <Text>+14388097799,,586952386#,,,,*036110#</Text>
               </ExtLink>{' '}
               Canada
             </Paragraph>
             <Paragraph>
               <ExtLink href="tel:+15873281099,,586952386#,,,,*036110# Canada">
-                +15873281099,,586952386#,,,,*036110#
+                <Text>+15873281099,,586952386#,,,,*036110#</Text>
               </ExtLink>{' '}
               Canada
             </Paragraph>
@@ -99,7 +102,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
             <Paragraph>
               Find your local number:{' '}
               <ExtLink href="https://us02web.zoom.us/u/kc1iqj9IRk">
-                https://us02web.zoom.us/u/kc1iqj9IRk
+                <Text>https://us02web.zoom.us/u/kc1iqj9IRk</Text>
               </ExtLink>
             </Paragraph>
           </Accordion.Content>
@@ -125,7 +128,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event }) => {
               Previous recordings are available on the Toronto East Christadelphians YouTube channel
               here:{' '}
               <ExtLink href="https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w">
-                https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w
+                <Text>https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w</Text>
               </ExtLink>{' '}
               The videos can be under either Upload or Live
             </Paragraph>

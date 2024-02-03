@@ -111,7 +111,6 @@ type MainNavigationProps = {
 const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, session }) => {
   const router = useRouter()
   const path = usePathname()
-  console.log('path', path)
   const linkTo = (route: string) => {
     return () => {
       handleOpenChange && handleOpenChange()
@@ -126,8 +125,9 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             <Text>Welcome {session.user.name}</Text>
           </NavHeading>
         )}
-        {pages.map((page) => (
+        {pages.map((page, i) => (
           <NavigationButtonItem
+            key={i}
             linkTo={linkTo(page.path)}
             text={page.label}
             active={path === page.path}

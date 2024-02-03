@@ -1,4 +1,4 @@
-export type ProgramTypeKeys = 'memorial' | 'sundaySchool' | 'bibleClass'
+export type ProgramTypeKeys = 'memorial' | 'sundaySchool' | 'bibleClass' | 'cyc'
 
 export type GoogleSheets = Record<
   ProgramTypeKeys,
@@ -43,4 +43,21 @@ export type BibleClassType = {
   Topic: string
 }
 
-export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType
+type CycRegular = {
+  type: 'regular'
+  location: string
+  speaker: string
+  topic: string
+}
+
+type CycSpecial = {
+  type: 'special'
+  event: string
+}
+
+export type CycType = {
+  Date: Date
+  Key: 'cyc'
+} & (CycRegular | CycSpecial)
+
+export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType
