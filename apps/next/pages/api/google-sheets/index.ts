@@ -2,11 +2,12 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
+import { convertGoogleDate } from '../../../utils/convert-google-date'
+import teeServicesDb from '../../../tee-services-db47a9e534d3.json'
 
 const keys = require('../../../tee-services-db47a9e534d3.json')
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log('req.query', req.query.sheet)
   if (!req.query.sheet) {
     return res.status(404).json({ failed: 'Schedule Not Found' })
   }
@@ -41,7 +42,11 @@ async function get_google_sheet(sheetKey: string) {
     const rows = await sheet.getRows()
     const data = rows.map((row) => {
       const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
-      const date = getDateFromGoogle(cell.value as number).toISOString()
+      const date = convertGoogleDate(
+        teeServicesDb,
+        cell.value as number,
+        sheetKey as keyof typeof teeServicesDb.sheet_ids
+      )
       // extract the "Google Date" and convert to something readable.
       const arrangement = row.toObject()
       arrangement['Date'] = date
@@ -52,8 +57,4 @@ async function get_google_sheet(sheetKey: string) {
   } catch (error) {
     throw error
   }
-}
-
-function getDateFromGoogle(serialNumber: number): Date {
-  return new Date((serialNumber - 25569) * 86400000)
 }
