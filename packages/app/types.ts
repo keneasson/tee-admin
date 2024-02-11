@@ -61,3 +61,9 @@ export type CycType = {
 } & (CycRegular | CycSpecial)
 
 export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType
+
+export type DailyReadingType = Record<string, string[]>
+
+export type DailyReadingsType = {
+  readings: DailyReadingType[]
+}

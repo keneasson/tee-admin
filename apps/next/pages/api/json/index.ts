@@ -43,7 +43,7 @@ type JsonTypes = {
 } & (CycRegular | CycSpecial)
 
 /**
- * main function here is to make the date clean in the data but a Valid Javascript date
+ * main function here is to make the date clean in the data with a UTC date that matches the Localized Date in the data file
  * @param name the filename to be imported.
  */
 async function get_json(name: string) {
