@@ -85,7 +85,6 @@ async function findNextProgram<FindNextProgramProps>(
     const event = row.toObject() as Omit<ProgramTypes, 'Key'>
     const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
     const eventDate = convertGoogleDate(teeServicesDb, cell.value as number, sheetKey)
-    console.log('upcoming program', { eventDate, Date: convertHumanReadableDate(eventDate) })
     return {
       ...event,
       Date: convertHumanReadableDate(eventDate),

@@ -1,9 +1,11 @@
+'use client'
 import React from 'react'
 import { Wrapper } from 'app/provider/wrapper'
 import { Accordion, ExtLink, Heading, Paragraph, Separator, Square, Text } from '@my/ui'
 import { ChevronDown, Utensils } from '@tamagui/lucide-icons'
 import { Section } from 'app/features/newsletter/Section'
 import { DownloadButton } from '@my/ui/src/download-button'
+import { EventsFooter } from 'app/features/events/index'
 
 export const StudyWeekend2024: React.FC = () => {
   return (
@@ -168,6 +170,7 @@ export const StudyWeekend2024: React.FC = () => {
           <Utensils size={14} /> Lunch and Fellowship to follow
         </Paragraph>
       </Section>
+      <EventsFooter />
     </Wrapper>
   )
 }
