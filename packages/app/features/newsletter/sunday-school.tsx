@@ -3,7 +3,7 @@ import React from 'react'
 import { Paragraph, YStack } from '@my/ui'
 import { Section } from 'app/features/newsletter/Section'
 
-type NextSundaySchoolProps = {
+export type NextSundaySchoolProps = {
   event: SundaySchoolType
 }
 export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => {

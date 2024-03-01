@@ -5,9 +5,12 @@ import { Section } from 'app/features/newsletter/Section'
 import { IntLink } from '@my/ui/src'
 import { DailyReadings } from 'app/features/newsletter/readings/daily-readings'
 import { fetchReadings } from 'app/features/newsletter/readings/fetch-readings'
+import { useSession } from 'next-auth/react'
 
 export function HomeScreen() {
   const [readings, setReadings] = useState<[] | false>(false)
+  const { data: session } = useSession()
+
   useEffect(() => {
     Promise.all([fetchReadings().then(setReadings)]).catch((error) =>
       console.log('error fetching data', error)
@@ -25,6 +28,10 @@ export function HomeScreen() {
         </Paragraph>
         <Paragraph fontWeight={600}>News</Paragraph>
         <IntLink href="/newsletter">View Online Newsletter</IntLink>
+        {session && session.user && <IntLink href="/welfare">Welfare</IntLink>}
+
+        <Paragraph fontWeight={600}>Programs for each Term</Paragraph>
+        <IntLink href="/schedule">View Schedules</IntLink>
 
         <Paragraph fontWeight={600}>Events</Paragraph>
         <IntLink href="/events/study-weekend-2024">March 2024 Study Day Program</IntLink>
@@ -35,11 +42,6 @@ export function HomeScreen() {
           Lakefield Bible School - at Fleming
         </IntLink>
 
-        <Paragraph>
-          We also share our {new Date().getFullYear()} program for Worship, Bible Study and Sunday
-          School.
-        </Paragraph>
-        <IntLink href="/schedule">View Schedules</IntLink>
         <Separator />
         {readings && <DailyReadings readings={readings} />}
       </Section>

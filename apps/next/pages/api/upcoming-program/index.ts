@@ -58,7 +58,7 @@ async function get_upcoming_program() {
 }
 
 /**
- *
+ * get the next two events from a specific Google Sheet
  * @param sheetKey
  * @param auth
  * @param today
