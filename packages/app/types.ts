@@ -35,6 +35,10 @@ export type SundaySchoolType = {
   'Holidays and Special Events'?: string
 }
 
+export type NextSundaySchoolProps = {
+  events: SundaySchoolType[]
+}
+
 export type BibleClassType = {
   Date: string | Date
   Key: 'bibleClass'

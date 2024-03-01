@@ -29,6 +29,7 @@ const pages: MainPageType[] = [
   { path: '/', label: 'Home' },
   { path: '/newsletter', label: 'Newsletter' },
   { path: '/schedule', label: 'Schedules' },
+  { path: '/events', label: 'Events' },
 ]
 
 export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
