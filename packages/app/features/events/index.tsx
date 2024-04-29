@@ -5,7 +5,6 @@ import { Button, Heading, Paragraph } from '@my/ui'
 import { useRouter } from 'solito/navigation'
 import { StudyWeekend2024 } from 'app/features/events/study-weekend-2024'
 import { LakefieldBibleSchool2024 } from 'app/features/events/lakefield-bible-school-2024'
-import { TorontoFraternal2024 } from 'app/features/events/toronto-fraternal-2024'
 import { XStack } from 'tamagui'
 import { Section } from 'app/features/newsletter/Section'
 
@@ -21,8 +20,6 @@ export const Events: React.FC<EventProps> = ({ eventId }) => {
       return <StudyWeekend2024 />
     case 'lakefield-bible-school-2024':
       return <LakefieldBibleSchool2024 />
-    case 'toronto-fraternal-2024':
-      return <TorontoFraternal2024 />
     default:
       return <EventListing isNotFound={true} />
   }
@@ -51,15 +48,6 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
       </Section>
       <Section>
         <Heading size={5}>Other events of interest</Heading>
-        <XStack>
-          <Button
-            size="$2"
-            onPress={() => router.push('/events/toronto-fraternal-2024')}
-            chromeless
-          >
-            Toronto Fraternal Gathering
-          </Button>
-        </XStack>
         <XStack>
           <Button
             variant={'outlined'}

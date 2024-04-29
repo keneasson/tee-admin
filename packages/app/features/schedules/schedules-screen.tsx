@@ -45,13 +45,7 @@ export const SchedulesScreen: React.FC<{
     setSchedule(program)
   }
 
-  const allSchedules = {
-    ...googleSheets,
-    cyc: {
-      name: 'Toronto CYC',
-      key: 'cyc',
-    },
-  }
+  const allSchedules = googleSheets
 
   return (
     <Wrapper subHheader={'Ecclesial Programs'}>

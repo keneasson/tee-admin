@@ -24,7 +24,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 const PAGE1 = 0
 const DATE_INDEX = 0
 
-async function get_upcoming_program() {
+export async function get_upcoming_program() {
   try {
     // Initialize auth - see https://theoephraim.github.io/node-google-spreadsheet/#/guides/authentication
     const serviceAccountAuth = new JWT({

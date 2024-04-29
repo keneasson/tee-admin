@@ -1,4 +1,19 @@
-export type ProgramTypeKeys = 'memorial' | 'sundaySchool' | 'bibleClass' | 'cyc'
+export enum ProgramsTypes {
+  memorial = 'memorial',
+  sundaySchool = 'sundaySchool',
+  bibleClass = 'bibleClass',
+  cyc = 'cyc',
+}
+
+export enum EmailListTypes {
+  sundaySchool = 'sundaySchool',
+  newsletter = 'newsletter',
+  memorial = 'memorial',
+  bibleClass = 'bibleClass',
+}
+
+export type ProgramTypeKeys = keyof typeof ProgramsTypes
+export type EmailListTypeKeys = keyof typeof EmailListTypes
 
 export type GoogleSheets = Record<
   ProgramTypeKeys,
@@ -8,9 +23,21 @@ export type GoogleSheets = Record<
   }
 >
 
+export type ContactPrefPreferences = { [K in EmailListTypeKeys]: boolean }
+
+export type ContactPreferencesProps = {
+  email: string
+  preferences: ContactPrefPreferences
+}
+
+export type ContactListProps = {
+  listName: string
+  contact: ContactPreferencesProps
+}
+
 export type MemorialServiceType = {
   Date: string | Date
-  Key: 'memorial'
+  Key: ProgramsTypes.memorial
   Preside: string
   Exhort: string
   Organist: string
@@ -30,7 +57,7 @@ export type MemorialServiceType = {
 
 export type SundaySchoolType = {
   Date: string | Date
-  Key: 'sundaySchool'
+  Key: ProgramsTypes.sundaySchool
   Refreshments: string
   'Holidays and Special Events'?: string
 }
@@ -41,7 +68,7 @@ export type NextSundaySchoolProps = {
 
 export type BibleClassType = {
   Date: string | Date
-  Key: 'bibleClass'
+  Key: ProgramsTypes.bibleClass
   Presider: string
   Speaker: string
   Topic: string
@@ -61,10 +88,12 @@ type CycSpecial = {
 
 export type CycType = {
   Date: Date
-  Key: 'cyc'
+  Key: ProgramsTypes.cyc
 } & (CycRegular | CycSpecial)
 
 export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType
+
+export type DataTypes = CycType | DailyReadingsType
 
 export type DailyReadingType = Record<string, string[]>
 
