@@ -1,18 +1,18 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const range = !(req.query.start && req.query.end)
-    ? setDefaultRange()
-    : setGivenRange(req.query.start as string, req.query.end as string)
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const range = !(req.query.start && req.query.end)
+      ? setDefaultRange()
+      : setGivenRange(req.query.start as string, req.query.end as string)
 
-  get_json(range)
-    .then((result) => {
-      res.status(200).json(result)
-    })
-    .catch((error) => {
-      console.log('error', error)
-      res.status(500).json({ failed: error })
-    })
+    const result = await get_json(range)
+
+    return res.status(200).json(result)
+  } catch (error) {
+    console.log('error', error)
+    return res.status(500).json({ failed: error })
+  }
 }
 
 type ReadingsType = {

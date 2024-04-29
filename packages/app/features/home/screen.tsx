@@ -36,8 +36,6 @@ export function HomeScreen() {
         <Paragraph fontWeight={600}>Events</Paragraph>
         <IntLink href="/events/study-weekend-2024">March 2024 Study Day Program</IntLink>
 
-        <IntLink href="/events/toronto-fraternal-2024">Toronto Fraternal Gathering</IntLink>
-
         <IntLink href="/events/lakefield-bible-school-2024">
           Lakefield Bible School - at Fleming
         </IntLink>

@@ -26,27 +26,21 @@ import {
 import * as React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from 'app/types'
 
-const mockEvents: NextSundaySchoolProps = {
-  events: [
-    {
-      Key: 'sundaySchool',
-      Date: 'Feb 25, 2024',
-      Refreshments: 'Eassons',
-    },
-    {
-      Key: 'sundaySchool',
-      Date: 'March 3, 2024',
-      Refreshments: 'Currys',
-    },
-  ],
-}
+const mockEvents: SundaySchoolType[] = [
+  {
+    Key: 'sundaySchool',
+    Date: 'Feb 25, 2024',
+    Refreshments: 'Eassons',
+  },
+  {
+    Key: 'sundaySchool',
+    Date: 'March 3, 2024',
+    Refreshments: 'Currys',
+  },
+]
 
-type SundaySchoolProps = {
-  sundaySchoolEvents?: NextSundaySchoolProps
-}
-
-const SundaySchool: React.FC<SundaySchoolProps> = ({ sundaySchoolEvents }) => {
-  const events = sundaySchoolEvents?.events || mockEvents.events
+export const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
+  const sundaySchoolEvents = events || mockEvents
   console.log('SundaySchool', { mockEvents, sundaySchoolEvents })
   return (
     <Html lang="en">
@@ -65,8 +59,8 @@ const SundaySchool: React.FC<SundaySchoolProps> = ({ sundaySchoolEvents }) => {
             </Text>
           </Section>
           <Row>
-            <SundaySchoolProgram event={events[0]} />
-            {events[1] && <SundaySchoolProgram event={events[1]} />}
+            {sundaySchoolEvents[0] && <SundaySchoolProgram event={sundaySchoolEvents[0]} />}
+            {sundaySchoolEvents[1] && <SundaySchoolProgram event={sundaySchoolEvents[1]} />}
           </Row>
           <Section style={info}>
             <Heading style={defaultText}>Refreshments Schedule</Heading>
@@ -164,5 +158,3 @@ const SundaySchoolProgram = ({ event }: EventProps) => {
     )
   }
 }
-
-export default SundaySchool
