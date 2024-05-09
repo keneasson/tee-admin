@@ -4,7 +4,7 @@ import { color } from '@tamagui/themes'
 import { ExternalLink } from '@tamagui/lucide-icons'
 
 const StyledLink = styled(Anchor, {
-  fontWeight: 600,
+  fontWeight: 'bold',
   color: color.blue11Light,
 })
 
