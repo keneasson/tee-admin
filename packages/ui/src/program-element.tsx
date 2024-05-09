@@ -8,7 +8,7 @@ type ProgramElementProps = {
 export const ProgramElement: React.FC<ProgramElementProps> = ({ label, content }) => {
   return (
     <Paragraph>
-      <Text fontWeight={600}>{label}:</Text> {content}
+      <Text fontWeight="bold">{label}:</Text> {content}
     </Paragraph>
   )
 }

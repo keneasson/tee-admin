@@ -24,9 +24,7 @@ export const DownloadButton: React.FC<DownloadLinkProps> = ({ children, href }) 
         <Link href={href} download target={'_blank'} rel="noopener noreferrer">
           <XStack paddingHorizontal={6} display="inline-flex" gap={8}>
             <Download />
-            <Text fontWeight={100} fontSize={'$3'}>
-              {children}
-            </Text>
+            <Text fontSize={'$3'}>{children}</Text>
           </XStack>
         </Link>
       </View>
