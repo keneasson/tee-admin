@@ -1,5 +1,12 @@
 import Constants from 'expo-constants'
-import { ContactListProps, CycType, DataTypes, ProgramsTypes } from 'app/types'
+import {
+  CreateContactType,
+  CycType,
+  DataTypes,
+  ProgramsTypes,
+  SimplifiedContactListType,
+} from 'app/types'
+import { ListContactsResponse } from '@aws-sdk/client-sesv2'
 
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
@@ -31,7 +38,7 @@ export const sendEmail = async (key: string): Promise<string> => {
 /**
  * Get a list of all Subscriber Lists.
  */
-export const getContactsList = async (): Promise<string> => {
+export const getContactsList = async (): Promise<SimplifiedContactListType> => {
   const url = `${API_PATH}api/contact/list/`
   const list = await fetch(url, { cache: 'no-store' })
   return await list.json()
@@ -39,19 +46,24 @@ export const getContactsList = async (): Promise<string> => {
 
 /**
  * Get all the contacts from a Specific List (Topic)
+ * @param nextToken if there's more - pass this to get "next page"
  * @param key
  */
-export const getContacts = async (key: string): Promise<string> => {
-  const url = `${API_PATH}api/contact/${key}`
-  const rawSchedule = await fetch(url, { cache: 'no-store', method: 'GET' })
-  return await rawSchedule.json()
+export const getContacts = async (
+  key: string,
+  nextToken?: string | false
+): Promise<ListContactsResponse> => {
+  const urlNextToken = nextToken ? `?NextToken=${nextToken}` : ''
+  const url = `${API_PATH}api/contact/${key}${urlNextToken}`
+  const rawContacts = await fetch(url, { cache: 'no-store', method: 'GET' })
+  return await rawContacts.json()
 }
 
 /**
  * create a contact to all subscriber lists - passing opt-in for the lists to be added too
  * @param props
  */
-export const addContacts = async ({ listName, contact }: ContactListProps): Promise<string> => {
+export const addContacts = async ({ listName, contact }: CreateContactType): Promise<string> => {
   const url = `${API_PATH}api/contact/${listName}`
   const body = JSON.stringify(contact)
   const rawSchedule = await fetch(url, { cache: 'no-store', method: 'POST', body })

@@ -2,13 +2,13 @@ import { Button, Header, Text, YStack } from '@my/ui'
 import { ContactLists } from 'app/features/email-tester/contact-list'
 import React, { useState } from 'react'
 import { addContacts, getContactsList } from 'app/provider/get-data'
-import { ContactListProps } from 'app/types'
+import { CreateContactType, SimplifiedContactListType } from 'app/types'
 
 export const ManageContacts: React.FC = () => {
-  const [contactLists, setContactLists] = useState<any>(null)
+  const [contactLists, setContactLists] = useState<SimplifiedContactListType | null>(null)
   const [allContacts, setAllContacts] = useState<string>('0')
 
-  const handleRequestContactList = async () => {
+  const handleRequestContactList = async (): Promise<void> => {
     console.log('in here handleRequestContactList')
     const response = await getContactsList()
     console.log('response', response)
@@ -17,7 +17,7 @@ export const ManageContacts: React.FC = () => {
 
   const handleImportContactList = async () => {
     console.log('in here handleImportContactList')
-    const newContact: ContactListProps = {
+    const newContact: CreateContactType = {
       listName: 'TEEAdmin',
       contact: {
         email: 'email@address.com',
