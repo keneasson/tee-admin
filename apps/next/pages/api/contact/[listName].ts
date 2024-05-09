@@ -10,7 +10,7 @@ import { initSubscriberList } from '../../../utils/email/init/iniSesInitialSubsc
  * @param req NextApiRequest
  * @param res NextApiResponse
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   try {
     if (!req.query.listName) {
       return res.status(404).json({ failed: 'Json Data Not Found' })
@@ -21,13 +21,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const contact = req.body
       // const result = addContact({ listName, contact })
       console.log('API list.listName body', { listName, contact })
+      /**
+       * @todo - actually pass contacts to SES add Subscribers Service.
+       */
       const numberAdded = initSubscriberList()
       return res.status(200).json(numberAdded)
     }
     if (req.method === 'GET') {
       const contactResponse = await getContacts({ listName })
       console.log('result from tee-admin contacts API', contactResponse)
-      return res.status(200).json(contactResponse.Contacts)
+      return res
+        .status(200)
+        .json({ contacts: contactResponse.Contacts, nextToken: contactResponse.NextToken })
     }
   } catch (e) {
     console.log('getContacts error', e)

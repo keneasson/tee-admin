@@ -1,15 +1,15 @@
 import { GetContactListCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 import { getAwsConfig } from './contact'
+import { BackendContactList } from 'app/types'
 
 export const inputTemplate = { ContactListName: 'TEEAdmin' }
 
 /**
  * returns all the Topics (Contact Lists) for the entire system
  */
-export async function getContactLists(): Promise<any> {
+export async function getContactLists(): Promise<BackendContactList> {
   try {
     const client = new SESv2Client(getAwsConfig())
-    console.log('client', client)
     const input = {
       ...inputTemplate,
     }
@@ -21,19 +21,20 @@ export async function getContactLists(): Promise<any> {
     if (!awsContactList.Topics) {
       return 'Your subscriber list has no Topics (Lists)'
     }
+
     return {
       listName: awsContactList.ContactListName,
       lists: awsContactList.Topics.map((topic) => {
         return {
-          key: topic.TopicName,
+          key: topic.TopicName as string,
           defaultOptIn: topic.DefaultSubscriptionStatus === 'OPT_IN',
-          displayName: topic.DisplayName,
+          displayName: topic.DisplayName as string,
         }
       }),
     }
   } catch (err) {
     console.log('typeof error', typeof err)
     console.log('actual error', err)
+    throw err
   }
-  return
 }

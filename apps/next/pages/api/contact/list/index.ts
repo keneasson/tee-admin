@@ -12,10 +12,8 @@ import { getContactLists } from '../../../../utils/email/contact-lists'
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const response = await getContactLists()
-    console.log('result from tee-admin contacts API', response)
     return res.status(200).json(response)
   } catch (e) {
-    console.log('getContactLists error', e)
     const failed = {
       message: 'Failed in outside catch',
       error: e,

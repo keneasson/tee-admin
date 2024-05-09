@@ -9,9 +9,9 @@ import {
   SESv2ClientConfig,
   SubscriptionStatus,
 } from '@aws-sdk/client-sesv2'
-import { GetContactsProps } from '../types'
+
 import { inputTemplate } from './contact-lists'
-import { ContactListProps, EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { CreateContactType, EmailListTypeKeys, EmailListTypes, GetContactsProps } from 'app/types'
 
 const CREDENTIAL = {
   accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
@@ -59,7 +59,7 @@ export async function getContacts({
 
 export async function addContact({
   contact,
-}: ContactListProps): Promise<CreateContactCommandOutput> {
+}: CreateContactType): Promise<CreateContactCommandOutput> {
   const client = new SESv2Client(getAwsConfig())
   console.log('in addContact BE', contact)
   const sesPref = Object.keys(EmailListTypes).map((p) => {

@@ -1,3 +1,8 @@
+export type GetContactsProps = {
+  listName: string
+  nextPageToken?: string
+}
+
 export enum ProgramsTypes {
   memorial = 'memorial',
   sundaySchool = 'sundaySchool',
@@ -23,17 +28,52 @@ export type GoogleSheets = Record<
   }
 >
 
+export type BackendLists = {
+  key: string
+  defaultOptIn: boolean
+  displayName: string
+}
+
+/**
+ * The Type our Next JS returns describing Any Subscriber List
+ */
+export type BackendContactList =
+  | string
+  | {
+      listName: string
+      lists: BackendLists[]
+    }
+
 export type ContactPrefPreferences = { [K in EmailListTypeKeys]: boolean }
 
-export type ContactPreferencesProps = {
-  email: string
+export type ContactPreferences = {
+  unsubscribed: boolean
+  displayName: string
   preferences: ContactPrefPreferences
 }
 
-export type ContactListProps = {
-  listName: string
-  contact: ContactPreferencesProps
+export type ContactListMeta = {
+  key: EmailListTypeKeys
+  defaultOptIn: boolean
+  displayName: string
 }
+
+export type SimplifiedContactListType = {
+  listName: EmailListTypeKeys
+  lists: ContactListMeta[]
+}
+
+export type CreateContactType = {
+  listName: string
+  contact: {
+    email: string
+    preferences: { [K in EmailListTypeKeys] }
+  }
+}
+
+export type SimplifiedContactsByList = { [key: string]: ContactPreferences }
+
+export type SimplifiedContacts = { [K in EmailListTypeKeys]?: SimplifiedContactsByList }
 
 export type MemorialServiceType = {
   Date: string | Date
