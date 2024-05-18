@@ -1,3 +1,5 @@
+import { Contact } from '@aws-sdk/client-sesv2'
+
 export type GetContactsProps = {
   listName: string
   nextPageToken?: string
@@ -71,9 +73,20 @@ export type CreateContactType = {
   }
 }
 
+export type GetContactType = {
+  nextToken: string
+  contacts: Contact[]
+}
+
+/**
+ * string is an email address
+ */
 export type SimplifiedContactsByList = { [key: string]: ContactPreferences }
 
-export type SimplifiedContacts = { [K in EmailListTypeKeys]?: SimplifiedContactsByList }
+export type SimplifiedContacts = {
+  unsubscribed: string[]
+  subscribed: { [K in EmailListTypeKeys]?: SimplifiedContactsByList }
+}
 
 export type MemorialServiceType = {
   Date: string | Date

@@ -1,55 +1,63 @@
-import { Header, Text, XStack } from '@my/ui'
-import { Contact as SESContact } from '@aws-sdk/client-sesv2'
+import { CheckboxWithCheck, Text, XStack } from '@my/ui'
+import { ContactPreferences, EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { useEffect, useState } from 'react'
 
-const Wrapper: React.FC<SESContact> = ({ EmailAddress, TopicPreferences, UnsubscribeAll }) => {
+type Contact = {
+  email: string
+  preferences?: ContactPreferences
+}
+const Wrapper: React.FC<Contact> = ({ email, preferences }) => {
+  console.log('preferences', preferences)
   return (
-    <XStack>
-      <Header>
-        <Text>{EmailAddress}</Text>
-      </Header>
-      {/*{UnsubscribeAll ? (*/}
-      {/*  <Text>Unsubscribed</Text>*/}
-      {/*) : (*/}
-      {/*  // <Preferences EmailAddress={EmailAddress} TopicPreferences={TopicPreferences}></Preferences>*/}
-      {/*)}*/}
-    </XStack>
+    <>
+      <XStack justifyContent={'space-between'}>
+        <Text>{email}</Text>
+        {preferences && <Preferences email={email} preferences={preferences}></Preferences>}
+      </XStack>
+    </>
   )
 }
-//
-// const Preferences: React.FC<Omit<ContactPreferencesProps, 'UnsubscribeAll'>> = ({
-//   EmailAddress,
-//   TopicPreferences,
-// }) => {
-//   const [preference, setPreference] = useState<ContactPrefPreferences>(TopicPreferences)
-//
-//   const updateContact = (contactListKey: EmailListTypeKeys, optin: boolean) => {
-//     setPreference({
-//       ...preference,
-//       [contactListKey]: optin,
-//     })
-//   }
-//
-//   useEffect(() => {
-//     console.log('TopicPreferences', { TopicPreferences, EmailListTypes })
-//   }, [])
-//
-//   return (
-//     <YStack>
-//       {Object.keys(EmailListTypes).map((emailList: EmailListTypeKeys, index) => (
-//         <XStack key={index}>
-//           <Checkbox
-//             checked={preference[emailList]}
-//             onCheckedChange={(checkedState: boolean) => {
-//               updateContact(emailList, checkedState)
-//             }}
-//           />
-//         </XStack>
-//       ))}
-//     </YStack>
-//   )
-// }
+
+type PreferencesProps = {
+  email: string
+  preferences: ContactPreferences
+}
+const Preferences: React.FC<PreferencesProps> = ({ email, preferences }) => {
+  const [preference, setPreference] = useState<ContactPreferences>(preferences)
+
+  const updateContact = (contactListKey: EmailListTypeKeys, optIn: boolean) => {
+    setPreference({
+      ...preference,
+      [contactListKey]: optIn,
+    })
+  }
+
+  useEffect(() => {
+    console.log('preference', { preference })
+  }, [])
+
+  return (
+    <>
+      {Object.keys(EmailListTypes).map((emailList: EmailListTypeKeys, index) => {
+        console.log('emailList', { emailList, isOptIn: preference[emailList] })
+        return (
+          <XStack key={index}>
+            <CheckboxWithCheck
+              checked={preference[emailList]}
+              onCheckedChange={(checkedState: boolean) => {
+                updateContact(emailList, checkedState)
+              }}
+              label={emailList}
+              size={'$5'}
+            />
+          </XStack>
+        )
+      })}
+    </>
+  )
+}
 
 export const Contact = {
   Wrapper,
-  // Preferences,
+  Preferences,
 }
