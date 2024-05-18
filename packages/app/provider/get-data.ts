@@ -3,10 +3,10 @@ import {
   CreateContactType,
   CycType,
   DataTypes,
+  GetContactType,
   ProgramsTypes,
   SimplifiedContactListType,
 } from 'app/types'
-import { ListContactsResponse } from '@aws-sdk/client-sesv2'
 
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
@@ -52,7 +52,7 @@ export const getContactsList = async (): Promise<SimplifiedContactListType> => {
 export const getContacts = async (
   key: string,
   nextToken?: string | false
-): Promise<ListContactsResponse> => {
+): Promise<GetContactType> => {
   const urlNextToken = nextToken ? `?NextToken=${nextToken}` : ''
   const url = `${API_PATH}api/contact/${key}${urlNextToken}`
   const rawContacts = await fetch(url, { cache: 'no-store', method: 'GET' })

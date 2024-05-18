@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'POST') {
       const contact = req.body
       // const result = addContact({ listName, contact })
-      console.log('API list.listName body', { listName, contact })
+      console.log('API POST.addContact body', { listName, contact })
       /**
        * @todo - actually pass contacts to SES add Subscribers Service.
        */
@@ -28,11 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(numberAdded)
     }
     if (req.method === 'GET') {
-      const contactResponse = await getContacts({ listName })
-      console.log('result from tee-admin contacts API', contactResponse)
-      return res
-        .status(200)
-        .json({ contacts: contactResponse.Contacts, nextToken: contactResponse.NextToken })
+      const nextPageToken = checkNextPageToken(req.query)
+      const contactResponse = await getContacts({ listName, nextPageToken })
+      const nextToken = contactResponse.NextToken
+        ? encodeURIComponent(contactResponse.NextToken)
+        : undefined
+      return res.status(200).json({ contacts: contactResponse.Contacts, nextToken })
     }
   } catch (e) {
     console.log('getContacts error', e)
@@ -42,4 +43,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     return res.status(500).json({ failed })
   }
+}
+
+/**
+ * When we pass the NextToken Back from the Front-end it get's mashed so
+ * we url encode it before packing it up. This function checks for it
+ * then decodes it so it works.
+ * @param query the NextApiRequest Query String
+ */
+function checkNextPageToken(query: NextApiRequest['query']): string | undefined {
+  if (!query?.['NextToken']) {
+    return undefined
+  }
+  return decodeURIComponent(query['NextToken'] as string)
 }

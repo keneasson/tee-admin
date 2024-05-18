@@ -18,6 +18,8 @@ const CREDENTIAL = {
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
 }
 
+const PAGE_SIZE = 25
+
 /**
  * This isn't working very well - ideally AWS gets Security Credentials from ENV variables, but this is
  * extremely intermittent.
@@ -49,8 +51,10 @@ export async function getContacts({
         TopicName: listName,
       },
     },
-    PageSize: 25,
-    NextToken: nextPageToken,
+    PageSize: PAGE_SIZE,
+  }
+  if (nextPageToken) {
+    input['NextToken'] = nextPageToken
   }
 
   const command = new ListContactsCommand(input)
