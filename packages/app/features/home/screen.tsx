@@ -33,12 +33,8 @@ export function HomeScreen() {
         <Paragraph fontWeight={600}>Programs for each Term</Paragraph>
         <IntLink href="/schedule">View Schedules</IntLink>
 
-        <Paragraph fontWeight={600}>Events</Paragraph>
-        <IntLink href="/events/study-weekend-2024">March 2024 Study Day Program</IntLink>
-
-        <IntLink href="/events/lakefield-bible-school-2024">
-          Lakefield Bible School - at Fleming
-        </IntLink>
+        <Paragraph fontWeight={600}>Past Events</Paragraph>
+        <IntLink href="/events/study-weekend-2024">Notes from March 2024 Study Day</IntLink>
 
         <Separator />
         {readings && <DailyReadings readings={readings} />}

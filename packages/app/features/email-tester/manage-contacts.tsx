@@ -1,12 +1,14 @@
-import { Button, Header, Text, YStack } from '@my/ui'
-import { ContactLists } from 'app/features/email-tester/contact-list'
 import React, { useState } from 'react'
+
+import { Button, FullDialog, Heading, Text, YStack } from '@my/ui'
+import { ContactLists } from 'app/features/email-tester/contact-list'
 import { addContacts, getContactsList } from 'app/provider/get-data'
 import { CreateContactType, SimplifiedContactListType } from 'app/types'
 
+import { AddUpdateList } from 'app/features/email-tester/dialogues/add-update-list'
+
 export const ManageContacts: React.FC = () => {
   const [contactLists, setContactLists] = useState<SimplifiedContactListType | null>(null)
-  const [allContacts, setAllContacts] = useState<string>('0')
 
   const handleRequestContactList = async (): Promise<void> => {
     console.log('in here handleRequestContactList')
@@ -15,36 +17,24 @@ export const ManageContacts: React.FC = () => {
     setContactLists(response)
   }
 
-  const handleImportContactList = async () => {
-    console.log('in here handleImportContactList')
-    const newContact: CreateContactType = {
-      listName: 'TEEAdmin',
-      contact: {
-        email: 'email@address.com',
-        preferences: {
-          sundaySchool: true,
-          memorial: true,
-          newsletter: true,
-          bibleClass: true,
-        },
-      },
-    }
-    const response = await addContacts(newContact)
+  const handleAddContact = async (props: CreateContactType) => {
+    console.log('in here handleImportContactList', props)
+    const response = await addContacts(props)
     console.log('response', response)
-    setAllContacts(response)
   }
+
+  const handleShowAddContact = async () => {}
+  const handleShowAddCList = async () => {}
 
   return (
     <>
-      <Header>Manage Contacts</Header>
+      <Heading>Manage Contacts</Heading>
       <YStack>
+        <FullDialog content={<AddUpdateList />} trigger="Add New List"></FullDialog>
+        {/*<AddUpdateContact />*/}
         <Button onPress={() => handleRequestContactList()}>
-          <Text>View Contact Lists</Text>
+          <Text>Load Contact Lists</Text>
         </Button>
-        <Button onPress={() => handleImportContactList()}>
-          <Text>Bulk import</Text>
-        </Button>
-        <Text>response of bulk import: {allContacts}</Text>
       </YStack>
       {contactLists && <ContactLists contactLists={contactLists} />}
     </>

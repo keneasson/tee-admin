@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { emailReasons, emailSend } from '../../../utils/email/email-send'
-import { getEmailContent } from '../../../utils/getEmailContent'
+import { getEmailContent } from '../../../utils/email/get-email-content'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason

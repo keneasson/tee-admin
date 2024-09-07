@@ -1,59 +1,49 @@
 import { CheckboxWithCheck, Text, XStack } from '@my/ui'
-import { ContactPreferences, EmailListTypeKeys, EmailListTypes } from 'app/types'
-import { useEffect, useState } from 'react'
+import { ContactsEmailPreferences, EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { ConnectForm } from './contacts'
 
 type Contact = {
+  key: number
   email: string
-  preferences?: ContactPreferences
+  preferences?: ContactsEmailPreferences
+  index: number
 }
-const Wrapper: React.FC<Contact> = ({ email, preferences }) => {
-  console.log('preferences', preferences)
+const Wrapper: React.FC<Contact> = ({ key, email, preferences, index }) => {
   return (
-    <>
-      <XStack justifyContent={'space-between'}>
-        <Text>{email}</Text>
-        {preferences && <Preferences email={email} preferences={preferences}></Preferences>}
-      </XStack>
-    </>
+    <XStack
+      key={key}
+      justifyContent={'space-between'}
+      backgroundColor={index % 2 ? '$color2' : 'white'}
+    >
+      <Text>{email}</Text>
+      {preferences && <Preferences email={email} preferences={preferences}></Preferences>}
+    </XStack>
   )
 }
 
 type PreferencesProps = {
   email: string
-  preferences: ContactPreferences
+  preferences: ContactsEmailPreferences
 }
 const Preferences: React.FC<PreferencesProps> = ({ email, preferences }) => {
-  const [preference, setPreference] = useState<ContactPreferences>(preferences)
-
-  const updateContact = (contactListKey: EmailListTypeKeys, optIn: boolean) => {
-    setPreference({
-      ...preference,
-      [contactListKey]: optIn,
-    })
-  }
-
-  useEffect(() => {
-    console.log('preference', { preference })
-  }, [])
-
   return (
-    <>
+    <XStack gap={'$10'}>
       {Object.keys(EmailListTypes).map((emailList: EmailListTypeKeys, index) => {
-        console.log('emailList', { emailList, isOptIn: preference[emailList] })
         return (
-          <XStack key={index}>
-            <CheckboxWithCheck
-              checked={preference[emailList]}
-              onCheckedChange={(checkedState: boolean) => {
-                updateContact(emailList, checkedState)
-              }}
-              label={emailList}
-              size={'$5'}
-            />
-          </XStack>
+          <ConnectForm>
+            {({ register }) => (
+              <CheckboxWithCheck
+                {...register(`${email}.${emailList}`, {
+                  value: preferences[emailList] || false,
+                })}
+                rules={{ required: true }}
+                size={'$5'}
+              />
+            )}
+          </ConnectForm>
         )
       })}
-    </>
+    </XStack>
   )
 }
 

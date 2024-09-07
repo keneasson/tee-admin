@@ -37,6 +37,13 @@
         "projectId": "tee-admin-01"
       },
       "EXPO_PUBLIC_API_PATH": "https://www.tee-admin.com/"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

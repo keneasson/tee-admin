@@ -4,7 +4,6 @@ import { Wrapper } from 'app/provider/wrapper'
 import { Button, Heading, Paragraph } from '@my/ui'
 import { useRouter } from 'solito/navigation'
 import { StudyWeekend2024 } from 'app/features/events/study-weekend-2024'
-import { LakefieldBibleSchool2024 } from 'app/features/events/lakefield-bible-school-2024'
 import { XStack } from 'tamagui'
 import { Section } from 'app/features/newsletter/Section'
 
@@ -18,8 +17,6 @@ export const Events: React.FC<EventProps> = ({ eventId }) => {
   switch (eventId) {
     case 'study-weekend-2024':
       return <StudyWeekend2024 />
-    case 'lakefield-bible-school-2024':
-      return <LakefieldBibleSchool2024 />
     default:
       return <EventListing isNotFound={true} />
   }
@@ -46,19 +43,19 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
           </Button>
         </XStack>
       </Section>
-      <Section>
-        <Heading size={5}>Other events of interest</Heading>
-        <XStack>
-          <Button
-            variant={'outlined'}
-            size="$2"
-            onPress={() => router.push('/events/lakefield-bible-school-2024')}
-            chromeless
-          >
-            Lakefield Christadelphian Bible School at Fleming
-          </Button>
-        </XStack>
-      </Section>
+      {/*<Section>*/}
+      {/*  <Heading size={5}>Other events of interest</Heading>*/}
+      {/*  <XStack>*/}
+      {/*    <Button*/}
+      {/*      variant={'outlined'}*/}
+      {/*      size="$2"*/}
+      {/*      onPress={() => router.push('/events/lakefield-bible-school-2024')}*/}
+      {/*      chromeless*/}
+      {/*    >*/}
+      {/*      Lakefield Christadelphian Bible School at Fleming*/}
+      {/*    </Button>*/}
+      {/*  </XStack>*/}
+      {/*</Section>*/}
     </Wrapper>
   )
 }

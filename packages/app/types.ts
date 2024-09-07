@@ -1,7 +1,13 @@
+import { config } from '@my/config'
 import { Contact } from '@aws-sdk/client-sesv2'
 
+export type Conf = typeof config
+
+declare module '@my/ui' {
+  interface TamaguiCustomConfig extends Conf {}
+}
+
 export type GetContactsProps = {
-  listName: string
   nextPageToken?: string
 }
 
@@ -31,7 +37,7 @@ export type GoogleSheets = Record<
 >
 
 export type BackendLists = {
-  key: string
+  listName: string
   defaultOptIn: boolean
   displayName: string
 }
@@ -39,19 +45,16 @@ export type BackendLists = {
 /**
  * The Type our Next JS returns describing Any Subscriber List
  */
-export type BackendContactList =
-  | string
-  | {
-      listName: string
-      lists: BackendLists[]
-    }
+export type BackendContactList = {
+  lists: BackendLists[]
+}
 
-export type ContactPrefPreferences = { [K in EmailListTypeKeys]: boolean }
+export type ContactsEmailPreferences = { [K in EmailListTypeKeys]: boolean }
 
 export type ContactPreferences = {
   unsubscribed: boolean
   displayName: string
-  preferences: ContactPrefPreferences
+  preferences: ContactsEmailPreferences
 }
 
 export type ContactListMeta = {
@@ -61,16 +64,12 @@ export type ContactListMeta = {
 }
 
 export type SimplifiedContactListType = {
-  listName: EmailListTypeKeys
   lists: ContactListMeta[]
 }
 
 export type CreateContactType = {
-  listName: string
-  contact: {
-    email: string
-    preferences: { [K in EmailListTypeKeys] }
-  }
+  email: email
+  lists: ContactsEmailPreferences
 }
 
 export type GetContactType = {
@@ -81,7 +80,8 @@ export type GetContactType = {
 /**
  * string is an email address
  */
-export type SimplifiedContactsByList = { [key: string]: ContactPreferences }
+type email = string
+export type SimplifiedContactsByList = { [key: email]: ContactPreferences }
 
 export type SimplifiedContacts = {
   unsubscribed: string[]
