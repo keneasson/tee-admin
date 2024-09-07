@@ -49,22 +49,19 @@ export const getContactsList = async (): Promise<SimplifiedContactListType> => {
  * @param nextToken if there's more - pass this to get "next page"
  * @param key
  */
-export const getContacts = async (
-  key: string,
-  nextToken?: string | false
-): Promise<GetContactType> => {
+export const getContacts = async (nextToken?: string | false): Promise<GetContactType> => {
   const urlNextToken = nextToken ? `?NextToken=${nextToken}` : ''
-  const url = `${API_PATH}api/contact/${key}${urlNextToken}`
+  const url = `${API_PATH}api/contact${urlNextToken}`
   const rawContacts = await fetch(url, { cache: 'no-store', method: 'GET' })
   return await rawContacts.json()
 }
 
 /**
- * create a contact to all subscriber lists - passing opt-in for the lists to be added too
- * @param props
+ * add a contact to subscriber list
+ * @param contact Add this contact to the subscriber list
  */
-export const addContacts = async ({ listName, contact }: CreateContactType): Promise<string> => {
-  const url = `${API_PATH}api/contact/${listName}`
+export const addContacts = async (contact: CreateContactType): Promise<string> => {
+  const url = `${API_PATH}api/contact/`
   const body = JSON.stringify(contact)
   const rawSchedule = await fetch(url, { cache: 'no-store', method: 'POST', body })
   return await rawSchedule.json()

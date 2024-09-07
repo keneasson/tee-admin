@@ -1,13 +1,12 @@
 {
-  "name": "@my/ui",
+  "name": "@my/config",
   "version": "0.0.1",
   "sideEffects": [
     "*.css"
   ],
   "private": true,
   "types": "./src",
-  "main": "src/index.tsx",
-  "module:jsx": "src",
+  "main": "src/index.ts",
   "files": [
     "types",
     "dist"
@@ -17,9 +16,11 @@
     "watch": "tamagui-build --skip-types --watch"
   },
   "dependencies": {
-    "@my/config": "0.0.1",
-    "@tamagui/toast": "^1.110.0",
-    "react-hook-form": "^7.53.0",
+    "@tamagui/animations-react-native": "^1.110.0",
+    "@tamagui/font-inter": "^1.110.0",
+    "@tamagui/react-native-media-driver": "^1.110.0",
+    "@tamagui/shorthands": "^1.110.0",
+    "@tamagui/themes": "^1.110.0",
     "tamagui": "^1.110.0"
   },
   "devDependencies": {

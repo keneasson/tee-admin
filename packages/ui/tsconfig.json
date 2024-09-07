@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base",
   "include": [
-    "src"
+    "**/*.ts",
+    "**/*.tsx",
+    "../config/src/tamagui.config.ts"
   ],
   "compilerOptions": {
     "composite": true,

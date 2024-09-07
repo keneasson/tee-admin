@@ -25,15 +25,16 @@ import {
 } from '../styles'
 import * as React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from 'app/types'
+import { ProgramsTypes } from 'app/types'
 
 const mockEvents: SundaySchoolType[] = [
   {
-    Key: 'sundaySchool',
+    Key: ProgramsTypes.sundaySchool,
     Date: 'Feb 25, 2024',
     Refreshments: 'Eassons',
   },
   {
-    Key: 'sundaySchool',
+    Key: ProgramsTypes.sundaySchool,
     Date: 'March 3, 2024',
     Refreshments: 'Currys',
   },
