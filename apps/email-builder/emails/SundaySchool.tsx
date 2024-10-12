@@ -40,7 +40,7 @@ const mockEvents: SundaySchoolType[] = [
   },
 ]
 
-export const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
+const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
   const sundaySchoolEvents = events || mockEvents
   console.log('SundaySchool', { mockEvents, sundaySchoolEvents })
   return (
@@ -159,3 +159,5 @@ const SundaySchoolProgram = ({ event }: EventProps) => {
     )
   }
 }
+
+export default SundaySchool
