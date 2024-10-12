@@ -9,7 +9,7 @@ export type TableProps = {
 export const TableBody: React.FC<TableProps> = ({ children, past }) => {
   return (
     <View flex={1} flexBasis={0}>
-      <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$grey2Dark'}>
+      <Text fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
         {children}
       </Text>
     </View>

@@ -40,16 +40,13 @@ export async function getContacts({
   return await client.send(command)
 }
 
-export async function addContact({
-  contact,
-}: CreateContactType): Promise<CreateContactCommandOutput> {
+export async function addContact(contact: CreateContactType): Promise<CreateContactCommandOutput> {
   const client = getSesClient()
-  console.log('in addContact BE', contact)
-  const email = Object.keys(contact)[0]
+  console.log('in addContact BE', { contact })
   const sesPref = Object.keys(EmailListTypes).map((p) => {
     return {
       TopicName: p,
-      SubscriptionStatus: contact[email][p as EmailListTypeKeys]
+      SubscriptionStatus: contact.lists[p as EmailListTypeKeys]
         ? SubscriptionStatus.OPT_IN
         : SubscriptionStatus.OPT_OUT,
     }
@@ -57,7 +54,7 @@ export async function addContact({
 
   const input: CreateContactCommandInput = {
     ...inputTemplate,
-    EmailAddress: email,
+    EmailAddress: contact.email,
     AttributesData: '',
     TopicPreferences: sesPref,
   }
@@ -66,15 +63,15 @@ export async function addContact({
 }
 
 export async function updateContact({
-  contact,
+  email,
+  lists,
 }: CreateContactType): Promise<UpdateContactCommandOutput> {
   const client = getSesClient()
-  console.log('in updateContact BE', contact)
-  const email = Object.keys(contact)[0]
+  console.log('in updateContact BE', { email, lists })
   const sesPref = Object.keys(EmailListTypes).map((p) => {
     return {
       TopicName: p,
-      SubscriptionStatus: contact[email][p as EmailListTypeKeys]
+      SubscriptionStatus: lists[p as EmailListTypeKeys]
         ? SubscriptionStatus.OPT_IN
         : SubscriptionStatus.OPT_OUT,
     }

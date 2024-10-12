@@ -1,59 +1,77 @@
-import { Button, Dialog, Fieldset, Input, Label, Unspaced, XStack } from 'tamagui'
 import { X } from '@tamagui/lucide-icons'
-import { EmailListTypes, SimplifiedContactsByList } from 'app/types'
-import { CheckboxWithCheck } from '@my/ui'
+import { EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
+import { SubmitHandler, useForm } from 'react-hook-form'
+import { addContacts } from '../../../provider/get-data'
 
-export type AddUpdateContactParams = {
-  contact: SimplifiedContactsByList
+export type AddUpdateContactParams = {}
+
+type AddUpdateContactType = {
+  email: string
+  firstName: string
+  lastName: boolean
+  lists: { [K in EmailListTypeKeys]: boolean }
 }
-export const AddUpdateContact: React.FC<AddUpdateContactParams> = ({ contact }) => {
-  // const email = Object.keys(newContact)[0] || '-'
 
-  const handleSaveForm = (formData) => {
-    console.log('AddUpdateList.handleOptinToggle ', { formData })
+const listNameMap: { [K in EmailListTypeKeys]: string } = {
+  sundaySchool: 'Sunday School',
+  memorial: 'Memorial',
+  bibleClass: 'Bible Class',
+  newsletter: 'Newsletter',
+  testList: 'Test List',
+}
+
+export const AddUpdateContact: React.FC<AddUpdateContactParams> = () => {
+  const onSubmit: SubmitHandler<AddUpdateContactType> = async (data) => {
+    console.log('form was submitted', data)
+    const newContact = await addContacts({ lists: data.lists, email: data.email })
+    console.log('newContact', newContact)
   }
 
-  const lists = Object.keys(EmailListTypes).map((list) => list)
-
+  const {
+    control,
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<AddUpdateContactType>()
   return (
     <>
-      <Dialog.Title>Add New Contact List</Dialog.Title>
-
-      <Dialog.Description>Add or Update a Contact.</Dialog.Description>
-
-      <Fieldset gap="$4" horizontal>
-        <Label width={160} justifyContent="flex-end" htmlFor="email">
-          Email
-        </Label>
-        <Input flex={1} id="email" defaultValue={email} />
-      </Fieldset>
-      {Object.keys(EmailListTypes).map((list) => (
-        <Fieldset gap="$4" horizontal key={`key_${list}`}>
-          <Label width={160} justifyContent="flex-end" htmlFor={`list.${list}`}>
-            {list}
-          </Label>
-          <CheckboxWithCheck
-            flex={1}
-            id={`list.${list}`}
-            name={list}
-            size="$5"
-            label="check to Opt-in"
-          />
-        </Fieldset>
-      ))}
-
-      <XStack alignSelf="flex-end" gap="$4">
-        <Dialog.Close displayWhenAdapted asChild>
-          <Button theme="active" aria-label="Close">
-            Save changes
-          </Button>
-        </Dialog.Close>
-      </XStack>
       <Unspaced>
-        <Dialog.Close asChild>
+        <Dialog.Close displayWhenAdapted asChild>
           <Button position="absolute" top="$3" right="$3" size="$2" circular icon={X} />
         </Dialog.Close>
       </Unspaced>
+      <Dialog.Title>Add New Contact</Dialog.Title>
+
+      <Dialog.Description>Add a Contact and Select the lists they will be on.</Dialog.Description>
+      <Form onSubmit={handleSubmit(onSubmit)}>
+        <FormInput control={control} {...register('email', { required: true })} label="Email" />
+        <FormInput
+          control={control}
+          {...register('firstName', { required: true })}
+          label="First Name"
+        />
+        <FormInput
+          control={control}
+          {...register('lastName', { required: true })}
+          label="Last Name"
+        />
+        {Object.keys(EmailListTypes).map((listType: EmailListTypes) => (
+          <CheckboxWithCheck
+            key={listType}
+            control={control}
+            name={`lists.${listType}`}
+            label={listNameMap[listType]}
+          />
+        ))}
+        <XStack alignSelf="flex-end" gap="$4">
+          <Form.Trigger asChild>
+            <Button theme="active" aria-label="Save">
+              Save changes
+            </Button>
+          </Form.Trigger>
+        </XStack>
+      </Form>
     </>
   )
 }

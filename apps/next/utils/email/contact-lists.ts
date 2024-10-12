@@ -1,4 +1,5 @@
 import {
+  CreateContactListCommandInput,
   GetContactListCommand,
   GetContactListCommandOutput,
   SubscriptionStatus,
@@ -6,7 +7,7 @@ import {
   UpdateContactListCommandInput,
   UpdateContactListCommandOutput,
 } from '@aws-sdk/client-sesv2'
-import { BackendContactList } from 'app/types'
+import { BackendContactList, CreateUpdateListType } from 'app/types'
 import { getSesClient } from './sesClient'
 
 export const inputTemplate = { ContactListName: 'TEEAdmin' }
@@ -49,25 +50,71 @@ export async function getRawContactLists(): Promise<GetContactListCommandOutput>
   }
 }
 
-export async function addContactListTopic(
-  newTopic: string
-): Promise<UpdateContactListCommandOutput> {
+/**
+ * AWS SES Limits an account to one and only one list. This list has "Topics" which are the actual Lists for our Purposes.
+ * as such - create ADDS a Topic to the list using UPDATE
+ * @param listName
+ * @param displayName
+ * @param defaultOptIn
+ */
+export async function createContactListTopic({
+  listName,
+  displayName,
+  defaultOptIn,
+}: Omit<CreateUpdateListType, 'oldListName'>): Promise<UpdateContactListCommandOutput> {
   const oldList = await getRawContactLists()
-  const newTopicName = makeCamelCase(newTopic)
   const client = getSesClient()
 
   if (!oldList.ContactListName) {
     throw new Error('Must pass a valid list name')
   }
-  const input: UpdateContactListCommandInput = {
+  const input: CreateContactListCommandInput = {
     ...oldList,
-    ContactListName: oldList.ContactListName,
+    ContactListName: inputTemplate.ContactListName,
     Topics: [
       ...(oldList.Topics || []),
       {
-        TopicName: newTopicName, // required
-        DisplayName: newTopic, // required
-        DefaultSubscriptionStatus: SubscriptionStatus.OPT_OUT,
+        TopicName: listName, // required
+        DisplayName: displayName, // required
+        DefaultSubscriptionStatus: defaultOptIn
+          ? SubscriptionStatus.OPT_IN
+          : SubscriptionStatus.OPT_OUT,
+      },
+    ],
+  }
+  const command = new UpdateContactListCommand(input)
+  return await client.send(command)
+}
+
+export async function updateContactListTopic({
+  oldListName,
+  listName,
+  displayName,
+  defaultOptIn,
+}: CreateUpdateListType): Promise<UpdateContactListCommandOutput> {
+  const oldList = await getRawContactLists()
+  const client = getSesClient()
+  if (!oldList.ContactListName) {
+    throw new Error('Unable to find a Master Subscriber List')
+  }
+  /**
+   * Map over a list to Find and Update the object.
+   */
+  const found = oldList.Topics?.find((topic) => topic.TopicName === oldListName)
+  if (!found) {
+    throw new Error(`${oldListName} was not found - unable to rename`)
+  }
+  const input: CreateContactListCommandInput = {
+    ...oldList,
+    ContactListName: inputTemplate.ContactListName,
+    Topics: [
+      ...(oldList.Topics || []),
+      {
+        TopicName: listName, // required
+        DisplayName: displayName, // required
+        DefaultSubscriptionStatus: defaultOptIn
+          ? SubscriptionStatus.OPT_IN
+          : SubscriptionStatus.OPT_OUT,
       },
     ],
   }

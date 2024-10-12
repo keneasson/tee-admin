@@ -6,7 +6,6 @@ import { defaultProvider } from '@aws-sdk/credential-provider-node'
 
 const adminMailDomain = '@tee-admin.com'
 
-const date = new Date()
 export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap'
 
 const senders = {
