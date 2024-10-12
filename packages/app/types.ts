@@ -23,6 +23,7 @@ export enum EmailListTypes {
   newsletter = 'newsletter',
   memorial = 'memorial',
   bibleClass = 'bibleClass',
+  testList = 'testList',
 }
 
 export type ProgramTypeKeys = keyof typeof ProgramsTypes
@@ -65,6 +66,13 @@ export type ContactListMeta = {
 
 export type SimplifiedContactListType = {
   lists: ContactListMeta[]
+}
+
+export type CreateUpdateListType = {
+  oldListName?: string
+  listName: string
+  defaultOptIn: boolean
+  displayName: string
 }
 
 export type CreateContactType = {

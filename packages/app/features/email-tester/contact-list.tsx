@@ -85,6 +85,7 @@ export const ContactLists: React.FC<{ contactLists: SimplifiedContactListType }>
                   <Text>Newsletter</Text>
                   <Text>Memorial</Text>
                   <Text>Bible Class</Text>
+                  <Text>Test List</Text>
                 </XStack>
               </XStack>
               <Contacts contacts={contacts}></Contacts>

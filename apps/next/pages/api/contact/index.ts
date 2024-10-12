@@ -19,8 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      * ***************************************
      */
     if (req.method === 'POST') {
-      const contact = req.body as unknown as CreateContactType
-      const result = addContact(contact)
+      const contact = JSON.parse(req.body) as CreateContactType
+
+      const result = await addContact(contact)
       console.log('API POST.addContact body', { contact })
       return res.status(200).json(result)
     }

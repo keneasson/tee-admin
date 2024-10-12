@@ -1,15 +1,17 @@
 {
   "$schema": "https://turborepo.org/schema.json",
-  "globalEnv": ["DISABLE_EXTRACTION", "NODE_ENV", "EAS_BUILD_PLATFORM"],
-  "pipeline": {
-    "build": {
-      "env": ["DISABLE_EXTRACTION", "NODE_ENV", "EAS_BUILD_PLATFORM"],
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "build/**", "node_modules/.cache/metro/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    }
-  }
+  "globalEnv": [
+    "DISABLE_EXTRACTION",
+    "NODE_ENV",
+    "EAS_BUILD_PLATFORM"
+  ],
+  "globalPassThroughEnv": null,
+  "cacheDir": ".turbo/cache",
+  "ui": "tui",
+  "globalDependencies": [],
+  "dangerouslyDisablePackageManagerCheck": false,
+  "remoteCache": {},
+  "envMode": "strict",
+  "tasks": {},
+  "daemon": false
 }

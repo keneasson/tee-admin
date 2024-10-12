@@ -2,10 +2,11 @@ import React, { useState } from 'react'
 
 import { Button, FullDialog, Heading, Text, YStack } from '@my/ui'
 import { ContactLists } from 'app/features/email-tester/contact-list'
-import { addContacts, getContactsList } from 'app/provider/get-data'
-import { CreateContactType, SimplifiedContactListType } from 'app/types'
+import { getContactsList } from 'app/provider/get-data'
+import { SimplifiedContactListType } from 'app/types'
 
 import { AddUpdateList } from 'app/features/email-tester/dialogues/add-update-list'
+import { AddUpdateContact } from './dialogues/add-update-contact'
 
 export const ManageContacts: React.FC = () => {
   const [contactLists, setContactLists] = useState<SimplifiedContactListType | null>(null)
@@ -17,21 +18,12 @@ export const ManageContacts: React.FC = () => {
     setContactLists(response)
   }
 
-  const handleAddContact = async (props: CreateContactType) => {
-    console.log('in here handleImportContactList', props)
-    const response = await addContacts(props)
-    console.log('response', response)
-  }
-
-  const handleShowAddContact = async () => {}
-  const handleShowAddCList = async () => {}
-
   return (
     <>
       <Heading>Manage Contacts</Heading>
       <YStack>
         <FullDialog content={<AddUpdateList />} trigger="Add New List"></FullDialog>
-        {/*<AddUpdateContact />*/}
+        <FullDialog content={<AddUpdateContact />} trigger="Add New Contact"></FullDialog>
         <Button onPress={() => handleRequestContactList()}>
           <Text>Load Contact Lists</Text>
         </Button>
