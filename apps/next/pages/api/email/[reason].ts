@@ -19,23 +19,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const [emailHtml, emailText] = await getEmailContent(reason)
     if (!(emailHtml && emailText)) {
-      return res.status(404).json({ failed: 'Email template ' + reason + ' not found' })
+      return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }
-    emailSend({ reason, emailHtml, emailText })
-      .then((result) => {
-        console.log('result from AWS.SES', result)
-        return res.status(200).json(result)
-      })
-      .catch((error) => {
-        console.log('emailSend error', error)
-        const failed = {
-          message: 'Failed in-side catch',
-          error,
-        }
-        return res.status(500).json({ failed: error })
-      })
+    const result = await emailSend({ reason, emailHtml, emailText })
+    console.log('result from AWS.SES', result)
+    return res.status(200).json(result)
   } catch (e) {
-    console.log('getEmailContent error', e)
+    console.log('email[reason] failed with error:', e)
     const failed = {
       message: 'Failed in outside catch',
       error: e,

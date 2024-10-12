@@ -2,6 +2,7 @@ import { X } from '@tamagui/lucide-icons'
 import type { BackendLists } from 'app/types'
 import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
 import { SubmitHandler, useForm } from 'react-hook-form'
+import { addContactsList } from '../../../provider/get-data'
 
 export type AddUpdateListParams = {
   list?: BackendLists
@@ -19,8 +20,14 @@ export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
     listName: '',
     defaultOptIn: false,
   }
+
   const onSubmit: SubmitHandler<AddUpdateUserType> = (data) => {
-    console.log('form was submitted', data)
+    const result = addContactsList({
+      listName: data.listName,
+      displayName: data.displayName,
+      defaultOptIn: data.defaultOptIn,
+    })
+    console.log('form was submitted', { data, result })
   }
 
   const {

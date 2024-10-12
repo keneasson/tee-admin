@@ -7,6 +7,7 @@ import {
   ProgramsTypes,
   SimplifiedContactListType,
 } from 'app/types'
+import { CreateUpdateListType } from '../types'
 
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
@@ -45,9 +46,18 @@ export const getContactsList = async (): Promise<SimplifiedContactListType> => {
 }
 
 /**
+ * Add a new Subscriber List (Topic)
+ */
+export const addContactsList = async (createContact: CreateUpdateListType): Promise<string> => {
+  const url = `${API_PATH}api/contact/list/`
+  const body = JSON.stringify(createContact)
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  return await response.json()
+}
+
+/**
  * Get all the contacts from a Specific List (Topic)
  * @param nextToken if there's more - pass this to get "next page"
- * @param key
  */
 export const getContacts = async (nextToken?: string | false): Promise<GetContactType> => {
   const urlNextToken = nextToken ? `?NextToken=${nextToken}` : ''
@@ -63,6 +73,6 @@ export const getContacts = async (nextToken?: string | false): Promise<GetContac
 export const addContacts = async (contact: CreateContactType): Promise<string> => {
   const url = `${API_PATH}api/contact/`
   const body = JSON.stringify(contact)
-  const rawSchedule = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  return await rawSchedule.json()
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  return await response.json()
 }

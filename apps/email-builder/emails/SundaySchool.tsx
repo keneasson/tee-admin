@@ -23,7 +23,7 @@ import {
   main,
   program,
 } from '../styles'
-import * as React from 'react'
+import React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from 'app/types'
 import { ProgramsTypes } from 'app/types'
 

@@ -22,9 +22,7 @@ export const CheckboxWithCheck = <T extends FieldValues>({
   ...checkboxProps
 }: FormCheckboxProps<T>) => {
   const id = useId()
-
-  console.log('control', { control, type: typeof control })
-
+  
   return (
     <>
       <Controller

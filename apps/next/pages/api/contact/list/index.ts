@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { addContactListTopic, getContactLists } from '../../../../utils/email/contact-lists'
+import { createContactListTopic, getContactLists, updateContactListTopic } from '../../../../utils/email/contact-lists'
+import { CreateUpdateListType } from 'app/types'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -38,17 +39,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
    */
   if (req.method === 'POST') {
     try {
-      const contact = req.body
-      console.log('API POST.addContactListTopic body', { contact })
-      const response = await addContactListTopic(contact.listName)
+      const { oldListName, listName, displayName, defaultOptIn } = JSON.parse(
+        req.body
+      ) as CreateUpdateListType
+      console.log('API POST.addContactListTopic body', { listName, displayName, defaultOptIn })
+      const response = oldListName
+        ? await updateContactListTopic({ oldListName, listName, displayName, defaultOptIn })
+        : await createContactListTopic({ listName, displayName, defaultOptIn })
+      console.log()
       return res.status(200).json(response)
     } catch (e) {
       const failed = {
         message: 'Failed in outside catch',
         error: e,
       }
+      console.error('unable to Create List Topic', failed)
+      return res.status(500).json({ failed: failed })
     }
-    return res.status(500).json({ failed: 'should never get here' })
   }
 }
 
