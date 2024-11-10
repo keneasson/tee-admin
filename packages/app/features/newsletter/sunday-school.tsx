@@ -1,7 +1,7 @@
-import { SundaySchoolType } from 'app/types'
+import { SundaySchoolType } from '@my/app/types'
 import React from 'react'
 import { Paragraph, YStack } from '@my/ui'
-import { Section } from 'app/features/newsletter/Section'
+import { Section } from '@my/app/features/newsletter/Section'
 
 export type NextSundaySchoolProps = {
   event: SundaySchoolType
@@ -9,7 +9,7 @@ export type NextSundaySchoolProps = {
 export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => {
   if (!event.Refreshments) {
     return (
-      <YStack borderTopColor={'$grey1Dark'} borderWidth={1} borderTopWidth={2} padding={'1rem'}>
+      <YStack borderTopColor="$gray1Dark" borderWidth={1} borderTopWidth={2} padding="$size.1">
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
@@ -19,7 +19,7 @@ export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => 
   }
   return (
     <Section>
-      <Paragraph size={'$5'} fontWeight={600}>
+      <Paragraph size="$5" fontWeight={600}>
         {event.Date.toString()}
       </Paragraph>
       <Paragraph size={'$5'} fontWeight={600}>

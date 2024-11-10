@@ -13,8 +13,8 @@ import { usePathname, useRouter } from 'solito/navigation'
 import { Menu, X } from '@tamagui/lucide-icons'
 import { useSession } from 'next-auth/react'
 import { Session } from 'next-auth'
-import { NavitemLogout } from 'app/provider/auth/navItem-logout'
-import { LogInUser } from 'app/provider/auth/log-in-user'
+import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
+import { LogInUser } from '@my/app/provider/auth/log-in-user'
 
 type WithNavigationProps = {
   children: React.ReactNode

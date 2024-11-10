@@ -1,14 +1,14 @@
 import React from 'react'
 import { View, XStack, YStack } from 'tamagui'
 import { TableBody, Text } from '@my/ui'
-import { monthDay } from 'app/provider/date-utils'
-import { CycType } from 'app/types'
+import { monthDay } from '@my/app/provider/date-utils'
+import { CycType } from '@my/app/types'
 
 export const Cyc: React.FC<{
   schedule: CycType[]
 }> = ({ schedule }) => {
   const NOW = new Date()
-  
+
   return (
     <YStack>
       <YStack

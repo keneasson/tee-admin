@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { createContactListTopic, getContactLists, updateContactListTopic } from '../../../../utils/email/contact-lists'
-import { CreateUpdateListType } from 'app/types'
+import { CreateUpdateListType } from '@my/app/types'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -19,8 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      */
     if (req.method === 'GET') {
       const contactResponse = await getContactLists()
-
-      console.log('contactResponse', contactResponse)
+      console.log('getContactLists', contactResponse)
       return res.status(200).json(contactResponse)
     }
   } catch (e) {

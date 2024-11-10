@@ -11,23 +11,38 @@ import {
 } from '@aws-sdk/client-sesv2'
 
 import { inputTemplate } from './contact-lists'
-import { CreateContactType, EmailListTypeKeys, EmailListTypes, GetContactsProps } from 'app/types'
+import {
+  CreateContactType,
+  EmailListTypeKeys,
+  EmailListTypes,
+  GetContactsProps,
+} from '@my/app/types'
 import { getSesClient } from './sesClient'
 
 const PAGE_SIZE = 100
 
 /**
  * Return all the Contacts that Subscribe to the specific List Name
+ * @param listTopic the SES Topic - from the Email send reason
  * @param nextPageToken String - if there's more than one page, this will be a reference ot the next page.
  */
 export async function getContacts({
+  listTopic,
   nextPageToken,
 }: GetContactsProps): Promise<ListContactsResponse> {
   const client = getSesClient()
+  const listTopicFilter = listTopic
+    ? {
+        TopicFilter: {
+          TopicName: listTopic,
+          UseDefaultIfPreferenceUnavailable: false,
+        },
+      }
+    : {}
   const input: ListContactsRequest = {
     ...inputTemplate,
     Filter: {
-      // ListContactsFilter
+      ...listTopicFilter,
       FilteredStatus: SubscriptionStatus.OPT_IN,
     },
     PageSize: PAGE_SIZE,

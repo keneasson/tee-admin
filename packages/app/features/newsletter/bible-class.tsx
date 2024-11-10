@@ -2,8 +2,8 @@ import React from 'react'
 import { ChevronDown } from '@tamagui/lucide-icons'
 import { Accordion, ExtLink, Paragraph, Separator, Square, Text } from '@my/ui'
 
-import { BibleClassType } from 'app/types'
-import { Section } from 'app/features/newsletter/Section'
+import { BibleClassType } from '@my/app/types'
+import { Section } from '@my/app/features/newsletter/Section'
 
 type NextBibleClassProps = {
   event: BibleClassType

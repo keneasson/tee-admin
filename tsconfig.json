@@ -4,7 +4,7 @@
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "app/*": [
+      "@my/app/*": [
         "./packages/app/*"
       ],
       "@my/ui/*": [

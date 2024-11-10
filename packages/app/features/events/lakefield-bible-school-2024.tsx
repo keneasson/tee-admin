@@ -1,8 +1,8 @@
 'use client'
 import React from 'react'
 import { Paragraph, ProgramElement, Section } from '@my/ui'
-import { Wrapper } from 'app/provider/wrapper'
-import { EventsFooter } from 'app/features/events/index'
+import { Wrapper } from '@my/app/provider/wrapper'
+import { EventsFooter } from '@my/app/features/events/index'
 
 export const LakefieldBibleSchool2024: React.FC = () => {
   return (

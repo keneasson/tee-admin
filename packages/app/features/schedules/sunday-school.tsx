@@ -1,9 +1,8 @@
 import React from 'react'
 import { XStack, YStack } from 'tamagui'
 import { TableBody, TableHead, Text } from '@my/ui'
-import { monthDay } from 'app/provider/date-utils'
-import { SundaySchoolType } from 'app/types'
-import { color } from '@tamagui/themes'
+import { monthDay } from '@my/app/provider/date-utils'
+import { SundaySchoolType } from '@my/app/types'
 
 export const SundaySchool: React.FC<{
   schedule: SundaySchoolType[]
@@ -13,7 +12,7 @@ export const SundaySchool: React.FC<{
     <YStack>
       <YStack
         key={'header'}
-        borderColor={'lightGrey'}
+        borderColor={'lightgrey'}
         borderWidth={1}
         backgroundColor={'cornflowerblue'}
       >
@@ -30,13 +29,13 @@ export const SundaySchool: React.FC<{
       {schedule.map((service: SundaySchoolType, index) => {
         const date = new Date(service.Date)
         const past = date < today
-        const bgColour = past ? '$gray9Dark' : '$gray0Light'
+        const bgColour = past ? '$gray12Dark' : '$gray2Light'
         return (
           <YStack
             key={index}
-            borderColor={'$grey3light'}
+            borderColor={'$gray3Dark'}
             borderWidth={1}
-            backgroundColor={bgColour}
+            backgroundColor={'$gray9Dark'}
           >
             <XStack padding={'$2'}>
               <TableBody past={past}>{monthDay(date)}</TableBody>
@@ -45,7 +44,7 @@ export const SundaySchool: React.FC<{
             {service['Holidays and Special Events'] && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  <Text fontStyle={'normal'} color={past ? color.gray12Dark : color.gray2Dark}>
+                  <Text fontStyle={'normal'} color={bgColour}>
                     {service['Holidays and Special Events']}
                   </Text>
                 </YStack>

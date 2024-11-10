@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { Welfare } from 'app/features/welfare'
+import { Welfare } from '@my/app/features/welfare'
 
 export default function Page({}) {
   return (

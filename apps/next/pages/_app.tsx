@@ -10,8 +10,8 @@ import { SessionProvider } from 'next-auth/react'
 import 'raf/polyfill'
 import type { SolitoAppProps } from 'solito'
 
-import { Provider } from 'app/provider'
-import { WithNavigation } from 'app/features/with-navigation'
+import { Provider } from '@my/app/provider'
+import { WithNavigation } from '@my/app/features/with-navigation'
 
 if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')

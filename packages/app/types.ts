@@ -8,6 +8,7 @@ declare module '@my/ui' {
 }
 
 export type GetContactsProps = {
+  listTopic?: string
   nextPageToken?: string
 }
 
@@ -89,11 +90,10 @@ export type GetContactType = {
  * string is an email address
  */
 type email = string
-export type SimplifiedContactsByList = { [key: email]: ContactPreferences }
 
 export type SimplifiedContacts = {
   unsubscribed: string[]
-  subscribed: { [K in EmailListTypeKeys]?: SimplifiedContactsByList }
+  subscribed: { [key: email]: ContactPreferences }
 }
 
 export type MemorialServiceType = {
@@ -116,6 +116,12 @@ export type MemorialServiceType = {
   YouTube: string
 }
 
+export type SundayEvents = MemorialServiceType &
+  Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
+export type NextMemorialServiceProps = {
+  events: SundayEvents[]
+}
+
 export type SundaySchoolType = {
   Date: string | Date
   Key: ProgramsTypes.sundaySchool
@@ -133,6 +139,10 @@ export type BibleClassType = {
   Presider: string
   Speaker: string
   Topic: string
+}
+
+export type NextBibleClassProps = {
+  events: BibleClassType[]
 }
 
 type CycRegular = {

@@ -5,11 +5,12 @@ import { useSession } from 'next-auth/react'
 
 import { Button, Heading, Paragraph, Text, YStack } from '@my/ui'
 
-import { sendEmail } from 'app/provider/get-data'
-import { Wrapper } from 'app/provider/wrapper'
-import { Section } from 'app/features/newsletter/Section'
-import { LogInUser } from 'app/provider/auth/log-in-user'
-import { ManageContacts } from 'app/features/email-tester/manage-contacts'
+import { sendEmail } from '@my/app/provider/get-data'
+import { Wrapper } from '@my/app/provider/wrapper'
+import { Section } from '@my/app/features/newsletter/Section'
+import { LogInUser } from '@my/app/provider/auth/log-in-user'
+import { ManageContacts } from '@my/app/features/email-tester/manage-contacts'
+import { emailReasons } from 'next-app/utils/email/email-send'
 
 export const EmailTester: React.FC = () => {
   const { data: session } = useSession()
@@ -28,7 +29,7 @@ export const EmailTester: React.FC = () => {
     )
   }
 
-  const getEmail = async (reason) => {
+  const getEmail = async (reason: emailReasons) => {
     const response = await sendEmail(reason)
     setEmail(response)
   }
@@ -42,6 +43,9 @@ export const EmailTester: React.FC = () => {
 
             <Button onPress={() => getEmail('sunday-school')}>
               <Text>Sunday School Reminder</Text>
+            </Button>
+            <Button onPress={() => getEmail('recap')}>
+              <Text>Memorial Reminder</Text>
             </Button>
             {email && <pre>{JSON.stringify(email, null, 2)}</pre>}
           </YStack>

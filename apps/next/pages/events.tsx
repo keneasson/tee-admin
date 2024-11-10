@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { Events } from 'app/features/events'
+import { Events } from '@my/app/features/events'
 
 export default function Page() {
   return (

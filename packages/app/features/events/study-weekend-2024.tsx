@@ -1,10 +1,10 @@
 'use client'
 import React from 'react'
-import { Wrapper } from 'app/provider/wrapper'
+import { Wrapper } from '@my/app/provider/wrapper'
 import { ExtLink, Heading, Paragraph, Separator, Text } from '@my/ui'
-import { Section } from 'app/features/newsletter/Section'
+import { Section } from '@my/app/features/newsletter/Section'
 import { DownloadButton } from '@my/ui/src/download-button'
-import { EventsFooter } from 'app/features/events/index'
+import { EventsFooter } from '@my/app/features/events/index'
 
 export const StudyWeekend2024: React.FC = () => {
   return (

@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 
 import { Button, FullDialog, Heading, Text, YStack } from '@my/ui'
-import { ContactLists } from 'app/features/email-tester/contact-list'
-import { getContactsList } from 'app/provider/get-data'
-import { SimplifiedContactListType } from 'app/types'
+import { ContactLists } from '@my/app/features/email-tester/contact-list'
+import { getContactsList } from '@my/app/provider/get-data'
+import { SimplifiedContactListType } from '@my/app/types'
 
-import { AddUpdateList } from 'app/features/email-tester/dialogues/add-update-list'
+import { AddUpdateList } from '@my/app/features/email-tester/dialogues/add-update-list'
 import { AddUpdateContact } from './dialogues/add-update-contact'
 
 export const ManageContacts: React.FC = () => {
@@ -14,7 +14,6 @@ export const ManageContacts: React.FC = () => {
   const handleRequestContactList = async (): Promise<void> => {
     console.log('in here handleRequestContactList')
     const response = await getContactsList()
-    console.log('response', response)
     setContactLists(response)
   }
 

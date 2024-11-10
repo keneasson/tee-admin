@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { addContact, getContacts } from '../../../utils/email/contact'
-import { CreateContactType } from 'app/types'
+import { addContact, getContacts, updateContact } from '../../../utils/email/contact'
+import { CreateContactType } from '@my/app/types'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -23,6 +23,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const result = await addContact(contact)
       console.log('API POST.addContact body', { contact })
+      return res.status(200).json(result)
+    }
+
+    /**
+     * ***************************************
+     * UPDATE a Contact to SES Subscriber list
+     * unless specified, the list will have default Topics.
+     * ***************************************
+     */
+    if (req.method === 'PATCH') {
+      const contact = JSON.parse(req.body) as CreateContactType
+
+      const result = await updateContact(contact)
+      console.log('API PATCH.addContact body', { contact, result })
       return res.status(200).json(result)
     }
     /**

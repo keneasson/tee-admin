@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { EmailTester } from 'app/features/email-tester'
+import { EmailTester } from '@my/app/features/email-tester'
 
 export default function Page({}) {
   return (
