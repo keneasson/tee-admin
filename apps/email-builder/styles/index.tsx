@@ -1,3 +1,16 @@
+import { colours } from './tokens'
+
+export const globalCss = `
+@media only screen and (max-width: 648px)  {
+  .container {
+    padding: 6px;
+  }
+  .deviceWidth {
+    width: 280px!important;
+  }
+}
+`
+
 export const container = {
   margin: '0 auto',
   width: '648px',
@@ -11,11 +24,12 @@ export const columnAlignTop = {
 }
 
 export const footer = {
-  background: '#011759',
-  color: '#fdfaf5',
+  background: colours['background-bright'],
+  color: colours['foreground-bright'],
   textAlign: 'center' as const,
   padding: '0 24px 48px',
   marginBottom: '0',
+  boxShadow: `0 50vh 0 50vh ${colours['background-bright']}`,
 }
 
 export const footerText = {
@@ -24,14 +38,14 @@ export const footerText = {
 
 export const footerLink = {
   textDecoration: 'underline',
-  color: '#505050',
+  color: colours['background-dark'],
   cursor: 'pointer',
 }
 
 export const heading = {
-  background: '#d4e3ff',
+  background: colours['background-bright'],
   padding: '30px',
-  color: '#1a1818',
+  color: colours['background-dark'],
   fontWeight: '400',
   marginBottom: '0',
 }
@@ -49,11 +63,16 @@ export const info = {
 export const link = {
   color: '#003da9',
   cursor: 'pointer',
+  padding: '5px 5px 3px',
+  border: '2px solid #003da9',
+  borderRadius: '6px',
+  backgroundColor: '#fefeff',
 }
 
 export const main = {
   fontFamily: '"Google Sans",Roboto,RobotoDraft,Helvetica,Arial,sans-serif',
   backgroundColor: '#fdfaf5',
+  color: '#00102c',
   margin: '0',
 }
 

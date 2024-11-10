@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router'
-import { SchedulesScreen } from 'app/features/schedules/schedules-screen'
+import { SchedulesScreen } from '@my/app/features/schedules/schedules-screen'
 
 import keys from '../../../next/tee-services-db47a9e534d3.json'
 

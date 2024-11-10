@@ -13,6 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method !== 'GET' && !req.query.listName) {
       return res.status(404).json({ failed: 'Json Data Not Found' })
     }
+
     // const listName = req.query.listName as string
   } catch (e) {}
 }

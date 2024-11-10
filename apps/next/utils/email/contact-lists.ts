@@ -1,13 +1,13 @@
 import {
   CreateContactListCommandInput,
   GetContactListCommand,
+  GetContactListCommandInput,
   GetContactListCommandOutput,
   SubscriptionStatus,
   UpdateContactListCommand,
-  UpdateContactListCommandInput,
   UpdateContactListCommandOutput,
 } from '@aws-sdk/client-sesv2'
-import { BackendContactList, CreateUpdateListType } from 'app/types'
+import { BackendContactList, CreateUpdateListType } from '@my/app/types'
 import { getSesClient } from './sesClient'
 
 export const inputTemplate = { ContactListName: 'TEEAdmin' }
@@ -38,7 +38,7 @@ export async function getContactLists(): Promise<BackendContactList> {
 export async function getRawContactLists(): Promise<GetContactListCommandOutput> {
   try {
     const client = getSesClient()
-    const input: UpdateContactListCommandInput = {
+    const input: GetContactListCommandInput = {
       ...inputTemplate,
     }
     const command = new GetContactListCommand(input)

@@ -1,7 +1,6 @@
 {
   "name": "tee-admin",
   "private": true,
-  "typings": "dist/index",
   "workspaces": [
     "apps/*",
     "packages/*"

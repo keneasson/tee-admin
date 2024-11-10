@@ -1,5 +1,5 @@
 import { addContact, getContacts, updateContact } from '../contact'
-import { ContactPrefPreferences, EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { ContactPrefPreferences, EmailListTypeKeys, EmailListTypes } from '@my/app/types'
 
 import * as contacts from '../../../data/contact-subscribers4.json'
 

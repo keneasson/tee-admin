@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { emailReasons, emailSend } from '../../../utils/email/email-send'
-import { getEmailContent } from '../../../utils/email/get-email-content'
+import { getEmailContent } from 'next-app/utils/email/get-email-content'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -14,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!req.query.reason) {
     return res.status(404).json({ failed: 'Json Data Not Found' })
   }
+  const isTest = !!req.query.test
   const reason = req.query.reason as emailReasons
   console.log('reason', reason)
   try {
@@ -21,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!(emailHtml && emailText)) {
       return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }
-    const result = await emailSend({ reason, emailHtml, emailText })
+    const result = await emailSend({ reason, emailHtml, emailText, test: isTest })
     console.log('result from AWS.SES', result)
     return res.status(200).json(result)
   } catch (e) {

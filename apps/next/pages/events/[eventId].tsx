@@ -1,5 +1,5 @@
 import Head from 'next/head'
-import { Events } from 'app/features/events'
+import { Events } from '@my/app/features/events'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 

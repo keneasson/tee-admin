@@ -1,15 +1,15 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { Wrapper } from 'app/provider/wrapper'
+import { Wrapper } from '@my/app/provider/wrapper'
 import { Heading, YStack } from '@my/ui'
-import { ProgramTypes } from 'app/types'
-import { Loading } from 'app/provider/loading'
-import { NextBibleClass } from 'app/features/newsletter/bible-class'
-import { NextSundaySchool } from 'app/features/newsletter/sunday-school'
-import { NextMemorial } from 'app/features/newsletter/memorial'
-import { fetchUpcoming } from 'app/features/newsletter/fetch-upcoming'
-import { fetchReadings } from 'app/features/newsletter/readings/fetch-readings'
-import { DailyReadings } from 'app/features/newsletter/readings/daily-readings'
+import { ProgramTypes } from '@my/app/types'
+import { Loading } from '@my/app/provider/loading'
+import { NextBibleClass } from '@my/app/features/newsletter/bible-class'
+import { NextSundaySchool } from '@my/app/features/newsletter/sunday-school'
+import { NextMemorial } from '@my/app/features/newsletter/memorial'
+import { fetchUpcoming } from '@my/app/features/newsletter/fetch-upcoming'
+import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
+import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
 
 const days15 = 15
 
@@ -18,7 +18,7 @@ export const NewsletterScreen: React.FC = () => {
   const [readings, setReadings] = useState<[] | false>(false)
 
   useEffect(() => {
-    Promise.all([fetchUpcoming().then(setProgram), fetchReadings().then(setReadings)]).catch(
+    Promise.all([fetchUpcoming({}).then(setProgram), fetchReadings().then(setReadings)]).catch(
       (error) => console.log('error fetching data', error)
     )
   }, [])

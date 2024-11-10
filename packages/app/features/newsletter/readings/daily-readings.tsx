@@ -1,6 +1,6 @@
 import React from 'react'
 import { Heading, Text, XStack, YStack } from '@my/ui'
-import { DailyReadingsType } from 'app/types'
+import { DailyReadingsType } from '@my/app/types'
 import { color } from '@tamagui/themes'
 
 export const DailyReadings: React.FC<DailyReadingsType> = ({ readings }) => {

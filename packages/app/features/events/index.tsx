@@ -1,11 +1,11 @@
 'use client'
 import React from 'react'
-import { Wrapper } from 'app/provider/wrapper'
+import { Wrapper } from '@my/app/provider/wrapper'
 import { Button, Heading, Paragraph } from '@my/ui'
 import { useRouter } from 'solito/navigation'
-import { StudyWeekend2024 } from 'app/features/events/study-weekend-2024'
+import { StudyWeekend2024 } from '@my/app/features/events/study-weekend-2024'
 import { XStack } from 'tamagui'
-import { Section } from 'app/features/newsletter/Section'
+import { Section } from '@my/app/features/newsletter/Section'
 
 type EventProps = {
   eventId?: string | string[]
