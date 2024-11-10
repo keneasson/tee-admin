@@ -1,9 +1,9 @@
-import { MemorialServiceType } from 'app/types'
+import { MemorialServiceType } from '@my/app/types'
 import React from 'react'
 import { Accordion, ExtLink, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
 import { XStack } from 'tamagui'
 import { ChevronDown } from '@tamagui/lucide-icons'
-import { Section } from 'app/features/newsletter/Section'
+import { Section } from '@my/app/features/newsletter/Section'
 
 type NextMemorialProps = {
   event: MemorialServiceType

@@ -1,8 +1,8 @@
 import React from 'react'
 import { View, XStack, YStack } from 'tamagui'
 import { TableBody, Text } from '@my/ui'
-import { monthDay } from 'app/provider/date-utils'
-import { BibleClassType } from 'app/types'
+import { monthDay } from '@my/app/provider/date-utils'
+import { BibleClassType } from '@my/app/types'
 
 export const BibleClass: React.FC<{
   schedule: BibleClassType[]

@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react'
 import { SafeAreaView } from 'react-native'
 import { YStack } from 'tamagui'
-import { Banner } from 'app/features/banner'
+import { Banner } from '@my/app/features/banner'
 
 type WrapperType = {
   children: ReactNode

@@ -1,5 +1,5 @@
 import { X } from '@tamagui/lucide-icons'
-import type { BackendLists } from 'app/types'
+import type { BackendLists } from '@my/app/types'
 import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
 import { SubmitHandler, useForm } from 'react-hook-form'
 import { addContactsList } from '../../../provider/get-data'

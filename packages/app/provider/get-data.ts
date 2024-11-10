@@ -6,8 +6,9 @@ import {
   GetContactType,
   ProgramsTypes,
   SimplifiedContactListType,
-} from 'app/types'
+} from '@my/app/types'
 import { CreateUpdateListType } from '../types'
+import { emailReasons } from 'next-app/utils/email/email-send'
 
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
@@ -30,8 +31,8 @@ export const getData = async (key: string): Promise<DataTypes> => {
   } as CycType
 }
 
-export const sendEmail = async (key: string): Promise<string> => {
-  const url = `${API_PATH}api/email/${key}`
+export const sendEmail = async (key: emailReasons, isTest?: boolean): Promise<string> => {
+  const url = `${API_PATH}api/email/${key}${isTest ? '?test=true' : ''}`
   const rawSchedule = await fetch(url, { cache: 'no-store' })
   return await rawSchedule.json()
 }
@@ -74,5 +75,16 @@ export const addContacts = async (contact: CreateContactType): Promise<string> =
   const url = `${API_PATH}api/contact/`
   const body = JSON.stringify(contact)
   const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  return await response.json()
+}
+
+/**
+ * update a contact in subscriber list
+ * @param contact Add this contact to the subscriber list
+ */
+export const updateContacts = async (contact: CreateContactType): Promise<string> => {
+  const url = `${API_PATH}api/contact/`
+  const body = JSON.stringify(contact)
+  const response = await fetch(url, { cache: 'no-store', method: 'PATCH', body })
   return await response.json()
 }

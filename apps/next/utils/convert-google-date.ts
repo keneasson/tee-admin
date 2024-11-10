@@ -1,4 +1,4 @@
-import { ProgramTypeKeys } from 'app/types'
+import { ProgramTypeKeys } from '@my/app/types'
 import { setAwkwardTimeStuff } from './date'
 
 const secondsOffset = 86400000

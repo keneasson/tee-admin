@@ -1,5 +1,5 @@
 import { X } from '@tamagui/lucide-icons'
-import { EmailListTypeKeys, EmailListTypes } from 'app/types'
+import { EmailListTypeKeys, EmailListTypes } from '@my/app/types'
 import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
 import { SubmitHandler, useForm } from 'react-hook-form'
 import { addContacts } from '../../../provider/get-data'

@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { Stack, YStack } from 'tamagui'
 import { ListNavigation, ListNavigationText, ScrollView } from '@my/ui'
-import { Memorial } from 'app/features/schedules/memorial'
-import { SundaySchool } from 'app/features/schedules/sunday-school'
-import { BibleClass } from 'app/features/schedules/bible-class'
-import { ErrorNotFound } from 'app/provider/error-not-found'
-import { Wrapper } from 'app/provider/wrapper'
+import { Memorial } from '@my/app/features/schedules/memorial'
+import { SundaySchool } from '@my/app/features/schedules/sunday-school'
+import { BibleClass } from '@my/app/features/schedules/bible-class'
+import { ErrorNotFound } from '@my/app/provider/error-not-found'
+import { Wrapper } from '@my/app/provider/wrapper'
 import type {
   BibleClassType,
   CycType,
@@ -14,11 +14,11 @@ import type {
   ProgramTypeKeys,
   ProgramTypes,
   SundaySchoolType,
-} from 'app/types'
-import { Loading } from 'app/provider/loading'
-import { Cyc } from 'app/features/schedules/cyc'
-import { getGoogleSheet } from 'app/provider/get-google-sheet'
-import { getData } from 'app/provider/get-data'
+} from '@my/app/types'
+import { Loading } from '@my/app/provider/loading'
+import { Cyc } from '@my/app/features/schedules/cyc'
+import { getGoogleSheet } from '@my/app/provider/get-google-sheet'
+import { getData } from '@my/app/provider/get-data'
 
 type Program = {
   title: string

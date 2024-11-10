@@ -15,8 +15,7 @@ import {
   columnAlignTop,
   container,
   defaultText,
-  footer,
-  footerText,
+  globalCss,
   header,
   info,
   link,
@@ -24,8 +23,9 @@ import {
   program,
 } from '../styles'
 import React from 'react'
-import type { NextSundaySchoolProps, SundaySchoolType } from 'app/types'
-import { ProgramsTypes } from 'app/types'
+import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
+import { ProgramsTypes } from '@my/app/types'
+import { Footer } from '../components/Footer'
 
 const mockEvents: SundaySchoolType[] = [
   {
@@ -42,26 +42,30 @@ const mockEvents: SundaySchoolType[] = [
 
 const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
   const sundaySchoolEvents = events || mockEvents
-  console.log('SundaySchool', { mockEvents, sundaySchoolEvents })
+
   return (
     <Html lang="en">
-      <Head />
+      <Head>
+        <style>{globalCss}</style>
+      </Head>
       <Preview>Sunday School Reminder</Preview>
       <Body style={main}>
         <Section style={header}>
           <Heading>Toronto East Sunday School</Heading>
-          <Text style={defaultText}>2023/2024 News and Reminders</Text>
+          <Text style={defaultText}>2024/2025 News and Reminders</Text>
         </Section>
 
-        <Container style={container}>
+        <Container style={container} className="container">
           <Section style={program}>
             <Text style={defaultText}>
               Please join us for Sunday School at the Toronto East Hall.
             </Text>
           </Section>
           <Row>
-            {sundaySchoolEvents[0] && <SundaySchoolProgram event={sundaySchoolEvents[0]} />}
-            {sundaySchoolEvents[1] && <SundaySchoolProgram event={sundaySchoolEvents[1]} />}
+            <Column>
+              {sundaySchoolEvents[0] && <SundaySchoolProgram event={sundaySchoolEvents[0]} />}
+              {sundaySchoolEvents[1] && <SundaySchoolProgram event={sundaySchoolEvents[1]} />}
+            </Column>
           </Row>
           <Section style={info}>
             <Heading style={defaultText}>Refreshments Schedule</Heading>
@@ -82,9 +86,6 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
               Children are asked to find their classroom by 9:30 am,
               <br />
               <strong>9:30</strong> Sunday School will be opened with a communal Prayer
-              <br />
-              <strong>10:20</strong> The kids will be invited to congregate around the Piano for a
-              closing hymn and prayer.
             </Text>
           </Section>
           <Section>
@@ -96,19 +97,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
             </Text>
           </Section>
         </Container>
-        <Section style={footer}>
-          <Text style={footerText}>
-            <strong>Our address is:</strong>
-            <br />
-            Toronto East Christadelphians
-            <br />
-            975 Cosburn Avenue
-            <br />
-            Toronto, On M4C 2W8
-            <br />
-            Canada
-          </Text>
-        </Section>
+        <Footer />
       </Body>
     </Html>
   )
@@ -118,44 +107,50 @@ type EventProps = {
   event: SundaySchoolType | undefined
 }
 
-const SundaySchoolProgram = ({ event }: EventProps) => {
+export const SundaySchoolProgram = ({ event }: EventProps) => {
   console.log('event', event)
   if (!event) {
     return (
-      <Column style={columnAlignTop}>
-        <Text style={defaultText}>
-          <strong>Sunday School is in recess</strong>
-        </Text>
-      </Column>
+      <Row align="left" width={'49%'} className="deviceWidth">
+        <Column style={columnAlignTop}>
+          <Text style={defaultText}>
+            <strong>Sunday School is in recess</strong>
+          </Text>
+        </Column>
+      </Row>
     )
   }
   if (event.Refreshments) {
     return (
-      <Column style={columnAlignTop}>
-        <Text style={defaultText}>
-          <strong>{event.Date.toString()}</strong>
-          <br />
-          Start time: 9:30 am
-          <br />
-          Refreshments: {event.Refreshments}
-          {event['Holidays and Special Events'] && (
-            <>
-              <br />
-              {event['Holidays and Special Events']}
-            </>
-          )}
-        </Text>
-      </Column>
+      <Row align="left" width={'49%'} className="deviceWidth">
+        <Column style={columnAlignTop}>
+          <Text style={defaultText}>
+            <strong>{event.Date.toString()}</strong>
+            <br />
+            Start time: 9:30 am
+            <br />
+            Refreshments: {event.Refreshments}
+            {event['Holidays and Special Events'] && (
+              <>
+                <br />
+                {event['Holidays and Special Events']}
+              </>
+            )}
+          </Text>
+        </Column>
+      </Row>
     )
   } else {
     return (
-      <Column style={columnAlignTop}>
-        <Text style={defaultText}>
-          <strong>{event.Date.toString()}</strong>
-          <br />
-          {event['Holidays and Special Events']}
-        </Text>
-      </Column>
+      <Row align="left" width={'49%'} className="deviceWidth">
+        <Column style={columnAlignTop}>
+          <Text style={defaultText}>
+            <strong>{event.Date.toString()}</strong>
+            <br />
+            {event['Holidays and Special Events']}
+          </Text>
+        </Column>
+      </Row>
     )
   }
 }

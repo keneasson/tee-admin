@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Heading, Paragraph, Separator } from '@my/ui'
-import { Wrapper } from 'app/provider/wrapper'
-import { Section } from 'app/features/newsletter/Section'
+import { Wrapper } from '@my/app/provider/wrapper'
+import { Section } from '@my/app/features/newsletter/Section'
 import { IntLink } from '@my/ui/src'
-import { DailyReadings } from 'app/features/newsletter/readings/daily-readings'
-import { fetchReadings } from 'app/features/newsletter/readings/fetch-readings'
+import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
+import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
 import { useSession } from 'next-auth/react'
 
 export function HomeScreen() {
