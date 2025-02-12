@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Button,
   Dialog,
@@ -12,9 +12,10 @@ import {
 import { usePathname, useRouter } from 'solito/navigation'
 import { Menu, X } from '@tamagui/lucide-icons'
 import { useSession } from 'next-auth/react'
-import { Session } from 'next-auth'
+import { AdapterSession as Session } from 'next-auth'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 type WithNavigationProps = {
   children: React.ReactNode
@@ -118,6 +119,11 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
       router.push(route)
     }
   }
+
+  useEffect(() => {
+    console.log('with navigation session.user', session)
+  }, [session])
+
   return (
     <>
       <YStack width={'100%'} paddingTop={24} paddingLeft={10} paddingRight={0} gap={25}>
@@ -126,12 +132,10 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             <NavHeading>
               <Text>Welcome {session.user.name}</Text>
             </NavHeading>
-            <NavigationButtonItem
-              key="emailTester"
-              linkTo={linkTo('/email-tester')}
-              text="Email Tester"
-              active={path === '/email-tester'}
-            />
+            {session.user.role === ROLES.GUEST && <AdminMenu linkTo={linkTo} path={path} />}
+            {(session.user.role === ROLES.GUEST ||
+              session.user.role === ROLES.MEMBER ||
+              session.user.role === ROLES.ADMIN) && <MemberMenu linkTo={linkTo} path={path} />}
           </>
         )}
         {pages.map((page, i) => (
@@ -145,5 +149,31 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
         {session && session.user ? <NavitemLogout /> : <LogInUser />}
       </YStack>
     </>
+  )
+}
+
+type SubMenuType = {
+  linkTo: (route: string) => () => void
+  path?: string
+}
+const AdminMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
+  return (
+    <NavigationButtonItem
+      key="emailTester"
+      linkTo={linkTo('/email-tester')}
+      text="Email Tester"
+      active={path === '/email-tester'}
+    />
+  )
+}
+
+const MemberMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
+  return (
+    <NavigationButtonItem
+      key="profile"
+      linkTo={linkTo('/profile')}
+      text="Profile"
+      active={path === '/profile'}
+    />
   )
 }

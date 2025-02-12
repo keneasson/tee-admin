@@ -1,8 +1,8 @@
-import { X } from '@tamagui/lucide-icons'
-import type { BackendLists } from '@my/app/types'
-import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
+import { Button, CheckboxWithCheck, Form, FormInput, FullDialog, Text, XStack } from '@my/ui'
 import { SubmitHandler, useForm } from 'react-hook-form'
 import { addContactsList } from '../../../provider/get-data'
+import { BackendLists } from '../../../types'
+import { useEffect, useState } from 'react'
 
 export type AddUpdateListParams = {
   list?: BackendLists
@@ -15,6 +15,19 @@ type AddUpdateUserType = {
 }
 
 export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
+  const [isOpen, setIsOpen] = useState<boolean>(false)
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitSuccessful, isSubmitting },
+  } = useForm<AddUpdateUserType>()
+
+  useEffect(() => {
+    setIsOpen(false)
+  }, [isSubmitSuccessful])
+
   const sesListForm: BackendLists = {
     displayName: '',
     listName: '',
@@ -30,22 +43,14 @@ export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
     console.log('form was submitted', { data, result })
   }
 
-  const {
-    control,
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<AddUpdateUserType>()
   return (
-    <>
-      <Unspaced>
-        <Dialog.Close displayWhenAdapted asChild>
-          <Button position="absolute" top="$3" right="$3" size="$2" circular icon={X} />
-        </Dialog.Close>
-      </Unspaced>
-      <Dialog.Title>Add New Subscriber List</Dialog.Title>
-
-      <Dialog.Description>Add a Subscriber List for sending bulk emails.</Dialog.Description>
+    <FullDialog
+      trigger={'Create a Subscriber List'}
+      title={'Add New Subscriber List'}
+      description={'Add a Subscriber List for sending bulk emails.'}
+      isOpen={isOpen}
+      setOpen={setIsOpen}
+    >
       <Form onSubmit={handleSubmit(onSubmit)}>
         <FormInput
           control={control}
@@ -58,14 +63,23 @@ export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
           label="Display Name"
         />
         <CheckboxWithCheck control={control} name={'defaultOptIn'} label="Auto Opt In" />
+        {errors &&
+          Object.keys(errors).map((key, index) => {
+            console.log(`errors[${key}]`, errors[key])
+            return (
+              <XStack key={`errors-${index}`}>
+                <Text>{errors[key].displayName}</Text>
+              </XStack>
+            )
+          })}
         <XStack alignSelf="flex-end" gap="$4">
           <Form.Trigger asChild>
-            <Button theme="active" aria-label="Save">
+            <Button theme="active" aria-label="Save" disabled={isSubmitting}>
               Save changes
             </Button>
           </Form.Trigger>
         </XStack>
       </Form>
-    </>
+    </FullDialog>
   )
 }

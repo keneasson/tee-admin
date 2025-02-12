@@ -1,15 +1,11 @@
-import { ProgramTypeKeys } from '@my/app/types'
+import { GoogleSheet } from '@my/app/types'
 import { setAwkwardTimeStuff } from './date'
 
 const secondsOffset = 86400000
 
-export function convertGoogleDate(
-  teeServicesDb: any,
-  serialNumber: number,
-  sheetKey: ProgramTypeKeys
-): Date {
-  const [hours, minutes] =
-    teeServicesDb.sheet_ids[sheetKey as keyof typeof teeServicesDb.sheet_ids]?.startTime.split(':')
+export function convertGoogleDate(googleSheet: GoogleSheet, serialNumber: number): Date {
+  console.log('googleSheet', googleSheet)
+  const [hours, minutes] = googleSheet.startTime.split(':')
   const eventDate = new Date((serialNumber - 25569) * secondsOffset)
   const datePart = eventDate.toISOString().split('T')[0]
   const gmtOffset = setAwkwardTimeStuff(datePart)

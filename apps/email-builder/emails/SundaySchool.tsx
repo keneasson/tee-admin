@@ -20,6 +20,7 @@ import {
   info,
   link,
   main,
+  notice,
   program,
 } from '../styles'
 import React from 'react'
@@ -31,7 +32,8 @@ const mockEvents: SundaySchoolType[] = [
   {
     Key: ProgramsTypes.sundaySchool,
     Date: 'Feb 25, 2024',
-    Refreshments: 'Eassons',
+    Refreshments: '',
+    'Holidays and Special Events': 'Cancelled due to expected weather'
   },
   {
     Key: ProgramsTypes.sundaySchool,
@@ -68,14 +70,13 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
             </Column>
           </Row>
           <Section style={info}>
-            <Heading style={defaultText}>Refreshments Schedule</Heading>
+            <Heading style={defaultText}>Schedule</Heading>
             <Text style={defaultText}>
-              To view the entire schedule for the Sunday School year, Visit the TEE Admin website -
-              schedules section
+              To view the Sunday School schedule, Visit the TEE Admin website - schedules section
             </Text>
             <Section>
               <Link href="http://www.tee-admin.com/schedule" style={link}>
-                View online
+                Open Schedules
               </Link>
             </Section>
           </Section>
@@ -86,14 +87,6 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
               Children are asked to find their classroom by 9:30 am,
               <br />
               <strong>9:30</strong> Sunday School will be opened with a communal Prayer
-            </Text>
-          </Section>
-          <Section>
-            <Heading style={defaultText}>Newsletter</Heading>
-            <Text style={defaultText}>
-              If you know someone who would like to receive this newsletter, or if you would like to
-              be removed from this newsletter, please let Bro. Ken Easson know. Unsubscribing using
-              the link below, will remove you from all Toronto East Newsletters.
             </Text>
           </Section>
         </Container>
@@ -142,7 +135,7 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
     )
   } else {
     return (
-      <Row align="left" width={'49%'} className="deviceWidth">
+      <Row align="left" width={'49%'} className="deviceWidth" style={notice}>
         <Column style={columnAlignTop}>
           <Text style={defaultText}>
             <strong>{event.Date.toString()}</strong>

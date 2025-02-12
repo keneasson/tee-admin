@@ -1,20 +1,32 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button, Separator, Text, XStack, YStack } from '@my/ui'
 import { Contacts } from '@my/app/features/email-tester/contacts'
 import { getContacts } from '@my/app/provider/get-data'
 import { Contact } from '@aws-sdk/client-sesv2'
-import type { EmailListTypeKeys, SimplifiedContacts } from '@my/app/types'
-import { ContactPreferences } from '../../types'
+import type {
+  ContactPreferences,
+  EmailListTypeKeys,
+  SimplifiedContactListType,
+  SimplifiedContacts,
+} from '@my/app/types'
 
 const ALL_CONTACTS_LOADED = 'DONE'
 
+type ContactListsProps = {
+  contactLists?: SimplifiedContactListType
+}
+
 /**
- * inputs an empty ContactList with name,
+ * Display all contact lists
  * @constructor
  */
-export const ContactLists: React.FC = () => {
+export const ContactLists: React.FC<ContactListsProps> = ({ contactLists }) => {
   const [allLists, setAllLists] = useState<SimplifiedContacts>({ subscribed: {}, unsubscribed: [] })
   const [nextToken, setNextToken] = useState<string>()
+
+  useEffect(() => {
+    console.log(ContactLists, { contactLists, allLists })
+  }, [contactLists, allLists])
 
   const handleRequestContacts = async (): Promise<void> => {
     if (nextToken === ALL_CONTACTS_LOADED) {
@@ -44,11 +56,6 @@ export const ContactLists: React.FC = () => {
         </Button>
       )}
 
-      {/*<YStack>*/}
-      {/*  <XStack alignItems={'center'} gap={'$5'}>*/}
-      {/*    <Text>{Object.keys(allLists).length}</Text>*/}
-      {/*  </XStack>*/}
-      {/*</YStack>*/}
       <YStack>
         <XStack justifyContent={'space-between'}>
           <Text>Email</Text>

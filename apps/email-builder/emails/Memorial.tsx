@@ -19,6 +19,8 @@ import {
   header,
   link,
   main,
+  weatherNotice,
+  weatherNoticeText,
   program,
 } from '../styles'
 import React from 'react'
@@ -44,7 +46,7 @@ const mockEvents: SundayEvents[] = [
     Key: ProgramsTypes.memorial,
     Date: 'Feb 25, 2024',
     Preside: 'Presiding Brother',
-    Exhort: 'Exorting Brother',
+    Exhort: 'Exhorting Brother',
     Organist: 'Keyboard Player',
     Steward: 'Hall Steward',
     Doorkeeper: 'Door Keeper',
@@ -59,8 +61,37 @@ const mockEvents: SundayEvents[] = [
     YouTube: 'The Youtube Link',
     Refreshments: 'Eassons',
     'Holidays and Special Events': undefined,
+    Activities: 'WEATHER NOTICE',
+  },
+  {
+    Key: ProgramsTypes.memorial,
+    Date: 'Mar 3, 2024',
+    Preside: 'Presiding Bro 2',
+    Exhort: 'Exhort Bro 2',
+    Organist: 'Keyboardist',
+    Steward: 'Hall Steward 2',
+    Doorkeeper: 'Door Keeper 2',
+    Collection: '',
+    Lunch: 'no lunch will be served',
+    Reading1: 'Reading 1',
+    Reading2: 'Reading 2',
+    'Hymn-opening': '',
+    'Hymn-exhortation': '',
+    'Hymn-memorial': '',
+    'Hymn-closing': '',
+    YouTube: 'The Youtube Link',
+    Refreshments: 'Eassons',
+    'Holidays and Special Events': 'Toronto Fraternal Gathering',
   },
 ]
+
+function getDateFormatted(date: Date | string): string {
+  if (typeof date === 'string') {
+    const when = new Date(date)
+    return when.toDateString()
+  }
+  return date.toDateString()
+}
 
 const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
   const sundaysDateString = getNextDayOfTheWeek('sun').toDateString()
@@ -78,15 +109,27 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
           <Text style={defaultText}>{sundaysDateString}</Text>
           <text>{'All arrangements are subject to God’s will.'}</text>
         </Section>
+        {sundayEvents[0]?.Activities === 'WEATHER NOTICE' && 
+        <Section style={weatherNotice}>
+          <Container style={weatherNotice}>
+            <Text style={weatherNoticeText} >Significant Snowfall is expected overnight.<br />If there is snow on the ground tomorrow, in person activities will be cancelled, please stay home and join us on Zoom or YouTube.</Text>
+            </Container>
+        </Section>
+        
+        }
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           {sundayEvents[0] !== undefined && (
             <>
               <Section style={program}>
                 <Heading style={defaultText}>Sunday School at 9:30am</Heading>
-                <Text style={defaultText}>
-                  {'Refreshments: '}
-                  <strong>{sundayEvents[0].Refreshments}</strong>
-                </Text>
+                {sundayEvents[0].Refreshments ? (
+                  <Text style={defaultText}>
+                    {'Refreshments: '}
+                    <strong>{sundayEvents[0].Refreshments}</strong>
+                  </Text>
+                ) : (
+                  <Text style={defaultText}>{'No Sunday school this week!'}</Text>
+                )}
               </Section>
               <hr />
             </>
@@ -130,7 +173,6 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
         </Container>
         <Container style={container} className="container zoom-info">
           <Heading style={defaultText}>Join us on Zoom</Heading>
-
           <Text style={defaultText}>
             <Link
               href="https://us04web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09"
@@ -152,15 +194,15 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
             <br />
             +1 647 558 0588 Canada (Toronto)
           </Text>
+          <hr />
         </Container>
-        <hr />
         <Container style={container} className="container youtube-info">
           {sundayEvents[0]?.YouTube !== undefined && (
             <>
               <Heading style={defaultText}>Join us on YouTube</Heading>
               <Text style={defaultText}>
                 <Link href={sundayEvents[0].YouTube} style={link}>
-                  Click to join YouTube
+                  Click to join on YouTube
                 </Link>
               </Text>
             </>
@@ -171,18 +213,37 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
               YouTube Channel
             </Link>
           </Text>
-          <hr />
         </Container>
+        <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+        {(sundayEvents[1]?.Exhort || sundayEvents[1]?.['Holidays and Special Events']) && (
+          <Container style={container} className="container youtube-info">
+            <Heading style={defaultText}>
+              Arrangements for {getDateFormatted(sundayEvents[1].Date)}
+            </Heading>
+            <Row>
+              <Column style={columnAlignTop}>{MemorialServiceProgram(sundayEvents[1])}</Column>
+            </Row>
+          </Container>
+        )}
         <Container>
-          <Text style={defaultText}>
-            To unsubscribe please contact the Recording Brother at teerecbro@gmail.com
-            <br />
-          </Text>
+          <Text>&nbsp;</Text>
         </Container>
-
         <Footer />
       </Body>
     </Html>
+  )
+}
+
+const Lunch = ({ lunch }: { lunch: string }) => {
+  if (!lunch) {
+    return null
+  }
+  return (
+    <>
+      <br />
+      <br />
+      <strong>{lunch}</strong>
+    </>
   )
 }
 
@@ -194,6 +255,9 @@ const MemorialServiceProgram = (event: SundayEvents) => {
        */
       <Text style={defaultText}>
         <strong>There will be no Memorial service at the Toronto East Hall.</strong>
+        {event['Holidays and Special Events'] && (
+          <Text>{event['Holidays and Special Events']}</Text>
+        )}
       </Text>
     )
   }
@@ -215,10 +279,15 @@ const MemorialServiceProgram = (event: SundayEvents) => {
       <strong>{event.Doorkeeper}</strong>
       <br />
       <br />
-      <strong>
-        {'Second Collection is for '}
-        {event.Collection}
-      </strong>
+      {event.Collection ? (
+        <strong>
+          {'Second Collection is for '}
+          {event.Collection}
+        </strong>
+      ) : (
+        <>No Second Collection.</>
+      )}
+      <Lunch lunch={event.Lunch} />
     </Text>
   )
 }

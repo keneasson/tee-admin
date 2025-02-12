@@ -1,6 +1,6 @@
 {
-  "version": "0.0.1",
   "name": "@my/app",
+  "version": "0.0.1",
   "main": "index.ts",
   "private": true,
   "sideEffects": [
