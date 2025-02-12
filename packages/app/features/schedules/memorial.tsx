@@ -13,7 +13,7 @@ export const Memorial: React.FC<{
     <YStack>
       <YStack
         key={'header'}
-        borderColor={'lightGrey'}
+        borderColor={'lightgrey'}
         borderWidth={1}
         backgroundColor={'cornflowerblue'}
       >
@@ -48,12 +48,12 @@ export const Memorial: React.FC<{
 
         const date = new Date(service.Date)
         const past = date < today
-        const bgColour = past ? '$gray9Dark' : '$gray0Light'
+        const bgColour = past ? '$gray9Dark' : '$gray1Light'
 
         return (
           <YStack
             key={index}
-            borderColor={'$grey3light'}
+            borderColor={'$gray3Light'}
             borderWidth={1}
             backgroundColor={bgColour}
           >

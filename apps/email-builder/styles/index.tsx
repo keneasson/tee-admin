@@ -27,7 +27,7 @@ export const footer = {
   background: colours['background-bright'],
   color: colours['foreground-bright'],
   textAlign: 'center' as const,
-  padding: '0 24px 48px',
+  padding: '12px 24px 48px',
   marginBottom: '0',
   boxShadow: `0 50vh 0 50vh ${colours['background-bright']}`,
 }
@@ -38,7 +38,7 @@ export const footerText = {
 
 export const footerLink = {
   textDecoration: 'underline',
-  color: colours['background-dark'],
+  color: colours['foreground-action'],
   cursor: 'pointer',
 }
 
@@ -78,6 +78,27 @@ export const main = {
 
 export const program = {
   color: '#000821',
+}
+
+export const notice = {
+  backgroundColor: '#ff3333',
+  color: 'white',
+  padding: '3px',
+}
+
+export const weatherNotice = {
+  backgroundColor: '#ff3333',
+  color: 'white',
+  padding: '3px',
+  textAlign: 'center' as const,
+}
+
+export const weatherNoticeText = {
+  fontSize: '24px',
+  lineHeight: '34px',
+  backgroundColor: '#ff3333',
+  color: 'white',
+  margin: '24px',
 }
 
 export const defaultText = {

@@ -1,4 +1,5 @@
 import { SESv2Client, SESv2ClientConfig } from '@aws-sdk/client-sesv2'
+import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb'
 
 export class GlobalRef<T> {
   private readonly sym: symbol
@@ -18,15 +19,19 @@ export class GlobalRef<T> {
 }
 
 const CREDENTIAL = {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
+  },
+  region: 'ca-central-1',
 }
 
 export function getAwsConfig(): SESv2ClientConfig {
-  return {
-    region: 'ca-central-1',
-    credentials: CREDENTIAL,
-  }
+  return CREDENTIAL
+}
+
+export function getAwsDbConfig(): DynamoDBClientConfig {
+  return CREDENTIAL
 }
 
 export function getSesClient(): SESv2Client {

@@ -19,6 +19,10 @@ export enum ProgramsTypes {
   cyc = 'cyc',
 }
 
+export enum Directory {
+  directory = 'DIRECTORY',
+}
+
 export enum EmailListTypes {
   sundaySchool = 'sundaySchool',
   newsletter = 'newsletter',
@@ -30,13 +34,13 @@ export enum EmailListTypes {
 export type ProgramTypeKeys = keyof typeof ProgramsTypes
 export type EmailListTypeKeys = keyof typeof EmailListTypes
 
-export type GoogleSheets = Record<
-  ProgramTypeKeys,
-  {
-    name: string
-    key: string
-  }
->
+export type GoogleSheet = {
+  name: string
+  key: string
+  startTime: string
+}
+
+export type GoogleSheets = Record<ProgramTypeKeys, GoogleSheet>
 
 export type BackendLists = {
   listName: string
@@ -116,17 +120,17 @@ export type MemorialServiceType = {
   YouTube: string
 }
 
-export type SundayEvents = MemorialServiceType &
-  Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
-export type NextMemorialServiceProps = {
-  events: SundayEvents[]
-}
-
 export type SundaySchoolType = {
   Date: string | Date
   Key: ProgramsTypes.sundaySchool
   Refreshments: string
   'Holidays and Special Events'?: string
+}
+
+export type SundayEvents = MemorialServiceType &
+  Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
+export type NextMemorialServiceProps = {
+  events: SundayEvents[]
 }
 
 export type NextSundaySchoolProps = {
@@ -143,6 +147,10 @@ export type BibleClassType = {
 
 export type NextBibleClassProps = {
   events: BibleClassType[]
+}
+
+export type NextNewsletterProps = {
+  events: SundayEvents[] | BibleClassType[]
 }
 
 type CycRegular = {
@@ -170,4 +178,13 @@ export type DailyReadingType = Record<string, string[]>
 
 export type DailyReadingsType = {
   readings: DailyReadingType[]
+}
+
+export type DirectoryType = {
+  LastName: string
+  FirstName: string
+  Address: string
+  Phone: string
+  Email: string
+  Children: string
 }

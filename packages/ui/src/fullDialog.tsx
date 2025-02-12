@@ -1,24 +1,26 @@
-import { Adapt, Button, Dialog, Sheet } from 'tamagui'
+import { Adapt, Button, Dialog, type DialogProps, Sheet, Unspaced } from 'tamagui'
+import { X } from '@tamagui/lucide-icons'
+import type { JSX } from 'react'
 
-export function FullDialog(props: {
-  content: React.ReactElement
-  trigger: string | React.ReactElement
-}) {
-  return <DialogInstance {...props} />
-}
-
-function DialogInstance({ content, trigger }) {
+const FullDialog: React.FC<
+  DialogProps & {
+    trigger: string | JSX.Element
+    title: string | JSX.Element
+    description: string | JSX.Element
+    isOpen?: boolean
+    setOpen?: (open: boolean) => void
+  }
+> = ({ children, title, trigger, description, isOpen, setOpen }) => {
   return (
-    <Dialog modal>
+    <Dialog modal open={isOpen}>
       <Dialog.Trigger asChild>
-        <Button>{trigger}</Button>
+        <Button {...(setOpen && { onPress: () => setOpen(true) })}>{trigger}</Button>
       </Dialog.Trigger>
       <Adapt when="sm" platform="touch">
         <Sheet animation="quick" zIndex={200000} modal dismissOnSnapToBottom>
           <Sheet.Frame padding="$4" gap="$4">
             <Adapt.Contents />
           </Sheet.Frame>
-
           <Sheet.Overlay animation="lazy" enterStyle={{ opacity: 0 }} exitStyle={{ opacity: 0 }} />
         </Sheet>
       </Adapt>
@@ -47,9 +49,26 @@ function DialogInstance({ content, trigger }) {
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           gap="$4"
         >
-          {content}
+          <Unspaced>
+            <Dialog.Close displayWhenAdapted asChild>
+              <Button
+                position="absolute"
+                top="$3"
+                right="$3"
+                size="$2"
+                circular
+                icon={X}
+                {...(setOpen && { onPress: () => setOpen(false) })}
+              />
+            </Dialog.Close>
+          </Unspaced>
+          <Dialog.Title>{title}</Dialog.Title>
+          <Dialog.Description>{description}</Dialog.Description>
+          {children}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
   )
 }
+
+export { FullDialog }

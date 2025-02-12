@@ -1,9 +1,11 @@
 import { JWT } from 'google-auth-library'
-import teeServicesDb from '../tee-services-db47a9e534d3.json'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { convertGoogleDate } from './convert-google-date'
 import { convertHumanReadableDate } from './date'
+
 import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
+
+import teeServicesDb from '../tee-services-db47a9e534d3.json'
 
 const PAGE1 = 0
 const DATE_INDEX = 0
@@ -61,16 +63,17 @@ async function findNextProgram<FindNextProgramProps>(
   await doc.loadInfo(true) // loads document properties and worksheets
   const sheet = doc.sheetsByIndex[PAGE1] // or use `doc.sheetsById[id]` or `doc.sheetsByTitle[title]`
   const rows = await sheet.getRows()
+  const googleSheet = teeServicesDb['sheet_ids'][sheetKey]
   const index = rows.findIndex((row) => {
     const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
-    const date = convertGoogleDate(teeServicesDb, cell.value as number, sheetKey)
+    const date = convertGoogleDate(googleSheet, cell.value as number)
     return date.getTime() >= today.getTime()
   })
   const upcomingRows = rows.slice(index, index + 2)
   return upcomingRows.map((row): ProgramTypes => {
     const event = row.toObject() as Omit<ProgramTypes, 'Key'>
     const cell = sheet.getCell(row.rowNumber - 1, DATE_INDEX)
-    const eventDate = convertGoogleDate(teeServicesDb, cell.value as number, sheetKey)
+    const eventDate = convertGoogleDate(googleSheet, cell.value as number)
     return {
       ...event,
       Date: convertHumanReadableDate(eventDate),

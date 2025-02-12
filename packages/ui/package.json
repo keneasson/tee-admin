@@ -6,7 +6,7 @@
   ],
   "private": true,
   "types": "./src",
-  "main": "src/index.tsx",
+  "main": "./src/index.tsx",
   "module:jsx": "src",
   "files": [
     "types",

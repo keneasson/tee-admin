@@ -18,6 +18,7 @@ export const NewsletterScreen: React.FC = () => {
   const [readings, setReadings] = useState<[] | false>(false)
 
   useEffect(() => {
+    console.log('in useEffect', { program, readings })
     Promise.all([fetchUpcoming({}).then(setProgram), fetchReadings().then(setReadings)]).catch(
       (error) => console.log('error fetching data', error)
     )

@@ -62,7 +62,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
               Click to join Zoom
             </Link>
             <br />
-            Meeting ID: 932 385 03
+            Meeting ID: 932 385 033
             <br />
             Password: 456345
           </Text>
