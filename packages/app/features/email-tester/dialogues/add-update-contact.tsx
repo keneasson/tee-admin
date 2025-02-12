@@ -1,8 +1,8 @@
-import { X } from '@tamagui/lucide-icons'
 import { EmailListTypeKeys, EmailListTypes } from '@my/app/types'
-import { Button, CheckboxWithCheck, Dialog, Form, FormInput, Unspaced, XStack } from '@my/ui'
+import { Button, CheckboxWithCheck, Form, FormInput, FullDialog, XStack } from '@my/ui'
 import { SubmitHandler, useForm } from 'react-hook-form'
 import { addContacts } from '../../../provider/get-data'
+import { useState } from 'react'
 
 export type AddUpdateContactParams = {}
 
@@ -22,10 +22,16 @@ const listNameMap: { [K in EmailListTypeKeys]: string } = {
 }
 
 export const AddUpdateContact: React.FC<AddUpdateContactParams> = () => {
+  const [isOpen, setIsOpen] = useState<boolean>(false)
+  const [isSending, setIsSending] = useState<boolean>(false)
+
   const onSubmit: SubmitHandler<AddUpdateContactType> = async (data) => {
+    setIsSending(true)
     console.log('form was submitted', data)
     const newContact = await addContacts({ lists: data.lists, email: data.email })
     console.log('newContact', newContact)
+    setIsSending(false)
+    setIsOpen(false)
   }
 
   const {
@@ -35,15 +41,13 @@ export const AddUpdateContact: React.FC<AddUpdateContactParams> = () => {
     formState: { errors },
   } = useForm<AddUpdateContactType>()
   return (
-    <>
-      <Unspaced>
-        <Dialog.Close displayWhenAdapted asChild>
-          <Button position="absolute" top="$3" right="$3" size="$2" circular icon={X} />
-        </Dialog.Close>
-      </Unspaced>
-      <Dialog.Title>Add New Contact</Dialog.Title>
-
-      <Dialog.Description>Add a Contact and Select the lists they will be on.</Dialog.Description>
+    <FullDialog
+      title={'Add New Contact'}
+      trigger={'Add A Contact'}
+      description={'Add a Contact and Select the lists they will be on.'}
+      isOpen={isOpen}
+      setOpen={(open: boolean) => setIsOpen(open)}
+    >
       <Form onSubmit={handleSubmit(onSubmit)}>
         <FormInput control={control} {...register('email', { required: true })} label="Email" />
         <FormInput
@@ -65,13 +69,13 @@ export const AddUpdateContact: React.FC<AddUpdateContactParams> = () => {
           />
         ))}
         <XStack alignSelf="flex-end" gap="$4">
-          <Form.Trigger asChild>
-            <Button theme="active" aria-label="Save">
+          <Form.Trigger asChild disabled={isSending}>
+            <Button theme={isSending ? 'blue_active' : 'blue'} aria-label="Save">
               Save changes
             </Button>
           </Form.Trigger>
         </XStack>
       </Form>
-    </>
+    </FullDialog>
   )
 }
