@@ -3,6 +3,11 @@ import Constants from 'expo-constants'
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
 
+/**
+ * 
+ * @TODO This is currently a No-OP - will need to update the users ROLE in the USER:${email} record.
+ * @param email string 
+ */
 async function setRole({ email }: { email: string }) {
   const url = `${API_PATH}api/security/${email}`
   const rawResponse = await fetch(url, { next: { revalidate: 3600 } })

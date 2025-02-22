@@ -71,16 +71,14 @@ export const emailSend = async function ({
   test = false,
 }: emailSendProps): Promise<Sends | Error> {
   if (Object.keys(senders).findIndex((r) => r === reason) === -1) {
-    throw new Error('reason is not a valid email type')
+    throw new Error(`${reason} is not a valid email type`)
   }
   try {
-    if (test === true) {
-      senders[reason].contactList = 'testList'
-    }
-    const listTopic = senders[reason].contactList
+    const listTopic = test === true ? 'testList' : senders[reason].contactList
     const sesClient = getSesClient()
     const result = { sends: [], skips: [] }
 
+    console.log('why test=false sends test', { test, listTopic })
     const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
     if (!contacts) {
       return result

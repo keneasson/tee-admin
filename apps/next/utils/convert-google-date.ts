@@ -4,7 +4,6 @@ import { setAwkwardTimeStuff } from './date'
 const secondsOffset = 86400000
 
 export function convertGoogleDate(googleSheet: GoogleSheet, serialNumber: number): Date {
-  console.log('googleSheet', googleSheet)
   const [hours, minutes] = googleSheet.startTime.split(':')
   const eventDate = new Date((serialNumber - 25569) * secondsOffset)
   const datePart = eventDate.toISOString().split('T')[0]

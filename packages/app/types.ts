@@ -23,6 +23,8 @@ export enum Directory {
   directory = 'DIRECTORY',
 }
 
+export type GoogleSheetTypes = keyof typeof ProgramsTypes | keyof typeof Directory
+
 export enum EmailListTypes {
   sundaySchool = 'sundaySchool',
   newsletter = 'newsletter',
@@ -181,10 +183,20 @@ export type DailyReadingsType = {
 }
 
 export type DirectoryType = {
+  Key: 'directory'
   LastName: string
   FirstName: string
   Address: string
   Phone: string
   Email: string
   Children: string
+  ecclesia: string
 }
+
+export type GoogleSheetDirectory = {
+  title: string
+  type: 'directory'
+  content: DirectoryType[]
+}
+
+export type GoogleSheetsAvailableTypes = ProgramTypes | DirectoryType

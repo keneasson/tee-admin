@@ -12,7 +12,6 @@ import {
 import { usePathname, useRouter } from 'solito/navigation'
 import { Menu, X } from '@tamagui/lucide-icons'
 import { useSession } from 'next-auth/react'
-import { AdapterSession as Session } from 'next-auth'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
@@ -72,7 +71,7 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
 }
 
 type SmallScreenNavProps = {
-  session: Session | null
+  session: any | null
 }
 const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
   const [open, setOpen] = useState(false)
@@ -108,7 +107,7 @@ const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
 
 type MainNavigationProps = {
   handleOpenChange?: () => void
-  session?: Session | null
+  session?: any | null
 }
 const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, session }) => {
   const router = useRouter()
@@ -132,10 +131,10 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             <NavHeading>
               <Text>Welcome {session.user.name}</Text>
             </NavHeading>
-            {session.user.role === ROLES.GUEST && <AdminMenu linkTo={linkTo} path={path} />}
-            {(session.user.role === ROLES.GUEST ||
-              session.user.role === ROLES.MEMBER ||
-              session.user.role === ROLES.ADMIN) && <MemberMenu linkTo={linkTo} path={path} />}
+            {session.user.role === ROLES.ADMIN && <AdminMenu linkTo={linkTo} path={path} />}
+            {(session.user.role === ROLES.MEMBER || session.user.role === ROLES.ADMIN) && (
+              <MemberMenu linkTo={linkTo} path={path} />
+            )}
           </>
         )}
         {pages.map((page, i) => (
