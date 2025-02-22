@@ -11,7 +11,17 @@ import {
   Section,
   Text,
 } from '@react-email/components'
-import { container, defaultText, globalCss, header, link, main, program } from '../styles'
+import {
+  container,
+  defaultText,
+  globalCss,
+  header,
+  link,
+  main,
+  program,
+  specialNoteContainer,
+  specialNotice,
+} from '../styles'
 import React from 'react'
 import type { BibleClassType, NextBibleClassProps } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
@@ -40,6 +50,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
           <Heading>Toronto East Bible Class</Heading>
         </Section>
         <Container style={container} className="container">
+          <SpecialNotice />
           <Section style={program}>
             <Heading style={defaultText}>
               Please join us on Zoom for our Weekly Bible Class
@@ -77,6 +88,24 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
         <Footer />
       </Body>
     </Html>
+  )
+}
+
+const SpecialNotice = () => {
+  return (
+    <Container style={specialNoteContainer}>
+      <Section style={specialNotice}>
+        <Heading style={defaultText}>
+          Special Note about Sunday! We plan to have the Service In Person.
+        </Heading>
+        <Text style={defaultText}>
+          Bro. Andrew and Sis. Donna are planning to attend in person, and Lunch will be provided at
+          the hall!
+          <br />
+          Please contact Sis. Pauline if you will bring an entrée. Salads and deserts are welcome.
+        </Text>
+      </Section>
+    </Container>
   )
 }
 

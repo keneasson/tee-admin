@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, UpdateCommand, UpdateCommandInput } from '@aws-sdk/lib-dynamodb'
 import { User } from 'next-auth'
+import { generateUpdateExpression } from '@auth/dynamodb-adapter'
 
 import { getAwsDbConfig } from '../email/sesClient'
 import { nextAuthDynamoDb } from '../auth'
@@ -13,59 +14,55 @@ type EmailUserProps = {
 
 const dbClientConfig = getAwsDbConfig()
 
-function createUpdateExpressions(item: { [key: string]: any }) {
-  const updateExpression: string[] = []
-  const expressionAttribute: { [key: string]: any } = {}
-  const expressionAttributeNames: { [key: string]: any } = {}
-  Object.keys(item).map((key) => {
-    const placeholder = `:p${key}`
-    const alias = `#a${key}`
-    updateExpression.push(`${alias} = ${placeholder}`)
-    expressionAttribute[placeholder] = item[key]
-    expressionAttributeNames[alias] = key
-  })
-  return {
-    updateExpression: `SET ${updateExpression.join(', ')}`,
-    expressionAttribute,
-    expressionAttributeNames,
-  }
+type DBUser = User & {
+  pkey: string
+  skey: string
+  gsi1sk: string
+  gsi1pk: string
+  image: string
+  id: string
 }
 
-// @deprecated - not using this table - see NextAuth for correct function
-async function setUserRole({ email }: EmailUserProps) {
-  const dbClient = new DynamoDBClient(dbClientConfig)
-  const docClient = DynamoDBDocumentClient.from(dbClient)
-  const put = new PutCommand({
-    Item: {
-      pkey: `role:${email}`,
-      skey: email,
-      userdata: { fname: 'Ken', lname: 'Easson', role: 'administrator' },
-    },
-    TableName: 'tee-admin',
-    ReturnConsumedCapacity: 'TOTAL' as const,
-  })
-  const ret = await docClient.send(put)
-  console.log('ret', ret)
-  return ret
-}
-
-export { setUserRole }
-
-async function addUsersRoleToDB({ user, legacy }: { user: User; legacy: DirectoryType }) {
+async function addUsersRoleToDB({ user, legacy }: { user: DBUser; legacy: DirectoryType }) {
   console.log('set-user-role addUsersRoleToDB', user)
   if (!user?.id) return
-  const dbClient = new DynamoDBClient(dbClientConfig)
-  const docClient = DynamoDBDocumentClient.from(dbClient)
-  const updateCmd = new UpdateCommand({
-    TableName: nextAuthDynamoDb.tableName,
-    Key: {
-      pkey: `USER#${user.id}`,
-    },
-    ...createUpdateExpressions({ role: user.role }),
-  })
-  const ret = await docClient.send(updateCmd)
-  console.log('addUsersRoleToDB ret', ret)
-  return ret
+  const { pkey, skey } = user
+  try {
+    const dbClient = new DynamoDBClient(dbClientConfig)
+    const docClient = DynamoDBDocumentClient.from(dbClient)
+    const { UpdateExpression, ExpressionAttributeNames, ExpressionAttributeValues } =
+      generateUpdateExpression({
+        role: user.role,
+        ecclesia: legacy.ecclesia.trim(),
+        profile: {
+          fname: legacy.FirstName.trim(),
+          lname: legacy.LastName.trim(),
+          phone: legacy.Phone.trim(),
+          address: legacy.Address.trim(),
+          children: legacy.Children.trim(),
+        },
+      })
+
+    const update: UpdateCommandInput = {
+      TableName: nextAuthDynamoDb.tableName,
+      Key: {
+        pkey: `USER#${user.id}`,
+        skey: `USER#${user.id}`,
+      },
+      UpdateExpression,
+      ExpressionAttributeNames,
+      ExpressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
+    }
+
+    const updateCmd = new UpdateCommand(update)
+    const ret = await docClient.send(updateCmd)
+    console.log('addUsersRoleToDB ret', { update, ret })
+    return ret
+  } catch (err) {
+    console.log('failed to addUserRoleToDB ', err)
+    return
+  }
 }
 
 export { addUsersRoleToDB }

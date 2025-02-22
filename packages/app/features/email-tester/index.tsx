@@ -11,7 +11,7 @@ import { ManageContacts } from './manage-contacts'
 import { emailReasons } from 'next-app/utils/email/email-send'
 import { Check } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
-import { setRole } from '../../provider/auth/setRole'
+// import { setRole } from '../../provider/auth/setRole'
 
 export const EmailTester: React.FC = () => {
   const { data: session } = useSession()
@@ -21,21 +21,21 @@ export const EmailTester: React.FC = () => {
   const [test, setTest] = useState<boolean>(false)
   const [buttonResponce, setButtonResponce] = useState<string>()
 
-  const handleButtonPress = async () => {
-    try {
-      const res = await setRole({ email: 'ken.easson@gmail.com' })
-      console.log('res', res)
-      setButtonResponce(JSON.stringify(res))
-    } catch (error) {
-      if (error instanceof Error) {
-        console.log('handleButtonPress Error', error.message)
-        setButtonResponce(error.message)
-      } else {
-        console.error('error', { error })
-        setButtonResponce(error)
-      }
-    }
-  }
+  // const handleButtonPress = async () => {
+  //   try {
+  //     const res = await setRole({ email: 'ken.easson@gmail.com' })
+  //     console.log('res', res)
+  //     setButtonResponce(JSON.stringify(res))
+  //   } catch (error) {
+  //     if (error instanceof Error) {
+  //       console.log('handleButtonPress Error', error.message)
+  //       setButtonResponce(error.message)
+  //     } else {
+  //       console.error('error', { error })
+  //       setButtonResponce(error)
+  //     }
+  //   }
+  // }
 
   const handleCheckTest = () => {
     setTest(!test)
@@ -113,10 +113,10 @@ export const EmailTester: React.FC = () => {
             )}
           </YStack>
           <ManageContacts />
-          <br />
+          {/* <br />
           <Button onPress={() => handleButtonPress()}>
             <Text>Add Role for Ken Easson</Text>
-          </Button>
+          </Button> */}
           {buttonResponce && <Text>{buttonResponce}</Text>}
         </YStack>
       </Section>

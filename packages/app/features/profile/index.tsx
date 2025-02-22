@@ -1,13 +1,19 @@
-import { Section, YStack, Heading } from '@my/ui'
+import { Section, Text, XStack, YStack, Heading } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { useEffect, useState } from 'react'
-import { getGoogleSheet } from '@my/app/provider/get-google-sheet'
+import { getUserFromLegacyDirectory } from '@my/app/provider/auth/get-user-from-legacy'
+import { DirectoryType } from '@my/app/types'
 
 type ProfileType = {}
 export const Profile: React.FC<ProfileType> = ({}) => {
-  const [directory, setDirectory] = useState()
+  const [user, setUser] = useState<DirectoryType>()
   useEffect(() => {
-    getGoogleSheet('directory').then(setDirectory)
+    async function getUser() {
+      const user = await getUserFromLegacyDirectory({ email: 'ken.easson@gmail.com' })
+      console.log('get user', user)
+      setUser(user)
+    }
+    getUser()
   }, [])
 
   return (
@@ -16,7 +22,15 @@ export const Profile: React.FC<ProfileType> = ({}) => {
         <YStack>
           <YStack>
             <Heading size={5}>Profile</Heading>
-            <pre>{JSON.stringify(directory)}</pre>
+            {user &&
+              Object.keys(user).map((key) => {
+                return (
+                  <XStack>
+                    <Text>{key}: </Text>
+                    <Text>{user[key]}</Text>
+                  </XStack>
+                )
+              })}
           </YStack>
         </YStack>
       </Section>

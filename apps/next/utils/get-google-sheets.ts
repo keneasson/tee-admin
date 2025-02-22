@@ -4,11 +4,12 @@ import { JWT } from 'google-auth-library'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { convertGoogleDate } from './convert-google-date'
 import teeServicesDb from '../tee-services-db47a9e534d3.json'
+import type { GoogleSheetTypes, GoogleSheetsAvailableTypes } from '@my/app/types'
 
 const PAGE1 = 0
 const DATE_INDEX = 0
 
-export async function get_google_sheet(sheetKey: string) {
+export async function get_google_sheet<K extends GoogleSheetTypes>(sheetKey: K) {
   if (!Object.keys(teeServicesDb['sheet_ids']).includes(sheetKey)) {
     throw new Error('Invalid Google Sheet')
   }
