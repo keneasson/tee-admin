@@ -80,6 +80,18 @@ export const program = {
   color: '#000821',
 }
 
+export const specialNoteContainer = {
+  border: '2px solid #bc6401',
+  backgroundColor: 'white',
+  margin: '0px',
+}
+
+export const specialNotice = {
+  margin: '12px',
+  width: 'calc(100% - 24px)',
+  color: '#e08712',
+}
+
 export const notice = {
   backgroundColor: '#ff3333',
   color: 'white',

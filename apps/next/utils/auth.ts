@@ -8,8 +8,11 @@ import { getAwsDbConfig } from './email/sesClient'
 import { addUsersRoleToDB } from './dynamodb/set-user-role'
 
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { get_google_sheet } from './get-google-sheets'
-import { getGoogleSheet } from '@my/app/provider/get-google-sheet'
+import {
+  getRoleFromLegacyUser,
+  getUserFromLegacyDirectory,
+} from '@my/app/provider/auth/get-user-from-legacy'
+import { userFromLegacy } from './user-from-legacy'
 
 export const nextAuthDynamoDb = {
   tableName: 'tee-admin',
@@ -39,6 +42,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   adapter: DynamoDBAdapter(client, nextAuthDynamoDb),
   callbacks: {
+    async signIn({ user, profile }) {
+      if (user.role) {
+        return true
+      }
+      const userEmail = user.email || profile?.email
+      if (!userEmail) {
+        return true
+      }
+      const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
+      if (!legacyUser) {
+        return true
+      }
+      const role = await getRoleFromLegacyUser({ user: legacyUser })
+
+      if (role) {
+        user.role = role
+        await addUsersRoleToDB({ user, legacy: legacyUser })
+      }
+      console.log('injecting role into session', {
+        name: legacyUser.FirstName + ' ' + legacyUser.LastName,
+        user,
+      })
+      return true
+    },
     async session({ session, user }) {
       // Safely add role to the Session.User
       try {
@@ -60,22 +87,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user?.id) {
           // store role on database when user signs up
           if (user.email) {
-            const directory = getUserFromLegacyDirectory({ email: user.email })
-            console.log('injecting role into session', { user })
+            const legacyUser = await getUserFromLegacyDirectory({ email: user.email })
+            if (!legacyUser) {
+              return
+            }
+            const role = await getRoleFromLegacyUser({ user: legacyUser })
+            console.log('injecting role into session', {
+              name: legacyUser.FirstName + ' ' + legacyUser.LastName,
+              role,
+            })
+            if (role) {
+              user.role = role
+              await addUsersRoleToDB({ user, legacy: legacyUser })
+            }
           }
-          await addUsersRoleToDB({ user, legacy })
         }
       } catch (error) {
         console.error('Error in createUser event:', error)
+      }
+    },
+    async updateUser({ user }) {
+      console.log('updateUser', user)
+      if (user.role || !user.email) {
+        return
+      }
+      const legacyUser = await getUserFromLegacyDirectory({ email: user.email })
+      if (!legacyUser) {
+        return
+      }
+      const role = await getRoleFromLegacyUser({ user: legacyUser })
+      console.log('injecting role into session', {
+        name: legacyUser.FirstName + ' ' + legacyUser.LastName,
+        role,
+      })
+      if (role) {
+        user.role = role
+        await addUsersRoleToDB({ user, legacy: legacyUser })
       }
     },
   },
   secret: process.env.NEXT_PUBLIC_SECRET,
   debug: process.env.NODE_ENV === 'development',
 })
-
-export async function getUserFromLegacyDirectory({ email }: { email: string }) {
-  const directory = getGoogleSheet('directory')
-
-  console.log('directory', directory)
-}

@@ -49,6 +49,9 @@ module.exports = function () {
     ],
     experimental: {
       scrollRestoration: true,
+      serverActions: {
+        allowedOrigins: ['my-forwarded-host.com'],
+      },
     },
   }
 

@@ -15,7 +15,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(404).json({ failed: 'Json Data Not Found' })
   }
   const isTest = !!req.query.test
-  console.log('handler', { query: req.query, url: req.url })
   const reason = req.query.reason as emailReasons
   try {
     const [emailHtml, emailText] = await getEmailContent(reason)
