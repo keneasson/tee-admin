@@ -34,14 +34,14 @@
     "react-native-web": "^0.19.12"
   },
   "dependencies": {
-    "@babel/runtime": "^7.24.6",
-    "@manypkg/cli": "^0.21.4",
-    "check-dependency-version-consistency": "^4.1.0",
+    "@babel/runtime": "^7.26.9",
+    "@manypkg/cli": "^0.23.0",
+    "check-dependency-version-consistency": "^5.0.0",
     "eslint": "^9.3.0",
-    "node-gyp": "^10.1.0",
-    "prettier": "^3.2.5",
-    "turbo": "^1.13.3",
-    "typescript": "^5.4.5"
+    "node-gyp": "^11.1.0",
+    "prettier": "^3.5.2",
+    "turbo": "^2.4.2",
+    "typescript": "^5.7.3"
   },
-  "packageManager": "yarn@4.1.0"
+  "packageManager": "yarn@4.6.0"
 }

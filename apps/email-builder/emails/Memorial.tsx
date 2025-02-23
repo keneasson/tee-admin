@@ -109,14 +109,22 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
           <Text style={defaultText}>{sundaysDateString}</Text>
           <text>{'All arrangements are subject to God’s will.'}</text>
         </Section>
-        {sundayEvents[0]?.Activities === 'WEATHER NOTICE' && 
+
         <Section style={weatherNotice}>
           <Container style={weatherNotice}>
-            <Text style={weatherNoticeText} >Significant Snowfall is expected overnight.<br />If there is snow on the ground tomorrow, in person activities will be cancelled, please stay home and join us on Zoom or YouTube.</Text>
-            </Container>
+            <Text style={weatherNoticeText}>
+              <strong>Parking at the Hall:</strong>
+              <br /> The parking lot will fit about 5 cars.
+              <br />
+              There is plenty of parking 400 meters down Haldon Ave. (across from the Hall) in the
+              Taylor Creek Park Public parking. The lot has been mostly cleared of snow.
+              <br />
+              If needed, please coordinate rides from the parking lot; Bro. Jim Perks has offered to
+              coordinate this.
+            </Text>
+          </Container>
         </Section>
-        
-        }
+
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           {sundayEvents[0] !== undefined && (
             <>
