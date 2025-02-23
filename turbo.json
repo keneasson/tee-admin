@@ -1,11 +1,7 @@
 {
   "$schema": "https://turborepo.org/schema.json",
-  "globalEnv": [
-    "DISABLE_EXTRACTION",
-    "NODE_ENV",
-    "EAS_BUILD_PLATFORM"
-  ],
-  "globalPassThroughEnv": null,
+  "globalEnv": ["DISABLE_EXTRACTION", "NODE_ENV", "EAS_BUILD_PLATFORM"],
+  "globalPassThroughEnv": [],
   "cacheDir": ".turbo/cache",
   "ui": "tui",
   "globalDependencies": [],
