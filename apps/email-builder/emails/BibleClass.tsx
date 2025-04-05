@@ -50,7 +50,6 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
           <Heading>Toronto East Bible Class</Heading>
         </Section>
         <Container style={container} className="container">
-          <SpecialNotice />
           <Section style={program}>
             <Heading style={defaultText}>
               Please join us on Zoom for our Weekly Bible Class

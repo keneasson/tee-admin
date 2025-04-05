@@ -2,9 +2,13 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import { emailReasons, emailSend } from 'next-app/utils/email/email-send'
 import { getEmailContent } from 'next-app/utils/email/get-email-content'
 
+export const config = {
+  maxDuration: 60, // 60 seconds
+}
+
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
- * reasons include: Newsletter, Memorial, Sunday School and Bible Class
+ * reasons include: "sunday-school" | "newsletter" | "bible-class" | "recap"
  *
  * takes a query param ?reason=
  * @param req NextApiRequest

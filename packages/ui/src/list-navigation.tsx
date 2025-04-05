@@ -28,7 +28,7 @@ export const ListNavigation: React.FC<ListSelectorProps> = ({ styles, onPress, c
   }
 
   return (
-    <Selector hoverTheme pressTheme focusTheme onPress={handlePress}>
+    <Selector pressTheme focusTheme onPress={handlePress}>
       {children}
     </Selector>
   )
