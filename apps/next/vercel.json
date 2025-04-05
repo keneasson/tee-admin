@@ -1,3 +1,9 @@
 {
-  "installCommand": "yarn set version berry && yarn install"
+  "installCommand": "yarn set version berry && yarn install",
+  "crons": [
+    {
+      "path": "/api/email/sunday-school",
+      "schedule": "0 13  * * 6"
+    }
+  ]
 }

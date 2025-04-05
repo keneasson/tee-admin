@@ -42,10 +42,6 @@ export const Memorial: React.FC<{
         </XStack>
       </YStack>
       {schedule.map((service: MemorialServiceType, index) => {
-        if (!service.Exhort && !service.Activities) {
-          return null
-        }
-
         const date = new Date(service.Date)
         const past = date < today
         const bgColour = past ? '$gray9Dark' : '$gray1Light'

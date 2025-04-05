@@ -12,7 +12,6 @@ import {
   getRoleFromLegacyUser,
   getUserFromLegacyDirectory,
 } from '@my/app/provider/auth/get-user-from-legacy'
-import { userFromLegacy } from './user-from-legacy'
 
 export const nextAuthDynamoDb = {
   tableName: 'tee-admin',

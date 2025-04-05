@@ -110,21 +110,6 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
           <text>{'All arrangements are subject to God’s will.'}</text>
         </Section>
 
-        <Section style={weatherNotice}>
-          <Container style={weatherNotice}>
-            <Text style={weatherNoticeText}>
-              <strong>Parking at the Hall:</strong>
-              <br /> The parking lot will fit about 5 cars.
-              <br />
-              There is plenty of parking 400 meters down Haldon Ave. (across from the Hall) in the
-              Taylor Creek Park Public parking. The lot has been mostly cleared of snow.
-              <br />
-              If needed, please coordinate rides from the parking lot; Bro. Jim Perks has offered to
-              coordinate this.
-            </Text>
-          </Container>
-        </Section>
-
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           {sundayEvents[0] !== undefined && (
             <>
@@ -255,6 +240,25 @@ const Lunch = ({ lunch }: { lunch: string }) => {
   )
 }
 
+const Parking = () => {
+  return (
+    <Section style={weatherNotice}>
+      <Container style={weatherNotice}>
+        <Text style={weatherNoticeText}>
+          <strong>Parking at the Hall:</strong>
+          <br /> The parking lot will fit about 5 cars.
+          <br />
+          There is plenty of parking 400 meters down Haldon Ave. (across from the Hall) in the
+          Taylor Creek Park Public parking. The lot has been mostly cleared of snow.
+          <br />
+          If needed, please coordinate rides from the parking lot; Bro. Jim Perks has offered to
+          coordinate this.
+        </Text>
+      </Container>
+    </Section>
+  )
+}
+
 const MemorialServiceProgram = (event: SundayEvents) => {
   if (event.Exhort === '') {
     return (
@@ -280,7 +284,7 @@ const MemorialServiceProgram = (event: SundayEvents) => {
       {'Keyboardist: '}
       <strong>{event.Organist}</strong>
       <br />
-      {'Stewart: '}
+      {'Steward: '}
       <strong>{event.Steward}</strong>
       <br />
       {'Doorkeeper: '}

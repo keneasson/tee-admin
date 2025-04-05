@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Stack, YStack } from 'tamagui'
+import { Stack, Text, YStack } from 'tamagui'
 import { ListNavigation, ListNavigationText, ScrollView } from '@my/ui'
 import { Memorial } from '@my/app/features/schedules/memorial'
 import { SundaySchool } from '@my/app/features/schedules/sunday-school'
@@ -51,41 +51,31 @@ export const SchedulesScreen: React.FC<{
     <Wrapper subHheader={'Ecclesial Programs'}>
       {allSchedules ? (
         <YStack>
-          {Object.keys(allSchedules).map((serviceType: string, index: number) => {
-            return allSchedules[serviceType] && allSchedules[serviceType].key ? (
-              <ListNavigation
-                key={index}
-                onPress={() => handleSchedules(serviceType)}
-                styles={
-                  serviceType === currentSchedule
-                    ? {
-                        backgroundColor: '$blue12Light',
-                        color: '$blue1Light',
-                      }
-                    : {
-                        backgroundColor: '$blue1Light',
-                        color: '$blue12Light',
-                      }
-                }
-              >
-                <ListNavigationText
-                  style={
+          {Object.keys(allSchedules)
+            .filter((serviceType) => allSchedules[serviceType].name !== 'Directory')
+            .map((serviceType: string, index: number) => {
+              return allSchedules[serviceType] && allSchedules[serviceType].key ? (
+                <ListNavigation
+                  key={index}
+                  onPress={() => handleSchedules(serviceType)}
+                  styles={
                     serviceType === currentSchedule
                       ? {
-                          color: '$blue1Light',
+                          backgroundColor: '$blue12Light',
                         }
                       : {
-                          color: '$blue12Light',
+                          backgroundColor: '$blue1Light',
                         }
                   }
                 >
-                  {allSchedules[serviceType].name}
-                </ListNavigationText>
-              </ListNavigation>
-            ) : (
-              <ErrorNotFound message={`Unable to find the Schedule for ${serviceType}`} />
-            )
-          })}
+                  <Text color={serviceType === currentSchedule ? '$blue12Dark' : '$blue12Light'}>
+                    {allSchedules[serviceType].name}
+                  </Text>
+                </ListNavigation>
+              ) : (
+                <ErrorNotFound message={`Unable to find the Schedule for ${serviceType}`} />
+              )
+            })}
         </YStack>
       ) : (
         <ErrorNotFound message="No Schedules Found"></ErrorNotFound>

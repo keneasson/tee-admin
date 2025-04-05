@@ -1,26 +1,20 @@
 {
   "$schema": "https://turborepo.org/schema.json",
-  "globalEnv": [
-    "DISABLE_EXTRACTION",
-    "NODE_ENV",
-    "EAS_BUILD_PLATFORM"
-  ],
+  "globalEnv": ["DISABLE_EXTRACTION", "NODE_ENV", "EAS_BUILD_PLATFORM"],
   "tasks": {
     "build": {
       "env": [
         "DISABLE_EXTRACTION",
         "NODE_ENV",
-        "EAS_BUILD_PLATFORM"
+        "EAS_BUILD_PLATFORM",
+        "IGNORE_TS_CONFIG_PATHS",
+        "TAMAGUI_TARGET",
+        "TAMAGUI_DISABLE_WARN_DYNAMIC_LOAD",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY"
       ],
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "build/**",
-        "node_modules/.cache/metro/**"
-      ]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "build/**", "node_modules/.cache/metro/**"]
     },
     "dev": {
       "cache": false,
