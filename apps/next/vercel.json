@@ -2,8 +2,12 @@
   "installCommand": "yarn set version berry && yarn install",
   "crons": [
     {
-      "path": "/api/email/sunday-school",
-      "schedule": "0 13 * * 6"
+      "path": "/api/email/bible-class",
+      "schedule": "0 17 * * 3"
+    },
+    {
+      "path": "/api/email/recap",
+      "schedule": "0 18 * * 6"
     }
   ]
 }

@@ -119,9 +119,6 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
     }
   }
 
-  useEffect(() => {
-    console.log('with navigation session.user', session)
-  }, [session])
 
   return (
     <>

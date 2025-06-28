@@ -7,7 +7,12 @@
     "build": "cd ../.. && yarn build && cd apps/next && TAMAGUI_TARGET=web next build",
     "start": "next start",
     "serve": "NODE_ENV=production next start --port 8151",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@auth/dynamodb-adapter": "^2.7.4",
@@ -19,6 +24,7 @@
     "@tamagui/config": "^1.125.14",
     "@tamagui/next-theme": "^1.125.14",
     "@vercel/analytics": "^1.5.0",
+    "bcryptjs": "^3.0.2",
     "google-auth-library": "^9.15.0",
     "google-spreadsheet": "^4.1.4",
     "next": "14.2.21",
@@ -33,11 +39,16 @@
     "vercel": "^39.2.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.1",
     "@tamagui/next-plugin": "^1.125.14",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20.14.15",
     "@types/nodemailer": "^6.4.15",
+    "@vitest/ui": "^3.2.4",
     "eslint-config-next": "^14.2.3",
     "next-compose-plugins": "^2.2.1",
-    "next-transpile-modules": "^10.0.1"
+    "next-transpile-modules": "^10.0.1",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }
