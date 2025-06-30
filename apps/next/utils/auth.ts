@@ -7,6 +7,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 
 import { getAwsDbConfig } from './email/sesClient'
 import { addUsersRoleToDB } from './dynamodb/set-user-role'
+import { getUserFromDynamoDB } from './dynamodb/get-user'
 
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import {
@@ -110,32 +111,50 @@ export const authOptions = {
       }
       
       try {
-        const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
-        if (!legacyUser) {
+        console.log('🔑 SignIn callback for:', userEmail)
+        
+        // STEP 1: Check DynamoDB first (existing users)
+        const dbUser = await getUserFromDynamoDB(userEmail)
+        if (dbUser && dbUser.role) {
+          console.log('✅ Found existing user in DynamoDB with role:', dbUser.role)
+          user.role = dbUser.role
           return true
         }
         
+        // STEP 2: Fallback to legacy directory (new users only)
+        console.log('📂 User not in DynamoDB, checking legacy directory...')
+        const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
+        if (!legacyUser) {
+          console.log('⚠️ No legacy user found for:', userEmail)
+          return true
+        }
+        
+        // STEP 3: Assign role and save to DynamoDB for future logins
         const role = await getRoleFromLegacyUser({ user: legacyUser })
+        console.log('🔑 Role determined from legacy:', role, 'for user:', userEmail)
         if (role) {
           user.role = role
           await addUsersRoleToDB({ user, legacy: legacyUser })
+          console.log('✅ Role saved to DB for future logins:', role)
         }
         
         return true
       } catch (error) {
-        console.error('Error in signIn callback:', error)
-        // Don't block sign-in due to legacy user lookup errors
+        console.error('❌ Error in signIn callback:', error)
+        // Don't block sign-in due to lookup errors
         return true
       }
     },
     async session({ session, user, token }) {
       // Safely add role to the Session.User
       try {
-        session.user.role = user?.role || token?.role || ROLES.GUEST
+        const finalRole = user?.role || token?.role || ROLES.GUEST
+        console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
+        session.user.role = finalRole
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error
-        console.error('Error in session callback:', msg)
+        console.error('❌ Error in session callback:', msg)
         session.user.role = ROLES.GUEST // Ensure we always return a valid session
 
         return session
