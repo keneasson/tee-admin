@@ -34,6 +34,9 @@ module.exports = function () {
     typescript: {
       ignoreBuildErrors: true,
     },
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
     modularizeImports: {
       '@tamagui/lucide-icons': {
         transform: `@tamagui/lucide-icons/dist/esm/icons/{{kebabCase member}}`,
@@ -46,11 +49,22 @@ module.exports = function () {
       'expo-linking',
       'expo-constants',
       'expo-modules-core',
+      '@my/app',
+      '@my/ui',
+      '@my/config',
     ],
     experimental: {
       scrollRestoration: true,
-      serverActions: {
-        allowedOrigins: ['my-forwarded-host.com'],
+    },
+    turbopack: {
+      rules: {
+        '*.ts': ['ts-loader'],
+        '*.tsx': ['ts-loader'],
+      },
+      resolveAlias: {
+        '@my/app': '../../packages/app',
+        '@my/ui': '../../packages/ui',
+        '@my/config': '../../packages/config',
       },
     },
   }

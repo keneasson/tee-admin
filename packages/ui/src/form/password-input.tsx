@@ -1,7 +1,10 @@
+'use client'
+
 import React, { useId, useState } from 'react'
 import type { InputProps } from 'tamagui'
 import { Input, Label, YStack, Text, XStack, Button } from 'tamagui'
-import { Eye, EyeOff } from '@tamagui/lucide-icons'
+import { Eye } from '@tamagui/lucide-icons/icons/Eye'
+import { EyeOff } from '@tamagui/lucide-icons/icons/EyeOff'
 import { type Control, Controller, FieldValues, Path } from 'react-hook-form'
 import { FormFieldset } from './form-fieldset'
 

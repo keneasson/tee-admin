@@ -1,0 +1,18 @@
+# Page snapshot
+
+```yaml
+- button:
+  - img
+- heading "Reset Password"
+- paragraph: Enter your email address and we'll send you a link to reset your password.
+- group:
+  - text: Email Address
+  - textbox "Email Address": ken.easson@gmail.com
+- button "Send Reset Link"
+- link "Back to Sign In":
+  - /url: /auth/signin
+- region "Notifications (F8)"
+- alert
+- button "Open Next.js Dev Tools":
+  - img
+```

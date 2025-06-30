@@ -62,7 +62,13 @@ export async function createCredentialsUser(data: {
   role?: string
   invitationCode?: string
 }): Promise<CredentialsUser> {
-  // Check if user already exists
+  // Check if ANY user already exists with this email (any provider)
+  const existingAnyUser = await findAnyUserByEmail(data.email)
+  if (existingAnyUser) {
+    throw new Error('User with this email already exists. Please sign in with your existing account or use a different email.')
+  }
+  
+  // Check if credentials user specifically exists
   const existingUser = await findCredentialsUserByEmail(data.email)
   if (existingUser) {
     throw new Error('User with this email already exists')
@@ -129,6 +135,32 @@ export async function findCredentialsUserByEmail(email: string): Promise<Credent
     return null
   } catch (error) {
     console.error('Error finding credentials user:', error)
+    return null
+  }
+}
+
+export async function findAnyUserByEmail(email: string): Promise<any | null> {
+  try {
+    // Use scan to find any user with this email (regardless of provider)
+    const result = await client.scan({
+      TableName: TABLE_NAME,
+      FilterExpression: 'email = :email AND #type = :userType',
+      ExpressionAttributeValues: {
+        ':email': email,
+        ':userType': 'USER'
+      },
+      ExpressionAttributeNames: {
+        '#type': 'type'
+      }
+    })
+
+    if (result.Items && result.Items.length > 0) {
+      console.log('🔍 Found existing user with email:', email, 'provider:', result.Items[0].provider)
+      return result.Items[0]
+    }
+    return null
+  } catch (error) {
+    console.error('Error finding any user by email:', error)
     return null
   }
 }
@@ -373,7 +405,9 @@ export async function validatePasswordResetToken(token: string): Promise<{ email
       },
     })
 
-    if (!result.Item) return null
+    if (!result.Item) {
+      return null
+    }
 
     const tokenData = result.Item as VerificationToken & { tokenType: string }
     

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react'
+'use client'
+
+import React, { useState } from 'react'
 import {
   Button,
   Dialog,
@@ -10,7 +12,8 @@ import {
   YStack,
 } from '@my/ui'
 import { usePathname, useRouter } from 'solito/navigation'
-import { Menu, X } from '@tamagui/lucide-icons'
+import { Menu } from '@tamagui/lucide-icons/icons/Menu'
+import { X } from '@tamagui/lucide-icons/icons/X'
 import { useSession } from 'next-auth/react'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
@@ -37,7 +40,7 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
   const { data: session } = useSession()
 
   return (
-    <XStack f={1}>
+    <XStack flex={1}>
       <XStack
         $lg={{
           position: 'absolute',
@@ -48,11 +51,11 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
         $gtLg={{
           position: 'relative',
           backgroundColor: 'wheat',
-          minWidth: 120,
-          f: 1,
+          minWidth: 200,
+          flex: 1,
         }}
       >
-        {media.gtLg ? <MainNavigation session={session} /> : <SmallScreenNav session={session} />}
+        {!media.lg ? <MainNavigation session={session} /> : <SmallScreenNav session={session} />}
       </XStack>
       <XStack
         display={'block'}
@@ -60,8 +63,8 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
           flex: 1,
         }}
         $gtLg={{
-          minWidth: 1000,
-          f: 5,
+          minWidth: 800,
+          flex: 4,
         }}
       >
         {children}
@@ -119,7 +122,6 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
     }
   }
 
-
   return (
     <>
       <YStack width={'100%'} paddingTop={24} paddingLeft={10} paddingRight={0} gap={25}>
@@ -128,8 +130,10 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             <NavHeading>
               <Text>Welcome {session.user.name}</Text>
             </NavHeading>
-            {session.user.role === ROLES.ADMIN && <AdminMenu linkTo={linkTo} path={path} />}
-            {(session.user.role === ROLES.MEMBER || session.user.role === ROLES.ADMIN) && (
+            {(session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
+              <AdminOwnerMenu linkTo={linkTo} path={path} />
+            )}
+            {(session.user.role === ROLES.MEMBER || session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
               <MemberMenu linkTo={linkTo} path={path} />
             )}
           </>
@@ -142,7 +146,11 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             active={path === page.path}
           />
         ))}
-        {session && session.user ? <NavitemLogout /> : <LogInUser />}
+        {session && session.user ? (
+          <NavitemLogout handleOpenChange={handleOpenChange} />
+        ) : (
+          <LogInUser handleOpenChange={handleOpenChange} />
+        )}
       </YStack>
     </>
   )
@@ -152,7 +160,7 @@ type SubMenuType = {
   linkTo: (route: string) => () => void
   path?: string
 }
-const AdminMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
+const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
   return (
     <NavigationButtonItem
       key="emailTester"

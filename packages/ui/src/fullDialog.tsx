@@ -1,5 +1,7 @@
+'use client'
+
 import { Adapt, Button, Dialog, type DialogProps, Sheet, Unspaced } from 'tamagui'
-import { X } from '@tamagui/lucide-icons'
+import { X } from '@tamagui/lucide-icons/icons/X'
 import type { JSX } from 'react'
 
 const FullDialog: React.FC<

@@ -2,7 +2,7 @@ import { MemorialServiceType } from '@my/app/types'
 import React from 'react'
 import { Accordion, ExtLink, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
 import { XStack } from 'tamagui'
-import { ChevronDown } from '@tamagui/lucide-icons'
+import { ChevronDown } from '@tamagui/lucide-icons/icons/ChevronDown'
 import { Section } from '@my/app/features/newsletter/Section'
 
 type NextMemorialProps = {
@@ -40,7 +40,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
           </Paragraph>
           <Paragraph>
             <Text fontWeight={600}>Exhorting:</Text> {event.Exhort}
-          </Paragraph>{' '}
+          </Paragraph>
           <Paragraph>
             <Text fontWeight={600}>Organist:</Text> {event.Organist}
           </Paragraph>

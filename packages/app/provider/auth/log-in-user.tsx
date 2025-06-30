@@ -1,14 +1,25 @@
+'use client'
+
 import React from 'react'
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation'
 
 import { NavItem, Text } from '@my/ui'
 
-export const LogInUser: React.FC = () => {
+type LogInUserProps = {
+  handleOpenChange?: () => void
+}
+
+export const LogInUser: React.FC<LogInUserProps> = ({ handleOpenChange }) => {
   const router = useRouter()
+
+  const handleSignInPress = () => {
+    handleOpenChange && handleOpenChange()
+    router.push('/auth/signin')
+  }
 
   return (
     <>
-      <NavItem onPress={() => router.push('/auth/signin')}>
+      <NavItem onPress={handleSignInPress}>
         <Text>Sign In</Text>
       </NavItem>
     </>

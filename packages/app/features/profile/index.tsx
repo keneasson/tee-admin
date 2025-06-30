@@ -1,12 +1,15 @@
+'use client'
+
 import { Section, Text, XStack, YStack, Heading, Button, FormInput, Separator } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { useEffect, useState } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation'
 import { getUserFromLegacyDirectory } from '@my/app/provider/auth/get-user-from-legacy'
 import { DirectoryType } from '@my/app/types'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { useHydrated } from '@my/app/hooks/use-hydrated'
 
 interface InvitationFormData {
   firstName: string
@@ -19,6 +22,7 @@ type ProfileType = {}
 export const Profile: React.FC<ProfileType> = ({}) => {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const isHydrated = useHydrated()
   
   const [user, setUser] = useState<DirectoryType>()
   const [invitationLoading, setInvitationLoading] = useState(false)
@@ -77,6 +81,19 @@ export const Profile: React.FC<ProfileType> = ({}) => {
     } finally {
       setInvitationLoading(false)
     }
+  }
+
+  // Don't render anything until hydrated to prevent hydration mismatch
+  if (!isHydrated) {
+    return (
+      <Wrapper>
+        <Section gap={'$4'}>
+          <YStack gap="$4" alignItems="center">
+            <Text fontSize="$4" theme="alt2">Loading...</Text>
+          </YStack>
+        </Section>
+      </Wrapper>
+    )
   }
 
   // Show loading state while checking authentication

@@ -1,7 +1,7 @@
 import React from 'react'
 import { Paragraph, Text, View, XStack } from 'tamagui'
 import { Link } from 'solito/link'
-import { Download } from '@tamagui/lucide-icons'
+import { Download } from '@tamagui/lucide-icons/icons/Download'
 
 type DownloadLinkProps = {
   children: React.ReactNode

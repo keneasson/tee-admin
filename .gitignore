@@ -45,4 +45,14 @@ thumbs.db
 
 # turbo build log
 **/.turbo/*
+
+# sensitive configuration files
+/apps/next/scripts
 /apps/next/tee-services-db47a9e534d3.json
+**/tee-smtp-credentials_credentials.csv
+**/*.pem
+**/*.key
+**/secrets.json
+
+# Claude AI settings (local configuration)
+.claude/settings.local.json

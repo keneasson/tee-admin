@@ -44,10 +44,12 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - **React Hook Form** - Form validation and state management
 - **Lucide Icons** - Via @tamagui/lucide-icons for consistent iconography
 
-### Next.js Hybrid Router Architecture
-- **App Router (`apps/next/app/`)** - Used for API routes (modern approach)
-- **Pages Router (`apps/next/pages/`)** - Used for frontend pages (NextAuth.js v5 compatibility)
-- This hybrid approach leverages new App Router features while maintaining compatibility with existing authentication patterns
+### Next.js App Router Architecture
+- **App Router (`apps/next/app/`)** - Full App Router implementation for all routes
+- **Frontend Pages** - All user-facing pages migrated to App Router (`/page.tsx` pattern)
+- **API Routes** - RESTful API endpoints using App Router (`/route.ts` pattern)
+- **NextAuth.js v5** - Authentication fully integrated with App Router
+- **Pages Router** - Completely phased out (migration completed)
 
 ### Authentication & Data Flow
 - **Multi-provider authentication**: Google OAuth + Email/Password credentials
@@ -64,6 +66,39 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - UI components in `packages/ui/` work across web and mobile
 - Platform-specific code only in `apps/` directories
 - Shared navigation logic using Solito
+
+### App Router Architecture & Patterns
+
+#### Hydration Safety
+All client components use the `useHydrated` hook to prevent hydration mismatches:
+
+```typescript
+import { useHydrated } from '@my/app/hooks/use-hydrated'
+
+export default function MyPage() {
+  const isHydrated = useHydrated()
+  
+  if (!isHydrated) {
+    return <Loading />
+  }
+  
+  return <MyContent />
+}
+```
+
+#### Page Structure
+- **App Router Pages**: `/apps/next/app/[route]/page.tsx`
+- **API Routes**: `/apps/next/app/api/[route]/route.ts`
+- **Layouts**: `/apps/next/app/layout.tsx` (global layout)
+- **Authentication**: NextAuth.js v5 integrated with App Router middleware
+
+#### Migration Pattern
+1. Create `/app/[route]/page.tsx` with `'use client'` directive
+2. Import existing screen component from `@my/app/features/`
+3. Add hydration safety with `useHydrated` hook
+4. Update router imports (`next/router` → `next/navigation`)
+5. Remove conflicting Pages Router routes
+6. Add Playwright regression tests
 
 ### Form Component Architecture
 - **React Hook Form integration**: Custom components (`FormInput`, `PasswordInput`) with built-in validation
@@ -119,3 +154,50 @@ Deploy to Vercel using:
 - Install command: `yarn set version berry && yarn install`
 - Build command: default
 - Includes automated cron jobs for email campaigns
+
+## ✅ Migration Status - COMPLETED
+
+**MIGRATION COMPLETE** - Comprehensive modernization successfully completed following a systematic phased approach.
+
+### Migration State: Phase 4 Complete - Full App Router Migration
+- **Start Date**: June 30, 2025
+- **Completion Date**: July 1, 2025  
+- **Final Phase**: Phase 4 (App Router Migration)
+- **Overall Progress**: 100% Complete
+- **Status**: 🟢 **MIGRATION SUCCESSFUL**
+
+### Current Version State (Post-Migration)
+- **Node.js**: 22 LTS ✅
+- **Next.js**: 15.3.4 ✅
+- **React**: 19.x ✅
+- **Expo**: SDK 53.0.13 ✅
+- **React Native**: 0.77.x ✅
+- **Tamagui**: 1.129.11 ✅
+- **Architecture**: Full App Router ✅
+
+### Completed Migration Phases
+1. **Phase 1**: Node.js 22 + Next.js 15 + React 19 ✅
+2. **Phase 2**: Tamagui 1.129.11 upgrade ✅
+3. **Phase 3**: Expo SDK 53 + React Native 0.77 ✅
+4. **Phase 4**: Complete App Router migration ✅
+
+### Migration Tracking
+- **Progress Tracker**: `MIGRATION_TRACKER.md`
+- **Risk Evaluation**: `GITHUB_ISSUES/00-comprehensive-risk-evaluation.md`
+- **Upgrade Issues**: `GITHUB_ISSUES/01-05-*.md`
+
+### Important Notes for Development
+- **NO PRODUCTION CHANGES** until Phase 0 validation complete
+- **Feature Freeze**: No new features during migration period
+- **Backup Strategy**: Current working state preserved as rollback option
+- **Testing Required**: All changes require comprehensive testing
+- **Documentation**: All migration steps documented for continuity
+
+### Migration Phases (Pending Validation)
+1. **Phase 1**: Foundation (Node.js 22 + Tamagui upgrade)
+2. **Phase 2**: Framework (Next.js 15 + React 19) - **HIGH RISK**
+3. **Phase 3**: Mobile (Expo SDK 53 + React Native 0.77) - **HIGH RISK**
+4. **Phase 4**: Architecture (Pages → App Router migration)
+5. **Phase 5**: Data Layer (TanStack Query implementation)
+
+**⚠️ CRITICAL**: Migration may be halted if Phase 0 validation reveals blocking incompatibilities. Always check `MIGRATION_TRACKER.md` for current status before making any changes.

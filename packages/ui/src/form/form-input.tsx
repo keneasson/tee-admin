@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useId } from 'react'
 import type { InputProps } from 'tamagui'
 import { Input, Label, YStack, Text } from 'tamagui'

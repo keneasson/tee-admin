@@ -1,7 +1,9 @@
+'use client'
+
 import type { CheckboxProps } from 'tamagui'
 import { Checkbox, Label, Text, XStack, YStack } from 'tamagui'
 import { useId } from 'react'
-import { Check as CheckIcon } from '@tamagui/lucide-icons'
+import { Check as CheckIcon } from '@tamagui/lucide-icons/icons/Check'
 import type { Control, FieldValues, Path } from 'react-hook-form'
 import { Controller } from 'react-hook-form'
 import { FormFieldset } from './form-fieldset'

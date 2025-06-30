@@ -10,24 +10,30 @@ import { NextMemorial } from '@my/app/features/newsletter/memorial'
 import { fetchUpcoming } from '@my/app/features/newsletter/fetch-upcoming'
 import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
 import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
-
-const days15 = 15
+import { useHydrated } from '@my/app/hooks/use-hydrated'
 
 export const NewsletterScreen: React.FC = () => {
-  const [program, setProgram] = useState<ProgramTypes[] | false>(false)
-  const [readings, setReadings] = useState<[] | false>(false)
+  const [program, setProgram] = useState<ProgramTypes[] | null>(null)
+  const [readings, setReadings] = useState<[] | null>(null)
+  const isHydrated = useHydrated()
 
   useEffect(() => {
+    // Only fetch data after hydration to prevent hydration mismatches
+    if (!isHydrated) return
+    
     console.log('in useEffect', { program, readings })
     Promise.all([fetchUpcoming({}).then(setProgram), fetchReadings().then(setReadings)]).catch(
       (error) => console.log('error fetching data', error)
     )
-  }, [])
+  }, [isHydrated])
 
-  const resumeAfter = new Date()
-  resumeAfter.setDate(resumeAfter.getDate() + days15)
+  // Don't render content until hydrated to prevent hydration mismatch
+  if (!isHydrated) {
+    return <Loading />
+  }
 
-  if (!program) return <Loading />
+  // Show loading while data is being fetched
+  if (program === null) return <Loading />
 
   let lastEventDate = 0
   const checkForSameDayEvents = (date: Date): boolean => {
@@ -42,7 +48,7 @@ export const NewsletterScreen: React.FC = () => {
   }
 
   return (
-    <Wrapper subHheader={'Newsletter'}>
+    <Wrapper subHeader={'Newsletter'}>
       <YStack>
         <Heading size={5}>Regular Services</Heading>
         {program.map((event: ProgramTypes, index) => {

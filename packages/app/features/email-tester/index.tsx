@@ -7,9 +7,10 @@ import { Button, Checkbox, Heading, Paragraph, Text, XStack, YStack } from '@my/
 import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { ManageContacts } from './manage-contacts'
 import { emailReasons } from 'next-app/utils/email/email-send'
-import { Check } from '@tamagui/lucide-icons'
+import { Check } from '@tamagui/lucide-icons/icons/Check'
 import { sendEmail } from '../../provider/get-data'
 // import { setRole } from '../../provider/auth/setRole'
 
@@ -48,6 +49,24 @@ export const EmailTester: React.FC = () => {
           <Heading size={5}>Email management</Heading>
           <Paragraph>To access this section of our site, please sign in.</Paragraph>
           <LogInUser />
+        </Section>
+      </Wrapper>
+    )
+  }
+
+  // Check if user has admin or owner role
+  const userRole = session.user.role
+  if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
+    return (
+      <Wrapper>
+        <Section space={'$4'}>
+          <Heading size={5}>Access Denied</Heading>
+          <Paragraph>
+            You need admin or owner permissions to access the Email Tester.
+          </Paragraph>
+          <Paragraph>
+            Current role: {userRole || 'None'}
+          </Paragraph>
         </Section>
       </Wrapper>
     )
