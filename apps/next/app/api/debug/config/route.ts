@@ -10,10 +10,8 @@ export async function GET() {
       environment: process.env.NODE_ENV,
       aws: {
         region: config.region,
-        hasAccessKey: !!config.credentials?.accessKeyId,
-        accessKeyPreview: config.credentials?.accessKeyId?.substring(0, 10) + '...',
-        hasSecretKey: !!config.credentials?.secretAccessKey,
-        secretKeyPreview: config.credentials?.secretAccessKey?.substring(0, 10) + '...',
+        hasCredentials: !!config.credentials,
+        credentialsType: typeof config.credentials,
       },
       nextauth: {
         url: process.env.NEXTAUTH_URL,

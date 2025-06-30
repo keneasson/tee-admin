@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react'
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Heading, Paragraph, Separator } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
@@ -9,13 +11,30 @@ import { useSession } from 'next-auth/react'
 
 export function HomeScreen() {
   const [readings, setReadings] = useState<[] | false>(false)
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
   useEffect(() => {
-    Promise.all([fetchReadings().then(setReadings)]).catch((error) =>
-      console.log('error fetching data', error)
-    )
+    // Only fetch readings on client side
+    if (typeof window !== 'undefined') {
+      fetchReadings()
+        .then(setReadings)
+        .catch((error) => {
+          console.log('error fetching data', error)
+          setReadings([]) // Set empty array on error to prevent loading state
+        })
+    }
   }, [])
+
+  // Show loading during SSR or initial client hydration
+  if (status === "loading") {
+    return (
+      <Wrapper>
+        <Section space={'$4'}>
+          <Paragraph>Loading...</Paragraph>
+        </Section>
+      </Wrapper>
+    )
+  }
 
   return (
     <Wrapper>

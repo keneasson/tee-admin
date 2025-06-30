@@ -25,6 +25,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
+  /* Configure dev server for tests */
+  webServer: {
+    command: 'yarn web',
+    port: 3000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000, // 2 minutes for dev server to start
+  },
+
   /* Configure projects for major browsers */
   projects: [
     {

@@ -4,14 +4,12 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { Heading, Paragraph } from '@my/ui'
 import React from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/router'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 
 export const Welfare: React.FC = () => {
   const { data: session } = useSession()
 
   if (!(session && session.user)) {
-    const router = useRouter()
     return (
       <Wrapper>
         <Section space={'$4'}>

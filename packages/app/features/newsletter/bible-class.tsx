@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown } from '@tamagui/lucide-icons'
+import { ChevronDown } from '@tamagui/lucide-icons/icons/ChevronDown'
 import { Accordion, ExtLink, Paragraph, Separator, Square, Text } from '@my/ui'
 
 import { BibleClassType } from '@my/app/types'

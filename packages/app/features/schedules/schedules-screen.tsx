@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState } from 'react'
 import { Stack, Text, YStack } from 'tamagui'
 import { ListNavigation, ListNavigationText, ScrollView } from '@my/ui'
@@ -19,6 +21,7 @@ import { Loading } from '@my/app/provider/loading'
 import { Cyc } from '@my/app/features/schedules/cyc'
 import { getGoogleSheet } from '@my/app/provider/get-google-sheet'
 import { getData } from '@my/app/provider/get-data'
+import { useHydrated } from '@my/app/hooks/use-hydrated'
 
 type Program = {
   title: string
@@ -37,8 +40,9 @@ export const SchedulesScreen: React.FC<{
 }> = ({ googleSheets }) => {
   const [schedule, setSchedule] = useState<Program>()
   const [currentSchedule, setCurrentSchedule] = useState<string>()
+  const isHydrated = useHydrated()
 
-  const handleSchedules = async (scheduleKey) => {
+  const handleSchedules = async (scheduleKey: string) => {
     setCurrentSchedule(scheduleKey)
     const program =
       scheduleKey === 'cyc' ? await getData(scheduleKey) : await getGoogleSheet(scheduleKey)
@@ -47,8 +51,17 @@ export const SchedulesScreen: React.FC<{
 
   const allSchedules = googleSheets
 
+  // Don't render until hydrated to prevent hydration mismatch
+  if (!isHydrated) {
+    return (
+      <Wrapper subHeader={'Ecclesial Programs'}>
+        <Loading />
+      </Wrapper>
+    )
+  }
+
   return (
-    <Wrapper subHheader={'Ecclesial Programs'}>
+    <Wrapper subHeader={'Ecclesial Programs'}>
       {allSchedules ? (
         <YStack>
           {Object.keys(allSchedules)

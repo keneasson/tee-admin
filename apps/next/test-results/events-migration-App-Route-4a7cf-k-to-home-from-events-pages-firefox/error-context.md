@@ -1,0 +1,57 @@
+# Page snapshot
+
+```yaml
+- button:
+  - img
+- heading "Open BibleToronto East Ecclesia" [level=1]:
+  - img "Open Bible"
+  - text: Toronto East Ecclesia
+- heading "Events hosted by the Toronto East Christadelphians"
+- paragraph: March 2 & 3, 2024 - Study Day
+- paragraph: The Epistle of James - A Faith that Works
+- paragraph: Bro. Mike LeDuke
+- paragraph: "Bro. Mike has shared a prequel: Setting the Stage and also his Full notes:"
+- paragraph:
+  - link "Download \"Setting the Stage\"":
+    - /url: /pdf/James-introductory-notes.pdf
+    - img
+    - text: Download "Setting the Stage"
+- paragraph:
+  - link "Download Full notes":
+    - /url: /pdf/James-Full-Set-of-Notes.pdf
+    - img
+    - text: Download Full notes
+- paragraph: Class 1 Be Doers Of The Word (Introduction to the Epistle & Chapter 1)
+- paragraph:
+  - link "View on YouTube":
+    - /url: https://youtube.com/live/JpQmx-rfjrc?feature=share
+    - text: View on YouTube
+    - img
+- paragraph: Class 2 Wisdom from Above (Chapters 2 & 3)
+- paragraph:
+  - link "View on YouTube":
+    - /url: https://youtube.com/live/THucnZsxJjY?feature=share
+    - text: View on YouTube
+    - img
+- paragraph: Class 3 He Shall Lift You Up (Chapters 4 & 5:1-6)
+- paragraph:
+  - link "View on YouTube":
+    - /url: https://youtube.com/live/Jaq--moaqMI?feature=share
+    - text: View on YouTube
+    - img
+- paragraph: Memorial Worship
+- paragraph: "Exhortation: The Prayer of Faith (Chapter 5:7-20)"
+- paragraph:
+  - link "View on YouTube":
+    - /url: https://youtube.com/live/ki5r0EW-ON0?feature=share
+    - text: View on YouTube
+    - img
+- button "Back to Events"
+- region "Notifications (F8)"
+- alert
+- button "Open Next.js Dev Tools":
+  - img
+- button "Open issues overlay": 4 Issue
+- button "Collapse issues badge":
+  - img
+```
