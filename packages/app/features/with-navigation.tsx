@@ -162,12 +162,44 @@ type SubMenuType = {
 }
 const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
   return (
-    <NavigationButtonItem
-      key="emailTester"
-      linkTo={linkTo('/email-tester')}
-      text="Email Tester"
-      active={path === '/email-tester'}
-    />
+    <>
+      <NavigationButtonItem
+        key="emailTester"
+        linkTo={linkTo('/email-tester')}
+        text="Email Tester"
+        active={path === '/email-tester'}
+      />
+      <NavigationButtonItem
+        key="brandColours"
+        linkTo={linkTo('/brand/colours')}
+        text="Brand Colors"
+        active={path === '/brand/colours'}
+      />
+      <NavigationButtonItem
+        key="brandTypography"
+        linkTo={linkTo('/brand/typography')}
+        text="Brand Typography"
+        active={path === '/brand/typography'}
+      />
+      <NavigationButtonItem
+        key="brandComponents"
+        linkTo={linkTo('/brand/components')}
+        text="Component Showcase"
+        active={path === '/brand/components'}
+      />
+      <NavigationButtonItem
+        key="brandNavigation"
+        linkTo={linkTo('/brand/navigation')}
+        text="Navigation Testing"
+        active={path === '/brand/navigation'}
+      />
+      <NavigationButtonItem
+        key="brandPlayground"
+        linkTo={linkTo('/brand/playground')}
+        text="Feature Playground"
+        active={path === '/brand/playground'}
+      />
+    </>
   )
 }
 

@@ -5273,6 +5273,7 @@ __metadata:
     "@my/config": "npm:0.0.1"
     "@tamagui/build": "npm:^1.129.11"
     "@tamagui/toast": "npm:^1.129.11"
+    react-colorful: "npm:^5.6.1"
     react-hook-form: "npm:^7.53.0"
     tamagui: "npm:^1.129.11"
   languageName: unknown
@@ -18462,6 +18463,7 @@ __metadata:
     nodemailer: "npm:^6.10.0"
     raf: "npm:^3.4.1"
     react: "npm:19.1.0"
+    react-colorful: "npm:^5.6.1"
     react-dom: "npm:19.1.0"
     react-native: "npm:^0.77.2"
     react-native-web: "npm:^0.20.0"
@@ -20116,6 +20118,16 @@ __metadata:
   bin:
     rc: ./cli.js
   checksum: 10/5c4d72ae7eec44357171585938c85ce066da8ca79146b5635baf3d55d74584c92575fa4e2c9eac03efbed3b46a0b2e7c30634c012b4b4fa40d654353d3c163eb
+  languageName: node
+  linkType: hard
+
+"react-colorful@npm:^5.6.1":
+  version: 5.6.1
+  resolution: "react-colorful@npm:5.6.1"
+  peerDependencies:
+    react: ">=16.8.0"
+    react-dom: ">=16.8.0"
+  checksum: 10/3e02ba013454818d0c323949bd961fb2c19ac18130dfc67a4032aa5b03787c5ffe7ff159c4b97dc3475072d576828ca0c4b8e8ce85b55eaf484180596cdf0403
   languageName: node
   linkType: hard
 
@@ -22444,6 +22456,7 @@ __metadata:
     eslint: "npm:^9.3.0"
     node-gyp: "npm:^11.1.0"
     prettier: "npm:^3.5.2"
+    react-colorful: "npm:^5.6.1"
     turbo: "npm:^2.4.2"
     typescript: "npm:^5.8.3"
     vitest: "npm:^3.2.4"
