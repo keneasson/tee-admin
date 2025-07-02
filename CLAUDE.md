@@ -166,6 +166,54 @@ Deploy to Vercel using:
 - **Overall Progress**: 100% Complete
 - **Status**: 🟢 **MIGRATION SUCCESSFUL**
 
+## 🎨 Brand System & Component Development
+
+### Brand Route Design System
+TEE Admin includes a comprehensive brand system accessible at `/brand/*` routes for Admin/Owner roles only. This serves as our custom Storybook/Chromatic solution for component development and brand consistency.
+
+**Brand System Routes:**
+- `/brand/colours` - Color palette with accessibility testing
+- `/brand/typography` - Typography hierarchy and examples
+- `/brand/components` - Interactive component showcase
+- `/brand/navigation` - Navigation testing environment
+- `/brand/playground` - Feature flag testing area
+
+### Component Development Workflow
+1. **Component Creation**: All new components go in `packages/ui/src/`
+2. **Brand Testing**: Add component variants to `/brand/components`
+3. **Integration Testing**: Test with real data in `/brand/playground`
+4. **Feature Flags**: Use feature flags for gradual rollout
+5. **Production**: Deploy when ready via feature flag activation
+
+### Feature Flag System
+- **Location**: `packages/app/features/feature-flags/`
+- **Usage**: Control visibility of new components and features
+- **Testing**: Brand route allows safe testing without user exposure
+- **Rollout**: Gradual deployment through flag percentage controls
+
+### Brand Consistency Requirements
+- **All UI components** must be showcased in brand system
+- **Color usage** must follow brand palette definitions
+- **Typography** must use defined hierarchy
+- **Component props** must be documented with examples
+- **Accessibility** must be tested and validated
+- **Cross-platform** compatibility must be verified
+
+### Development Guidelines
+- **Never deploy directly to production** - use brand system first
+- **Test all viewport sizes** in component showcase
+- **Validate accessibility** using built-in contrast testing
+- **Document component APIs** with interactive examples
+- **Use feature flags** for any user-facing changes
+- **Run TypeScript validation** after every major change: `yarn workspace next-app typecheck`
+- **Capture learnings** in `DEVELOPMENT_LEARNINGS.md` when encountering complex issues
+- **Test builds, not just dev** - run `yarn workspace next-app build` before commits
+
+### Knowledge Management
+- **Development Learnings**: [`DEVELOPMENT_LEARNINGS.md`](./DEVELOPMENT_LEARNINGS.md) - Comprehensive knowledge base of lessons learned, common pitfalls, and best practices
+- **Update learnings** after fixing complex bugs, discovering new patterns, or establishing workflows
+- **Review monthly** to keep knowledge current and actionable
+
 ### Current Version State (Post-Migration)
 - **Node.js**: 22 LTS ✅
 - **Next.js**: 15.3.4 ✅
