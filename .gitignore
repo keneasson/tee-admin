@@ -56,3 +56,4 @@ thumbs.db
 
 # Claude AI settings (local configuration)
 .claude/settings.local.json
+tee-smtp-credentials_credentials.csv
