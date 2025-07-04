@@ -46,7 +46,7 @@ export const Cyc: React.FC<{
               backgroundColor={bgColour}
             >
               <TableBody past={past}>{monthDay(eventDate)}</TableBody>
-              <TableBody past={past}>{service.event}</TableBody>
+              <TableBody past={past}>{service.event || '-'}</TableBody>
             </XStack>
           )
         }
@@ -64,9 +64,9 @@ export const Cyc: React.FC<{
               {', '}
               {`${eventDate.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })}`}
             </TableBody>
-            <TableBody past={past}>{service.speaker}</TableBody>
-            <TableBody past={past}>{service.topic}</TableBody>
-            <TableBody past={past}>{service.location}</TableBody>
+            <TableBody past={past}>{service.speaker || '-'}</TableBody>
+            <TableBody past={past}>{service.topic || '-'}</TableBody>
+            <TableBody past={past}>{service.location || '-'}</TableBody>
           </XStack>
         )
       })}
