@@ -47,6 +47,10 @@ export const brandColors = {
     interactiveHover: '#2A4A73',
     interactivePressed: '#153056',
     interactiveDisabled: '#D0CFC4',
+    
+    // Primary interaction states
+    primaryHover: '#2A4A73',
+    primaryPressed: '#153056',
   },
   
   dark: {
@@ -96,6 +100,10 @@ export const brandColors = {
     interactiveHover: '#5BA0F2',
     interactivePressed: '#3A80D2',
     interactiveDisabled: '#30363D',
+    
+    // Primary interaction states
+    primaryHover: '#5BA0F2',
+    primaryPressed: '#3A80D2',
   }
 } as const
 

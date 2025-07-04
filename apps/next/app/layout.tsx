@@ -1,39 +1,13 @@
 'use client'
 
-import '@tamagui/core/reset.css'
-import '@tamagui/font-inter/css/400.css'
-import '@tamagui/font-inter/css/700.css'
-import { NextThemeProvider, useRootTheme } from '@tamagui/next-theme'
-import { Analytics } from '@vercel/analytics/react'
-
 import React from 'react'
 import { SessionProvider } from 'next-auth/react'
-import 'raf/polyfill'
-
-import { Provider } from '@my/app/provider'
-import { WithNavigation } from '@my/app/features/with-navigation'
+import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { config } from '@my/ui'
+import { TamaguiProvider } from '@my/ui'
 
 if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
-}
-
-// Metadata moved to head section in HTML since this is now a client component
-
-function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useRootTheme()
-
-  return (
-    <NextThemeProvider
-      onChangeTheme={(next) => {
-        setTheme(next as any)
-      }}
-    >
-      <Provider disableRootThemeClass defaultTheme={theme}>
-        {children}
-      </Provider>
-    </NextThemeProvider>
-  )
 }
 
 export default function RootLayout({
@@ -60,14 +34,13 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeProvider>
+        <TamaguiProvider config={config} defaultTheme="light">
           <SessionProvider>
-            <WithNavigation>
+            <FeatureGatedNavigation>
               {children}
-            </WithNavigation>
+            </FeatureGatedNavigation>
           </SessionProvider>
-        </ThemeProvider>
-        <Analytics />
+        </TamaguiProvider>
       </body>
     </html>
   )
