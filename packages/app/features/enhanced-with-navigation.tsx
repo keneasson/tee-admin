@@ -16,8 +16,7 @@ import {
 } from '@my/ui/src/navigation'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
-import { Text, YStack, View } from '@my/ui'
-import { brandColors } from '@my/ui/src/branding/brand-colors'
+import { Text, YStack, View, useThemeName } from '@my/ui'
 
 type WithNavigationProps = {
   children: React.ReactNode
@@ -50,6 +49,8 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
   const { data: session } = useSession()
   const router = useRouter()
   const currentPath = usePathname()
+  const themeName = useThemeName()
+  const mode = themeName.includes('dark') ? 'dark' : 'light'
 
   const navigateTo = (path: string) => () => {
     router.push(path)
@@ -68,7 +69,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
       {/* User Welcome */}
       {session?.user && (
         <View
-          backgroundColor="$backgroundTertiary"
+          backgroundColor="$background"
           padding="$3"
           borderRadius="$3"
           borderWidth={1}
@@ -94,7 +95,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
       {session?.user ? <NavitemLogout /> : <LogInUser />}
 
       <View
-        backgroundColor="$backgroundTertiary"
+        backgroundColor="$background"
         padding="$2"
         borderRadius="$2"
         alignItems="center"
@@ -110,7 +111,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
     <View flex={1} flexDirection="row">
       {/* Enhanced Navigation Sidebar */}
       <NavigationContainer
-        mode="light"
+        mode={mode}
         user={
           session?.user
             ? {
@@ -135,7 +136,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
               text={page.label}
               icon={page.icon}
               active={currentPath === page.path}
-              mode="light"
+              mode={mode}
               description={`Navigate to ${page.label}`}
             />
           ))}
@@ -155,7 +156,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
               text="Profile"
               icon="👤"
               active={currentPath === '/profile'}
-              mode="light"
+              mode={mode}
               description="Manage your profile settings"
             />
           </NavigationGroup>
@@ -171,7 +172,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
                 text={page.label}
                 icon={page.icon}
                 active={currentPath === page.path}
-                mode="light"
+                mode={mode}
                 description={`Admin: ${page.label}`}
                 badge={page.path.includes('showcase') ? 'NEW' : undefined}
               />

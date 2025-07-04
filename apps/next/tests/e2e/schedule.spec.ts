@@ -16,7 +16,7 @@ test.describe('Schedule Page', () => {
     
     // Check for "Ecclesial Programs" heading
     const heading = page.getByRole('heading', { name: 'Ecclesial Programs' })
-    if (await heading.count() > 0) {
+    if ((await heading.count()) > 0) {
       await expect(heading).toBeVisible()
     }
   })
@@ -35,7 +35,7 @@ test.describe('Schedule Page', () => {
     let foundScheduleType = false
     for (const scheduleType of scheduleTypes) {
       const element = page.locator(`text=${scheduleType} Service`).or(page.locator(`text=${scheduleType}`)).first()
-      if (await element.count() > 0) {
+      if ((await element.count()) > 0) {
         foundScheduleType = true
         break
       }
@@ -69,7 +69,7 @@ test.describe('Schedule Page', () => {
     
     // Check for Ecclesial Programs heading if present
     const heading = page.getByRole('heading', { name: 'Ecclesial Programs' })
-    if (await heading.count() > 0) {
+    if ((await heading.count()) > 0) {
       await expect(heading).toBeVisible()
     }
   })

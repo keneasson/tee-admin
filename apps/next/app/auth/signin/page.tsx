@@ -121,7 +121,6 @@ function SignInPageContent() {
           Sign in to the TEE Portal
         </Paragraph>
       </YStack>
-
       <form onSubmit={handleSubmit(onSubmit)}>
         <YStack gap="$4">
           {/* Email Field */}
@@ -155,10 +154,11 @@ function SignInPageContent() {
 
           {/* Forgot Password Link */}
           <XStack justifyContent="flex-end">
-            <Link href="/auth/forgot-password" passHref>
-              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
-                Forgot password?
-              </Text>
+            <Link 
+              href="/auth/forgot-password"
+              style={{ fontSize: '14px', color: '#0066CC', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Forgot password?
             </Link>
           </XStack>
 
@@ -193,25 +193,27 @@ function SignInPageContent() {
             <Text fontSize="$3" color="$gray11">
               Don't have an account?
             </Text>
-            <Link href="/auth/register" passHref>
-              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
-                Create account
-              </Text>
+            <Link 
+              href="/auth/register"
+              style={{ fontSize: '14px', color: '#0066CC', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Create account
             </Link>
           </XStack>
 
           {/* Resend Verification Link */}
           <XStack justifyContent="center">
-            <Link href="/auth/resend-verification" passHref>
-              <Text fontSize="$2" color="$gray11" textDecorationLine="underline" cursor="pointer">
-                Resend email verification
-              </Text>
+            <Link 
+              href="/auth/resend-verification"
+              style={{ fontSize: '12px', color: '#6B7280', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Resend email verification
             </Link>
           </XStack>
         </YStack>
       </form>
     </YStack>
-  )
+  );
 }
 
 export default function SignInPage() {

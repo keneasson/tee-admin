@@ -255,7 +255,7 @@ const MemorialServiceProgram = (event: SundayEvents) => {
           <Text>{event['Holidays and Special Events']}</Text>
         )}
       </Text>
-    )
+    );
   }
   return (
     <Text style={defaultText}>

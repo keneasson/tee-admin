@@ -70,13 +70,13 @@ function VerifyEmailPageContent() {
             <Paragraph color="$gray11" textAlign="center">
               {message}
             </Paragraph>
-            <Link href="/auth/signin" passHref>
+            <Link href="/auth/signin" passHref legacyBehavior>
               <Button theme="green" size="$4">
                 Sign In Now
               </Button>
             </Link>
           </YStack>
-        )
+        );
 
       case 'error':
         return (
@@ -87,19 +87,19 @@ function VerifyEmailPageContent() {
               {message}
             </Paragraph>
             <YStack gap="$3" alignItems="center">
-              <Link href="/auth/resend-verification" passHref>
+              <Link href="/auth/resend-verification" passHref legacyBehavior>
                 <Button variant="outlined" size="$4">
                   Resend Verification Email
                 </Button>
               </Link>
-              <Link href="/auth/register" passHref>
+              <Link href="/auth/register" passHref legacyBehavior>
                 <Button theme="blue" size="$4">
                   Create New Account
                 </Button>
               </Link>
             </YStack>
           </YStack>
-        )
+        );
 
       default:
         return null

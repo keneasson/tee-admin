@@ -13,7 +13,7 @@ interface ColorPickerProps {
 
 // Simple hex color validation
 const isValidHex = (hex: string): boolean => {
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex)
+  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex);
 }
 
 // Convert hex to RGB for calculations

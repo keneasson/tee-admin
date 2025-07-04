@@ -10,16 +10,15 @@ if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
         <title>Toronto East Christadelphians</title>
-        <meta name="description" content="Schedules, News and Information about the Christadelphians meeting in Toronto East." />
+        <meta
+          name="description"
+          content="Schedules, News and Information about the Christadelphians meeting in Toronto East."
+        />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
@@ -35,14 +34,9 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <TamaguiProvider 
-          config={config} 
-          defaultTheme="light"
-        >
+        <TamaguiProvider config={config} defaultTheme="light">
           <SessionProvider>
-            <FeatureGatedNavigation>
-              {children}
-            </FeatureGatedNavigation>
+            <FeatureGatedNavigation>{children}</FeatureGatedNavigation>
           </SessionProvider>
         </TamaguiProvider>
       </body>
