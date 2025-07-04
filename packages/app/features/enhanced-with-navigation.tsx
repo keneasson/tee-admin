@@ -16,7 +16,8 @@ import {
 } from '@my/ui/src/navigation'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
-import { Text, YStack, View, useThemeName } from '@my/ui'
+import { Text, YStack, View, useThemeName, useThemeContext } from '@my/ui'
+import { ThemeToggle } from './theme-toggle'
 
 type WithNavigationProps = {
   children: React.ReactNode
@@ -51,6 +52,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
   const currentPath = usePathname()
   const themeName = useThemeName()
   const mode = themeName.includes('dark') ? 'dark' : 'light'
+  const { setTheme } = useThemeContext()
 
   const navigateTo = (path: string) => () => {
     router.push(path)
@@ -59,11 +61,12 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
   // Custom header with user info
   const Header = () => (
     <YStack gap="$2">
-      {/* App Branding */}
-      <View>
+      {/* App Branding with Theme Toggle */}
+      <View flexDirection="row" alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700" color="$textPrimary">
           TEE Portal
         </Text>
+        <ThemeToggle onThemeChange={setTheme} />
       </View>
 
       {/* User Welcome */}
@@ -73,7 +76,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
           padding="$3"
           borderRadius="$3"
           borderWidth={1}
-          borderColor="$borderLight"
+          borderColor="$borderColor"
         >
           <Text fontSize="$4" fontWeight="600" color="$textPrimary">
             Welcome back!
@@ -186,7 +189,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
         flex={1}
         backgroundColor="$background"
         borderLeftWidth={1}
-        borderLeftColor="$borderLight"
+        borderLeftColor="$borderColor"
       >
         {children}
       </View>

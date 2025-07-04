@@ -4,7 +4,7 @@ import React from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { config } from '@my/ui'
-import { TamaguiProvider } from '@my/ui'
+import { ThemeProvider, ThemeAwareProvider } from '@my/ui'
 
 if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
@@ -34,11 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <TamaguiProvider config={config} defaultTheme="light">
-          <SessionProvider>
-            <FeatureGatedNavigation>{children}</FeatureGatedNavigation>
-          </SessionProvider>
-        </TamaguiProvider>
+        <ThemeProvider defaultTheme="light">
+          <ThemeAwareProvider config={config}>
+            <SessionProvider>
+              <FeatureGatedNavigation>{children}</FeatureGatedNavigation>
+            </SessionProvider>
+          </ThemeAwareProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

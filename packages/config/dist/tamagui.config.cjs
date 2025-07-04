@@ -29,7 +29,8 @@ var import_tamagui = require("tamagui"),
   import_shorthands = require("@tamagui/shorthands"),
   import_v3 = require("@tamagui/config/v3"),
   import_react_native_media_driver = require("@tamagui/react-native-media-driver"),
-  import_animations = require("@my/ui/src/animations");
+  import_animations = require("@my/ui/src/animations"),
+  import_tee_themes = require("./tee-themes.cjs");
 const headingFont = (0, import_font_inter.createInterFont)({
     size: {
       6: 15
@@ -90,7 +91,10 @@ const headingFont = (0, import_font_inter.createInterFont)({
     settings: {
       allowedStyleValues: "somewhat-strict"
     },
-    themes: import_v3.themes,
+    themes: {
+      ...import_v3.themes,
+      ...import_tee_themes.teeThemes
+    },
     tokens: import_v3.tokens,
     media: (0, import_react_native_media_driver.createMedia)({
       xs: {
