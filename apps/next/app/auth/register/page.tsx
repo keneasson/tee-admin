@@ -155,7 +155,6 @@ function RegisterPageContent() {
           Join the Toronto East Christadelphian Ecclesia admin system
         </Paragraph>
       </YStack>
-
       <form onSubmit={handleSubmit(onSubmit)}>
         <YStack gap="$4">
           {/* Invitation Code Field */}
@@ -295,7 +294,7 @@ function RegisterPageContent() {
             <Text fontSize="$3" color="$gray11">
               Already have an account?
             </Text>
-            <Link href="/auth/signin" passHref>
+            <Link href="/auth/signin" passHref legacyBehavior>
               <Text
                 fontSize="$3"
                 color="$blue10"
@@ -309,7 +308,7 @@ function RegisterPageContent() {
         </YStack>
       </form>
     </YStack>
-  )
+  );
 }
 
 export default function RegisterPage() {

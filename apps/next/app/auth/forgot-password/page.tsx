@@ -60,21 +60,17 @@ export default function ForgotPasswordPage() {
         <Text fontSize="$10" color="$blue10">
           📧
         </Text>
-
         <Heading size="$8" textAlign="center">
           Check Your Email
         </Heading>
-
         <Paragraph color="$gray11" textAlign="center">
           {message}
         </Paragraph>
-
         <Paragraph fontSize="$3" color="$gray11" textAlign="center">
           If you don't see the email in a few minutes, check your spam folder.
         </Paragraph>
-
         <YStack gap="$3" alignItems="center" width="100%">
-          <Link href="/auth/signin" passHref>
+          <Link href="/auth/signin" passHref legacyBehavior>
             <Button theme="blue" size="$4">
               Back to Sign In
             </Button>
@@ -92,7 +88,7 @@ export default function ForgotPasswordPage() {
           </Button>
         </YStack>
       </YStack>
-    )
+    );
   }
 
   return (
@@ -103,7 +99,6 @@ export default function ForgotPasswordPage() {
           Enter your email address and we'll send you a link to reset your password.
         </Paragraph>
       </YStack>
-
       <form onSubmit={handleSubmit(onSubmit)}>
         <YStack gap="$4">
           {/* Email Field */}
@@ -137,7 +132,7 @@ export default function ForgotPasswordPage() {
 
           {/* Back to Sign In */}
           <YStack alignItems="center">
-            <Link href="/auth/signin" passHref>
+            <Link href="/auth/signin" passHref legacyBehavior>
               <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
                 Back to Sign In
               </Text>
@@ -146,5 +141,5 @@ export default function ForgotPasswordPage() {
         </YStack>
       </form>
     </YStack>
-  )
+  );
 }

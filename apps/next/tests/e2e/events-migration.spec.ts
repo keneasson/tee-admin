@@ -99,7 +99,7 @@ test.describe('App Router Migration - Events Pages', () => {
       const homeLink = page.getByRole('link', { name: /home/i })
       
       // At least one navigation element should be visible
-      const navigationVisible = await menuButton.isVisible() || await homeLink.isVisible()
+      const navigationVisible = (await menuButton.isVisible()) || (await homeLink.isVisible())
       expect(navigationVisible).toBe(true)
     })
 

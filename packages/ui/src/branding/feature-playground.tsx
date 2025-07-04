@@ -67,9 +67,7 @@ export function FeaturePlayground() {
           </View>
         </XStack>
       </YStack>
-      
       <Separator />
-      
       {/* Feature Flag Controls */}
       <YStack gap="$4">
         <H3>Feature Flag Controls</H3>
@@ -148,7 +146,6 @@ export function FeaturePlayground() {
                     </Text>
                   </XStack>
                 </YStack>
-                
                 <XStack gap="$2" alignItems="center">
                   <Text fontSize="$2" color={effectiveState ? '$success' : '$error'}>
                     {effectiveState ? 'ON' : 'OFF'}
@@ -162,13 +159,11 @@ export function FeaturePlayground() {
                   </Button>
                 </XStack>
               </XStack>
-            )
+            );
           })}
         </YStack>
       </YStack>
-      
       <Separator />
-      
       {/* Live Feature Testing */}
       <YStack gap="$4">
         <H3>Live Feature Testing</H3>
@@ -299,9 +294,7 @@ export function FeaturePlayground() {
           ]}
         />
       </YStack>
-      
       <Separator />
-      
       {/* Integration Testing */}
       <YStack gap="$4">
         <H3>Integration Testing</H3>
@@ -368,9 +361,7 @@ export function FeaturePlayground() {
           </YStack>
         </View>
       </YStack>
-      
       <Separator />
-      
       {/* Feature Flag Rollout Guide */}
       <YStack gap="$4">
         <H3>🚀 Feature Rollout Strategy</H3>
@@ -452,9 +443,7 @@ export function FeaturePlayground() {
           </View>
         </YStack>
       </YStack>
-      
       <Separator />
-      
       {/* Emergency Procedures */}
       <YStack gap="$4">
         <H3>🆘 Emergency Procedures</H3>
@@ -482,9 +471,7 @@ export function FeaturePlayground() {
           </YStack>
         </View>
       </YStack>
-      
       <Separator />
-      
       {/* Configuration Guide */}
       <YStack gap="$4">
         <H3>⚙️ Configuration Guide</H3>
@@ -521,9 +508,7 @@ export function FeaturePlayground() {
           </YStack>
         </View>
       </YStack>
-      
       <Separator />
-      
       <YStack gap="$2">
         <H3>🧠 Testing Checklist</H3>
         <Text color="$textSecondary" fontSize="$3">
@@ -558,5 +543,5 @@ export function FeaturePlayground() {
         </YStack>
       </YStack>
     </YStack>
-  )
+  );
 }

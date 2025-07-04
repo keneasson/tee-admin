@@ -98,22 +98,19 @@ function ResetPasswordPageContent() {
         <Text fontSize="$10" color="$green10">
           ✓
         </Text>
-
         <Heading size="$8" color="$green10" textAlign="center">
           Password Reset Complete
         </Heading>
-
         <Paragraph color="$gray11" textAlign="center">
           {message}
         </Paragraph>
-
-        <Link href="/auth/signin" passHref>
+        <Link href="/auth/signin" passHref legacyBehavior>
           <Button theme="green" size="$4">
             Sign In Now
           </Button>
         </Link>
       </YStack>
-    )
+    );
   }
 
   if (!token || error.includes('Invalid reset link')) {
@@ -122,30 +119,27 @@ function ResetPasswordPageContent() {
         <Text fontSize="$10" color="$red10">
           ✗
         </Text>
-
         <Heading size="$8" color="$red10" textAlign="center">
           Invalid Reset Link
         </Heading>
-
         <Paragraph color="$gray11" textAlign="center">
           This password reset link is invalid or has expired.
         </Paragraph>
-
         <YStack gap="$3" alignItems="center">
-          <Link href="/auth/forgot-password" passHref>
+          <Link href="/auth/forgot-password" passHref legacyBehavior>
             <Button theme="blue" size="$4">
               Request New Reset Link
             </Button>
           </Link>
 
-          <Link href="/auth/signin" passHref>
+          <Link href="/auth/signin" passHref legacyBehavior>
             <Button variant="outlined" size="$4">
               Back to Sign In
             </Button>
           </Link>
         </YStack>
       </YStack>
-    )
+    );
   }
 
   return (
@@ -156,7 +150,6 @@ function ResetPasswordPageContent() {
           Choose a new password for your account.
         </Paragraph>
       </YStack>
-
       <form onSubmit={handleSubmit(onSubmit)}>
         <YStack gap="$4">
           {/* Password Field */}
@@ -200,7 +193,7 @@ function ResetPasswordPageContent() {
 
           {/* Back to Sign In */}
           <YStack alignItems="center">
-            <Link href="/auth/signin" passHref>
+            <Link href="/auth/signin" passHref legacyBehavior>
               <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
                 Back to Sign In
               </Text>
@@ -209,7 +202,7 @@ function ResetPasswordPageContent() {
         </YStack>
       </form>
     </YStack>
-  )
+  );
 }
 
 export default function ResetPasswordPage() {

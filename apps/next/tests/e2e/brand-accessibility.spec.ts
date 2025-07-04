@@ -93,7 +93,7 @@ test.describe('Brand System Accessibility', () => {
     
     for (const input of inputs) {
       // Should have either a label or aria-label
-      const hasLabel = await input.locator('..').locator('label').count() > 0
+      const hasLabel = (await input.locator('..').locator('label').count()) > 0
       const hasAriaLabel = await input.getAttribute('aria-label')
       const hasAriaLabelledBy = await input.getAttribute('aria-labelledby')
       
