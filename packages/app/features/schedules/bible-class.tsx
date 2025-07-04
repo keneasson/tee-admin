@@ -48,8 +48,8 @@ export const BibleClass: React.FC<{
           >
             <XStack padding={'$2'}>
               <TableBody past={past}>{monthDay(date)}</TableBody>
-              <TableBody past={past}>{service.Presider}</TableBody>
-              <TableBody past={past}>{service.Speaker}</TableBody>
+              <TableBody past={past}>{service.Presider || '-'}</TableBody>
+              <TableBody past={past}>{service.Speaker || '-'}</TableBody>
             </XStack>
             <XStack padding={'$2'}>
               <YStack flex={3}>

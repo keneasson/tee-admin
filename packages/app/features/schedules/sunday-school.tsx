@@ -39,7 +39,7 @@ export const SundaySchool: React.FC<{
           >
             <XStack padding={'$2'}>
               <TableBody past={past}>{monthDay(date)}</TableBody>
-              <TableBody past={past}>{service.Refreshments}</TableBody>
+              <TableBody past={past}>{service.Refreshments || '-'}</TableBody>
             </XStack>
             {service['Holidays and Special Events'] && (
               <XStack padding={'$2'}>

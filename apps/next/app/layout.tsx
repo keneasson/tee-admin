@@ -31,10 +31,14 @@ export default function RootLayout({
               exclude: process.env.NODE_ENV === 'development' ? null : 'design-system',
             }),
           }}
+          suppressHydrationWarning
         />
       </head>
       <body>
-        <TamaguiProvider config={config} defaultTheme="light">
+        <TamaguiProvider 
+          config={config} 
+          defaultTheme="light"
+        >
           <SessionProvider>
             <FeatureGatedNavigation>
               {children}

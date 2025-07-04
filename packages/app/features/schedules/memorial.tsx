@@ -55,11 +55,11 @@ export const Memorial: React.FC<{
           >
             <XStack padding={'$2'}>
               <TableBody past={past}>{monthDay(date)}</TableBody>
-              <TableBody past={past}>{service.Preside}</TableBody>
-              <TableBody past={past}>{service.Exhort}</TableBody>
-              <TableBody past={past}>{service.Organist}</TableBody>
-              <TableBody past={past}>{service.Steward}</TableBody>
-              <TableBody past={past}>{service.Doorkeeper}</TableBody>
+              <TableBody past={past}>{service.Preside || '-'}</TableBody>
+              <TableBody past={past}>{service.Exhort || '-'}</TableBody>
+              <TableBody past={past}>{service.Organist || '-'}</TableBody>
+              <TableBody past={past}>{service.Steward || '-'}</TableBody>
+              <TableBody past={past}>{service.Doorkeeper || '-'}</TableBody>
             </XStack>
             {(service.Lunch || service.Activities) && (
               <XStack padding={'$2'}>
@@ -71,7 +71,7 @@ export const Memorial: React.FC<{
                   )}
                   {service.Activities && (
                     <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
-                      {service.Activities}
+                      {service.Activities || ''}
                     </Paragraph>
                   )}
                 </YStack>

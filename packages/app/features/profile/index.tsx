@@ -148,8 +148,7 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                   Create invitation codes for new users to join the system.
                 </Text>
 
-                <form onSubmit={handleSubmit(onSubmitInvitation)}>
-                  <YStack gap="$4">
+                <YStack gap="$4" asChild={false}>
                     <XStack gap="$3">
                       <FormInput
                         control={control}
@@ -232,7 +231,6 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                       {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
                     </Button>
                   </YStack>
-                </form>
               </YStack>
             </>
           )}
