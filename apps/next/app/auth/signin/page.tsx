@@ -40,7 +40,7 @@ function SignInPageContent() {
   // Check for URL error parameters after hydration
   useEffect(() => {
     if (!isHydrated) return
-    
+
     const urlError = searchParams?.get('error')
     if (urlError === 'CredentialsSignin') {
       setError('Invalid email or password')
@@ -52,7 +52,7 @@ function SignInPageContent() {
   // Check if user is already authenticated
   useEffect(() => {
     if (!isHydrated) return
-    
+
     const checkAuth = async () => {
       const session = await getSession()
       if (session) {
@@ -115,122 +115,101 @@ function SignInPageContent() {
 
   return (
     <YStack maxWidth={400} margin="auto" padding="$4" gap="$4">
-        <YStack gap="$2" alignItems="center">
-          <Heading size="$8">Welcome Back</Heading>
-          <Paragraph color="$gray11" textAlign="center">
-            Sign in to your TEE Admin account
-          </Paragraph>
+      <YStack gap="$2" alignItems="center">
+        <Heading size="$8">Welcome Back</Heading>
+        <Paragraph color="$gray11" textAlign="center">
+          Sign in to the TEE Portal
+        </Paragraph>
+      </YStack>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <YStack gap="$4">
+          {/* Email Field */}
+          <FormInput
+            control={control}
+            name="email"
+            label="Email Address"
+            type="email"
+            placeholder="your@email.com"
+            autoComplete="email"
+            onChangeText={clearError}
+            rules={{
+              required: 'Email is required',
+              pattern: {
+                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                message: 'Invalid email format',
+              },
+            }}
+          />
+
+          {/* Password Field */}
+          <PasswordInput
+            control={control}
+            name="password"
+            label="Password"
+            placeholder="Enter your password"
+            autoComplete="current-password"
+            onChangeText={clearError}
+            rules={{ required: 'Password is required' }}
+          />
+
+          {/* Forgot Password Link */}
+          <XStack justifyContent="flex-end">
+            <Link href="/auth/forgot-password" passHref>
+              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
+                Forgot password?
+              </Text>
+            </Link>
+          </XStack>
+
+          {/* Error Message */}
+          {error && (
+            <Text fontSize="$3" color="$red10" textAlign="center">
+              {error}
+            </Text>
+          )}
+
+          {/* Submit Button */}
+          <Button size="$4" disabled={loading} theme="blue">
+            {loading ? 'Signing In...' : 'Sign In'}
+          </Button>
+
+          {/* Divider */}
+          <XStack alignItems="center" gap="$3">
+            <Separator flex={1} />
+            <Text fontSize="$3" color="$gray11">
+              or
+            </Text>
+            <Separator flex={1} />
+          </XStack>
+
+          {/* Google Sign In */}
+          <Button onPress={handleGoogleSignIn} size="$4" variant="outlined">
+            Continue with Google
+          </Button>
+
+          {/* Link to Register */}
+          <XStack justifyContent="center" gap="$2">
+            <Text fontSize="$3" color="$gray11">
+              Don't have an account?
+            </Text>
+            <Link href="/auth/register" passHref>
+              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
+                Create account
+              </Text>
+            </Link>
+          </XStack>
+
+          {/* Resend Verification Link */}
+          <XStack justifyContent="center">
+            <Link href="/auth/resend-verification" passHref>
+              <Text fontSize="$2" color="$gray11" textDecorationLine="underline" cursor="pointer">
+                Resend email verification
+              </Text>
+            </Link>
+          </XStack>
         </YStack>
-
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <YStack gap="$4">
-            {/* Email Field */}
-            <FormInput
-              control={control}
-              name="email"
-              label="Email Address"
-              type="email"
-              placeholder="your@email.com"
-              autoComplete="email"
-              onChangeText={clearError}
-              rules={{
-                required: 'Email is required',
-                pattern: {
-                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                  message: 'Invalid email format',
-                },
-              }}
-            />
-
-            {/* Password Field */}
-            <PasswordInput
-              control={control}
-              name="password"
-              label="Password"
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              onChangeText={clearError}
-              rules={{ required: 'Password is required' }}
-            />
-
-            {/* Forgot Password Link */}
-            <XStack justifyContent="flex-end">
-              <Link href="/auth/forgot-password" passHref>
-                <Text
-                  fontSize="$3"
-                  color="$blue10"
-                  textDecorationLine="underline"
-                  cursor="pointer"
-                >
-                  Forgot password?
-                </Text>
-              </Link>
-            </XStack>
-
-            {/* Error Message */}
-            {error && (
-              <Text fontSize="$3" color="$red10" textAlign="center">
-                {error}
-              </Text>
-            )}
-
-            {/* Submit Button */}
-            <Button
-              size="$4"
-              disabled={loading}
-              theme="blue"
-            >
-              {loading ? 'Signing In...' : 'Sign In'}
-            </Button>
-
-            {/* Divider */}
-            <XStack alignItems="center" gap="$3">
-              <Separator flex={1} />
-              <Text fontSize="$3" color="$gray11">or</Text>
-              <Separator flex={1} />
-            </XStack>
-
-            {/* Google Sign In */}
-            <Button
-              onPress={handleGoogleSignIn}
-              size="$4"
-              variant="outlined"
-            >
-              Continue with Google
-            </Button>
-
-            {/* Link to Register */}
-            <XStack justifyContent="center" gap="$2">
-              <Text fontSize="$3" color="$gray11">
-                Don't have an account?
-              </Text>
-              <Link href="/auth/register" passHref>
-                <Text
-                  fontSize="$3"
-                  color="$blue10"
-                  textDecorationLine="underline"
-                  cursor="pointer"
-                >
-                  Create account
-                </Text>
-              </Link>
-            </XStack>
-
-            {/* Resend Verification Link */}
-            <XStack justifyContent="center">
-              <Link href="/auth/resend-verification" passHref>
-                <Text
-                  fontSize="$2"
-                  color="$gray11"
-                  textDecorationLine="underline"
-                  cursor="pointer"
-                >
-                  Resend email verification
-                </Text>
-              </Link>
-            </XStack>
-          </YStack>
-        </form>
+      </form>
     </YStack>
   )
 }

@@ -41,9 +41,9 @@ export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
   
   [FEATURE_FLAGS.NEW_NAVIGATION_DESIGN]: {
     enabled: true,
-    rolloutPercentage: 0,
+    rolloutPercentage: 100,
     userRoles: ['admin', 'owner'],
-    description: 'Updated navigation with new brand colors',
+    description: 'Enhanced navigation system with brand colors, mobile responsiveness, and improved UX',
     environment: 'development'
   },
   
