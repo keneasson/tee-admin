@@ -66,19 +66,15 @@ export default function ResendVerificationPage() {
     return (
       <YStack maxWidth={500} margin="auto" padding="$4" gap="$4" alignItems="center">
         <Text fontSize="$10" color="$blue10">📧</Text>
-        
         <Heading size="$8" textAlign="center">Verification Email Sent</Heading>
-        
         <Paragraph color="$gray11" textAlign="center">
           {message}
         </Paragraph>
-
         <Paragraph fontSize="$3" color="$gray11" textAlign="center">
           Please check your email and spam folder for the verification link.
         </Paragraph>
-
         <YStack gap="$3" alignItems="center" width="100%">
-          <Link href="/auth/signin" passHref>
+          <Link href="/auth/signin" passHref legacyBehavior>
             <Button theme="blue" size="$4">
               Back to Sign In
             </Button>
@@ -96,7 +92,7 @@ export default function ResendVerificationPage() {
           </Button>
         </YStack>
       </YStack>
-    )
+    );
   }
 
   return (
@@ -107,7 +103,6 @@ export default function ResendVerificationPage() {
           Enter your email address and we'll resend your account verification email.
         </Paragraph>
       </YStack>
-
       <form onSubmit={handleSubmit(onSubmit)}>
         <YStack gap="$4">
           {/* Email Field */}
@@ -145,7 +140,7 @@ export default function ResendVerificationPage() {
 
           {/* Links */}
           <YStack gap="$2" alignItems="center">
-            <Link href="/auth/signin" passHref>
+            <Link href="/auth/signin" passHref legacyBehavior>
               <Text
                 fontSize="$3"
                 color="$blue10"
@@ -156,7 +151,7 @@ export default function ResendVerificationPage() {
               </Text>
             </Link>
             
-            <Link href="/auth/register" passHref>
+            <Link href="/auth/register" passHref legacyBehavior>
               <Text
                 fontSize="$3"
                 color="$gray11"
@@ -170,5 +165,5 @@ export default function ResendVerificationPage() {
         </YStack>
       </form>
     </YStack>
-  )
+  );
 }

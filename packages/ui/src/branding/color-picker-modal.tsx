@@ -109,7 +109,7 @@ const generateSmartSuggestions = (baseColor: string): string[] => {
 
 // Simple hex color validation
 const isValidHex = (hex: string): boolean => {
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex)
+  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex);
 }
 
 // Calculate contrast ratio for accessibility

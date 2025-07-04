@@ -19,7 +19,7 @@ test.describe('Newsletter Page', () => {
     
     // Check for Newsletter heading - use more specific selector
     const newsletterHeading = page.getByRole('heading', { name: 'Newsletter' })
-    if (await newsletterHeading.count() > 0) {
+    if ((await newsletterHeading.count()) > 0) {
       await expect(newsletterHeading).toBeVisible()
     }
   })
@@ -36,7 +36,7 @@ test.describe('Newsletter Page', () => {
     
     for (const eventType of eventTypes) {
       // These events might not always be present, so we check if they exist
-      const eventExists = await page.locator(`:has-text("${eventType}")`).count() > 0
+      const eventExists = (await page.locator(`:has-text("${eventType}")`).count()) > 0
       if (eventExists) {
         await expect(page.locator(`:has-text("${eventType}")`)).toBeVisible()
       }
@@ -50,7 +50,7 @@ test.describe('Newsletter Page', () => {
     await page.waitForTimeout(3000)
     
     // Check if daily readings section exists
-    const readingsExists = await page.locator(':has-text("Daily Reading")').count() > 0
+    const readingsExists = (await page.locator(':has-text("Daily Reading")').count()) > 0
     if (readingsExists) {
       await expect(page.locator(':has-text("Daily Reading")')).toBeVisible()
     }
@@ -79,7 +79,7 @@ test.describe('Newsletter Page', () => {
     // Check that navigation is present and functional
     // Test home navigation if present
     const homeLink = page.locator('a[href="/"]')
-    if (await homeLink.count() > 0) {
+    if ((await homeLink.count()) > 0) {
       await expect(homeLink).toBeVisible()
     }
   })
