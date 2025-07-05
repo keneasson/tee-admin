@@ -407,8 +407,112 @@ yarn web
 - `disableExtraction` is set to `true` in development mode
 - Multiple instances sharing the same webpack cache can cause conflicts
 
+### **Tamagui Lucide Icons Import Pattern (July 4, 2025)**
+
+#### **The Problem**
+```typescript
+// ❌ WRONG: Specific path imports causing module resolution errors
+import { Sun } from '@tamagui/lucide-icons/icons/Sun'
+import { Moon } from '@tamagui/lucide-icons/icons/Moon'
+// Error: Package path ./dist/esm/icons/sun is not exported
+
+// ❌ ALSO WRONG: Mixed import patterns causing inconsistency
+// Sometimes using specific paths, sometimes barrel imports
+// Led to constant "flip-flopping" between different approaches
+```
+
+#### **Root Cause**
+- **Package exports confusion**: `@tamagui/lucide-icons` supports multiple import patterns
+- **Inconsistent documentation**: Some examples show specific paths, others show barrel imports
+- **Build-time vs dev-time differences**: Different module resolution behavior
+- **Developer uncertainty**: Switching between patterns without establishing a standard
+
+#### **Final Solution - Use Tamagui Documentation Pattern**
+```typescript
+// ✅ CORRECT: Always use main package barrel imports
+import { Sun, Moon } from '@tamagui/lucide-icons'
+
+// This pattern:
+// ✅ Matches official Tamagui documentation exactly
+// ✅ Uses the main package exports (confirmed in package.json)
+// ✅ Works in both development and production builds
+// ✅ Prevents future import pattern confusion
+```
+
+#### **Verification Process**
+```bash
+# 1. Check package.json exports
+head -50 node_modules/@tamagui/lucide-icons/package.json
+
+# 2. Verify main index exports
+grep -E "(Sun|Moon)" node_modules/@tamagui/lucide-icons/dist/esm/index.mjs
+
+# 3. Test build
+yarn build  # Must succeed
+
+# 4. Test runtime
+yarn web   # Must start without errors
+```
+
+#### **Prevention Strategy - DEFINITIVE RULE**
+1. **ALWAYS use barrel imports**: `import { IconName } from '@tamagui/lucide-icons'`
+2. **NEVER use specific paths**: Avoid `/icons/IconName` pattern
+3. **Follow Tamagui docs**: When in doubt, reference https://tamagui.dev/ui/lucide-icons
+4. **Document the standard**: Update this file when import patterns change
+5. **Test immediately**: Run `yarn build` after any icon import changes
+
+#### **Working Examples**
+```typescript
+// ✅ Theme toggle icons
+import { Sun, Moon } from '@tamagui/lucide-icons'
+
+// ✅ Form icons (existing working pattern)
+import { Eye } from '@tamagui/lucide-icons/icons/Eye'     // Legacy - but works
+import { EyeOff } from '@tamagui/lucide-icons/icons/EyeOff' // Legacy - but works
+
+// 🔄 TODO: Standardize existing specific path imports to barrel imports
+// Only change when touching those files to avoid unnecessary churn
+```
+
+#### **Implementation Locations**
+- **Theme Toggle**: `packages/app/features/theme-toggle.tsx`
+- **Password Input**: `packages/ui/src/form/password-input.tsx` (uses specific paths - legacy)
+- **Other Components**: Various locations using mixed patterns
+
+#### **CRITICAL ROOT CAUSE DISCOVERED**
+The persistent issue was caused by **Next.js `modularizeImports` configuration**:
+
+```javascript
+// ❌ WRONG: This was transforming Sun → sun (kebabCase)
+modularizeImports: {
+  '@tamagui/lucide-icons': {
+    transform: `@tamagui/lucide-icons/dist/esm/icons/{{kebabCase member}}`,
+    //                                              ^^^^^^^^^^^^^^^^
+    //                                              This caused Sun → sun
+  },
+},
+
+// ✅ CORRECT: Use exact member name and proper path
+modularizeImports: {
+  '@tamagui/lucide-icons': {
+    transform: `@tamagui/lucide-icons/icons/{{member}}`,
+    //                               ^^^^^  ^^^^^^^^
+    //                               Right path, exact case
+  },
+},
+```
+
+**What was happening**:
+1. Code: `import { Sun } from '@tamagui/lucide-icons'`
+2. Next.js transforms: `Sun` → `sun` (kebabCase) → `@tamagui/lucide-icons/dist/esm/icons/sun`
+3. But actual export: `@tamagui/lucide-icons/icons/Sun` (uppercase)
+4. Result: Module not found error
+
+#### **Key Lesson**
+**Check build tool configurations first**: When imports work in isolation but fail in the build, investigate webpack/Next.js transform rules before changing code patterns.
+
 ---
 
-*Last Updated: July 2, 2025*
+*Last Updated: July 4, 2025*
 *Contributors: Claude (AI Assistant)*
 *Review Schedule: Monthly*

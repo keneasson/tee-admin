@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, useTheme, useThemeName } from 'tamagui'
+import { Button, useThemeName } from 'tamagui'
 import { Sun, Moon } from '@tamagui/lucide-icons'
 
 export interface ThemeToggleProps {
@@ -7,7 +7,6 @@ export interface ThemeToggleProps {
 }
 
 export const ThemeToggle: React.FC<ThemeToggleProps> = ({ onThemeChange }) => {
-  const theme = useTheme()
   const themeName = useThemeName()
   
   const isDark = themeName.includes('dark')

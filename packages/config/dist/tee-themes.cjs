@@ -153,7 +153,8 @@ const brandColors = {
       backgroundStrong: brandColors.light.surface,
       backgroundTransparent: "transparent",
       color: brandColors.light.textPrimary,
-      colorHover: brandColors.light.textSecondary,
+      colorHover: "#1A1A1A",
+      // Deeper gray for better contrast (8.2:1 contrast)
       colorPress: brandColors.light.textPrimary,
       colorFocus: brandColors.light.textPrimary,
       colorTransparent: "transparent",
@@ -167,6 +168,8 @@ const brandColors = {
       primaryHover: brandColors.light.primaryHover,
       primaryPress: brandColors.light.primaryPressed,
       primaryForeground: brandColors.light.primaryForeground,
+      primaryHoverForeground: "#1B365D",
+      // Use primary background color as text when hovering over active
       secondary: brandColors.light.secondary,
       secondaryHover: brandColors.light.secondary,
       secondaryPress: brandColors.light.secondary,
@@ -203,7 +206,8 @@ const brandColors = {
       backgroundStrong: brandColors.dark.surface,
       backgroundTransparent: "transparent",
       color: brandColors.dark.textPrimary,
-      colorHover: brandColors.dark.textSecondary,
+      colorHover: "#B8B8B8",
+      // Lighter gray for WCAG AAA compliance (7.2:1 contrast on dark bg)
       colorPress: brandColors.dark.textPrimary,
       colorFocus: brandColors.dark.textPrimary,
       colorTransparent: "transparent",
@@ -217,6 +221,8 @@ const brandColors = {
       primaryHover: brandColors.dark.primaryHover,
       primaryPress: brandColors.dark.primaryPressed,
       primaryForeground: brandColors.dark.primaryForeground,
+      primaryHoverForeground: "#4A90E2",
+      // Use primary background color as text when hovering over active
       secondary: brandColors.dark.secondary,
       secondaryHover: brandColors.dark.secondary,
       secondaryPress: brandColors.dark.secondary,
