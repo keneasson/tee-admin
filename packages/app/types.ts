@@ -42,6 +42,14 @@ export type GoogleSheet = {
   startTime: string
 }
 
+export type GoogleSheetData = {
+  title: string
+  type: GoogleSheetTypes
+  content: any[]
+  lastUpdated?: string
+  version?: string
+}
+
 export type GoogleSheets = Record<ProgramTypeKeys, GoogleSheet>
 
 export type BackendLists = {

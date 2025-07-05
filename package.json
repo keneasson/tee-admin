@@ -28,7 +28,21 @@
     "test": "cd apps/next && npm test",
     "test:auth": "cd apps/next && npm test tests/auth/role-assignment-simple.test.ts",
     "test:e2e": "cd apps/next && npm run test:e2e",
-    "fix-auth": "bash scripts/test-and-fix.sh"
+    "fix-auth": "bash scripts/test-and-fix.sh",
+    "setup-dynamodb": "tsx scripts/setup-dynamodb.ts create",
+    "setup-dynamodb:dev": "STAGE=dev tsx scripts/setup-dynamodb.ts dev",
+    "setup-dynamodb:delete": "tsx scripts/setup-dynamodb.ts delete",
+    "list-tables": "tsx scripts/list-dynamodb-tables.ts",
+    "test-webhook": "cd apps/next && tsx ../../scripts/test-webhook-system.ts all",
+    "test-webhook:health": "cd apps/next && tsx ../../scripts/test-webhook-system.ts health",
+    "test-webhook:sheets": "cd apps/next && tsx ../../scripts/test-webhook-system.ts sheets",
+    "test-webhook:security": "cd apps/next && tsx ../../scripts/test-webhook-system.ts security",
+    "test-webhook:sync": "cd apps/next && tsx ../../scripts/test-webhook-system.ts sync",
+    "test-api-migration": "cd apps/next && tsx ../../scripts/test-api-migration.ts all",
+    "test-api-migration:health": "cd apps/next && tsx ../../scripts/test-api-migration.ts health",
+    "test-api-migration:schedule": "cd apps/next && tsx ../../scripts/test-api-migration.ts schedule",
+    "test-api-migration:directory": "cd apps/next && tsx ../../scripts/test-api-migration.ts directory",
+    "test-api-migration:upcoming": "cd apps/next && tsx ../../scripts/test-api-migration.ts upcoming"
   },
   "resolutions": {
     "react": "19.1.0",
@@ -51,6 +65,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@vitest/ui": "^3.2.4",
+    "tsx": "^4.19.2",
     "vitest": "^3.2.4"
   }
 }
