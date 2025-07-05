@@ -11,6 +11,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:webhook": "playwright test webhook-system.spec.ts --grep \"webhook health endpoint responds correctly|webhook rejects requests without signature|webhook accepts valid signature\"",
     "test:e2e:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit"
   },
