@@ -14,7 +14,7 @@
     "native": "cd apps/expo && yarn start",
     "watch": "yarn workspaces foreach --all -pi run watch",
     "vercel:install": "yarn set version 4.0.2 && yarn install",
-    "web": "yarn build && cd apps/next && yarn next",
+    "web": "yarn build && cd apps/next && yarn next -p 4000",
     "web:extract": "DISABLE_EXTRACTION=false yarn workspace next-app dev",
     "web:prod": "yarn workspace next-app build",
     "web:prod:serve": "yarn workspace next-app serve",

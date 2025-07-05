@@ -4,10 +4,11 @@ import React from 'react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'solito/navigation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Text, YStack, XStack, View, Button, useThemeName } from '@my/ui'
+import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext } from '@my/ui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
+import { ThemeToggle } from './theme-toggle'
 
 type SimpleEnhancedNavigationProps = {
   children: React.ReactNode
@@ -39,6 +40,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   const router = useRouter()
   const currentPath = usePathname()
   const themeName = useThemeName()
+  const { setTheme } = useThemeContext()
   
   // Use theme-aware colors
   const mode = themeName.includes('dark') ? 'dark' : 'light'
@@ -66,10 +68,11 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       >
         <YStack gap="$3">
           {/* Header */}
-          <View>
+          <View flexDirection="row" alignItems="center" justifyContent="space-between">
             <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
               TEE Portal
             </Text>
+            <ThemeToggle onThemeChange={setTheme} />
           </View>
 
           {session?.user && (
@@ -102,10 +105,16 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                 justifyContent="flex-start"
                 paddingHorizontal="$3"
                 paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
               >
                 <Text
                   color={currentPath === page.path ? colors.primaryForeground : colors.textPrimary}
                   fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primary : colors.textSecondary,
+                  }}
                 >
                   {page.label}
                 </Text>
