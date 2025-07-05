@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Stack, Text, YStack } from 'tamagui'
+import { Stack, Text, YStack, useThemeName } from 'tamagui'
 import { ListNavigation, ListNavigationText, ScrollView } from '@my/ui'
+import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { Memorial } from '@my/app/features/schedules/memorial'
 import { SundaySchool } from '@my/app/features/schedules/sunday-school'
 import { BibleClass } from '@my/app/features/schedules/bible-class'
@@ -41,6 +42,9 @@ export const SchedulesScreen: React.FC<{
   const [schedule, setSchedule] = useState<Program>()
   const [currentSchedule, setCurrentSchedule] = useState<string>()
   const isHydrated = useHydrated()
+  const themeName = useThemeName()
+  const mode = themeName.includes('dark') ? 'dark' : 'light'
+  const colors = brandColors[mode]
 
   const handleSchedules = async (scheduleKey: string) => {
     setCurrentSchedule(scheduleKey)
@@ -74,14 +78,29 @@ export const SchedulesScreen: React.FC<{
                   styles={
                     serviceType === currentSchedule
                       ? {
-                          backgroundColor: '$blue12Light',
+                          backgroundColor: colors.primary,
                         }
                       : {
-                          backgroundColor: '$blue1Light',
+                          backgroundColor: 'transparent',
+                        }
+                  }
+                  hoverStyle={
+                    serviceType === currentSchedule
+                      ? {
+                          backgroundColor: colors.primaryHover,
+                        }
+                      : {
+                          backgroundColor: colors.backgroundSecondary,
                         }
                   }
                 >
-                  <Text color={serviceType === currentSchedule ? '$blue12Dark' : '$blue12Light'}>
+                  <Text 
+                    color={serviceType === currentSchedule ? colors.primaryForeground : colors.textPrimary}
+                    fontWeight={serviceType === currentSchedule ? '600' : '400'}
+                    hoverStyle={{
+                      color: serviceType === currentSchedule ? colors.primary : colors.textSecondary,
+                    }}
+                  >
                     {allSchedules[serviceType].name}
                   </Text>
                 </ListNavigation>
