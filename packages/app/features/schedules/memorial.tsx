@@ -61,17 +61,17 @@ export const Memorial: React.FC<{
               <TableBody past={past}>{service.Steward || '-'}</TableBody>
               <TableBody past={past}>{service.Doorkeeper || '-'}</TableBody>
             </XStack>
-            {(service.Lunch || service.Activities) && (
+            {((service.Lunch && service.Lunch.trim()) || (service.Activities && service.Activities.trim())) && (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  {service.Lunch && (
+                  {service.Lunch && service.Lunch.trim() && (
                     <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                       Lunch will be held at the hall
                     </Paragraph>
                   )}
-                  {service.Activities && (
+                  {service.Activities && service.Activities.trim() && (
                     <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
-                      {service.Activities || ''}
+                      {service.Activities.trim()}
                     </Paragraph>
                   )}
                 </YStack>

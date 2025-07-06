@@ -5,6 +5,11 @@ const API_PATH =
 
 export const fetchUpcoming = async ({ key }: { key?: string }) => {
   const url = `${API_PATH}api/upcoming-program${key ? `/${key}` : ''}`
-  const rawSchedule = await fetch(url, { next: { revalidate: 3600 } })
+  const rawSchedule = await fetch(url, { 
+    next: { 
+      revalidate: 3600,
+      tags: ['upcoming-program', 'newsletter', 'schedules'] 
+    } 
+  })
   return await rawSchedule.json()
 }

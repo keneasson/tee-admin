@@ -100,6 +100,9 @@ export class WebhookSyncService {
       // Update sync status
       await this.updateSyncStatus(sheetId, sheetType, currentVersion, 'completed')
       
+      // Invalidate Next.js cache for this data type
+      await this.invalidateRelatedCache(sheetId, sheetType)
+      
       const migrationResult: SheetMigrationResult = {
         sheetId,
         sheetType,
@@ -232,5 +235,31 @@ export class WebhookSyncService {
     
     this.pendingSyncs.clear()
     console.log('✅ Webhook sync service cleanup complete')
+  }
+
+  // Cache invalidation method
+  private async invalidateRelatedCache(sheetId: string, sheetType: string): Promise<void> {
+    try {
+      // Import cache utilities dynamically to avoid issues in non-Next.js environments
+      const { invalidateScheduleCache, invalidateDirectoryCache, getSheetTypeFromId } = 
+        await import('../../../apps/next/utils/cache')
+      
+      // Determine the specific sheet type from the sheet ID
+      const specificSheetType = getSheetTypeFromId(sheetId)
+      
+      console.log(`🗄️ Invalidating cache for sheet ${sheetId} (type: ${specificSheetType})`)
+      
+      if (sheetType === 'directory') {
+        await invalidateDirectoryCache()
+      } else {
+        // Schedule data
+        await invalidateScheduleCache(specificSheetType)
+      }
+      
+      console.log(`✅ Cache invalidation completed for sheet ${sheetId}`)
+    } catch (error) {
+      console.error(`❌ Failed to invalidate cache for sheet ${sheetId}:`, error)
+      // Don't throw - cache invalidation failures shouldn't break the sync
+    }
   }
 }

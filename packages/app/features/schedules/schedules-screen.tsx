@@ -20,7 +20,7 @@ import type {
 } from '@my/app/types'
 import { Loading } from '@my/app/provider/loading'
 import { Cyc } from '@my/app/features/schedules/cyc'
-import { getGoogleSheet } from '@my/app/provider/get-google-sheet'
+import { getGoogleSheet } from '@my/app/provider/get-google-sheet-migrated'
 import { getData } from '@my/app/provider/get-data'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 
