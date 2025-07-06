@@ -54,29 +54,29 @@ export const Memorial: React.FC<{
             backgroundColor={bgColour}
           >
             <XStack padding={'$2'}>
-              <TableBody past={past}>{monthDay(date)}</TableBody>
-              <TableBody past={past}>{service.Preside || '-'}</TableBody>
-              <TableBody past={past}>{service.Exhort || '-'}</TableBody>
-              <TableBody past={past}>{service.Organist || '-'}</TableBody>
-              <TableBody past={past}>{service.Steward || '-'}</TableBody>
-              <TableBody past={past}>{service.Doorkeeper || '-'}</TableBody>
+              <TableBody past={past}>{date && !isNaN(date.getTime()) ? monthDay(date) : '-'}</TableBody>
+              <TableBody past={past}>{(service.Preside && service.Preside.trim()) || '-'}</TableBody>
+              <TableBody past={past}>{(service.Exhort && service.Exhort.trim()) || '-'}</TableBody>
+              <TableBody past={past}>{(service.Organist && service.Organist.trim()) || '-'}</TableBody>
+              <TableBody past={past}>{(service.Steward && service.Steward.trim()) || '-'}</TableBody>
+              <TableBody past={past}>{(service.Doorkeeper && service.Doorkeeper.trim()) || '-'}</TableBody>
             </XStack>
-            {((service.Lunch && service.Lunch.trim()) || (service.Activities && service.Activities.trim())) && (
+            {((service.Lunch && service.Lunch.trim()) || (service.Activities && service.Activities.trim())) ? (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
-                  {service.Lunch && service.Lunch.trim() && (
+                  {service.Lunch && service.Lunch.trim() ? (
                     <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                       Lunch will be held at the hall
                     </Paragraph>
-                  )}
-                  {service.Activities && service.Activities.trim() && (
+                  ) : null}
+                  {service.Activities && service.Activities.trim() ? (
                     <Paragraph fontStyle={'normal'} color={past ? '$gray12Dark' : '$gray2Dark'}>
                       {service.Activities.trim()}
                     </Paragraph>
-                  )}
+                  ) : null}
                 </YStack>
               </XStack>
-            )}
+            ) : null}
           </YStack>
         )
       })}
