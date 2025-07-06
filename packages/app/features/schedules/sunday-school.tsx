@@ -26,7 +26,7 @@ export const SundaySchool: React.FC<{
           </YStack>
         </XStack>
       </YStack>
-      {schedule.map((service: SundaySchoolType, index) => {
+      {schedule.filter(service => service && service.Date).map((service: SundaySchoolType, index) => {
         const date = new Date(service.Date)
         const past = date < today
         const bgColour = past ? '$gray12Dark' : '$gray2Light'
@@ -38,18 +38,18 @@ export const SundaySchool: React.FC<{
             backgroundColor={'$gray9Dark'}
           >
             <XStack padding={'$2'}>
-              <TableBody past={past}>{monthDay(date)}</TableBody>
-              <TableBody past={past}>{service.Refreshments || '-'}</TableBody>
+              <TableBody past={past}>{date && !isNaN(date.getTime()) ? monthDay(date) : '-'}</TableBody>
+              <TableBody past={past}>{(service.Refreshments && service.Refreshments.trim()) || '-'}</TableBody>
             </XStack>
-            {service['Holidays and Special Events'] && (
+            {service['Holidays and Special Events'] && service['Holidays and Special Events'].trim() ? (
               <XStack padding={'$2'}>
                 <YStack flex={6}>
                   <Text fontStyle={'normal'} color={bgColour}>
-                    {service['Holidays and Special Events']}
+                    {service['Holidays and Special Events'].trim()}
                   </Text>
                 </YStack>
               </XStack>
-            )}
+            ) : null}
           </YStack>
         )
       })}
