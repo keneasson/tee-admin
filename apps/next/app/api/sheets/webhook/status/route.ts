@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { auth } from '../../../../utils/auth'
 import { WebhookSyncService } from '@my/app/provider/sync/webhook-sync-service'
 import { WebhookSecurity } from '@my/app/provider/sync/webhook-security'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
@@ -9,7 +9,7 @@ const syncService = new WebhookSyncService()
 export async function GET(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession()
+    const session = await auth()
     
     if (!session?.user) {
       return NextResponse.json(
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession()
+    const session = await auth()
     
     if (!session?.user) {
       return NextResponse.json(

@@ -3,8 +3,8 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand } from '@
 import { GoogleSheetTypes, GoogleSheetData, ProgramTypeKeys } from '@my/app/types'
 
 interface ScheduleRecord {
-  pkey: string
-  skey: string
+  PK: string
+  SK: string
   sheetType: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc'
   sheetId: string
   date: string
@@ -14,8 +14,8 @@ interface ScheduleRecord {
 }
 
 interface DirectoryRecord {
-  pkey: string
-  skey: string
+  PK: string
+  SK: string
   email: string
   firstName: string
   lastName: string
@@ -48,13 +48,13 @@ export class ScheduleService {
       console.log(`📊 Fetching ${sheetType} schedule from DynamoDB`)
 
       const response = await this.client.send(new QueryCommand({
-        TableName: 'tee-schedules',
-        KeyConditionExpression: 'pkey = :pk',
+        TableName: 'dev-tee-schedules',
+        KeyConditionExpression: 'PK = :pk',
         ExpressionAttributeValues: {
           ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
         },
-        ScanIndexForward: false, // Most recent first
-        Limit: 100, // Reasonable limit for schedule data
+        ScanIndexForward: true, // Chronological order
+        // No limit to get all records
       }))
 
       if (!response.Items || response.Items.length === 0) {
@@ -64,21 +64,22 @@ export class ScheduleService {
 
       // Transform DynamoDB records back to GoogleSheet format
       const scheduleRecords = response.Items as ScheduleRecord[]
+      // Records should already be in chronological order due to ScanIndexForward: true
+      // But sort again to ensure consistency
       const sortedRecords = scheduleRecords.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-      // Convert to GoogleSheetData format expected by frontend
-      const headers = this.getHeadersForSheetType(sheetType)
-      const rows = sortedRecords.map((record: ScheduleRecord) => this.convertRecordToRow(record, headers))
+      // Convert to GoogleSheetData format - return original data objects
+      const content = sortedRecords.map((record: ScheduleRecord) => record.data)
 
       const googleSheetData: GoogleSheetData = {
         title: this.getSheetTitle(sheetType),
         type: sheetType,
-        content: [headers, ...rows],
+        content: content,
         lastUpdated: scheduleRecords[0]?.lastUpdated || new Date().toISOString(),
         version: scheduleRecords[0]?.version || '1',
       }
 
-      console.log(`✅ Retrieved ${rows.length} ${sheetType} schedule entries from DynamoDB`)
+      console.log(`✅ Retrieved ${content.length} ${sheetType} schedule entries from DynamoDB`)
       return googleSheetData
 
     } catch (error) {
@@ -88,19 +89,26 @@ export class ScheduleService {
   }
 
   /**
-   * Get upcoming program events from all schedule types
+   * Get upcoming program events from all schedule types (optimized for newsletter)
+   * Returns events from 2 hours ago to 2 weeks from now
    * Replaces: get_upcoming_program()
    */
-  async getUpcomingProgram(orderOfKeys: ProgramTypeKeys[] = ['memorial', 'bibleClass', 'sundaySchool']): Promise<Array<{
+  async getUpcomingProgram(orderOfKeys: ProgramTypeKeys[] = ['sundaySchool', 'memorial', 'bibleClass']): Promise<Array<{
     type: ProgramTypeKeys
     title: string
     date: Date
     details: Record<string, any>
   }>> {
     try {
-      console.log('📅 Fetching upcoming program events from DynamoDB')
+      console.log('📅 Fetching upcoming program events from DynamoDB (newsletter optimized)')
 
+      // Newsletter time range: 2 hours ago to 2 weeks from now
       const now = new Date()
+      const twoHoursAgo = new Date(now.getTime() - (2 * 60 * 60 * 1000)) // 2 hours ago
+      const twoWeeksFromNow = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)) // 2 weeks from now
+      
+      console.log(`📅 Date range: ${twoHoursAgo.toISOString()} to ${twoWeeksFromNow.toISOString()}`)
+
       const upcomingEvents: Array<{
         type: ProgramTypeKeys
         title: string
@@ -108,46 +116,11 @@ export class ScheduleService {
         details: Record<string, any>
       }> = []
 
-      // Fetch from each schedule type
+      // Fetch events for each schedule type in the date range
       for (const sheetType of orderOfKeys) {
         try {
-          const scheduleData = await this.getScheduleData(sheetType as any)
-          if (!scheduleData?.content) continue
-
-          const [headers, ...rows] = scheduleData.content
-          const dateColumnIndex = this.getDateColumnIndex(sheetType, headers)
-
-          if (dateColumnIndex === -1) continue
-
-          // Find next 2 upcoming events for this sheet type
-          const futureEvents = rows
-            .map((row: any[]) => {
-              const dateValue = row[dateColumnIndex]
-              let eventDate: Date
-
-              // Handle different date formats
-              if (typeof dateValue === 'number') {
-                // Google Sheets serial date
-                eventDate = new Date((dateValue - 25569) * 86400 * 1000)
-              } else if (typeof dateValue === 'string') {
-                eventDate = new Date(dateValue)
-              } else {
-                return null
-              }
-
-              return {
-                type: sheetType as ProgramTypeKeys,
-                title: this.getSheetTitle(sheetType),
-                date: eventDate,
-                details: this.createEventDetails(headers, row),
-              }
-            })
-            .filter((event: any) => event && event.date > now)
-            .sort((a: any, b: any) => a!.date.getTime() - b!.date.getTime())
-            .slice(0, 2) // Next 2 events
-
-          upcomingEvents.push(...(futureEvents.filter(Boolean) as any[]))
-
+          const events = await this.getEventsInDateRange(sheetType as any, twoHoursAgo, twoWeeksFromNow)
+          upcomingEvents.push(...events)
         } catch (error) {
           console.warn(`⚠️ Failed to get upcoming events for ${sheetType}:`, error)
           // Continue with other sheet types
@@ -157,12 +130,70 @@ export class ScheduleService {
       // Sort all events by date and return
       const sortedEvents = upcomingEvents.sort((a, b) => a.date.getTime() - b.date.getTime())
       
-      console.log(`✅ Found ${sortedEvents.length} upcoming events from DynamoDB`)
+      console.log(`✅ Found ${sortedEvents.length} upcoming events from DynamoDB in date range`)
       return sortedEvents
 
     } catch (error) {
       console.error('❌ Error fetching upcoming program from DynamoDB:', error)
       throw new Error('Failed to fetch upcoming program data')
+    }
+  }
+
+  /**
+   * Get events for a specific schedule type within a date range (DynamoDB optimized)
+   */
+  private async getEventsInDateRange(
+    sheetType: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc',
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{
+    type: ProgramTypeKeys
+    title: string
+    date: Date
+    details: Record<string, any>
+  }>> {
+    try {
+      // Query DynamoDB with date range filter
+      const response = await this.client.send(new QueryCommand({
+        TableName: 'dev-tee-schedules',
+        KeyConditionExpression: 'PK = :pk',
+        FilterExpression: '#dateField BETWEEN :startDate AND :endDate',
+        ExpressionAttributeNames: {
+          '#dateField': 'date'
+        },
+        ExpressionAttributeValues: {
+          ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
+          ':startDate': startDate.toISOString(),
+          ':endDate': endDate.toISOString(),
+        },
+        ScanIndexForward: true, // Chronological order
+      }))
+
+      if (!response.Items || response.Items.length === 0) {
+        console.log(`📅 No events found for ${sheetType} in date range`)
+        return []
+      }
+
+      const scheduleRecords = response.Items as ScheduleRecord[]
+      
+      // Convert to event format
+      const events = scheduleRecords.map(record => {
+        const eventDate = new Date(record.date)
+        
+        return {
+          type: sheetType as ProgramTypeKeys,
+          title: this.getSheetTitle(sheetType),
+          date: eventDate,
+          details: record.data, // The full data object from DynamoDB
+        }
+      })
+      
+      console.log(`📅 Found ${events.length} events for ${sheetType} in date range`)
+      return events
+      
+    } catch (error) {
+      console.error(`❌ Error fetching ${sheetType} events in date range:`, error)
+      return []
     }
   }
 
@@ -174,20 +205,23 @@ export class ScheduleService {
     try {
       console.log(`👤 Looking up user ${email} in DynamoDB directory`)
 
-      const response = await this.client.send(new GetCommand({
-        TableName: 'tee-schedules',
-        Key: {
-          pkey: 'DIRECTORY#MEMBERS',
-          skey: `USER#${email.toLowerCase()}`,
+      // Since we have indexed keys, we need to query by email
+      const response = await this.client.send(new QueryCommand({
+        TableName: 'dev-tee-schedules',
+        KeyConditionExpression: 'PK = :pk',
+        FilterExpression: 'email = :email',
+        ExpressionAttributeValues: {
+          ':pk': 'DIRECTORY#MEMBERS',
+          ':email': email.toLowerCase(),
         },
       }))
 
-      if (!response.Item) {
+      if (!response.Items || response.Items.length === 0) {
         console.log(`👤 User ${email} not found in DynamoDB directory`)
         return null
       }
 
-      const user = response.Item as DirectoryRecord
+      const user = response.Items[0] as DirectoryRecord
       console.log(`✅ Found user ${email} in DynamoDB directory`)
       return user
 
@@ -206,8 +240,8 @@ export class ScheduleService {
       console.log('📋 Fetching directory data from DynamoDB')
 
       const response = await this.client.send(new QueryCommand({
-        TableName: 'tee-schedules',
-        KeyConditionExpression: 'pkey = :pk',
+        TableName: 'dev-tee-schedules',
+        KeyConditionExpression: 'PK = :pk',
         ExpressionAttributeValues: {
           ':pk': 'DIRECTORY#MEMBERS',
         },
@@ -252,20 +286,20 @@ export class ScheduleService {
   async isDataFresh(sheetType: string, maxAgeMinutes: number = 60): Promise<boolean> {
     try {
       const response = await this.client.send(new GetCommand({
-        TableName: 'tee-schedules',
+        TableName: 'dev-tee-sync-status',
         Key: {
-          pkey: `SCHEDULE#${sheetType.toUpperCase()}`,
-          skey: 'METADATA',
+          PK: `SYNC#${sheetType.toUpperCase()}`,
+          SK: 'STATUS',
         },
       }))
 
-      if (!response.Item?.lastUpdated) {
+      if (!response.Item?.lastSync) {
         return false
       }
 
-      const lastUpdated = new Date(response.Item.lastUpdated)
+      const lastSync = new Date(response.Item.lastSync)
       const now = new Date()
-      const ageMinutes = (now.getTime() - lastUpdated.getTime()) / (1000 * 60)
+      const ageMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60)
 
       return ageMinutes <= maxAgeMinutes
 

@@ -6,8 +6,21 @@
  * Usage: yarn list-tables
  */
 
-import { ListTablesCommand } from '@aws-sdk/client-dynamodb'
-import { dynamoClient } from '../packages/app/provider/dynamodb/config'
+import { config } from 'dotenv'
+import { join } from 'path'
+import { ListTablesCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
+
+// Load environment variables
+config({ path: join(process.cwd(), 'apps/next/.env') })
+
+// Create AWS DynamoDB client (not localhost)
+const dynamoClient = new DynamoDBClient({
+  region: process.env.AWS_REGION || 'ca-central-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+})
 
 async function listTables() {
   try {

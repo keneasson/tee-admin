@@ -42,7 +42,10 @@
     "test-api-migration:health": "cd apps/next && tsx ../../scripts/test-api-migration.ts health",
     "test-api-migration:schedule": "cd apps/next && tsx ../../scripts/test-api-migration.ts schedule",
     "test-api-migration:directory": "cd apps/next && tsx ../../scripts/test-api-migration.ts directory",
-    "test-api-migration:upcoming": "cd apps/next && tsx ../../scripts/test-api-migration.ts upcoming"
+    "test-api-migration:upcoming": "cd apps/next && tsx ../../scripts/test-api-migration.ts upcoming",
+    "populate-dynamodb": "tsx scripts/populate-dynamodb.ts",
+    "validate-data": "cd apps/next && tsx ../../scripts/validate-data.ts",
+    "test-newsletter-timing": "cd apps/next && tsx ../../scripts/test-newsletter-timing.ts"
   },
   "resolutions": {
     "react": "19.1.0",
