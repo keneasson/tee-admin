@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../utils/auth'
+import { auth } from '../../../../../utils/auth'
 import { WebhookSyncService } from '@my/app/provider/sync/webhook-sync-service'
 import { WebhookSecurity } from '@my/app/provider/sync/webhook-security'
 import { ROLES } from '@my/app/provider/auth/auth-roles'

@@ -20,6 +20,7 @@ import { FormFieldset } from '../form/form-fieldset'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { FormInput } from '../form/form-input'
 import { PasswordInput } from '../form/password-input'
+import { DataTableDemo, EnhancedScheduleDemo } from '../data-table'
 
 // Note: Form components require proper React Hook Form setup
 // These examples show the component structure but won't be functional without real form context
@@ -359,6 +360,126 @@ function MyForm() {
 <TableBody past={isPast}>
   Body Content
 </TableBody>`}
+        />
+      </ComponentGroup>
+      
+      {/* Data Table Components */}
+      <ComponentGroup
+        title="Data Table Components"
+        description="Advanced table components built with TanStack Table and Tamagui, featuring sorting, filtering, pagination, and responsive design."
+      >
+        <ComponentShowcase
+          title="Basic Data Table"
+          description="Generic TanStack Table integration with Tamagui styling, sorting, search, and pagination."
+          children={
+            <View maxHeight={400} overflow="hidden">
+              <DataTableDemo />
+            </View>
+          }
+          code={`import { BaseDataTable } from '@my/ui'
+import { ColumnDef } from '@tanstack/react-table'
+
+interface DataItem {
+  id: string
+  name: string
+  value: string
+}
+
+const columns: ColumnDef<DataItem>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Name',
+  },
+  {
+    accessorKey: 'value', 
+    header: 'Value',
+  },
+]
+
+function MyTable() {
+  return (
+    <BaseDataTable
+      data={myData}
+      columns={columns}
+      searchPlaceholder="Search items..."
+      pageSize={10}
+    />
+  )
+}`}
+        />
+        
+        <ComponentShowcase
+          title="Enhanced Schedule Table"
+          description="Complete schedule table with horizontal tabs, Next Event indicators, user highlighting, and conflict detection."
+          children={
+            <View maxHeight={500} overflow="hidden">
+              <EnhancedScheduleDemo />
+            </View>
+          }
+          code={`import { EnhancedScheduleTable } from '@my/ui'
+
+const scheduleData = {
+  memorial: [/* Memorial service events */],
+  'sunday-school': [/* Sunday school events */],
+  'bible-class': [/* Bible class events */],
+  cyc: [/* CYC events */]
+}
+
+const tabs = [
+  { id: 'memorial', name: 'Memorial Service', key: 'memorial' },
+  { id: 'sunday-school', name: 'Sunday School', key: 'sundaySchool' },
+  { id: 'bible-class', name: 'Bible Class', key: 'bibleClass' },
+  { id: 'cyc', name: 'CYC', key: 'cyc' },
+]
+
+function ScheduleView() {
+  return (
+    <EnhancedScheduleTable
+      tabs={tabs}
+      data={scheduleData}
+      currentUser="John Smith"
+      onTabChange={(tabKey) => console.log('Tab:', tabKey)}
+    />
+  )
+}`}
+        />
+        
+        <ComponentShowcase
+          title="Schedule Features"
+          description="Key features of the Enhanced Schedule Table system."
+          children={
+            <YStack gap="$4" backgroundColor="$backgroundSecondary" padding="$4" borderRadius="$4">
+              <Text fontSize="$4" fontWeight="600">Enhanced Schedule Table Features:</Text>
+              <YStack gap="$2">
+                <Text>• <Text fontWeight="600">Horizontal Tab Navigation</Text> - Switch between schedule types</Text>
+                <Text>• <Text fontWeight="600">Next Event Indicators</Text> - Green badges for ongoing/upcoming events</Text>
+                <Text>• <Text fontWeight="600">User Highlighting</Text> - Blue background for logged-in user's responsibilities</Text>
+                <Text>• <Text fontWeight="600">Conflict Detection</Text> - Orange badges for scheduling conflicts</Text>
+                <Text>• <Text fontWeight="600">Search & Filter</Text> - Real-time search across all data</Text>
+                <Text>• <Text fontWeight="600">Pagination</Text> - Configurable page sizes (10-100 rows)</Text>
+                <Text>• <Text fontWeight="600">Responsive Design</Text> - Works on all screen sizes</Text>
+                <Text>• <Text fontWeight="600">Brand Theming</Text> - Full light/dark mode support</Text>
+              </YStack>
+              <Text fontSize="$3" color="$textSecondary">
+                Built with TanStack Table v8.21.3 and Tamagui for optimal performance and accessibility.
+              </Text>
+            </YStack>
+          }
+          code={`// Enhanced Schedule Event Interface
+interface EnhancedScheduleEvent {
+  id: string
+  date: string
+  time: string
+  event: string
+  presider: string
+  speaker?: string
+  steward?: string
+  location: string
+  type: 'memorial' | 'sunday-school' | 'bible-class' | 'cyc'
+  isNextEvent?: boolean      // Green "Next" badge
+  hasConflict?: boolean      // Orange "Conflict" badge
+  userHighlight?: boolean    // Blue background highlight
+}`}
         />
       </ComponentGroup>
     </YStack>

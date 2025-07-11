@@ -33,26 +33,26 @@ export interface FeatureFlagConfig {
 export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
   [FEATURE_FLAGS.NEW_BRAND_COLORS]: {
     enabled: true,
-    rolloutPercentage: 0, // Start at 0% for testing
-    userRoles: ['admin', 'owner'],
+    rolloutPercentage: 100,
+    userRoles: [], // Available to all users
     description: 'New accessible brand color palette',
-    environment: 'development'
+    environment: 'all'
   },
   
   [FEATURE_FLAGS.NEW_NAVIGATION_DESIGN]: {
     enabled: true,
     rolloutPercentage: 100,
-    userRoles: ['admin', 'owner'],
+    userRoles: [], // Available to all users
     description: 'Enhanced navigation system with brand colors, mobile responsiveness, and improved UX',
-    environment: 'development'
+    environment: 'all'
   },
   
   [FEATURE_FLAGS.ENHANCED_TYPOGRAPHY]: {
     enabled: true,
-    rolloutPercentage: 0,
-    userRoles: ['admin', 'owner'],
+    rolloutPercentage: 100,
+    userRoles: [], // Available to all users
     description: 'Enhanced typography system with better hierarchy',
-    environment: 'development'
+    environment: 'all'
   },
   
   [FEATURE_FLAGS.NEW_FORM_COMPONENTS]: {
