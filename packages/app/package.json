@@ -7,8 +7,8 @@
     "*.css"
   ],
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.693.0",
-    "@aws-sdk/lib-dynamodb": "^3.693.0",
+    "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/lib-dynamodb": "^3.750.0",
     "@my/ui": "0.0.1",
     "@react-navigation/native": "^6.1.17",
     "@tamagui/animations-react-native": "^1.129.11",

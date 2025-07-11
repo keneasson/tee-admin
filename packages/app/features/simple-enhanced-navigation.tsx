@@ -113,7 +113,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                   color={currentPath === page.path ? colors.primaryForeground : colors.textPrimary}
                   fontWeight={currentPath === page.path ? '600' : '400'}
                   hoverStyle={{
-                    color: currentPath === page.path ? colors.primary : colors.textSecondary,
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
                   }}
                 >
                   {page.label}
@@ -143,12 +143,18 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                     justifyContent="flex-start"
                     paddingHorizontal="$3"
                     paddingVertical="$2"
+                    hoverStyle={{
+                      backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                    }}
                   >
                     <Text
                       color={
                         currentPath === page.path ? colors.primaryForeground : colors.textPrimary
                       }
                       fontWeight={currentPath === page.path ? '600' : '400'}
+                      hoverStyle={{
+                        color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                      }}
                     >
                       {page.label}
                     </Text>

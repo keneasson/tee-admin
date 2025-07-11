@@ -1,5 +1,5 @@
 {
-  "installCommand": "yarn set version berry && yarn install",
+  "installCommand": "cd ../.. && yarn install",
   "crons": [
     {
       "path": "/api/email/bible-class",
