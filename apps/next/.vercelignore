@@ -1,0 +1,12 @@
+# Don't ignore yarn files needed for berry version
+!.yarn/
+!.yarnrc.yml
+!yarn.lock
+
+# Standard ignores
+node_modules
+.next
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

@@ -21,7 +21,7 @@ export function useFeatureFlag(flag: FeatureFlag): boolean {
   }
   
   // Check user role
-  if (config.userRoles && session?.user?.role) {
+  if (config.userRoles && config.userRoles.length > 0 && session?.user?.role) {
     if (!config.userRoles.includes(session.user.role)) {
       return false
     }

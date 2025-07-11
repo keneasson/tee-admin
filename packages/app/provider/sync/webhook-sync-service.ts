@@ -242,7 +242,7 @@ export class WebhookSyncService {
     try {
       // Import cache utilities dynamically to avoid issues in non-Next.js environments
       const { invalidateScheduleCache, invalidateDirectoryCache, getSheetTypeFromId } = 
-        await import('../../../apps/next/utils/cache')
+        await import('../../../../apps/next/utils/cache')
       
       // Determine the specific sheet type from the sheet ID
       const specificSheetType = getSheetTypeFromId(sheetId)
