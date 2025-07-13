@@ -175,6 +175,7 @@ export async function verifyCredentialsUser(email: string, password: string): Pr
   }
 
   console.log('verifyCredentialsUser: User found, checking password...')
+  
   const isValid = await verifyPassword(password, user.hashedPassword)
   if (!isValid) {
     console.log('verifyCredentialsUser: Invalid password for:', email)
