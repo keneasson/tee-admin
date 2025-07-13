@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signIn, getSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
+import type { GestureResponderEvent } from 'react-native'
 
 import {
   YStack,
@@ -35,7 +36,12 @@ function SignInPageContent() {
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<SignInFormData>()
+  } = useForm<SignInFormData>({
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  })
 
   // Check for URL error parameters after hydration
   useEffect(() => {
@@ -109,7 +115,9 @@ function SignInPageContent() {
     }
   }
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = (e: GestureResponderEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     signIn('google', { callbackUrl: '/profile' })
   }
 
@@ -121,99 +129,105 @@ function SignInPageContent() {
           Sign in to the TEE Portal
         </Paragraph>
       </YStack>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <YStack gap="$4">
-          {/* Email Field */}
-          <FormInput
-            control={control}
-            name="email"
-            label="Email Address"
-            type="email"
-            placeholder="your@email.com"
-            autoComplete="email"
-            onChangeText={clearError}
-            rules={{
-              required: 'Email is required',
-              pattern: {
-                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                message: 'Invalid email format',
-              },
+      <YStack gap="$4" tag="form">
+        <FormInput
+          control={control}
+          name="email"
+          label="Email Address"
+          type="email"
+          placeholder="your@email.com"
+          autoComplete="email"
+          onChangeText={clearError}
+          rules={{
+            required: 'Email is required',
+            pattern: {
+              value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+              message: 'Invalid email format',
+            },
+          }}
+        />
+
+        <PasswordInput
+          control={control}
+          name="password"
+          label="Password"
+          placeholder="Enter your password"
+          autoComplete="current-password"
+          onChangeText={clearError}
+          rules={{ required: 'Password is required' }}
+        />
+
+        <XStack justifyContent="flex-end">
+          <Link
+            href="/auth/forgot-password"
+            style={{
+              fontSize: '14px',
+              color: '#0066CC',
+              textDecoration: 'underline',
+              cursor: 'pointer',
             }}
-          />
+          >
+            Forgot password?
+          </Link>
+        </XStack>
 
-          {/* Password Field */}
-          <PasswordInput
-            control={control}
-            name="password"
-            label="Password"
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            onChangeText={clearError}
-            rules={{ required: 'Password is required' }}
-          />
-
-          {/* Forgot Password Link */}
-          <XStack justifyContent="flex-end">
-            <Link 
-              href="/auth/forgot-password"
-              style={{ fontSize: '14px', color: '#0066CC', textDecoration: 'underline', cursor: 'pointer' }}
-            >
-              Forgot password?
-            </Link>
+        {error ? (
+          <XStack>
+            <Paragraph color="$red10" textAlign="center">
+              {error || 'Sign in failed. Please try again.'}
+            </Paragraph>
           </XStack>
+        ) : null}
 
-          {/* Error Message */}
-          {error && (
-            <Text fontSize="$3" color="$red10" textAlign="center">
-              {error}
-            </Text>
-          )}
+        <Button size="$4" disabled={loading} theme="blue" onPress={handleSubmit(onSubmit)}>
+          {loading ? 'Signing In...' : 'Sign In'}
+        </Button>
 
-          {/* Submit Button */}
-          <Button size="$4" disabled={loading} theme="blue">
-            {loading ? 'Signing In...' : 'Sign In'}
-          </Button>
+        <XStack alignItems="center" gap="$3">
+          <Separator flex={1} />
+          <Text fontSize="$3" color="$gray11">
+            or
+          </Text>
+          <Separator flex={1} />
+        </XStack>
 
-          {/* Divider */}
-          <XStack alignItems="center" gap="$3">
-            <Separator flex={1} />
-            <Text fontSize="$3" color="$gray11">
-              or
-            </Text>
-            <Separator flex={1} />
-          </XStack>
+        <Button onPress={handleGoogleSignIn} size="$4" variant="outlined">
+          Continue with Google
+        </Button>
 
-          {/* Google Sign In */}
-          <Button onPress={handleGoogleSignIn} size="$4" variant="outlined">
-            Continue with Google
-          </Button>
+        <XStack justifyContent="center" gap="$2">
+          <Text fontSize="$3" color="$gray11">
+            Don't have an account?
+          </Text>
+          <Link
+            href="/auth/register"
+            style={{
+              fontSize: '14px',
+              color: '#0066CC',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Create account
+          </Link>
+        </XStack>
 
-          {/* Link to Register */}
-          <XStack justifyContent="center" gap="$2">
-            <Text fontSize="$3" color="$gray11">
-              Don't have an account?
-            </Text>
-            <Link 
-              href="/auth/register"
-              style={{ fontSize: '14px', color: '#0066CC', textDecoration: 'underline', cursor: 'pointer' }}
-            >
-              Create account
-            </Link>
-          </XStack>
-
-          {/* Resend Verification Link */}
-          <XStack justifyContent="center">
-            <Link 
-              href="/auth/resend-verification"
-              style={{ fontSize: '12px', color: '#6B7280', textDecoration: 'underline', cursor: 'pointer' }}
-            >
-              Resend email verification
-            </Link>
-          </XStack>
-        </YStack>
-      </form>
+        <XStack justifyContent="center">
+          <Link
+            href="/auth/resend-verification"
+            style={{
+              fontSize: '12px',
+              color: '#6B7280',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Resend email verification
+          </Link>
+        </XStack>
+      </YStack>
     </YStack>
-  );
+  )
 }
 
 export default function SignInPage() {
