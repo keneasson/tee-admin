@@ -40,8 +40,9 @@ export const FormInput = <T extends FieldValues>({
           customOnChangeText?.(text)
         }
 
+        const { defaultValue, ...cleanInputProps } = inputProps
         const validInputProps = {
-          ...inputProps,
+          ...cleanInputProps,
           onChangeText: handleChange,
           inputMode: type as InputModeOptions
         } as InputProps
@@ -54,7 +55,7 @@ export const FormInput = <T extends FieldValues>({
                 ref={ref} 
                 id={id} 
                 {...validInputProps}
-                value={value}
+                value={value || ''}
               />
               {error && (
                 <Text fontSize="$3" color="$red10">

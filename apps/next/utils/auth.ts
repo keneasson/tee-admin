@@ -14,7 +14,7 @@ import {
   getRoleFromLegacyUser,
   getUserFromLegacyDirectory,
 } from '@my/app/provider/auth/get-user-from-legacy'
-import { verifyCredentialsUser } from './dynamodb/credentials-users'
+import { verifyCredentialsUser, findCredentialsUserByEmail } from './dynamodb/credentials-users'
 
 export const nextAuthDynamoDb = {
   tableName: 'tee-admin',
@@ -118,6 +118,14 @@ export const authOptions = {
         if (dbUser && dbUser.role) {
           console.log('✅ Found existing user in DynamoDB with role:', dbUser.role)
           user.role = dbUser.role
+          return true
+        }
+        
+        // STEP 1.5: Check if this email has a credentials account
+        const credentialsUser = await findCredentialsUserByEmail(userEmail)
+        if (credentialsUser && credentialsUser.role) {
+          console.log('✅ Found existing credentials user with role:', credentialsUser.role)
+          user.role = credentialsUser.role
           return true
         }
         
