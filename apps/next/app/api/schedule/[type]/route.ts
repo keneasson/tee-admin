@@ -6,13 +6,10 @@ const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 300 : 0
 
 const scheduleService = new ScheduleService()
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { type: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { type: string } }) {
   try {
     const { type } = params
-    
+
     // Validate schedule type
     const validTypes = ['memorial', 'bibleClass', 'sundaySchool', 'cyc']
     if (!validTypes.includes(type)) {
@@ -26,15 +23,15 @@ export async function GET(
 
     // Check if we have fresh data, otherwise fall back to Google Sheets
     const isDataFresh = await scheduleService.isDataFresh(type, 60) // 1 hour freshness
-    
+
     if (!isDataFresh) {
       console.warn(`⚠️ ${type} data is stale, falling back to Google Sheets`)
-      
+
       // Fallback to original Google Sheets API
       try {
         const { get_google_sheet } = await import('../../../../utils/get-google-sheets')
         const googleSheetData = await get_google_sheet(type as any)
-        
+
         return NextResponse.json(googleSheetData, {
           headers: {
             'Cache-Control': `public, max-age=60, stale-while-revalidate=30`,
@@ -52,13 +49,10 @@ export async function GET(
 
     // Fetch from DynamoDB
     const scheduleData = await scheduleService.getScheduleData(type as any)
-    
+
     if (!scheduleData) {
       console.warn(`⚠️ No ${type} schedule data found in DynamoDB`)
-      return NextResponse.json(
-        { error: `No ${type} schedule data available` },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: `No ${type} schedule data available` }, { status: 404 })
     }
 
     console.log(`✅ Served ${type} schedule from DynamoDB cache`)
@@ -70,14 +64,13 @@ export async function GET(
         'X-Last-Updated': scheduleData.lastUpdated || '',
       },
     })
-
   } catch (error) {
     console.error(`❌ Error serving ${params.type} schedule:`, error)
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        message: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
       },
       { status: 500 }
     )

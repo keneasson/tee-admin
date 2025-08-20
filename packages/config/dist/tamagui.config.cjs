@@ -77,8 +77,10 @@ const headingFont = (0, import_font_inter.createInterFont)({
   config = (0, import_tamagui.createTamagui)({
     defaultFont: "body",
     animations: import_animations.animations,
-    shouldAddPrefersColorThemes: !0,
-    themeClassNameOnRoot: !0,
+    shouldAddPrefersColorThemes: !1,
+    // Disable browser preference override
+    themeClassNameOnRoot: !1,
+    // Let our theme provider handle root theming
     // highly recommended to turn this on if you are using shorthands
     // to avoid having multiple valid style keys that do the same thing
     // we leave it off by default because it can be confusing as you onboard.

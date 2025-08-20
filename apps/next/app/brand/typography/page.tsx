@@ -7,7 +7,7 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 export default function BrandTypographyPage() {
   const isHydrated = useHydrated()
   const { hasAccess, isLoading } = useAdminAccess()
-  
+
   if (!isHydrated || isLoading) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
@@ -16,7 +16,7 @@ export default function BrandTypographyPage() {
       </YStack>
     )
   }
-  
+
   if (!hasAccess) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
@@ -29,6 +29,6 @@ export default function BrandTypographyPage() {
       </YStack>
     )
   }
-  
+
   return <TypographyShowcase />
 }

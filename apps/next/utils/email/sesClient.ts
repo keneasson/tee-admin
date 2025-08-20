@@ -51,7 +51,7 @@ export interface SendEmailProps {
 
 export async function sendEmail({ to, subject, body, textBody }: SendEmailProps): Promise<void> {
   const sesClient = getSesClient()
-  
+
   const emailCmd = new SendEmailCommand({
     FromEmailAddress: '"TEE Admin" <noreply@tee-admin.com>',
     Destination: {
@@ -69,7 +69,7 @@ export async function sendEmail({ to, subject, body, textBody }: SendEmailProps)
           ...(textBody && {
             Text: {
               Data: textBody,
-            }
+            },
           }),
         },
       },

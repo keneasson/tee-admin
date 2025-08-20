@@ -16,19 +16,13 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!email || !password || !firstName || !lastName || !ecclesia) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
     }
 
     // Validate password
@@ -43,10 +37,7 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existingUser = await findCredentialsUserByEmail(email)
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User with this email already exists' },
-        { status: 409 }
-      )
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
     }
 
     // Validate invitation code if provided
@@ -58,10 +49,7 @@ export async function POST(request: NextRequest) {
     if (invitationCode) {
       const invitation = await validateInvitationCode(invitationCode)
       if (!invitation) {
-        return NextResponse.json(
-          { error: 'Invalid or expired invitation code' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Invalid or expired invitation code' }, { status: 400 })
       }
 
       // Use the role and details from the invitation
@@ -93,12 +81,8 @@ export async function POST(request: NextRequest) {
       message: 'User registered successfully. Please check your email to verify your account.',
       userId: user.id,
     })
-
   } catch (error) {
     console.error('Registration error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

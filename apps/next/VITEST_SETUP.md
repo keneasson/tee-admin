@@ -7,16 +7,19 @@ The Vitest configuration has been successfully fixed to work with ES modules.
 ## Key Changes Made
 
 ### 1. Package.json Updates
+
 - Added `"type": "module"` to enable ES module support
 - Kept Vitest and related dev dependencies
 
 ### 2. Vitest Configuration (`vitest.config.ts`)
+
 - Changed import from `'vite'` to `'vitest/config'`
 - Added proper `__dirname` handling for ES modules using `fileURLToPath`
 - Configured test file inclusion/exclusion patterns
 - Excluded Playwright e2e tests from Vitest runs
 
 ### 3. Test Structure
+
 - **Simple unit tests**: `tests/vitest-working.test.ts` - Basic functionality tests
 - **Password reset tests**: `tests/password-reset.test.ts` - Core password reset logic
 - **Integration tests**: `tests/simple-db.test.ts` - Working database tests
@@ -55,6 +58,7 @@ yarn test --watch
 ## Test Examples
 
 ### Basic Test
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 
@@ -66,6 +70,7 @@ describe('Basic Tests', () => {
 ```
 
 ### Mock Test
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest'
 
@@ -79,6 +84,7 @@ describe('Mock Tests', () => {
 ```
 
 ### Password Validation Test
+
 ```typescript
 it('should validate password strength', () => {
   const result = validatePassword('StrongPassword123!')
@@ -99,7 +105,7 @@ it('should validate password strength', () => {
 ```bash
 # These commands now work:
 yarn test vitest-working     # ✅ 9 tests passing
-yarn test simple-db          # ✅ 4 tests passing  
+yarn test simple-db          # ✅ 4 tests passing
 yarn test password-reset     # ✅ Some tests passing (with minor mock issues)
 ```
 

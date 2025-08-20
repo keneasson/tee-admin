@@ -1,150 +1,78 @@
 [
   {
     "EmailAddress": "lin.susan.lh@gmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "bjstephens@rogers.com",
-    "TopicPreferences": [
-      "newsletter"
-    ]
+    "TopicPreferences": ["newsletter"]
   },
   {
     "EmailAddress": "jlbell48@mail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "naomi.atkin_17@hotmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "ian.browning@lcbo.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "robbingoodhue@gmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "kamosa176@rogers.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "catherinebadger72@gmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "joanncameron@hotmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "rsldawes90@gmail.com",
-    "TopicPreferences": [
-      "newsletter"
-    ]
+    "TopicPreferences": ["newsletter"]
   },
   {
     "EmailAddress": "bgrosewood@gmail.com",
-    "TopicPreferences": [
-      "newsletter"
-    ]
+    "TopicPreferences": ["newsletter"]
   },
   {
     "EmailAddress": "leane@sympatico.ca",
-    "TopicPreferences": [
-      "sundaySchool",
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["sundaySchool", "newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "Elpis@sympatico.ca",
-    "TopicPreferences": [
-      "newsletter"
-    ]
+    "TopicPreferences": ["newsletter"]
   },
   {
     "EmailAddress": "carter4975@rogers.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "rachelyumbe1@gmail.com",
-    "TopicPreferences": [
-      "sundaySchool",
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["sundaySchool", "newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "phil@phildwyer.ca",
-    "TopicPreferences": [
-      "sundaySchool",
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["sundaySchool", "newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "percygwilliam@hotmail.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "joancurry@bell.net",
-    "TopicPreferences": [
-      "sundaySchool",
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["sundaySchool", "newsletter", "memorial", "bibleClass"]
   },
   {
     "EmailAddress": "jperks1@live.com",
-    "TopicPreferences": [
-      "newsletter",
-      "memorial",
-      "bibleClass"
-    ]
+    "TopicPreferences": ["newsletter", "memorial", "bibleClass"]
   }
 ]

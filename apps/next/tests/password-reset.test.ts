@@ -94,7 +94,7 @@ describe('Password Reset Flow', () => {
       mockPut.mockRejectedValue(new Error('Database error'))
 
       const email = 'test@example.com'
-      
+
       await expect(createPasswordResetToken(email)).rejects.toThrow('Database error')
     })
   })
@@ -311,7 +311,7 @@ describe('Password Reset Flow', () => {
     it('should work together for complete password reset flow', async () => {
       const email = 'integration@example.com'
       const userId = 'integration-user-123'
-      
+
       // Mock user exists
       mockQuery.mockResolvedValue({
         Items: [
@@ -332,7 +332,7 @@ describe('Password Reset Flow', () => {
 
       // Mock token creation
       mockPut.mockResolvedValue({})
-      
+
       // Test token creation
       const token = await createPasswordResetToken(email)
       expect(token).toBeDefined()
@@ -370,7 +370,7 @@ describe('Password Reset Flow', () => {
     it('should call sendPasswordResetEmail with correct parameters', async () => {
       const email = 'email-test@example.com'
       const userName = 'Email Test User'
-      
+
       mockPut.mockResolvedValue({})
       const token = await createPasswordResetToken(email)
 

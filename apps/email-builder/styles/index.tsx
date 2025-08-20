@@ -1,12 +1,52 @@
 import { colours } from './tokens'
 
 export const globalCss = `
-@media only screen and (max-width: 648px)  {
+/* Mobile-first responsive design */
+.container {
+  padding: 8px;
+  max-width: 100%;
+}
+
+.deviceWidth {
+  width: 100%!important;
+  max-width: 320px;
+}
+
+.two-column {
+  width: 48%;
+  display: inline-block;
+  vertical-align: top;
+}
+
+/* Tablet and up */
+@media only screen and (min-width: 480px) {
   .container {
-    padding: 6px;
+    padding: 12px;
+  }
+  .deviceWidth {
+    max-width: 440px;
+  }
+}
+
+/* Desktop */
+@media only screen and (min-width: 648px) {
+  .container {
+    padding: 16px;
   }
   .deviceWidth {
     width: 280px!important;
+    max-width: none;
+  }
+  .two-column {
+    width: 49%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .email-container {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
   }
 }
 `
@@ -53,7 +93,7 @@ export const heading = {
 export const header = {
   backgroundColor: '#c5d9fd',
   textAlign: 'center' as const,
-  paddingBottom: '10px',
+  padding: '20px 16px 10px 16px',
 }
 
 export const info = {

@@ -17,7 +17,7 @@
         "WEBHOOK_SECRET"
       ],
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "build/**", "node_modules/.cache/metro/**"]
+      "outputs": [".next/**", "!.next/cache/**", "build/**", "dist/**", "node_modules/.cache/metro/**"]
     },
     "dev": {
       "cache": false,

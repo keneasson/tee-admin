@@ -10,14 +10,14 @@ export const CACHE_TAGS = {
   SCHEDULES_BIBLE_CLASS: 'schedules:bibleClass',
   SCHEDULES_SUNDAY_SCHOOL: 'schedules:sundaySchool',
   SCHEDULES_CYC: 'schedules:cyc',
-  
+
   // API endpoint tags
   UPCOMING_PROGRAM: 'api:upcoming-program',
   NEWSLETTER: 'api:newsletter',
-  
+
   // Directory data
   DIRECTORY: 'directory:all',
-  
+
   // Combined tags for bulk invalidation
   ALL_SCHEDULE_DATA: 'data:schedules',
   ALL_API_RESPONSES: 'api:all',
@@ -28,7 +28,7 @@ export const CACHE_TAGS = {
  */
 export function getScheduleCacheTags(sheetType: string): string[] {
   const tags = [CACHE_TAGS.SCHEDULES_ALL, CACHE_TAGS.ALL_SCHEDULE_DATA]
-  
+
   switch (sheetType.toLowerCase()) {
     case 'memorial':
       tags.push(CACHE_TAGS.SCHEDULES_MEMORIAL)
@@ -43,10 +43,10 @@ export function getScheduleCacheTags(sheetType: string): string[] {
       tags.push(CACHE_TAGS.SCHEDULES_CYC)
       break
   }
-  
+
   // APIs that depend on schedule data
   tags.push(CACHE_TAGS.UPCOMING_PROGRAM, CACHE_TAGS.NEWSLETTER, CACHE_TAGS.ALL_API_RESPONSES)
-  
+
   return tags
 }
 
@@ -62,9 +62,9 @@ export function getDirectoryCacheTags(): string[] {
  */
 export async function invalidateScheduleCache(sheetType: string): Promise<void> {
   const tags = getScheduleCacheTags(sheetType)
-  
+
   console.log(`🗄️ Invalidating cache tags for ${sheetType}:`, tags)
-  
+
   // Invalidate each tag
   for (const tag of tags) {
     try {
@@ -81,9 +81,9 @@ export async function invalidateScheduleCache(sheetType: string): Promise<void> 
  */
 export async function invalidateDirectoryCache(): Promise<void> {
   const tags = getDirectoryCacheTags()
-  
+
   console.log('🗄️ Invalidating directory cache tags:', tags)
-  
+
   for (const tag of tags) {
     try {
       revalidateTag(tag)
@@ -99,9 +99,9 @@ export async function invalidateDirectoryCache(): Promise<void> {
  */
 export async function invalidateAllCache(): Promise<void> {
   const allTags = Object.values(CACHE_TAGS)
-  
+
   console.log('🗄️ Invalidating ALL cache tags:', allTags)
-  
+
   for (const tag of allTags) {
     try {
       revalidateTag(tag)
@@ -120,32 +120,35 @@ function loadSheetConfig(): Record<string, string> {
     // Try to load from config file (development)
     const serviceConfig = require('../tee-services-db47a9e534d3.json')
     const sheetIds = serviceConfig.sheet_ids
-    
+
     const sheetIdMap: Record<string, string> = {}
-    
+
     // Build mapping from config file
     Object.entries(sheetIds).forEach(([type, config]: [string, any]) => {
       if (config.key) {
         sheetIdMap[config.key] = type
       }
     })
-    
+
     return sheetIdMap
   } catch (error) {
-    console.warn('⚠️ Could not load sheet configuration from file (this is normal in production):', error.message)
-    
+    console.warn(
+      '⚠️ Could not load sheet configuration from file (this is normal in production):',
+      error.message
+    )
+
     // Fallback: Load from environment variables (production)
     const sheetIdMap: Record<string, string> = {}
-    
+
     // Environment variable mapping for production
     const envMapping = {
-      'GOOGLE_SHEET_MEMORIAL': 'memorial',
-      'GOOGLE_SHEET_BIBLE_CLASS': 'bibleClass', 
-      'GOOGLE_SHEET_SUNDAY_SCHOOL': 'sundaySchool',
-      'GOOGLE_SHEET_DIRECTORY': 'directory',
-      'GOOGLE_SHEET_CYC': 'cyc',
+      GOOGLE_SHEET_MEMORIAL: 'memorial',
+      GOOGLE_SHEET_BIBLE_CLASS: 'bibleClass',
+      GOOGLE_SHEET_SUNDAY_SCHOOL: 'sundaySchool',
+      GOOGLE_SHEET_DIRECTORY: 'directory',
+      GOOGLE_SHEET_CYC: 'cyc',
     }
-    
+
     Object.entries(envMapping).forEach(([envVar, type]) => {
       const sheetId = process.env[envVar]
       if (sheetId) {
@@ -153,11 +156,11 @@ function loadSheetConfig(): Record<string, string> {
         console.log(`📋 Loaded ${type} sheet ID from environment variable ${envVar}`)
       }
     })
-    
+
     if (Object.keys(sheetIdMap).length === 0) {
       console.warn('⚠️ No sheet configuration found in file or environment variables')
     }
-    
+
     return sheetIdMap
   }
 }
@@ -173,14 +176,14 @@ export function getSheetTypeFromId(sheetId: string): string {
   if (!sheetIdMapCache) {
     sheetIdMapCache = loadSheetConfig()
   }
-  
+
   const sheetType = sheetIdMapCache[sheetId]
-  
+
   if (!sheetType) {
     console.warn(`⚠️ Unknown sheet ID: ${sheetId}`)
     return 'unknown'
   }
-  
+
   console.log(`📋 Mapped sheet ID ${sheetId} to type: ${sheetType}`)
   return sheetType
 }
@@ -193,19 +196,19 @@ export function getSheetIdFromType(sheetType: string): string | null {
     // Try to load from config file first
     const serviceConfig = require('../tee-services-db47a9e534d3.json')
     const sheetIds = serviceConfig.sheet_ids
-    
+
     const config = sheetIds[sheetType]
     return config?.key || null
   } catch (error) {
     // Fallback to environment variables (production)
     const envMapping: Record<string, string> = {
-      'memorial': process.env.GOOGLE_SHEET_MEMORIAL || '',
-      'bibleClass': process.env.GOOGLE_SHEET_BIBLE_CLASS || '',
-      'sundaySchool': process.env.GOOGLE_SHEET_SUNDAY_SCHOOL || '',
-      'directory': process.env.GOOGLE_SHEET_DIRECTORY || '',
-      'cyc': process.env.GOOGLE_SHEET_CYC || '',
+      memorial: process.env.GOOGLE_SHEET_MEMORIAL || '',
+      bibleClass: process.env.GOOGLE_SHEET_BIBLE_CLASS || '',
+      sundaySchool: process.env.GOOGLE_SHEET_SUNDAY_SCHOOL || '',
+      directory: process.env.GOOGLE_SHEET_DIRECTORY || '',
+      cyc: process.env.GOOGLE_SHEET_CYC || '',
     }
-    
+
     return envMapping[sheetType] || null
   }
 }
@@ -213,58 +216,61 @@ export function getSheetIdFromType(sheetType: string): string | null {
 /**
  * Get all configured Google Sheet IDs and their types
  */
-export function getAllSheetMappings(): Array<{id: string, type: string, name: string}> {
+export function getAllSheetMappings(): Array<{ id: string; type: string; name: string }> {
   try {
     // Try to load from config file first (development)
     const serviceConfig = require('../tee-services-db47a9e534d3.json')
     const sheetIds = serviceConfig.sheet_ids
-    
+
     return Object.entries(sheetIds).map(([type, config]: [string, any]) => ({
       id: config.key || 'not-configured',
       type,
       name: config.name || type,
     }))
   } catch (error) {
-    console.warn('⚠️ Could not load sheet configuration from file (this is normal in production):', error.message)
-    
+    console.warn(
+      '⚠️ Could not load sheet configuration from file (this is normal in production):',
+      error.message
+    )
+
     // Fallback: Load from environment variables (production)
     const envMappings = [
-      { 
+      {
         id: process.env.GOOGLE_SHEET_MEMORIAL || 'not-configured',
         type: 'memorial',
-        name: 'Memorial Service Schedule'
+        name: 'Memorial Service Schedule',
       },
-      { 
+      {
         id: process.env.GOOGLE_SHEET_BIBLE_CLASS || 'not-configured',
         type: 'bibleClass',
-        name: 'Bible Class Schedule'
+        name: 'Bible Class Schedule',
       },
-      { 
+      {
         id: process.env.GOOGLE_SHEET_SUNDAY_SCHOOL || 'not-configured',
         type: 'sundaySchool',
-        name: 'Sunday School Schedule'
+        name: 'Sunday School Schedule',
       },
-      { 
+      {
         id: process.env.GOOGLE_SHEET_DIRECTORY || 'not-configured',
         type: 'directory',
-        name: 'Directory Data'
+        name: 'Directory Data',
       },
-      { 
+      {
         id: process.env.GOOGLE_SHEET_CYC || 'not-configured',
         type: 'cyc',
-        name: 'CYC Schedule'
+        name: 'CYC Schedule',
       },
     ]
-    
+
     // Filter out any entries that don't have valid sheet IDs
-    const validMappings = envMappings.filter(mapping => mapping.id !== 'not-configured')
-    
+    const validMappings = envMappings.filter((mapping) => mapping.id !== 'not-configured')
+
     if (validMappings.length === 0) {
       console.warn('⚠️ No valid sheet configuration found in environment variables')
     } else {
       console.log(`📋 Loaded ${validMappings.length} sheet mappings from environment variables`)
     }
-    
+
     return validMappings
   }
 }

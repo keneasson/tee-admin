@@ -84,9 +84,9 @@ vi.mock('next-auth', () => ({
 vi.mock('next/server', () => ({
   NextRequest: vi.fn(),
   NextResponse: {
-    json: vi.fn((data, options) => ({ 
+    json: vi.fn((data, options) => ({
       json: () => Promise.resolve(data),
-      status: options?.status || 200 
+      status: options?.status || 200,
     })),
   },
 }))

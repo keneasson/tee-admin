@@ -1,5 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { createContactListTopic, getContactLists, updateContactListTopic } from '../../../../utils/email/contact-lists'
+import {
+  createContactListTopic,
+  getContactLists,
+  updateContactListTopic,
+} from '../../../../utils/email/contact-lists'
 import { CreateUpdateListType } from '@my/app/types'
 
 /**

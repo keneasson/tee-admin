@@ -7,22 +7,16 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication and authorization
     const session = await auth()
-    
+
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const userRole = session.user.role
-    
+
     // Only members and admins can create invitation codes
     if (userRole !== ROLES.MEMBER && userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -30,10 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!firstName || !lastName || !ecclesia || !role) {
-      return NextResponse.json(
-        { error: 'All fields are required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
     }
 
     // Validate role - only allow guest or member roles to be assigned
@@ -65,12 +56,8 @@ export async function POST(request: NextRequest) {
         expiresIn: '7 days',
       },
     })
-
   } catch (error) {
     console.error('Create invitation error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -203,7 +203,7 @@ describe('Credentials Users Database Functions', () => {
       }
 
       mockQuery.mockResolvedValueOnce({ Items: [mockUser] })
-      
+
       // Mock bcryptjs.compare to return true
       vi.doMock('bcryptjs', () => ({
         compare: vi.fn().mockResolvedValue(true),
@@ -224,7 +224,7 @@ describe('Credentials Users Database Functions', () => {
       }
 
       mockQuery.mockResolvedValueOnce({ Items: [mockUser] })
-      
+
       vi.doMock('bcryptjs', () => ({
         compare: vi.fn().mockResolvedValue(true),
       }))

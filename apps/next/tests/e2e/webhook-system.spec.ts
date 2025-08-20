@@ -6,9 +6,9 @@ test.describe('Webhook System', () => {
     test('webhook health endpoint responds correctly', async ({ page }) => {
       // Test the health endpoint directly
       const response = await page.request.get('/api/sheets/webhook')
-      
+
       expect(response.status()).toBe(200)
-      
+
       const data = await response.json()
       expect(data).toHaveProperty('status', 'healthy')
       expect(data).toHaveProperty('service', 'sheets-webhook')
@@ -22,18 +22,18 @@ test.describe('Webhook System', () => {
         sheetId: 'test-sheet-id',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       const response = await page.request.post('/api/sheets/webhook', {
         data: payload,
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       })
 
       expect(response.status()).toBe(401)
-      
+
       const data = await response.json()
       expect(data).toHaveProperty('error', 'Invalid signature')
     })
@@ -44,19 +44,19 @@ test.describe('Webhook System', () => {
         sheetId: 'test-sheet-id',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       const response = await page.request.post('/api/sheets/webhook', {
         data: payload,
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': 'sha256=invalid-signature'
-        }
+          'x-webhook-signature': 'sha256=invalid-signature',
+        },
       })
 
       expect(response.status()).toBe(401)
-      
+
       const data = await response.json()
       expect(data).toHaveProperty('error', 'Invalid signature')
     })
@@ -67,14 +67,15 @@ test.describe('Webhook System', () => {
         sheetId: '1rRluyfllvMv50GRQ2ATmG7kVA_n-Pmyo_dxRFPYn0yg',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       // Generate valid HMAC signature
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(payload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
@@ -82,12 +83,12 @@ test.describe('Webhook System', () => {
         data: payload,
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': `sha256=${signature}`
-        }
+          'x-webhook-signature': `sha256=${signature}`,
+        },
       })
 
       expect(response.status()).toBe(200)
-      
+
       const data = await response.json()
       expect(data).toHaveProperty('success', true)
       expect(data).toHaveProperty('message', 'Webhook processed successfully')
@@ -98,9 +99,9 @@ test.describe('Webhook System', () => {
   test.describe('Data Sync Flow (Mocked)', () => {
     test('schedule page reflects webhook data updates', async ({ page }) => {
       // Mock Google Sheets API responses
-      await page.route('**/googleapis.com/**', route => {
+      await page.route('**/googleapis.com/**', (route) => {
         const url = route.request().url()
-        
+
         if (url.includes('spreadsheets') && url.includes('values')) {
           // Mock sheet data response
           route.fulfill({
@@ -110,9 +111,9 @@ test.describe('Webhook System', () => {
               values: [
                 ['Tim', 'Preside', 'Exhort', 'Steward', 'Doorkeeper'],
                 ['2025-07-06', 'John Smith', 'David Johnson', 'Mike Brown', 'Tom Wilson'],
-                ['2025-07-13', 'Paul Davis', 'Steve Miller', 'James Taylor', 'Bob Anderson']
-              ]
-            })
+                ['2025-07-13', 'Paul Davis', 'Steve Miller', 'James Taylor', 'Bob Anderson'],
+              ],
+            }),
           })
         } else if (url.includes('spreadsheets') && url.includes('properties')) {
           // Mock sheet metadata response
@@ -121,9 +122,9 @@ test.describe('Webhook System', () => {
             contentType: 'application/json',
             body: JSON.stringify({
               properties: {
-                title: 'Sunday Memorial Schedule - 2024'
-              }
-            })
+                title: 'Sunday Memorial Schedule - 2024',
+              },
+            }),
           })
         } else {
           route.continue()
@@ -131,7 +132,7 @@ test.describe('Webhook System', () => {
       })
 
       // Mock webhook processing
-      await page.route('**/api/sheets/webhook', route => {
+      await page.route('**/api/sheets/webhook', (route) => {
         if (route.request().method() === 'POST') {
           route.fulfill({
             status: 200,
@@ -140,8 +141,8 @@ test.describe('Webhook System', () => {
               success: true,
               message: 'Webhook processed successfully',
               debounced: true,
-              dataUpdated: true
-            })
+              dataUpdated: true,
+            }),
           })
         } else {
           route.continue()
@@ -150,20 +151,20 @@ test.describe('Webhook System', () => {
 
       // Navigate to home page (schedule page may not exist yet)
       await page.goto('/')
-      
+
       // Wait for page to load
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(2000)
 
       // Check that page loads successfully
       await expect(page.locator('text=404')).not.toBeVisible()
-      
+
       // Simulate webhook trigger (this would normally come from Google Sheets)
       const webhookPayload = {
         eventType: 'SHEET_CHANGED',
         sheetId: '1rRluyfllvMv50GRQ2ATmG7kVA_n-Pmyo_dxRFPYn0yg',
         changeType: 'UPDATE',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       }
 
       // The webhook would trigger in the background
@@ -172,7 +173,8 @@ test.describe('Webhook System', () => {
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(webhookPayload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
@@ -180,8 +182,8 @@ test.describe('Webhook System', () => {
         data: webhookPayload,
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': `sha256=${signature}`
-        }
+          'x-webhook-signature': `sha256=${signature}`,
+        },
       })
 
       expect(webhookResponse.status()).toBe(200)
@@ -193,33 +195,34 @@ test.describe('Webhook System', () => {
         sheetId: '1rRluyfllvMv50GRQ2ATmG7kVA_n-Pmyo_dxRFPYn0yg',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(payload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
       // Send multiple requests quickly to trigger rate limiting
-      const requests = Array.from({ length: 15 }, () => 
+      const requests = Array.from({ length: 15 }, () =>
         page.request.post('/api/sheets/webhook', {
           data: payload,
           headers: {
             'Content-Type': 'application/json',
-            'x-webhook-signature': `sha256=${signature}`
-          }
+            'x-webhook-signature': `sha256=${signature}`,
+          },
         })
       )
 
       const responses = await Promise.all(requests)
-      
+
       // All should succeed (rate limiting may not trigger in test environment)
-      const successCount = responses.filter(r => r.status() === 200).length
-      const rateLimitedCount = responses.filter(r => r.status() === 429).length
-      
+      const successCount = responses.filter((r) => r.status() === 200).length
+      const rateLimitedCount = responses.filter((r) => r.status() === 429).length
+
       expect(successCount).toBeGreaterThan(0)
       // Rate limiting might not trigger in test environment, so make this flexible
       expect(successCount + rateLimitedCount).toBe(15)
@@ -232,8 +235,8 @@ test.describe('Webhook System', () => {
         data: 'invalid-json',
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': 'sha256=invalid'
-        }
+          'x-webhook-signature': 'sha256=invalid',
+        },
       })
 
       expect(response.status()).toBe(400)
@@ -242,13 +245,14 @@ test.describe('Webhook System', () => {
     test('webhook handles missing required fields', async ({ page }) => {
       const payload = {
         // Missing required fields like eventType, sheetId
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       }
 
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(payload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
@@ -256,8 +260,8 @@ test.describe('Webhook System', () => {
         data: payload,
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': `sha256=${signature}`
-        }
+          'x-webhook-signature': `sha256=${signature}`,
+        },
       })
 
       expect(response.status()).toBe(400)
@@ -269,13 +273,14 @@ test.describe('Webhook System', () => {
         sheetId: 'unknown-sheet-id-12345',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(payload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
@@ -283,13 +288,13 @@ test.describe('Webhook System', () => {
         data: payload,
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': `sha256=${signature}`
-        }
+          'x-webhook-signature': `sha256=${signature}`,
+        },
       })
 
       // Should still accept the webhook (debouncing handles unknown sheets)
       expect(response.status()).toBe(200)
-      
+
       const data = await response.json()
       expect(data).toHaveProperty('success', true)
       expect(data).toHaveProperty('debounced', true)
@@ -303,13 +308,14 @@ test.describe('Webhook System', () => {
         sheetId: '1rRluyfllvMv50GRQ2ATmG7kVA_n-Pmyo_dxRFPYn0yg',
         changeType: 'UPDATE',
         timestamp: new Date().toISOString(),
-        test: true
+        test: true,
       }
 
       const crypto = require('crypto')
       const secret = 'tee-admin-webhook-secret-2025-change-in-production'
       const payloadString = JSON.stringify(payload)
-      const signature = crypto.createHmac('sha256', secret)
+      const signature = crypto
+        .createHmac('sha256', secret)
         .update(payloadString, 'utf8')
         .digest('hex')
 
@@ -319,27 +325,27 @@ test.describe('Webhook System', () => {
           data: payload,
           headers: {
             'Content-Type': 'application/json',
-            'x-webhook-signature': `sha256=${signature}`
-          }
+            'x-webhook-signature': `sha256=${signature}`,
+          },
         }),
         page.request.post('/api/sheets/webhook', {
           data: payload,
           headers: {
             'Content-Type': 'application/json',
-            'x-webhook-signature': `sha256=${signature}`
-          }
+            'x-webhook-signature': `sha256=${signature}`,
+          },
         }),
         page.request.post('/api/sheets/webhook', {
           data: payload,
           headers: {
             'Content-Type': 'application/json',
-            'x-webhook-signature': `sha256=${signature}`
-          }
-        })
+            'x-webhook-signature': `sha256=${signature}`,
+          },
+        }),
       ])
 
       // All should succeed but be debounced
-      responses.forEach(response => {
+      responses.forEach((response) => {
         expect(response.status()).toBe(200)
       })
 
@@ -351,11 +357,11 @@ test.describe('Webhook System', () => {
   test.describe('Integration with UI', () => {
     test('webhook system does not break existing navigation', async ({ page }) => {
       // Mock all Google API calls to prevent external dependencies
-      await page.route('**/googleapis.com/**', route => {
+      await page.route('**/googleapis.com/**', (route) => {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ values: [] })
+          body: JSON.stringify({ values: [] }),
         })
       })
 

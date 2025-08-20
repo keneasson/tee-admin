@@ -56,6 +56,19 @@ module.exports = function () {
     experimental: {
       scrollRestoration: true,
     },
+    // Ensure proper static asset serving in development
+    assetPrefix: process.env.NODE_ENV === 'production' ? undefined : '',
+    webpack: (config) => {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@my/app': join(__dirname, '../../packages/app'),
+        '@my/ui': join(__dirname, '../../packages/ui'),
+        '@my/config': join(__dirname, '../../packages/config'),
+        '@': join(__dirname, '.'),
+        '@/utils': join(__dirname, './utils'),
+      }
+      return config
+    },
     turbopack: {
       rules: {
         '*.ts': ['ts-loader'],
@@ -65,6 +78,8 @@ module.exports = function () {
         '@my/app': '../../packages/app',
         '@my/ui': '../../packages/ui',
         '@my/config': '../../packages/config',
+        '@': '.',
+        '@/utils': './utils',
       },
     },
   }

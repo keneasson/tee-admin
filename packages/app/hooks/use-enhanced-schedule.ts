@@ -78,7 +78,6 @@ export function useEnhancedSchedule(
 
   const fetchScheduleData = useCallback(async (loadMore = false, loadOlder = false, currentDataState?: Record<string, EnhancedScheduleEvent[]>) => {
     try {
-      console.log('fetchScheduleData called with:', { loadMore, loadOlder })
       setLoading(true)
       setError(null)
 
@@ -88,30 +87,18 @@ export function useEnhancedSchedule(
       // Always fetch only the current active tab's data
       const typesToFetch = [currentActiveTab || 'memorial']
       params.set('types', typesToFetch.join(','))
-      console.log('Fetching for single tab:', currentActiveTab || 'memorial')
       
       if (loadOlder) {
-        console.log('Loading older events')
-        
         // Use the passed currentDataState if provided, otherwise use the closure data
         const dataToUse = currentDataState || data
-        console.log('Current data state:', dataToUse)
-        console.log('Current data keys:', Object.keys(dataToUse))
-        console.log('Current active tab:', currentActiveTab)
-        console.log('Types to fetch:', typesToFetch)
         
         // Get the current earliest date from the ACTIVE TAB only (not all schedule types)
         const activeTab = currentActiveTab || 'memorial'
         const currentEvents = activeTab && dataToUse[activeTab] ? dataToUse[activeTab] : []
         
-        console.log('Active tab determined as:', activeTab)
-        console.log('Current events for active tab:', currentEvents.length)
-        console.log('Sample dates from current events:', currentEvents.slice(0, 3).map(e => e.date))
-        
         let earliestDate: string
         
         if (currentEvents.length === 0) {
-          console.log('No current events for active tab, loading older events from today')
           // If no current events, load older events from today backwards
           earliestDate = fromDate
         } else {
@@ -121,9 +108,6 @@ export function useEnhancedSchedule(
             currentEvents[0].date
           )
         }
-        
-        console.log('Earliest date found:', earliestDate)
-        console.log('Current events count for active tab:', currentEvents.length)
         
         // Load events strictly before the earliest date (no overlap)
         params.set('toDate', earliestDate) // Up to but not including the earliest date
@@ -150,12 +134,6 @@ export function useEnhancedSchedule(
       }
 
       const result: EnhancedScheduleResponse = await response.json()
-      
-      if (loadOlder) {
-        console.log('API response for older events:', result)
-        const totalOlderEvents = Object.values(result.data).reduce((sum, events) => sum + events.length, 0)
-        console.log('Total older events received:', totalOlderEvents)
-      }
 
       // Handle API error response
       if ('error' in result) {
@@ -182,11 +160,9 @@ export function useEnhancedSchedule(
               )
               // Sort chronologically (oldest first) - this is our single source of truth
               newData[activeTab] = uniqueEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-              console.log(`${activeTab}: Combined ${newData[activeTab].length} events, oldest: ${newData[activeTab][0]?.date}, newest: ${newData[activeTab][newData[activeTab].length - 1]?.date}`)
             } else {
               // If no existing data, just add the new older events (sorted chronologically)
               newData[activeTab] = result.data[activeTab].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-              console.log(`${activeTab}: Added ${newData[activeTab].length} older events (no existing data)`)
             }
           }
           
@@ -229,10 +205,7 @@ export function useEnhancedSchedule(
 
   // Load older function for historical data
   const loadOlder = useCallback(async () => {
-    console.log('loadOlder called, hasOlder:', hasOlder, 'loading:', loading)
     if (!hasOlder || loading) return
-    
-    console.log('About to call fetchScheduleData(false, true)')
     // Get the current data state at the time of calling
     setData(currentData => {
       // Call fetchScheduleData with the current data state
@@ -243,7 +216,6 @@ export function useEnhancedSchedule(
 
   // Switch to specific tab - fetch only that tab's data
   const switchToTab = useCallback(async (tabKey: string) => {
-    console.log('switchToTab called with:', tabKey)
     setCurrentActiveTab(tabKey)
     // Clear existing data for clean switch
     setData({})

@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
           </Button>
         </YStack>
       </YStack>
-    );
+    )
   }
 
   return (
@@ -141,5 +141,5 @@ export default function ForgotPasswordPage() {
         </YStack>
       </form>
     </YStack>
-  );
+  )
 }

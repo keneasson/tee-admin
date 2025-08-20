@@ -18,6 +18,7 @@
   "dependencies": {
     "@auth/dynamodb-adapter": "^2.7.4",
     "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/client-s3": "^3.844.0",
     "@aws-sdk/client-sesv2": "^3.750.0",
     "@aws-sdk/credential-provider-node": "^3.750.0",
     "@aws-sdk/lib-dynamodb": "^3.750.0",
@@ -28,6 +29,7 @@
     "bcryptjs": "^3.0.2",
     "google-auth-library": "^9.15.0",
     "google-spreadsheet": "^4.1.4",
+    "nanoid": "^5.1.5",
     "next": "15.3.4",
     "next-auth": "^5.0.0-beta.29",
     "nodemailer": "^6.10.0",
@@ -40,15 +42,23 @@
     "vercel": "^39.2.2"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@playwright/test": "^1.53.1",
     "@tamagui/next-plugin": "^1.129.11",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20.14.15",
     "@types/nodemailer": "^6.4.15",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
     "@vitest/ui": "^3.2.4",
     "eslint-config-next": "^14.2.3",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.5.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "next-compose-plugins": "^2.2.1",
     "next-transpile-modules": "^10.0.1",
+    "prettier": "^3.6.2",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

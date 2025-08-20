@@ -18,7 +18,9 @@ test.describe('Password Reset Flow', () => {
 
       // Check page elements
       await expect(page.getByRole('heading', { name: 'Forgot Password' })).toBeVisible()
-      await expect(page.getByText('Enter your email address and we\'ll send you instructions')).toBeVisible()
+      await expect(
+        page.getByText("Enter your email address and we'll send you instructions")
+      ).toBeVisible()
       await expect(page.getByLabel('Email Address')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Send Reset Instructions' })).toBeVisible()
       await expect(page.getByText('Back to Sign In')).toBeVisible()
@@ -84,7 +86,9 @@ test.describe('Password Reset Flow', () => {
 
       // Should show invalid link message
       await expect(page.getByRole('heading', { name: 'Invalid Reset Link' })).toBeVisible()
-      await expect(page.getByText('This password reset link is invalid or has expired')).toBeVisible()
+      await expect(
+        page.getByText('This password reset link is invalid or has expired')
+      ).toBeVisible()
       await expect(page.getByRole('button', { name: 'Request New Reset Link' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Back to Sign In' })).toBeVisible()
     })
@@ -192,16 +196,16 @@ test.describe('Password Reset Flow', () => {
 
       // Initially should be hidden (secureTextEntry)
       await passwordField.fill('testpassword')
-      
+
       // Click to show password
       await toggleButton.click()
-      
+
       // Button should change to hide password
       await expect(page.locator('[aria-label="Hide password"]').first()).toBeVisible()
-      
+
       // Click to hide password again
       await page.locator('[aria-label="Hide password"]').first().click()
-      
+
       // Button should change back to show password
       await expect(page.locator('[aria-label="Show password"]').first()).toBeVisible()
     })
@@ -277,7 +281,7 @@ test.describe('Password Reset Flow', () => {
 
       // Check form labels
       await expect(page.getByLabel('Email Address')).toBeVisible()
-      
+
       // Check button accessibility
       const submitButton = page.getByRole('button', { name: 'Send Reset Instructions' })
       await expect(submitButton).toBeVisible()

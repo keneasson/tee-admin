@@ -304,7 +304,7 @@ export function ResponsiveDataTable<TData>({
 
       {/* Pagination Footer */}
       <XStack gap="$2" alignItems="center" justifyContent="space-between">
-        <XStack gap="$2" alignItems="center">
+        <XStack gap="$2" alignItems="center" $sm={{ display: 'none' }}>
           <Text fontSize="$3" color={colors.textSecondary}>
             Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
             {Math.min(

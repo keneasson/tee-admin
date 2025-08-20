@@ -21,9 +21,8 @@ export const NewsletterScreen: React.FC = () => {
     // Only fetch data after hydration to prevent hydration mismatches
     if (!isHydrated) return
     
-    console.log('in useEffect', { program, readings })
     Promise.all([fetchUpcoming({}).then(setProgram), fetchReadings().then(setReadings)]).catch(
-      (error) => console.log('error fetching data', error)
+      (error) => console.error('Error fetching newsletter data:', error)
     )
   }, [isHydrated])
 

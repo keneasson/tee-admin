@@ -2,12 +2,8 @@
   "installCommand": "cd ../.. && yarn install",
   "crons": [
     {
-      "path": "/api/email/bible-class",
-      "schedule": "0 17 * * 3"
-    },
-    {
-      "path": "/api/email/recap",
-      "schedule": "0 18 * * 6"
+      "path": "/api/email/queue-processor",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -12,21 +12,21 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 
 export function validatePassword(password: string): { isValid: boolean; errors: string[] } {
   const errors: string[] = []
-  
+
   // Minimum 12 characters
   if (password.length < 12) {
     errors.push('Password must be at least 12 characters long')
   }
-  
+
   // Encourage spaces but don't require them
   if (!password.includes(' ')) {
     // This is a warning, not an error - we encourage but don't require spaces
     // Could be shown as a helpful tip in the UI
   }
-  
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
   }
 }
 

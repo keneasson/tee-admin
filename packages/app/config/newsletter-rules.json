@@ -1,0 +1,209 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-19T00:00:00.000Z",
+  "description": "Newsletter Assembly Rules Configuration - defines automatic content inclusion and formatting rules",
+  
+  "mandatoryContent": {
+    "sunday": {
+      "memorial": {
+        "alwaysInclude": true,
+        "time": "11:00 AM",
+        "requiredFields": ["preside", "exhort", "organist", "steward", "doorkeeper"],
+        "exceptions": [
+          {
+            "reason": "Toronto North Study Day",
+            "alternateMessage": "No Memorial Service - Toronto North Study Day",
+            "datePattern": "study-day-weekend"
+          },
+          {
+            "reason": "Easter Fraternal Gathering", 
+            "alternateMessage": "No Memorial Service - Easter Fraternal Gathering",
+            "datePattern": "easter-weekend"
+          }
+        ]
+      },
+      "sundaySchool": {
+        "schedule": "September to June",
+        "time": "9:30 AM",
+        "requiredFields": ["refreshments"],
+        "seasonalRules": {
+          "active": {
+            "months": [9, 10, 11, 12, 1, 2, 3, 4, 5, 6],
+            "message": "Sunday School at 9:30am"
+          },
+          "inactive": {
+            "months": [7, 8],
+            "message": "No Sunday School during summer months"
+          }
+        }
+      }
+    },
+    "bibleClass": {
+      "alwaysInclude": true,
+      "schedule": "Wednesday/Thursday 7:30 PM",
+      "platform": "Zoom",
+      "requiredFields": ["speaker", "topic"],
+      "defaultLocation": "Zoom Meeting"
+    },
+    "standingEvents": {
+      "bibleEffectively": {
+        "title": "Learn To Read The Bible Effectively",
+        "schedule": "Every Monday 7:00-8:30 PM at the Hall",
+        "description": "Please join us for our seminars: Learn to Read the Bible Effectively. All welcome!",
+        "alwaysInclude": true,
+        "priority": 3
+      }
+    }
+  },
+
+  "eventTypes": {
+    "study-weekend": {
+      "displayDuration": "until_event_date",
+      "priority": 10,
+      "includeInSummary": true,
+      "maxSummaryLength": 200,
+      "requiresCTA": true,
+      "ctaText": "Full Details & Registration",
+      "showFullContent": false
+    },
+    "funeral": {
+      "displayDuration": "3_weeks_from_first_inclusion",
+      "priority": 8,
+      "includeInSummary": false,
+      "showFullContent": true,
+      "requiresCTA": false
+    },
+    "wedding": {
+      "displayDuration": "3_weeks_or_until_event_date",
+      "priority": 7,
+      "includeInSummary": true,
+      "maxSummaryLength": 150,
+      "showFullContent": false,
+      "requiresCTA": false
+    },
+    "baptism": {
+      "displayDuration": "1_week_after_event",
+      "priority": 9,
+      "includeInSummary": false,
+      "showFullContent": true,
+      "requiresCTA": false
+    },
+    "youth-activity": {
+      "displayDuration": "until_event_date",
+      "priority": 6,
+      "includeInSummary": true,
+      "maxSummaryLength": 150,
+      "showFullContent": false,
+      "requiresCTA": false
+    },
+    "general": {
+      "displayDuration": "until_event_date",
+      "priority": 5,
+      "includeInSummary": true,
+      "maxSummaryLength": 150,
+      "showFullContent": false,
+      "requiresCTA": false
+    },
+    "fraternal": {
+      "displayDuration": "until_event_date",
+      "priority": 8,
+      "includeInSummary": true,
+      "maxSummaryLength": 200,
+      "requiresCTA": true,
+      "ctaText": "Registration & Details",
+      "showFullContent": false
+    },
+    "bible-school": {
+      "displayDuration": "until_event_date",
+      "priority": 10,
+      "includeInSummary": true,
+      "maxSummaryLength": 200,
+      "requiresCTA": true,
+      "ctaText": "Registration & Full Program",
+      "showFullContent": false
+    }
+  },
+
+  "contentOrdering": [
+    "daily_readings",
+    "this_week_bible_class", 
+    "next_week_bible_class",
+    "this_sunday_services",
+    "next_sunday_services",
+    "priority_events_desc",
+    "standing_events"
+  ],
+
+  "displayRules": {
+    "bibleReadings": {
+      "startDay": "friday",
+      "daysToShow": 7,
+      "format": "table",
+      "columns": ["date", "reading1", "reading2", "reading3"],
+      "mobileFormat": "stacked"
+    },
+    "eventSummary": {
+      "truncateAt": "maxSummaryLength",
+      "truncationSuffix": "...",
+      "linkText": "Read More"
+    }
+  },
+
+  "validation": {
+    "requiredFields": {
+      "memorial": ["preside", "exhort", "organist", "steward", "doorkeeper"],
+      "sundaySchool": ["refreshments"],
+      "bibleClass": ["speaker", "topic"]
+    },
+    "notifications": {
+      "missingFields": {
+        "enabled": true,
+        "method": "email_admin",
+        "threshold": "any_missing"
+      },
+      "unusualPatterns": {
+        "enabled": true,
+        "method": "email_admin",
+        "patterns": [
+          "no_memorial_two_weeks_consecutive",
+          "no_bible_class_scheduled",
+          "no_events_upcoming"
+        ]
+      }
+    },
+    "completenessThresholds": {
+      "excellent": 95,
+      "good": 85,
+      "acceptable": 75,
+      "poor": 50
+    }
+  },
+
+  "emailSettings": {
+    "maxTotalLength": 5000,
+    "sectionsMaxLength": {
+      "dailyReadings": 800,
+      "regularServices": 1500,
+      "events": 2000,
+      "standingContent": 700
+    },
+    "formatting": {
+      "useHtml": true,
+      "includeImages": false,
+      "responsive": true
+    }
+  },
+
+  "fallbackRules": {
+    "missingData": {
+      "memorial": "Check arrangements with hall coordinator",
+      "bibleClass": "Bible Class details to be confirmed",
+      "events": "No special events this week"
+    },
+    "dataSourceFailure": {
+      "primary": "dynamodb",
+      "fallback": "google_sheets",
+      "emergency": "manual_override"
+    }
+  }
+}

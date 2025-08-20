@@ -1,5 +1,5 @@
 import React, { useEffect, useState, ReactNode } from 'react'
-import { TamaguiProvider, TamaguiProviderProps } from 'tamagui'
+import { TamaguiProvider, TamaguiProviderProps, Theme } from 'tamagui'
 import { useThemeContext } from './theme-provider'
 
 export interface ThemeAwareProviderProps extends Omit<TamaguiProviderProps, 'defaultTheme'> {
@@ -14,7 +14,9 @@ export const ThemeAwareProvider: React.FC<ThemeAwareProviderProps> = ({
   
   return (
     <TamaguiProvider {...props} defaultTheme={theme}>
-      {children}
+      <Theme name={theme}>
+        {children}
+      </Theme>
     </TamaguiProvider>
   )
 }

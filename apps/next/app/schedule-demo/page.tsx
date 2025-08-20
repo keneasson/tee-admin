@@ -30,7 +30,7 @@ export default function ScheduleDemoPage() {
         id: 'mem-1',
         date: new Date().toISOString().split('T')[0],
         time: '11:00 AM', // Kept for data consistency
-        event: 'Memorial Service', // Kept for data consistency  
+        event: 'Memorial Service', // Kept for data consistency
         presider: 'John Smith',
         speaker: 'David Brown',
         steward: 'Michael Wilson',
@@ -141,20 +141,21 @@ export default function ScheduleDemoPage() {
       <YStack gap="$4">
         <H1>Enhanced Schedule Table Demo</H1>
         <Text color="$textSecondary" fontSize="$4">
-          Production-ready schedule table with horizontal tabs, responsive design, and full feature set.
-          The table uses horizontal layout everywhere except very small screens (under 660px) where it switches to cards.
+          Production-ready schedule table with horizontal tabs, responsive design, and full feature
+          set. The table uses horizontal layout everywhere except very small screens (under 660px)
+          where it switches to cards.
         </Text>
       </YStack>
-      
+
       <Separator />
-      
+
       {/* Enhanced Schedule Table */}
       <YStack gap="$4">
         <H2>Interactive Schedule System</H2>
         <Text color="$textSecondary" fontSize="$3">
           Full-featured schedule management with all requested improvements implemented.
         </Text>
-        
+
         <View
           borderWidth={1}
           borderColor="$border"
@@ -170,69 +171,148 @@ export default function ScheduleDemoPage() {
             activeTab="memorial"
           />
         </View>
-        
+
         <YStack gap="$2">
-          <Text fontSize="$3" fontWeight="600">Key Features:</Text>
+          <Text fontSize="$3" fontWeight="600">
+            Key Features:
+          </Text>
           <YStack gap="$1" paddingLeft="$3">
-            <Text fontSize="$2">• <Text fontWeight="600" color="green">Horizontal Tab Navigation</Text> - Switch between schedule types</Text>
-            <Text fontSize="$2">• <Text fontWeight="600" color="green">Next Event Indicators</Text> - Green badges for ongoing/upcoming events</Text>
-            <Text fontSize="$2">• <Text fontWeight="600" color="blue">User Highlighting</Text> - Blue backgrounds for "John Smith" responsibilities</Text>
-            <Text fontSize="$2">• <Text fontWeight="600" color="orange">Conflict Detection</Text> - Orange badges for scheduling conflicts</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Search & Filter</Text> - Real-time search across all data</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Sorting</Text> - Click column headers to sort data</Text>
-            <Text fontSize="$2">• <Text fontWeight="600" color="orange">Column Visibility</Text> - Coming soon (fixing animation conflicts)</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Pagination</Text> - Navigate through events (10-100 rows per page)</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Responsive Design</Text> - Horizontal table everywhere, cards only under 660px</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Full Width</Text> - Table stretches to available space</Text>
-            <Text fontSize="$2">• <Text fontWeight="600">Clean Columns</Text> - Only Date, Presider, Speaker, Steward (no redundant info)</Text>
+            <Text fontSize="$2">
+              •{' '}
+              <Text fontWeight="600" color="green">
+                Horizontal Tab Navigation
+              </Text>{' '}
+              - Switch between schedule types
+            </Text>
+            <Text fontSize="$2">
+              •{' '}
+              <Text fontWeight="600" color="green">
+                Next Event Indicators
+              </Text>{' '}
+              - Green badges for ongoing/upcoming events
+            </Text>
+            <Text fontSize="$2">
+              •{' '}
+              <Text fontWeight="600" color="blue">
+                User Highlighting
+              </Text>{' '}
+              - Blue backgrounds for "John Smith" responsibilities
+            </Text>
+            <Text fontSize="$2">
+              •{' '}
+              <Text fontWeight="600" color="orange">
+                Conflict Detection
+              </Text>{' '}
+              - Orange badges for scheduling conflicts
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Search & Filter</Text> - Real-time search across all data
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Sorting</Text> - Click column headers to sort data
+            </Text>
+            <Text fontSize="$2">
+              •{' '}
+              <Text fontWeight="600" color="orange">
+                Column Visibility
+              </Text>{' '}
+              - Coming soon (fixing animation conflicts)
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Pagination</Text> - Navigate through events (10-100 rows per
+              page)
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Responsive Design</Text> - Horizontal table everywhere, cards
+              only under 660px
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Full Width</Text> - Table stretches to available space
+            </Text>
+            <Text fontSize="$2">
+              • <Text fontWeight="600">Clean Columns</Text> - Only Date, Presider, Speaker, Steward
+              (no redundant info)
+            </Text>
           </YStack>
         </YStack>
       </YStack>
-      
+
       <Separator />
-      
+
       {/* Technical Details */}
       <YStack gap="$4">
         <H2>Technical Implementation</H2>
         <YStack gap="$3">
           <YStack gap="$2">
-            <Text fontSize="$4" fontWeight="600">Responsive Breakpoints:</Text>
+            <Text fontSize="$4" fontWeight="600">
+              Responsive Breakpoints:
+            </Text>
             <YStack gap="$1" paddingLeft="$3">
-              <Text fontSize="$2">• <Text fontWeight="600">660px and above</Text> - Horizontal table layout (preferred)</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">Under 660px</Text> - Card layout for readability on small screens</Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">660px and above</Text> - Horizontal table layout
+                (preferred)
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Under 660px</Text> - Card layout for readability on small
+                screens
+              </Text>
             </YStack>
           </YStack>
-          
+
           <YStack gap="$2">
-            <Text fontSize="$4" fontWeight="600">Cross-Platform Ready:</Text>
+            <Text fontSize="$4" fontWeight="600">
+              Cross-Platform Ready:
+            </Text>
             <YStack gap="$1" paddingLeft="$3">
-              <Text fontSize="$2">• <Text fontWeight="600">Web Compatible</Text> - Works in all modern browsers</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">React Native Ready</Text> - Full mobile app compatibility</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">Tamagui Integration</Text> - Uses your brand color system</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">TypeScript Safe</Text> - Full type checking and IntelliSense</Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Web Compatible</Text> - Works in all modern browsers
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">React Native Ready</Text> - Full mobile app compatibility
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Tamagui Integration</Text> - Uses your brand color system
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">TypeScript Safe</Text> - Full type checking and
+                IntelliSense
+              </Text>
             </YStack>
           </YStack>
-          
+
           <YStack gap="$2">
-            <Text fontSize="$4" fontWeight="600">Performance Optimized:</Text>
+            <Text fontSize="$4" fontWeight="600">
+              Performance Optimized:
+            </Text>
             <YStack gap="$1" paddingLeft="$3">
-              <Text fontSize="$2">• <Text fontWeight="600">TanStack Table v8.21.3</Text> - Industry-standard performance</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">Virtual Scrolling Ready</Text> - Can handle large datasets</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">Memoized Rendering</Text> - Optimized re-renders</Text>
-              <Text fontSize="$2">• <Text fontWeight="600">Lazy Loading Support</Text> - Progressive data loading</Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">TanStack Table v8.21.3</Text> - Industry-standard
+                performance
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Virtual Scrolling Ready</Text> - Can handle large datasets
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Memoized Rendering</Text> - Optimized re-renders
+              </Text>
+              <Text fontSize="$2">
+                • <Text fontWeight="600">Lazy Loading Support</Text> - Progressive data loading
+              </Text>
             </YStack>
           </YStack>
         </YStack>
       </YStack>
-      
+
       <Separator />
-      
+
       {/* Next Steps */}
       <YStack gap="$4">
         <H2>Implementation Status</H2>
         <YStack gap="$3">
           <YStack gap="$2">
-            <Text fontSize="$4" fontWeight="600" color="green">✅ Phase 1 Complete</Text>
+            <Text fontSize="$4" fontWeight="600" color="green">
+              ✅ Phase 1 Complete
+            </Text>
             <YStack gap="$1" paddingLeft="$3">
               <Text fontSize="$2">• TanStack Table + Tamagui integration</Text>
               <Text fontSize="$2">• Horizontal tab navigation system</Text>
@@ -242,9 +322,11 @@ export default function ScheduleDemoPage() {
               <Text fontSize="$2">• Cross-platform compatibility verified</Text>
             </YStack>
           </YStack>
-          
+
           <YStack gap="$2">
-            <Text fontSize="$4" fontWeight="600" color="orange">🔄 Ready for Phase 2</Text>
+            <Text fontSize="$4" fontWeight="600" color="orange">
+              🔄 Ready for Phase 2
+            </Text>
             <YStack gap="$1" paddingLeft="$3">
               <Text fontSize="$2">• Integration with existing schedule data sources</Text>
               <Text fontSize="$2">• Real-time "Next Event" logic with live data</Text>
@@ -256,20 +338,41 @@ export default function ScheduleDemoPage() {
           </YStack>
         </YStack>
       </YStack>
-      
+
       <Separator />
-      
+
       {/* Testing Instructions */}
       <YStack gap="$2" padding="$4" backgroundColor="$backgroundSecondary" borderRadius="$4">
-        <Text fontSize="$3" fontWeight="600">Testing Instructions</Text>
+        <Text fontSize="$3" fontWeight="600">
+          Testing Instructions
+        </Text>
         <YStack gap="$1">
-          <Text fontSize="$2">1. <Text fontWeight="600">Try different tabs</Text> - Click Memorial, Sunday School, Bible Class, CYC</Text>
-          <Text fontSize="$2">2. <Text fontWeight="600">Test search</Text> - Search for "John Smith" to see highlighting</Text>
-          <Text fontSize="$2">3. <Text fontWeight="600">Click column headers</Text> - Sort by Date, Time, Event, etc.</Text>
-          <Text fontSize="$2">4. <Text fontWeight="600">Column visibility</Text> - Coming soon (fixing Tamagui conflicts)</Text>
-          <Text fontSize="$2">5. <Text fontWeight="600">Resize browser</Text> - See responsive behavior (horizontal → cards)</Text>
-          <Text fontSize="$2">6. <Text fontWeight="600">Look for badges</Text> - Green "Next", Orange "Conflict", Blue highlighting</Text>
-          <Text fontSize="$2">7. <Text fontWeight="600">Test pagination</Text> - Navigate between pages of data</Text>
+          <Text fontSize="$2">
+            1. <Text fontWeight="600">Try different tabs</Text> - Click Memorial, Sunday School,
+            Bible Class, CYC
+          </Text>
+          <Text fontSize="$2">
+            2. <Text fontWeight="600">Test search</Text> - Search for "John Smith" to see
+            highlighting
+          </Text>
+          <Text fontSize="$2">
+            3. <Text fontWeight="600">Click column headers</Text> - Sort by Date, Time, Event, etc.
+          </Text>
+          <Text fontSize="$2">
+            4. <Text fontWeight="600">Column visibility</Text> - Coming soon (fixing Tamagui
+            conflicts)
+          </Text>
+          <Text fontSize="$2">
+            5. <Text fontWeight="600">Resize browser</Text> - See responsive behavior (horizontal →
+            cards)
+          </Text>
+          <Text fontSize="$2">
+            6. <Text fontWeight="600">Look for badges</Text> - Green "Next", Orange "Conflict", Blue
+            highlighting
+          </Text>
+          <Text fontSize="$2">
+            7. <Text fontWeight="600">Test pagination</Text> - Navigate between pages of data
+          </Text>
         </YStack>
       </YStack>
     </YStack>

@@ -24,36 +24,35 @@ export async function getUserFromDynamoDB(email: string): Promise<DBUser | null>
   try {
     const dbClient = new DynamoDBClient(dbClientConfig)
     const docClient = DynamoDBDocumentClient.from(dbClient)
-    
+
     // Scan for user by email (since email might not be the primary key)
     const params = {
       TableName: nextAuthDynamoDb.tableName,
       FilterExpression: 'email = :email',
       ExpressionAttributeValues: {
-        ':email': email
-      }
+        ':email': email,
+      },
     }
-    
+
     const scanCommand = new ScanCommand(params)
     const result = await docClient.send(scanCommand)
-    
+
     if (result.Items && result.Items.length > 0) {
       const item = result.Items[0]
       console.log('✅ Found user in DynamoDB:', { email, role: item.role })
-      
+
       return {
         id: item.id,
         email: item.email,
         name: item.name,
         role: item.role,
         ecclesia: item.ecclesia,
-        profile: item.profile
+        profile: item.profile,
       }
     }
-    
+
     console.log('📂 No user found in DynamoDB for:', email)
     return null
-    
   } catch (error) {
     console.error('❌ Error querying DynamoDB:', error)
     return null

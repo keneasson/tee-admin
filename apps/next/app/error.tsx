@@ -21,7 +21,7 @@ export default function Error({ error, reset }: ErrorProps) {
         justifyContent: 'center',
         height: '100vh',
         backgroundColor: '#FFFFFF',
-        padding: '16px'
+        padding: '16px',
       }}
     >
       <div
@@ -35,28 +35,33 @@ export default function Error({ error, reset }: ErrorProps) {
           borderRadius: '8px',
           border: '1px solid #E5E7EB',
           maxWidth: '500px',
-          textAlign: 'center'
+          textAlign: 'center',
         }}
       >
         <div style={{ fontSize: '48px' }}>⚠️</div>
-        
+
         <div>
-          <h1 style={{ 
-            margin: '0 0 8px 0', 
-            fontSize: '24px', 
-            fontWeight: 'bold',
-            color: '#111827'
-          }}>
+          <h1
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: '#111827',
+            }}
+          >
             Something went wrong
           </h1>
-          
-          <p style={{ 
-            margin: '0', 
-            fontSize: '16px',
-            color: '#6B7280',
-            lineHeight: '1.5'
-          }}>
-            An unexpected error occurred. You can try refreshing the page or contact support if the problem persists.
+
+          <p
+            style={{
+              margin: '0',
+              fontSize: '16px',
+              color: '#6B7280',
+              lineHeight: '1.5',
+            }}
+          >
+            An unexpected error occurred. You can try refreshing the page or contact support if the
+            problem persists.
           </p>
         </div>
 
@@ -72,7 +77,7 @@ export default function Error({ error, reset }: ErrorProps) {
               fontSize: '12px',
               color: '#6B7280',
               textAlign: 'left',
-              overflow: 'auto'
+              overflow: 'auto',
             }}
           >
             {error.message}
@@ -94,7 +99,7 @@ export default function Error({ error, reset }: ErrorProps) {
             padding: '12px 24px',
             fontSize: '14px',
             fontWeight: '600',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Try again

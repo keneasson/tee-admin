@@ -4,14 +4,7 @@ import React, { useState } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import Link from 'next/link'
 
-import {
-  YStack,
-  Text,
-  Heading,
-  Button,
-  Paragraph,
-  FormInput,
-} from '@my/ui'
+import { YStack, Text, Heading, Button, Paragraph, FormInput } from '@my/ui'
 
 import { useHydrated } from '../../../utils/hooks'
 
@@ -47,7 +40,9 @@ export default function ResendVerificationPage() {
       const result = await response.json()
 
       if (response.ok) {
-        setMessage('If an unverified account with that email exists, we have sent verification instructions.')
+        setMessage(
+          'If an unverified account with that email exists, we have sent verification instructions.'
+        )
         setEmailSent(true)
       } else {
         setError(result.error || 'Failed to send verification email')
@@ -65,8 +60,12 @@ export default function ResendVerificationPage() {
   if (emailSent) {
     return (
       <YStack maxWidth={500} margin="auto" padding="$4" gap="$4" alignItems="center">
-        <Text fontSize="$10" color="$blue10">📧</Text>
-        <Heading size="$8" textAlign="center">Verification Email Sent</Heading>
+        <Text fontSize="$10" color="$blue10">
+          📧
+        </Text>
+        <Heading size="$8" textAlign="center">
+          Verification Email Sent
+        </Heading>
         <Paragraph color="$gray11" textAlign="center">
           {message}
         </Paragraph>
@@ -79,9 +78,9 @@ export default function ResendVerificationPage() {
               Back to Sign In
             </Button>
           </Link>
-          
-          <Button 
-            variant="outlined" 
+
+          <Button
+            variant="outlined"
             size="$4"
             onPress={() => {
               setEmailSent(false)
@@ -92,7 +91,7 @@ export default function ResendVerificationPage() {
           </Button>
         </YStack>
       </YStack>
-    );
+    )
   }
 
   return (
@@ -130,34 +129,20 @@ export default function ResendVerificationPage() {
           )}
 
           {/* Submit Button */}
-          <Button
-            size="$4"
-            disabled={loading}
-            theme="blue"
-          >
+          <Button size="$4" disabled={loading} theme="blue">
             {loading ? 'Sending...' : 'Resend Verification Email'}
           </Button>
 
           {/* Links */}
           <YStack gap="$2" alignItems="center">
             <Link href="/auth/signin" passHref legacyBehavior>
-              <Text
-                fontSize="$3"
-                color="$blue10"
-                textDecorationLine="underline"
-                cursor="pointer"
-              >
+              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
                 Back to Sign In
               </Text>
             </Link>
-            
+
             <Link href="/auth/register" passHref legacyBehavior>
-              <Text
-                fontSize="$3"
-                color="$gray11"
-                textDecorationLine="underline"
-                cursor="pointer"
-              >
+              <Text fontSize="$3" color="$gray11" textDecorationLine="underline" cursor="pointer">
                 Create new account
               </Text>
             </Link>
@@ -165,5 +150,5 @@ export default function ResendVerificationPage() {
         </YStack>
       </form>
     </YStack>
-  );
+  )
 }

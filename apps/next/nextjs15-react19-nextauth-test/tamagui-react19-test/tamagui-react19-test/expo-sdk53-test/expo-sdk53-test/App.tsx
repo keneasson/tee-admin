@@ -1,15 +1,15 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-import { useState } from 'react';
+import { StatusBar } from 'expo-status-bar'
+import { StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
 
 export default function App() {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(0)
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>✅ Expo SDK 53 + React 19 Test</Text>
       <Text style={styles.subtitle}>New Architecture Enabled</Text>
-      
+
       <View style={styles.infoContainer}>
         <Text style={styles.info}>Expo: 53.0.13</Text>
         <Text style={styles.info}>React: 19.0.0</Text>
@@ -18,17 +18,14 @@ export default function App() {
 
       <View style={styles.testContainer}>
         <Text style={styles.testText}>React Hooks Test: {count}</Text>
-        <Text 
-          style={styles.button} 
-          onPress={() => setCount(c => c + 1)}
-        >
+        <Text style={styles.button} onPress={() => setCount((c) => c + 1)}>
           Tap to increment
         </Text>
       </View>
-      
+
       <StatusBar style="auto" />
     </View>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -81,4 +78,4 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     fontSize: 16,
   },
-});
+})

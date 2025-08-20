@@ -1,5 +1,6 @@
 import React from 'react'
-import { H1, H2, Picture, useMedia } from '@my/ui'
+import { H2, Picture, useMedia, Text, XStack, useThemeName } from '@my/ui'
+import { brandColors } from '@my/ui/src/branding/brand-colors'
 
 type BannerProps = {
   pageTitle?: string
@@ -7,6 +8,10 @@ type BannerProps = {
 
 export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
   const media = useMedia()
+  const themeName = useThemeName()
+  const mode = themeName.includes('dark') ? 'dark' : 'light'
+  const colors = brandColors[mode]
+  
   const sized = media.gtMd
     ? {
         width: 74,
@@ -16,14 +21,14 @@ export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
         width: 54,
         height: 41,
       }
+  
   return (
     <>
-      <H1
-        ta="center"
-        $md={{ fontSize: 22 }}
-        $sm={{
-          marginTop: 32,
-        }}
+      <XStack 
+        alignItems="center" 
+        justifyContent="center" 
+        gap="$3"
+        marginTop={media.gtMd ? "$4" : "$6"}
       >
         <Picture
           source={{
@@ -32,12 +37,26 @@ export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
           }}
           alt={'Open Bible'}
         />
-        Toronto East Ecclesia
-      </H1>
+        <Text 
+          fontSize={media.gtMd ? 28 : 22} 
+          fontWeight="700" 
+          color={colors.textPrimary}
+          letterSpacing={0}
+          textAlign="center"
+        >
+          Toronto East Ecclesia
+        </Text>
+      </XStack>
       {pageTitle && (
-        <H2 ta="center" $md={{ fontSize: 18 }}>
+        <Text 
+          textAlign="center" 
+          fontSize={media.gtMd ? 20 : 18}
+          fontWeight="600"
+          color={colors.textSecondary}
+          marginTop="$2"
+        >
           {pageTitle}
-        </H2>
+        </Text>
       )}
     </>
   )

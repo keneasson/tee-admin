@@ -265,18 +265,16 @@ function RegisterPageContent() {
           )}
 
           {/* Submit Button */}
-          <Button
-            size="$4"
-            disabled={loading}
-            theme="blue"
-          >
+          <Button size="$4" disabled={loading} theme="blue">
             {loading ? 'Creating Account...' : 'Create Account'}
           </Button>
 
           {/* Divider */}
           <XStack alignItems="center" gap="$3">
             <Separator flex={1} />
-            <Text fontSize="$3" color="$gray11">or</Text>
+            <Text fontSize="$3" color="$gray11">
+              or
+            </Text>
             <Separator flex={1} />
           </XStack>
 
@@ -295,12 +293,7 @@ function RegisterPageContent() {
               Already have an account?
             </Text>
             <Link href="/auth/signin" passHref legacyBehavior>
-              <Text
-                fontSize="$3"
-                color="$blue10"
-                textDecorationLine="underline"
-                cursor="pointer"
-              >
+              <Text fontSize="$3" color="$blue10" textDecorationLine="underline" cursor="pointer">
                 Sign in
               </Text>
             </Link>
@@ -308,7 +301,7 @@ function RegisterPageContent() {
         </YStack>
       </form>
     </YStack>
-  );
+  )
 }
 
 export default function RegisterPage() {

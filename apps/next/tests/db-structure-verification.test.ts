@@ -45,9 +45,11 @@ describe('DynamoDB Configuration and Structure Tests', () => {
       ecclesia: 'TEE',
     })
 
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin'
-    }))
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+      })
+    )
   })
 
   it('should create correct primary key structure for users', async () => {
@@ -64,15 +66,17 @@ describe('DynamoDB Configuration and Structure Tests', () => {
       ecclesia: 'TEE',
     })
 
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      Item: expect.objectContaining({
-        pkey: `USER#${result.id}`,
-        skey: `USER#${result.id}`,
-        gsi1pk: 'USER#test@example.com',
-        gsi1sk: 'USER#test@example.com',
-        type: 'USER',
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Item: expect.objectContaining({
+          pkey: `USER#${result.id}`,
+          skey: `USER#${result.id}`,
+          gsi1pk: 'USER#test@example.com',
+          gsi1sk: 'USER#test@example.com',
+          type: 'USER',
+        }),
       })
-    }))
+    )
   })
 
   it('should create correct structure for verification tokens', async () => {
@@ -82,18 +86,20 @@ describe('DynamoDB Configuration and Structure Tests', () => {
 
     const token = await createEmailVerificationToken('test@example.com')
 
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Item: expect.objectContaining({
-        pkey: `VERIFY_TOKEN#${token}`,
-        skey: `VERIFY_TOKEN#${token}`,
-        type: 'VERIFICATION_TOKEN',
-        tokenType: 'email_verification',
-        email: 'test@example.com',
-        createdAt: expect.any(Date),
-        expiresAt: expect.any(Date),
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Item: expect.objectContaining({
+          pkey: `VERIFY_TOKEN#${token}`,
+          skey: `VERIFY_TOKEN#${token}`,
+          type: 'VERIFICATION_TOKEN',
+          tokenType: 'email_verification',
+          email: 'test@example.com',
+          createdAt: expect.any(Date),
+          expiresAt: expect.any(Date),
+        }),
       })
-    }))
+    )
   })
 
   it('should create correct structure for invitation codes', async () => {
@@ -109,18 +115,20 @@ describe('DynamoDB Configuration and Structure Tests', () => {
       createdBy: 'admin123',
     })
 
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Item: expect.objectContaining({
-        pkey: `INVITE_CODE#${code}`,
-        skey: `INVITE_CODE#${code}`,
-        type: 'INVITATION_CODE',
-        code,
-        used: false,
-        createdAt: expect.any(Date),
-        expiresAt: expect.any(Date),
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Item: expect.objectContaining({
+          pkey: `INVITE_CODE#${code}`,
+          skey: `INVITE_CODE#${code}`,
+          type: 'INVITATION_CODE',
+          code,
+          used: false,
+          createdAt: expect.any(Date),
+          expiresAt: expect.any(Date),
+        }),
       })
-    }))
+    )
   })
 
   it('should create correct structure for password reset tokens', async () => {
@@ -130,18 +138,20 @@ describe('DynamoDB Configuration and Structure Tests', () => {
 
     const token = await createPasswordResetToken('test@example.com')
 
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Item: expect.objectContaining({
-        pkey: `RESET_TOKEN#${token}`,
-        skey: `RESET_TOKEN#${token}`,
-        type: 'PASSWORD_RESET_TOKEN',
-        tokenType: 'password_reset',
-        email: 'test@example.com',
-        createdAt: expect.any(Date),
-        expiresAt: expect.any(Date),
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Item: expect.objectContaining({
+          pkey: `RESET_TOKEN#${token}`,
+          skey: `RESET_TOKEN#${token}`,
+          type: 'PASSWORD_RESET_TOKEN',
+          tokenType: 'password_reset',
+          email: 'test@example.com',
+          createdAt: expect.any(Date),
+          expiresAt: expect.any(Date),
+        }),
       })
-    }))
+    )
   })
 
   it('should use GSI1 for email lookups', async () => {
@@ -151,19 +161,21 @@ describe('DynamoDB Configuration and Structure Tests', () => {
 
     await findCredentialsUserByEmail('test@example.com')
 
-    expect(mockQuery).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'USER#test@example.com',
-      },
-    }))
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        ExpressionAttributeValues: {
+          ':pk': 'USER#test@example.com',
+        },
+      })
+    )
   })
 
   it('should verify AWS configuration is properly set up', async () => {
     const { getAwsConfig, getAwsDbConfig } = await import('../utils/email/sesClient')
-    
+
     const sesConfig = getAwsConfig()
     const dbConfig = getAwsDbConfig()
 
@@ -172,7 +184,7 @@ describe('DynamoDB Configuration and Structure Tests', () => {
     expect(dbConfig).toBeDefined()
     expect(sesConfig.region).toBe('ca-central-1')
     expect(dbConfig.region).toBe('ca-central-1')
-    
+
     // Check that credentials structure is correct
     expect(sesConfig.credentials).toBeDefined()
     expect(dbConfig.credentials).toBeDefined()
@@ -209,26 +221,30 @@ describe('DynamoDB Configuration and Structure Tests', () => {
     expect(result).toEqual({ email: mockEmail })
 
     // Verify user was updated
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Key: {
-        pkey: `USER#${mockUserId}`,
-        skey: `USER#${mockUserId}`,
-      },
-      UpdateExpression: 'SET emailVerified = :now',
-      ExpressionAttributeValues: {
-        ':now': expect.any(Date),
-      },
-    }))
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Key: {
+          pkey: `USER#${mockUserId}`,
+          skey: `USER#${mockUserId}`,
+        },
+        UpdateExpression: 'SET emailVerified = :now',
+        ExpressionAttributeValues: {
+          ':now': expect.any(Date),
+        },
+      })
+    )
 
     // Verify token was deleted
-    expect(mockDelete).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Key: {
-        pkey: `VERIFY_TOKEN#${mockToken}`,
-        skey: `VERIFY_TOKEN#${mockToken}`,
-      },
-    }))
+    expect(mockDelete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Key: {
+          pkey: `VERIFY_TOKEN#${mockToken}`,
+          skey: `VERIFY_TOKEN#${mockToken}`,
+        },
+      })
+    )
   })
 
   it('should validate required environment variables', () => {

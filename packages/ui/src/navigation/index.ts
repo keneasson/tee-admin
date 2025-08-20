@@ -2,7 +2,7 @@
 export * from './enhanced-navigation-button'
 export * from './navigation-group'
 export * from './role-based-navigation'
-export * from './collapsible-navigation'
+export { CollapsibleNavigation, NavigationContainer } from './collapsible-navigation'
 export * from './navigation-feature-gate'
 export * from './navigation-showcase'
 

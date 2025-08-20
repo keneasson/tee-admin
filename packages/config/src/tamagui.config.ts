@@ -54,8 +54,8 @@ const bodyFont = createInterFont(
 export const config = createTamagui({
   defaultFont: 'body',
   animations,
-  shouldAddPrefersColorThemes: true,
-  themeClassNameOnRoot: true,
+  shouldAddPrefersColorThemes: false, // Disable browser preference override
+  themeClassNameOnRoot: false, // Let our theme provider handle root theming
 
   // highly recommended to turn this on if you are using shorthands
   // to avoid having multiple valid style keys that do the same thing

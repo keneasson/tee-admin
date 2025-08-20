@@ -6,16 +6,16 @@ const mockScan = vi.fn()
 const mockSend = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => ({
-  DynamoDBClient: vi.fn(() => ({}))
+  DynamoDBClient: vi.fn(() => ({})),
 }))
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: {
     from: vi.fn(() => ({
-      send: mockSend
-    }))
+      send: mockSend,
+    })),
   },
-  ScanCommand: vi.fn((params) => ({ params }))
+  ScanCommand: vi.fn((params) => ({ params })),
 }))
 
 describe('DynamoDB User Integration', () => {
@@ -27,20 +27,22 @@ describe('DynamoDB User Integration', () => {
   describe('getUserFromDynamoDB', () => {
     it('should find user with owner role', async () => {
       mockSend.mockResolvedValueOnce({
-        Items: [{
-          id: 'user-123',
-          email: 'ken.easson@gmail.com',
-          name: 'Ken Easson',
-          role: 'owner',
-          ecclesia: 'TEE',
-          profile: {
-            fname: 'Ken',
-            lname: 'Easson',
-            phone: '647-393-3153',
-            address: '28 Plumridge Crt',
-            children: 'Krystal, Zaiden'
-          }
-        }]
+        Items: [
+          {
+            id: 'user-123',
+            email: 'ken.easson@gmail.com',
+            name: 'Ken Easson',
+            role: 'owner',
+            ecclesia: 'TEE',
+            profile: {
+              fname: 'Ken',
+              lname: 'Easson',
+              phone: '647-393-3153',
+              address: '28 Plumridge Crt',
+              children: 'Krystal, Zaiden',
+            },
+          },
+        ],
       })
 
       const user = await getUserFromDynamoDB('ken.easson@gmail.com')
@@ -53,7 +55,7 @@ describe('DynamoDB User Integration', () => {
 
     it('should return null when user not found', async () => {
       mockSend.mockResolvedValueOnce({
-        Items: []
+        Items: [],
       })
 
       const user = await getUserFromDynamoDB('nonexistent@example.com')
@@ -76,15 +78,15 @@ describe('DynamoDB User Integration', () => {
             id: 'user-123',
             email: 'test@example.com',
             role: 'owner',
-            provider: 'google'
+            provider: 'google',
           },
           {
             id: 'user-456',
             email: 'test@example.com',
             role: 'guest',
-            provider: 'credentials'
-          }
-        ]
+            provider: 'credentials',
+          },
+        ],
       })
 
       const user = await getUserFromDynamoDB('test@example.com')
@@ -96,7 +98,7 @@ describe('DynamoDB User Integration', () => {
 
     it('should properly scan with correct filter expression', async () => {
       mockSend.mockResolvedValueOnce({
-        Items: []
+        Items: [],
       })
 
       await getUserFromDynamoDB('test@example.com')
@@ -106,9 +108,9 @@ describe('DynamoDB User Integration', () => {
           TableName: 'tee-admin',
           FilterExpression: 'email = :email',
           ExpressionAttributeValues: {
-            ':email': 'test@example.com'
-          }
-        }
+            ':email': 'test@example.com',
+          },
+        },
       })
     })
   })

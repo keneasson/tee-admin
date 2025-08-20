@@ -19,7 +19,6 @@ vi.mock('../../utils/password', () => ({
 }))
 
 describe('/api/auth/register', () => {
-
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -37,7 +36,8 @@ describe('/api/auth/register', () => {
   describe('successful registration', () => {
     it('should register user without invitation code', async () => {
       // Import mocked functions
-      const { createCredentialsUser, findCredentialsUserByEmail, createEmailVerificationToken } = await import('../../utils/dynamodb/credentials-users')
+      const { createCredentialsUser, findCredentialsUserByEmail, createEmailVerificationToken } =
+        await import('../../utils/dynamodb/credentials-users')
       const { sendVerificationEmail } = await import('../../utils/email/send-verification-email')
       const { validatePassword } = await import('../../utils/password')
 
@@ -85,11 +85,7 @@ describe('/api/auth/register', () => {
         role: 'guest',
         invitationCode: undefined,
       })
-      expect(sendVerificationEmail).toHaveBeenCalledWith(
-        requestBody.email,
-        'token123',
-        'John Doe'
-      )
+      expect(sendVerificationEmail).toHaveBeenCalledWith(requestBody.email, 'token123', 'John Doe')
     })
 
     it('should register user with valid invitation code', async () => {

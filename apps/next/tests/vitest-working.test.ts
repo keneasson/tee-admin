@@ -33,7 +33,7 @@ describe('Vitest Configuration Test', () => {
   it('should work with mocks', () => {
     const mockFn = vi.fn()
     mockFn('test argument')
-    
+
     expect(mockFn).toHaveBeenCalledWith('test argument')
     expect(mockFn).toHaveBeenCalledTimes(1)
   })
@@ -44,26 +44,26 @@ describe('Password Reset Core Logic Tests', () => {
     // Test password validation logic without database dependencies
     const validatePasswordStrength = (password: string) => {
       const errors: string[] = []
-      
+
       if (password.length < 12) {
         errors.push('Password must be at least 12 characters long')
       }
-      
+
       if (!/[A-Z]/.test(password)) {
         errors.push('Password must contain at least one uppercase letter')
       }
-      
+
       if (!/[a-z]/.test(password)) {
         errors.push('Password must contain at least one lowercase letter')
       }
-      
+
       if (!/[0-9]/.test(password)) {
         errors.push('Password must contain at least one number')
       }
-      
+
       return {
         isValid: errors.length === 0,
-        errors
+        errors,
       }
     }
 
@@ -83,7 +83,9 @@ describe('Password Reset Core Logic Tests', () => {
     const noUppercase = 'lowercasepassword123!'
     const noUppercaseResult = validatePasswordStrength(noUppercase)
     expect(noUppercaseResult.isValid).toBe(false)
-    expect(noUppercaseResult.errors).toContain('Password must contain at least one uppercase letter')
+    expect(noUppercaseResult.errors).toContain(
+      'Password must contain at least one uppercase letter'
+    )
   })
 
   it('should generate secure tokens', () => {
@@ -109,7 +111,8 @@ describe('Password Reset Core Logic Tests', () => {
   })
 
   it('should handle token expiration logic', () => {
-    const isExpired = (createdAt: Date, expirationHours = 168) => { // 168 hours = 7 days
+    const isExpired = (createdAt: Date, expirationHours = 168) => {
+      // 168 hours = 7 days
       const now = new Date()
       const expirationTime = new Date(createdAt.getTime() + expirationHours * 60 * 60 * 1000)
       return now > expirationTime

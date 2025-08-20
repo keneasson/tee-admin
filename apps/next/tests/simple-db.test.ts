@@ -65,14 +65,16 @@ describe('Database Functions Tests', () => {
     expect(token).toBeDefined()
     expect(typeof token).toBe('string')
     expect(token.length).toBeGreaterThan(0)
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Item: expect.objectContaining({
-        type: 'VERIFICATION_TOKEN',
-        email,
-        tokenType: 'email_verification',
-      }),
-    }))
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Item: expect.objectContaining({
+          type: 'VERIFICATION_TOKEN',
+          email,
+          tokenType: 'email_verification',
+        }),
+      })
+    )
   })
 
   it('should test user lookup by email', async () => {
@@ -89,14 +91,16 @@ describe('Database Functions Tests', () => {
     const result = await findCredentialsUserByEmail('test@example.com')
 
     expect(result).toEqual(mockUser)
-    expect(mockQuery).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'USER#test@example.com',
-      },
-    }))
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        ExpressionAttributeValues: {
+          ':pk': 'USER#test@example.com',
+        },
+      })
+    )
   })
 
   it('should test invitation code creation', async () => {
@@ -117,14 +121,16 @@ describe('Database Functions Tests', () => {
     expect(code).toBeDefined()
     expect(typeof code).toBe('string')
     expect(code.length).toBe(8)
-    expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({
-      TableName: 'tee-admin',
-      Item: expect.objectContaining({
-        type: 'INVITATION_CODE',
-        code,
-        ...inviteData,
-        used: false,
-      }),
-    }))
+    expect(mockPut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: 'tee-admin',
+        Item: expect.objectContaining({
+          type: 'INVITATION_CODE',
+          code,
+          ...inviteData,
+          used: false,
+        }),
+      })
+    )
   })
 })

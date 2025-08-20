@@ -54,7 +54,7 @@ describe('Password Reset API Routes', () => {
   describe('POST /api/auth/forgot-password', () => {
     it('should handle valid email for existing user', async () => {
       const email = 'test@example.com'
-      
+
       // Mock user exists (findCredentialsUserByEmail will find a credentials user)
       mockQuery.mockResolvedValue({
         Items: [
@@ -67,7 +67,7 @@ describe('Password Reset API Routes', () => {
           },
         ],
       })
-      
+
       // Mock token creation (put operation)
       mockPut.mockResolvedValue({})
 
@@ -92,7 +92,7 @@ describe('Password Reset API Routes', () => {
 
     it('should handle non-existent user gracefully', async () => {
       const email = 'nonexistent@example.com'
-      
+
       // Mock user doesn't exist
       mockFindCredentialsUserByEmail.mockResolvedValue(null)
 
@@ -148,7 +148,7 @@ describe('Password Reset API Routes', () => {
     it('should handle email sending failures gracefully', async () => {
       const email = 'test@example.com'
       const token = 'generated-token-123'
-      
+
       // Mock user exists
       mockFindCredentialsUserByEmail.mockResolvedValue({
         id: 'user-123',
@@ -156,10 +156,10 @@ describe('Password Reset API Routes', () => {
         name: 'Test User',
         provider: 'credentials',
       })
-      
+
       // Mock token creation
       mockCreatePasswordResetToken.mockResolvedValue(token)
-      
+
       // Mock email sending failure
       mockSendPasswordResetEmail.mockRejectedValue(new Error('Email service error'))
 
@@ -180,7 +180,7 @@ describe('Password Reset API Routes', () => {
 
     it('should handle database errors', async () => {
       const email = 'test@example.com'
-      
+
       // Mock database error
       mockFindCredentialsUserByEmail.mockRejectedValue(new Error('Database error'))
 
@@ -207,7 +207,7 @@ describe('Password Reset API Routes', () => {
       mockValidatePasswordResetToken.mockResolvedValue({
         email: 'test@example.com',
       })
-      
+
       // Mock successful password reset
       mockResetPassword.mockResolvedValue(true)
 

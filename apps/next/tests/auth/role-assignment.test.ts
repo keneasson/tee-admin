@@ -17,7 +17,7 @@ describe('Role Assignment', () => {
         ecclesia: 'TEE',
         Phone: '647-393-3153',
         Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Children: 'Krystal, Zaiden',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -32,7 +32,7 @@ describe('Role Assignment', () => {
         ecclesia: 'TEE',
         Phone: '647-393-3153',
         Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Children: 'Krystal, Zaiden',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -47,7 +47,7 @@ describe('Role Assignment', () => {
         ecclesia: 'TEE',
         Phone: '416-555-1234',
         Address: '123 Main St',
-        Children: ''
+        Children: '',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -62,7 +62,7 @@ describe('Role Assignment', () => {
         ecclesia: 'Peterborough',
         Phone: '705-555-1234',
         Address: '456 Oak Ave',
-        Children: ''
+        Children: '',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -77,7 +77,7 @@ describe('Role Assignment', () => {
         ecclesia: 'Other Ecclesia',
         Phone: '519-555-1234',
         Address: '789 Pine St',
-        Children: ''
+        Children: '',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -92,7 +92,7 @@ describe('Role Assignment', () => {
         ecclesia: 'TEE',
         Phone: '647-393-3153',
         Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Children: 'Krystal, Zaiden',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -107,7 +107,7 @@ describe('Role Assignment', () => {
         ecclesia: 'TEE',
         Phone: '647-393-3153',
         Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Children: 'Krystal, Zaiden',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -122,7 +122,7 @@ describe('Role Assignment', () => {
         ecclesia: 'Other Ecclesia', // Even with different ecclesia, should be owner
         Phone: '647-393-3153',
         Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Children: 'Krystal, Zaiden',
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })

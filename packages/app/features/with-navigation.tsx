@@ -1,6 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { LogInUser } from '@my/app/provider/auth/log-in-user'
+import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import {
   Button,
   Dialog,
@@ -11,13 +13,11 @@ import {
   XStack,
   YStack,
 } from '@my/ui'
-import { usePathname, useRouter } from 'solito/navigation'
 import { Menu } from '@tamagui/lucide-icons/icons/Menu'
 import { X } from '@tamagui/lucide-icons/icons/X'
 import { useSession } from 'next-auth/react'
-import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
-import { LogInUser } from '@my/app/provider/auth/log-in-user'
-import { ROLES } from '@my/app/provider/auth/auth-roles'
+import React, { useState } from 'react'
+import { usePathname, useRouter } from 'solito/navigation'
 
 type WithNavigationProps = {
   children: React.ReactNode
@@ -133,9 +133,9 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             {(session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
               <AdminOwnerMenu linkTo={linkTo} path={path} />
             )}
-            {(session.user.role === ROLES.MEMBER || session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
-              <MemberMenu linkTo={linkTo} path={path} />
-            )}
+            {(session.user.role === ROLES.MEMBER ||
+              session.user.role === ROLES.ADMIN ||
+              session.user.role === ROLES.OWNER) && <MemberMenu linkTo={linkTo} path={path} />}
           </>
         )}
         {pages.map((page, i) => (

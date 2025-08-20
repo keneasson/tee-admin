@@ -110,7 +110,7 @@ function ResetPasswordPageContent() {
           </Button>
         </Link>
       </YStack>
-    );
+    )
   }
 
   if (!token || error.includes('Invalid reset link')) {
@@ -139,7 +139,7 @@ function ResetPasswordPageContent() {
           </Link>
         </YStack>
       </YStack>
-    );
+    )
   }
 
   return (
@@ -202,7 +202,7 @@ function ResetPasswordPageContent() {
         </YStack>
       </form>
     </YStack>
-  );
+  )
 }
 
 export default function ResetPasswordPage() {

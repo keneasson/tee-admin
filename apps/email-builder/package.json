@@ -2,7 +2,11 @@
   "name": "email-builder",
   "version": "0.0.1",
   "scripts": {
-    "dev": "email dev"
+    "dev": "email dev",
+    "test": "jest",
+    "test:emails": "ts-node scripts/test-email-clients.ts",
+    "test:compatibility": "jest tests/email-compatibility.test.ts",
+    "build": "email build"
   },
   "packageManager": "yarn@4.1.0",
   "dependencies": {

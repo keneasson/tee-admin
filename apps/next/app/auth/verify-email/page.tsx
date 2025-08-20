@@ -4,14 +4,7 @@ import React, { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-import {
-  YStack,
-  Text,
-  Heading,
-  Button,
-  Paragraph,
-  Spinner,
-} from '@my/ui'
+import { YStack, Text, Heading, Button, Paragraph, Spinner } from '@my/ui'
 
 import { useHydrated } from '../../../utils/hooks'
 
@@ -65,8 +58,12 @@ function VerifyEmailPageContent() {
       case 'success':
         return (
           <YStack alignItems="center" gap="$4">
-            <Text fontSize="$10" color="$green10">✓</Text>
-            <Heading size="$8" color="$green10">Email Verified!</Heading>
+            <Text fontSize="$10" color="$green10">
+              ✓
+            </Text>
+            <Heading size="$8" color="$green10">
+              Email Verified!
+            </Heading>
             <Paragraph color="$gray11" textAlign="center">
               {message}
             </Paragraph>
@@ -76,13 +73,17 @@ function VerifyEmailPageContent() {
               </Button>
             </Link>
           </YStack>
-        );
+        )
 
       case 'error':
         return (
           <YStack alignItems="center" gap="$4">
-            <Text fontSize="$10" color="$red10">✗</Text>
-            <Heading size="$8" color="$red10">Verification Failed</Heading>
+            <Text fontSize="$10" color="$red10">
+              ✗
+            </Text>
+            <Heading size="$8" color="$red10">
+              Verification Failed
+            </Heading>
             <Paragraph color="$gray11" textAlign="center">
               {message}
             </Paragraph>
@@ -99,7 +100,7 @@ function VerifyEmailPageContent() {
               </Link>
             </YStack>
           </YStack>
-        );
+        )
 
       default:
         return null

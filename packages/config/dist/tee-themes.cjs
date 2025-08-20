@@ -27,16 +27,19 @@ const brandColors = {
     light: {
       // Primary colors - Deep blue with religious/trustworthy feel
       primary: "#1B365D",
-      // Rich navy blue
+      // Rich navy blue - 4.5:1 contrast ratio
       primaryForeground: "#FFFFFF",
+      // White text on dark blue
       // Secondary colors - Warm gold/amber for warmth and tradition
       secondary: "#B8860B",
-      // Dark goldenrod
+      // Dark goldenrod - high contrast
       secondaryForeground: "#FFFFFF",
+      // White text on gold
       // Accent colors - Sage green for peace and growth
-      accent: "#6B8E5A",
-      // Sage green
+      accent: "#5A7C47",
+      // Darker sage green for better contrast
       accentForeground: "#FFFFFF",
+      // White text on green
       // Semantic colors - Enhanced for accessibility
       success: "#2D7D32",
       // Darker green
@@ -77,25 +80,32 @@ const brandColors = {
       // Interactive colors
       interactive: "#1B365D",
       interactiveHover: "#2A4A73",
-      interactivePressed: "#153056",
+      // Lighter but still 4.5:1 contrast
+      interactivePressed: "#0F2238",
+      // Darker for pressed state
       interactiveDisabled: "#D0CFC4",
-      // Primary interaction states
+      // Primary interaction states  
       primaryHover: "#2A4A73",
-      primaryPressed: "#153056"
+      // Lighter blue, maintains contrast
+      primaryPressed: "#0F2238"
+      // Darker blue for pressed state
     },
     dark: {
-      // Primary colors - Bright enough for dark mode
-      primary: "#4A90E2",
-      // Bright blue
+      // Primary colors - Bright enough for dark mode with proper contrast
+      primary: "#3B82F6",
+      // Blue with 4.5:1 contrast on dark bg
       primaryForeground: "#000000",
+      // Black text on bright blue
       // Secondary colors - Warm gold that pops
-      secondary: "#FFB000",
-      // Bright gold
+      secondary: "#F59E0B",
+      // Amber with good contrast
       secondaryForeground: "#000000",
-      // Accent colors - Fresh green
-      accent: "#8BC34A",
-      // Light green
+      // Black text on amber
+      // Accent colors - Fresh green with proper contrast
+      accent: "#10B981",
+      // Emerald with good contrast
       accentForeground: "#000000",
+      // Black text on emerald
       // Semantic colors - Bright and accessible
       success: "#4CAF50",
       // Material green
@@ -134,13 +144,87 @@ const brandColors = {
       borderLight: "#21262D",
       // Very subtle
       // Interactive colors
-      interactive: "#4A90E2",
-      interactiveHover: "#5BA0F2",
-      interactivePressed: "#3A80D2",
-      interactiveDisabled: "#30363D",
+      interactive: "#3B82F6",
+      interactiveHover: "#60A5FA",
+      // Lighter but maintains contrast
+      interactivePressed: "#2563EB",
+      // Darker for pressed state
+      interactiveDisabled: "#374151",
       // Primary interaction states
-      primaryHover: "#5BA0F2",
-      primaryPressed: "#3A80D2"
+      primaryHover: "#60A5FA",
+      // Lighter blue for hover
+      primaryPressed: "#2563EB"
+      // Darker for pressed state
+    }
+  },
+  adminBrandColors = {
+    light: {
+      ...brandColors.light,
+      // Admin-specific adjustments
+      background: "#FBFBFB",
+      // Slightly grayer for reduced eye strain
+      backgroundSecondary: "#F6F6F6",
+      // More neutral
+      backgroundTertiary: "#F0F0F0",
+      // Cooler gray
+      // Tighter contrast for dense information
+      textPrimary: "#0F0F0F",
+      // Darker for better readability
+      textSecondary: "#3A3A3A",
+      // Higher contrast
+      // More subdued borders for dense layouts
+      border: "#E0E0E0",
+      borderLight: "#E8E8E8",
+      // Professional admin colors - high contrast
+      primary: "#1D4ED8",
+      // Modern blue with 4.5:1 contrast
+      primaryHover: "#3B82F6",
+      // Lighter hover state
+      primaryPressed: "#1E3A8A",
+      // Darker pressed state
+      primaryForeground: "#FFFFFF",
+      // White text
+      // Status colors optimized for admin interfaces
+      warning: "#F59E0B",
+      // Amber for better visibility
+      error: "#DC2626",
+      // Red that stands out
+      success: "#059669",
+      // Emerald for positive actions
+      info: "#0EA5E9"
+      // Sky blue for information
+    },
+    dark: {
+      ...brandColors.dark,
+      // Admin dark mode - designed for long sessions
+      background: "#0F172A",
+      // Deeper blue-black
+      backgroundSecondary: "#1E293B",
+      // Slate secondary
+      backgroundTertiary: "#334155",
+      // Lighter slate
+      // Optimized text contrast for readability
+      textPrimary: "#F8FAFC",
+      // Off-white
+      textSecondary: "#CBD5E1",
+      // Light slate
+      // Refined borders
+      border: "#475569",
+      borderLight: "#64748B",
+      // Admin primary colors - optimized for dark mode
+      primary: "#60A5FA",
+      // Bright blue with good contrast
+      primaryHover: "#93C5FD",
+      // Lighter hover
+      primaryPressed: "#3B82F6",
+      // Darker pressed
+      primaryForeground: "#000000",
+      // Black text on bright blue
+      // Enhanced status colors for dark mode
+      warning: "#F59E0B",
+      error: "#EF4444",
+      success: "#10B981",
+      info: "#06B6D4"
     }
   },
   teeThemes = {
@@ -249,5 +333,109 @@ const brandColors = {
       interactiveHover: brandColors.dark.interactiveHover,
       interactivePress: brandColors.dark.interactivePressed,
       interactiveDisabled: brandColors.dark.interactiveDisabled
+    },
+    admin_light: {
+      // Base Tamagui theme properties - admin optimized
+      background: adminBrandColors.light.background,
+      backgroundHover: adminBrandColors.light.backgroundSecondary,
+      backgroundPress: adminBrandColors.light.backgroundTertiary,
+      backgroundFocus: adminBrandColors.light.backgroundSecondary,
+      backgroundStrong: adminBrandColors.light.surface,
+      backgroundTransparent: "transparent",
+      color: adminBrandColors.light.textPrimary,
+      colorHover: "#0A0A0A",
+      colorPress: adminBrandColors.light.textPrimary,
+      colorFocus: adminBrandColors.light.textPrimary,
+      colorTransparent: "transparent",
+      borderColor: adminBrandColors.light.border,
+      borderColorHover: adminBrandColors.light.borderLight,
+      borderColorPress: adminBrandColors.light.border,
+      borderColorFocus: adminBrandColors.light.primary,
+      placeholderColor: adminBrandColors.light.textTertiary,
+      // Admin-specific brand tokens
+      primary: adminBrandColors.light.primary,
+      primaryHover: adminBrandColors.light.primaryHover,
+      primaryPress: adminBrandColors.light.primaryPressed,
+      primaryForeground: adminBrandColors.light.primaryForeground,
+      primaryHoverForeground: adminBrandColors.light.primaryForeground,
+      // Keep white for consistency
+      secondary: adminBrandColors.light.secondary,
+      secondaryHover: adminBrandColors.light.secondary,
+      secondaryPress: adminBrandColors.light.secondary,
+      secondaryForeground: adminBrandColors.light.secondaryForeground,
+      accent: adminBrandColors.light.accent,
+      accentHover: adminBrandColors.light.accent,
+      accentPress: adminBrandColors.light.accent,
+      accentForeground: adminBrandColors.light.accentForeground,
+      success: adminBrandColors.light.success,
+      successForeground: "#FFFFFF",
+      warning: adminBrandColors.light.warning,
+      warningForeground: "#000000",
+      error: adminBrandColors.light.error,
+      errorForeground: "#FFFFFF",
+      info: adminBrandColors.light.info,
+      infoForeground: "#FFFFFF",
+      // Text hierarchy
+      textPrimary: adminBrandColors.light.textPrimary,
+      textSecondary: adminBrandColors.light.textSecondary,
+      textTertiary: adminBrandColors.light.textTertiary,
+      textDisabled: adminBrandColors.light.textDisabled,
+      // Interactive states
+      interactive: adminBrandColors.light.primary,
+      interactiveHover: adminBrandColors.light.primaryHover,
+      interactivePress: adminBrandColors.light.primaryPressed,
+      interactiveDisabled: adminBrandColors.light.interactiveDisabled
+    },
+    admin_dark: {
+      // Base Tamagui theme properties - admin dark optimized
+      background: adminBrandColors.dark.background,
+      backgroundHover: adminBrandColors.dark.backgroundSecondary,
+      backgroundPress: adminBrandColors.dark.backgroundTertiary,
+      backgroundFocus: adminBrandColors.dark.backgroundSecondary,
+      backgroundStrong: adminBrandColors.dark.surface,
+      backgroundTransparent: "transparent",
+      color: adminBrandColors.dark.textPrimary,
+      colorHover: "#E2E8F0",
+      colorPress: adminBrandColors.dark.textPrimary,
+      colorFocus: adminBrandColors.dark.textPrimary,
+      colorTransparent: "transparent",
+      borderColor: adminBrandColors.dark.border,
+      borderColorHover: adminBrandColors.dark.borderLight,
+      borderColorPress: adminBrandColors.dark.border,
+      borderColorFocus: adminBrandColors.dark.primary,
+      placeholderColor: adminBrandColors.dark.textTertiary,
+      // Admin-specific brand tokens
+      primary: adminBrandColors.dark.primary,
+      primaryHover: adminBrandColors.dark.primaryHover,
+      primaryPress: adminBrandColors.dark.primaryPressed,
+      primaryForeground: adminBrandColors.dark.primaryForeground,
+      primaryHoverForeground: adminBrandColors.dark.primaryForeground,
+      // Keep black for consistency
+      secondary: adminBrandColors.dark.secondary,
+      secondaryHover: adminBrandColors.dark.secondary,
+      secondaryPress: adminBrandColors.dark.secondary,
+      secondaryForeground: adminBrandColors.dark.secondaryForeground,
+      accent: adminBrandColors.dark.accent,
+      accentHover: adminBrandColors.dark.accent,
+      accentPress: adminBrandColors.dark.accent,
+      accentForeground: adminBrandColors.dark.accentForeground,
+      success: adminBrandColors.dark.success,
+      successForeground: "#000000",
+      warning: adminBrandColors.dark.warning,
+      warningForeground: "#000000",
+      error: adminBrandColors.dark.error,
+      errorForeground: "#FFFFFF",
+      info: adminBrandColors.dark.info,
+      infoForeground: "#000000",
+      // Text hierarchy
+      textPrimary: adminBrandColors.dark.textPrimary,
+      textSecondary: adminBrandColors.dark.textSecondary,
+      textTertiary: adminBrandColors.dark.textTertiary,
+      textDisabled: adminBrandColors.dark.textDisabled,
+      // Interactive states
+      interactive: adminBrandColors.dark.primary,
+      interactiveHover: adminBrandColors.dark.primaryHover,
+      interactivePress: adminBrandColors.dark.primaryPressed,
+      interactiveDisabled: adminBrandColors.dark.interactiveDisabled
     }
   };

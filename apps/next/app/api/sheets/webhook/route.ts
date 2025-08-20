@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the webhook payload
     const payload: SheetWebhookPayload = await request.json()
-    
+
     console.log('📥 Webhook received:', {
       sheetId: payload.sheetId,
       eventType: payload.eventType,
@@ -38,19 +38,13 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('x-webhook-signature') || payload.signature || null
     if (!WebhookSecurity.validateSignature(JSON.stringify(payload), signature)) {
       console.warn('⚠️ Invalid webhook signature for sheet:', payload.sheetId)
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     // Rate limiting
     if (!WebhookSecurity.rateLimitBySheet(payload.sheetId)) {
       console.warn('⚠️ Rate limit exceeded for sheet:', payload.sheetId)
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      )
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
     // Handle the webhook with debouncing
@@ -62,14 +56,13 @@ export async function POST(request: NextRequest) {
       sheetId: payload.sheetId,
       debounced: true,
     })
-
   } catch (error) {
     console.error('❌ Webhook processing error:', error)
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     )

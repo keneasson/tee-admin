@@ -8,7 +8,6 @@ vi.mock('../../utils/dynamodb/credentials-users', () => ({
 }))
 
 describe('/api/auth/verify-email', () => {
-
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -18,7 +17,7 @@ describe('/api/auth/verify-email', () => {
     if (token) {
       url.searchParams.set('token', token)
     }
-    
+
     return new NextRequest(url, {
       method: 'GET',
     })

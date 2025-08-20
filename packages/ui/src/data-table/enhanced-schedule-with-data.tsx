@@ -40,9 +40,7 @@ export function EnhancedScheduleWithData({
     limit: 30,
   })
 
-  useEffect(() => {
-    console.log('data changed', data)
-  }, [data.length])
+  // Effect removed - no longer needed for debugging
 
   const themeName = useThemeName()
   const mode = themeName.includes('dark') ? 'dark' : 'light'

@@ -23,12 +23,12 @@ const TABLE_NAME = 'tee-admin'
 async function debugLiveAuth() {
   const email = 'ken.easson@gmail.com'
   const password = 'jBYiW9Fda3eJJ5v'
-  
+
   console.log('🔍 DEBUGGING LIVE AUTHENTICATION STEP BY STEP')
   console.log('📧 Email:', email)
   console.log('🔐 Password:', password)
   console.log('🕐 Timestamp:', new Date().toISOString())
-  
+
   try {
     // Step 1: Reproduce the exact query from findCredentialsUserByEmail
     console.log('\n📋 Step 1: Finding user by email (exact same query as app)...')
@@ -42,7 +42,7 @@ async function debugLiveAuth() {
     })
 
     console.log('📊 Query returned', result.Items?.length || 0, 'items')
-    
+
     if (!result.Items || result.Items.length === 0) {
       console.log('❌ No user found with email:', email)
       return
@@ -50,9 +50,9 @@ async function debugLiveAuth() {
 
     // Step 2: Filter for credentials provider (exact same logic)
     console.log('\n🔍 Step 2: Filtering for credentials provider...')
-    const credentialsUsers = result.Items.filter(item => item.provider === 'credentials')
+    const credentialsUsers = result.Items.filter((item) => item.provider === 'credentials')
     console.log('📊 Credentials users found:', credentialsUsers.length)
-    
+
     if (credentialsUsers.length === 0) {
       console.log('❌ No credentials user found')
       console.log('Available users:')
@@ -87,22 +87,17 @@ async function debugLiveAuth() {
     console.log('🔧 Comparing password with hash...')
     console.log('   Password to check:', password)
     console.log('   Hash starts with:', user.hashedPassword.substring(0, 20) + '...')
-    
+
     const isValid = await bcrypt.compare(password, user.hashedPassword)
     console.log('🔑 Password comparison result:', isValid)
 
     if (!isValid) {
       console.log('❌ Password is invalid!')
-      
+
       // Let's test with some common variations
       console.log('\n🔍 Testing password variations...')
-      const variations = [
-        password,
-        password.trim(),
-        password.toLowerCase(),
-        password.toUpperCase(),
-      ]
-      
+      const variations = [password, password.trim(), password.toLowerCase(), password.toUpperCase()]
+
       for (const variant of variations) {
         if (variant !== password) {
           const testResult = await bcrypt.compare(variant, user.hashedPassword)
@@ -122,11 +117,11 @@ async function debugLiveAuth() {
     console.log('   emailVerified truthy:', !!user.emailVerified)
 
     // Exact logic from verifyCredentialsUser
-    const isEmailVerified = user.emailVerified && (
-      user.emailVerified instanceof Date || 
-      typeof user.emailVerified === 'string' ||
-      typeof user.emailVerified === 'number'
-    )
+    const isEmailVerified =
+      user.emailVerified &&
+      (user.emailVerified instanceof Date ||
+        typeof user.emailVerified === 'string' ||
+        typeof user.emailVerified === 'number')
 
     console.log('📧 Email verification result:', isEmailVerified)
 
@@ -147,15 +142,26 @@ async function debugLiveAuth() {
     console.log('   Should authenticate: ✅')
 
     console.log('\n🚀 AUTHENTICATION SHOULD SUCCEED!')
-    console.log('If it\'s still failing, the issue is elsewhere in the auth flow.')
+    console.log("If it's still failing, the issue is elsewhere in the auth flow.")
 
     // Step 7: Let's also check if there are any other issues
     console.log('\n🔍 Step 7: Additional checks...')
-    
+
     // Check if user has all required fields
-    const requiredFields = ['id', 'email', 'hashedPassword', 'name', 'firstName', 'lastName', 'ecclesia', 'role', 'provider', 'createdAt']
-    const missingFields = requiredFields.filter(field => !user[field])
-    
+    const requiredFields = [
+      'id',
+      'email',
+      'hashedPassword',
+      'name',
+      'firstName',
+      'lastName',
+      'ecclesia',
+      'role',
+      'provider',
+      'createdAt',
+    ]
+    const missingFields = requiredFields.filter((field) => !user[field])
+
     if (missingFields.length > 0) {
       console.log('⚠️  Missing fields:', missingFields)
     } else {
@@ -170,22 +176,23 @@ async function debugLiveAuth() {
     if (!user.createdAt) {
       console.log('⚠️  createdAt is missing')
     }
-
   } catch (error) {
     console.error('💥 Error during live auth debug:', error)
     console.error('Error details:', {
       name: error.name,
       message: error.message,
-      stack: error.stack?.split('\n').slice(0, 5).join('\n')
+      stack: error.stack?.split('\n').slice(0, 5).join('\n'),
     })
   }
 }
 
 // Run the debug
-debugLiveAuth().then(() => {
-  console.log('\n🏁 Live auth debug completed')
-  process.exit(0)
-}).catch(error => {
-  console.error('💥 Live debug failed:', error)
-  process.exit(1)
-})
+debugLiveAuth()
+  .then(() => {
+    console.log('\n🏁 Live auth debug completed')
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error('💥 Live debug failed:', error)
+    process.exit(1)
+  })

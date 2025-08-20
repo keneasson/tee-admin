@@ -1,22 +1,20 @@
 'use client'
 
-import React from 'react'
-import { useSession } from 'next-auth/react'
-import { usePathname, useRouter } from 'solito/navigation'
-import { ROLES } from '@my/app/provider/auth/auth-roles'
-import {
-  NavigationContainer,
-  EnhancedNavigationButton,
-  NavigationGroup,
-  AdminNavigationGroup,
-  MainNavigationGroup,
-  RoleBasedNavigation,
-  AdminOnlyNavigation,
-  MemberPlusNavigation,
-} from '@my/ui/src/navigation'
-import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
-import { Text, YStack, View, useThemeName, useThemeContext } from '@my/ui'
+import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
+import { Text, View, YStack, useThemeContext, useThemeName } from '@my/ui'
+import {
+  AdminNavigationGroup,
+  AdminOnlyNavigation,
+  EnhancedNavigationButton,
+  MainNavigationGroup,
+  MemberPlusNavigation,
+  NavigationContainer,
+  NavigationGroup,
+} from '@my/ui/src/navigation'
+import { useSession } from 'next-auth/react'
+import React from 'react'
+import { usePathname, useRouter } from 'solito/navigation'
 import { ThemeToggle } from './theme-toggle'
 
 type WithNavigationProps = {
@@ -38,12 +36,15 @@ const pages: MainPageType[] = [
 
 const adminPages: MainPageType[] = [
   { path: '/email-tester', label: 'Email Tester', icon: '📬' },
+  { path: '/brand/navigation-showcase', label: 'Nav Showcase', icon: '✨' },
+  { path: '/brand/playground', label: 'Feature Flags', icon: '🚀' },
+]
+
+const designPages: MainPageType[] = [
   { path: '/brand/colours', label: 'Brand Colors', icon: '🎨' },
   { path: '/brand/typography', label: 'Typography', icon: '✍️' },
   { path: '/brand/components', label: 'Components', icon: '🧩' },
   { path: '/brand/navigation', label: 'Navigation', icon: '🧭' },
-  { path: '/brand/navigation-showcase', label: 'Nav Showcase', icon: '✨' },
-  { path: '/brand/playground', label: 'Feature Flags', icon: '🚀' },
 ]
 
 export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
@@ -97,12 +98,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
     <YStack gap="$2">
       {session?.user ? <NavitemLogout /> : <LogInUser />}
 
-      <View
-        backgroundColor="$background"
-        padding="$2"
-        borderRadius="$2"
-        alignItems="center"
-      >
+      <View backgroundColor="$background" padding="$2" borderRadius="$2" alignItems="center">
         <Text fontSize="$1" color="$textTertiary">
           v2.0.0 • Enhanced UI
         </Text>
@@ -180,6 +176,27 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
                 badge={page.path.includes('showcase') ? 'NEW' : undefined}
               />
             ))}
+            
+            {/* Design Tools Accordion */}
+            <NavigationGroup
+              title="Design"
+              icon="🎨"
+              description="Brand design system tools"
+              collapsible
+              defaultCollapsed={true}
+            >
+              {designPages.map((page) => (
+                <EnhancedNavigationButton
+                  key={page.path}
+                  onPress={navigateTo(page.path)}
+                  text={page.label}
+                  icon={page.icon}
+                  active={currentPath === page.path}
+                  mode={mode}
+                  description={`Design: ${page.label}`}
+                />
+              ))}
+            </NavigationGroup>
           </AdminNavigationGroup>
         </AdminOnlyNavigation>
       </NavigationContainer>

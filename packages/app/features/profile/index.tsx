@@ -1,15 +1,15 @@
 'use client'
 
-import { Section, Text, XStack, YStack, Heading, Button, FormInput, Separator } from '@my/ui'
+import { useHydrated } from '@my/app/hooks/use-hydrated'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { getUserFromLegacyDirectory } from '@my/app/provider/auth/get-user-from-legacy'
 import { Wrapper } from '@my/app/provider/wrapper'
-import { useEffect, useState } from 'react'
-import { useForm, SubmitHandler } from 'react-hook-form'
+import { User } from '@my/app/types/auth'
+import { Button, FormInput, Heading, Section, Separator, Text, XStack, YStack } from '@my/ui'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { getUserFromLegacyDirectory } from '@my/app/provider/auth/get-user-from-legacy'
-import { DirectoryType } from '@my/app/types'
-import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { useHydrated } from '@my/app/hooks/use-hydrated'
+import { useEffect, useState } from 'react'
+import { SubmitHandler, useForm } from 'react-hook-form'
 
 interface InvitationFormData {
   firstName: string
@@ -23,8 +23,8 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   const { data: session, status } = useSession()
   const router = useRouter()
   const isHydrated = useHydrated()
-  
-  const [user, setUser] = useState<DirectoryType>()
+
+  const [user, setUser] = useState<User>()
   const [invitationLoading, setInvitationLoading] = useState(false)
   const [invitationMessage, setInvitationMessage] = useState('')
   const [invitationError, setInvitationError] = useState('')
@@ -39,19 +39,22 @@ export const Profile: React.FC<ProfileType> = ({}) => {
 
   // Note: Server-side redirect handles unauthenticated users
   // This is just for additional client-side protection
-
+  // @todo - this shouldn't need this as we should have the user from Dynamodb at this point.
   useEffect(() => {
     async function getUser() {
       if (session?.user?.email) {
         const user = await getUserFromLegacyDirectory({ email: session.user.email })
-        setUser(user)
+        if (user?.user) {
+          setUser(user.user)
+        }
       }
     }
     getUser()
   }, [session])
 
   // Check if user can create invitation codes
-  const canCreateInvitations = session?.user?.role && [ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER].includes(session.user.role)
+  const canCreateInvitations =
+    session?.user?.role && [ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER].includes(session.user.role)
 
   const onSubmitInvitation: SubmitHandler<InvitationFormData> = async (data) => {
     setInvitationLoading(true)
@@ -84,25 +87,14 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   }
 
   // Don't render anything until hydrated to prevent hydration mismatch
-  if (!isHydrated) {
+  if (!isHydrated || status === 'loading') {
     return (
       <Wrapper>
         <Section gap={'$4'}>
           <YStack gap="$4" alignItems="center">
-            <Text fontSize="$4" theme="alt2">Loading...</Text>
-          </YStack>
-        </Section>
-      </Wrapper>
-    )
-  }
-
-  // Show loading state while checking authentication
-  if (status === 'loading') {
-    return (
-      <Wrapper>
-        <Section gap={'$4'}>
-          <YStack gap="$4" alignItems="center">
-            <Text fontSize="$4" theme="alt2">Loading...</Text>
+            <Text fontSize="$4" theme="alt2">
+              Loading...
+            </Text>
           </YStack>
         </Section>
       </Wrapper>
@@ -149,43 +141,45 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                 </Text>
 
                 <YStack gap="$4" asChild={false}>
-                    <XStack gap="$3">
-                      <FormInput
-                        control={control}
-                        name="firstName"
-                        label="First Name"
-                        placeholder="First Name"
-                        rules={{ required: 'First name is required' }}
-                        flex={1}
-                      />
-                      <FormInput
-                        control={control}
-                        name="lastName"
-                        label="Last Name"
-                        placeholder="Last Name"
-                        rules={{ required: 'Last name is required' }}
-                        flex={1}
-                      />
-                    </XStack>
-
+                  <XStack gap="$3">
                     <FormInput
                       control={control}
-                      name="ecclesia"
-                      label="Ecclesia"
-                      placeholder="e.g., TEE, Peterborough"
-                      rules={{ required: 'Ecclesia is required' }}
+                      name="firstName"
+                      label="First Name"
+                      placeholder="First Name"
+                      rules={{ required: 'First name is required' }}
+                      flex={1}
                     />
-
                     <FormInput
                       control={control}
-                      name="role"
-                      label="Role"
-                      placeholder="Select role"
-                      rules={{ required: 'Role is required' }}
-                      defaultValue={ROLES.GUEST}
+                      name="lastName"
+                      label="Last Name"
+                      placeholder="Last Name"
+                      rules={{ required: 'Last name is required' }}
+                      flex={1}
                     />
+                  </XStack>
 
-                    {/* Error and Success Messages */}
+                  <FormInput
+                    control={control}
+                    name="ecclesia"
+                    label="Ecclesia"
+                    placeholder="e.g., TEE, Peterborough"
+                    rules={{ required: 'Ecclesia is required' }}
+                  />
+
+                  <FormInput
+                    control={control}
+                    name="role"
+                    label="Role"
+                    placeholder="Select role"
+                    rules={{ required: 'Role is required' }}
+                    defaultValue={ROLES.GUEST}
+                  />
+
+                  {/* Error and Success Messages */}
+                  <>
+                    {/* Fixes the Text in View error in React Native */}
                     {invitationError && (
                       <Text fontSize="$3" color="$red10">
                         {invitationError}
@@ -221,16 +215,11 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                         </Text>
                       </YStack>
                     )}
-
-                    <Button
-                      type="submit"
-                      size="$4"
-                      disabled={invitationLoading}
-                      theme="blue"
-                    >
-                      {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
-                    </Button>
-                  </YStack>
+                  </>
+                  <Button type="submit" size="$4" disabled={invitationLoading} theme="blue">
+                    {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
+                  </Button>
+                </YStack>
               </YStack>
             </>
           )}

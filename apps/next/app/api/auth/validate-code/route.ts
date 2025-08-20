@@ -7,19 +7,13 @@ export async function POST(request: NextRequest) {
     const { code } = body
 
     if (!code) {
-      return NextResponse.json(
-        { error: 'Invitation code is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invitation code is required' }, { status: 400 })
     }
 
     const invitation = await validateInvitationCode(code)
-    
+
     if (!invitation) {
-      return NextResponse.json(
-        { error: 'Invalid or expired invitation code' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid or expired invitation code' }, { status: 400 })
     }
 
     return NextResponse.json({
@@ -31,12 +25,8 @@ export async function POST(request: NextRequest) {
         role: invitation.role,
       },
     })
-
   } catch (error) {
     console.error('Code validation error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

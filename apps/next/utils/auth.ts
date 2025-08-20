@@ -89,7 +89,7 @@ export const authOptions = {
     },
     async redirect({ url, baseUrl }) {
       // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`
+      if (url.startsWith('/')) return `${baseUrl}${url}`
       // Allows callback URLs on the same origin
       else if (new URL(url).origin === baseUrl) return url
       return baseUrl
@@ -99,20 +99,20 @@ export const authOptions = {
       if (user.provider === 'credentials') {
         return true
       }
-      
+
       // For other providers (like Google), check if user already has role
       if (user.role) {
         return true
       }
-      
+
       const userEmail = user.email || profile?.email
       if (!userEmail) {
         return true
       }
-      
+
       try {
         console.log('🔑 SignIn callback for:', userEmail)
-        
+
         // STEP 1: Check DynamoDB first (existing users)
         const dbUser = await getUserFromDynamoDB(userEmail)
         if (dbUser && dbUser.role) {
@@ -120,7 +120,7 @@ export const authOptions = {
           user.role = dbUser.role
           return true
         }
-        
+
         // STEP 1.5: Check if this email has a credentials account
         const credentialsUser = await findCredentialsUserByEmail(userEmail)
         if (credentialsUser && credentialsUser.role) {
@@ -128,24 +128,39 @@ export const authOptions = {
           user.role = credentialsUser.role
           return true
         }
-        
+
         // STEP 2: Fallback to legacy directory (new users only)
         console.log('📂 User not in DynamoDB, checking legacy directory...')
-        const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
-        if (!legacyUser) {
+        const legacyResult = await getUserFromLegacyDirectory({ email: userEmail })
+        if (!legacyResult) {
           console.log('⚠️ No legacy user found for:', userEmail)
           return true
         }
+
+        const { user: legacyUser, directoryUser } = legacyResult
+
+        // STEP 3: Merge user properties from Google auth and legacy directory
+        const firstName = profile?.given_name || legacyUser.firstName || user.name?.split(' ')[0] || ''
+        const lastName = profile?.family_name || legacyUser.lastName || user.name?.split(' ').slice(1).join(' ') || ''
         
-        // STEP 3: Assign role and save to DynamoDB for future logins
-        const role = await getRoleFromLegacyUser({ user: legacyUser })
+        user.name = user.name || profile?.name || legacyUser.name
+        user.email = userEmail
+        
+        // STEP 4: Assign role and save to DynamoDB for future logins
+        const role = await getRoleFromLegacyUser({ user: legacyUser, directoryUser })
         console.log('🔑 Role determined from legacy:', role, 'for user:', userEmail)
         if (role) {
           user.role = role
-          await addUsersRoleToDB({ user, legacy: legacyUser })
-          console.log('✅ Role saved to DB for future logins:', role)
+          
+          // Only call addUsersRoleToDB if user has NextAuth DynamoDB adapter properties
+          if (user.id && user.pkey && user.skey) {
+            await addUsersRoleToDB({ user: user as any, legacy: directoryUser })
+            console.log('✅ Role saved to DB for future logins:', role)
+          } else {
+            console.log('⚠️ User missing NextAuth adapter properties, skipping DB update')
+          }
         }
-        
+
         return true
       } catch (error) {
         console.error('❌ Error in signIn callback:', error)
@@ -157,7 +172,12 @@ export const authOptions = {
       // Safely add role to the Session.User
       try {
         const finalRole = user?.role || token?.role || ROLES.GUEST
-        console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
+        console.log(
+          '📋 Session callback - Final role:',
+          finalRole,
+          'for user:',
+          session.user?.email
+        )
         session.user.role = finalRole
         return session
       } catch (error) {

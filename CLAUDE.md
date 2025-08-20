@@ -23,6 +23,15 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - `yarn fix` - Fix monorepo package dependencies
 - `yarn check-deps` - Verify dependency version consistency
 
+### GitHub Issue Management
+- **Default Workflow**: When creating issues or planning new features, ALWAYS create GitHub issues automatically using GitHub CLI
+- **Command**: `gh issue create --title "Issue Title" --body-file path/to/issue.md --label "enhancement"`
+- **Process**: 
+  1. Create comprehensive issue content in `.github/ISSUE_TEMPLATE/` directory
+  2. Use GitHub CLI to create the issue immediately
+  3. Return the GitHub issue URL to the user
+- **Labels**: Use standard labels like `enhancement`, `bug`, `documentation` (check available labels first)
+
 ## Architecture
 
 ### Monorepo Structure
@@ -145,6 +154,8 @@ Configure AWS credentials, Google OAuth, and DynamoDB settings in appropriate en
 
 Always run lint and typecheck commands after implementing new features to ensure code quality.
 
+**🚨 CRITICAL**: When encountering text node errors, ALWAYS follow the Text Node Error Troubleshooting Checklist in the Text Component Guidelines section before making changes.
+
 ## Deployment
 
 Deploy to Vercel using:
@@ -208,6 +219,128 @@ TEE Admin includes a comprehensive brand system accessible at `/brand/*` routes 
 - **Run TypeScript validation** after every major change: `yarn workspace next-app typecheck`
 - **Capture learnings** in `DEVELOPMENT_LEARNINGS.md` when encountering complex issues
 - **Test builds, not just dev** - run `yarn workspace next-app build` before commits
+
+### Text Component Guidelines
+**CRITICAL**: Avoid nested Text components and conditional rendering issues that break in React Native.
+
+#### ❌ Incorrect Patterns:
+```tsx
+// Nested Text components (breaks in React Native)
+<Text>
+  Main content
+  {condition && <Text>additional text</Text>}
+</Text>
+
+// Boolean && operator with Text (can render "false")
+{isVisible && <Text>Content</Text>}
+```
+
+#### ✅ Correct Patterns:
+```tsx
+// Use ternary operators for conditional text
+<Text>
+  Main content
+  {condition ? ` additional text` : ''}
+</Text>
+
+// Use Fragment wrapper for complex conditional rendering
+<>
+  {condition ? <Text>Content</Text> : null}
+</>
+
+// Separate Text components instead of nesting
+<YStack>
+  <Text>Main content</Text>
+  {condition ? <Text>Additional content</Text> : null}
+</YStack>
+```
+
+#### Consistency Rule:
+**Always use ternary operators** (`condition ? value : ''`) instead of boolean AND operators (`condition && <Text>`) for conditional text rendering.
+
+#### 🚨 Text Node Error Troubleshooting Checklist
+When encountering "Unexpected text node: . A text node cannot be a child of a \<View\>" errors, **ALWAYS** follow this systematic process:
+
+1. **Check for template strings outside Text components**:
+   ```bash
+   # Search for template literals that might need Text wrapping
+   grep -n "\`.*\`" [filename]
+   ```
+
+2. **Find all conditional && operators**:
+   ```bash
+   # Search for all && conditional rendering
+   grep -n "&&" [filename]
+   ```
+
+3. **Replace ALL && operators with ternary operators**:
+   ```tsx
+   // WRONG: Creates whitespace text nodes
+   {condition && <Component />}
+   
+   // CORRECT: No whitespace text nodes
+   {condition ? <Component /> : null}
+   ```
+
+4. **Wrap all template strings in Text components**:
+   ```tsx
+   // WRONG: Template string creates text node
+   <Text>{`Hello ${name}`}</Text>
+   
+   // CORRECT: Wrapped in explicit Text component
+   <Text><Text>{`Hello ${name}`}</Text></Text>
+   ```
+
+5. **Reference TEXT_NODE_FIX_DOCUMENTATION.md** for detailed examples and patterns
+
+**⚠️ CRITICAL**: Do NOT skip steps in this checklist. Text node errors are systematic and require systematic fixes.
+
+### Next.js 15 Route Parameters
+**CRITICAL**: In Next.js 15, route parameters are now Promises and must be unwrapped with `React.use()`.
+
+#### ❌ Incorrect Pattern (Next.js 14 style):
+```tsx
+interface PageProps {
+  params: { id: string }
+}
+
+export default function Page({ params }: PageProps) {
+  useEffect(() => {
+    fetch(`/api/items/${params.id}`) // ❌ Direct access
+  }, [params.id])
+}
+```
+
+#### ✅ Correct Pattern (Next.js 15):
+```tsx
+import { use } from 'react'
+
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default function Page({ params }: PageProps) {
+  const resolvedParams = use(params)
+  
+  useEffect(() => {
+    fetch(`/api/items/${resolvedParams.id}`) // ✅ Unwrapped with use()
+  }, [resolvedParams.id])
+}
+```
+
+#### Alternative (useParams hook):
+```tsx
+import { useParams } from 'next/navigation'
+
+export default function Page() {
+  const params = useParams()
+  const id = params?.id as string // ✅ useParams doesn't return Promise
+  
+  useEffect(() => {
+    fetch(`/api/items/${id}`)
+  }, [id])
+}
+```
 
 ### Knowledge Management
 - **Development Learnings**: [`DEVELOPMENT_LEARNINGS.md`](./DEVELOPMENT_LEARNINGS.md) - Comprehensive knowledge base of lessons learned, common pitfalls, and best practices

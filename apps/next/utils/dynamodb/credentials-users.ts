@@ -65,9 +65,11 @@ export async function createCredentialsUser(data: {
   // Check if ANY user already exists with this email (any provider)
   const existingAnyUser = await findAnyUserByEmail(data.email)
   if (existingAnyUser) {
-    throw new Error('User with this email already exists. Please sign in with your existing account or use a different email.')
+    throw new Error(
+      'User with this email already exists. Please sign in with your existing account or use a different email.'
+    )
   }
-  
+
   // Check if credentials user specifically exists
   const existingUser = await findCredentialsUserByEmail(data.email)
   if (existingUser) {
@@ -77,7 +79,7 @@ export async function createCredentialsUser(data: {
   const userId = randomUUID()
   const hashedPassword = await hashPassword(data.password)
   const now = new Date()
-  
+
   const user: CredentialsUser = {
     id: userId,
     email: data.email,
@@ -147,15 +149,20 @@ export async function findAnyUserByEmail(email: string): Promise<any | null> {
       FilterExpression: 'email = :email AND #type = :userType',
       ExpressionAttributeValues: {
         ':email': email,
-        ':userType': 'USER'
+        ':userType': 'USER',
       },
       ExpressionAttributeNames: {
-        '#type': 'type'
-      }
+        '#type': 'type',
+      },
     })
 
     if (result.Items && result.Items.length > 0) {
-      console.log('🔍 Found existing user with email:', email, 'provider:', result.Items[0].provider)
+      console.log(
+        '🔍 Found existing user with email:',
+        email,
+        'provider:',
+        result.Items[0].provider
+      )
       return result.Items[0]
     }
     return null
@@ -165,9 +172,12 @@ export async function findAnyUserByEmail(email: string): Promise<any | null> {
   }
 }
 
-export async function verifyCredentialsUser(email: string, password: string): Promise<CredentialsUser | null> {
+export async function verifyCredentialsUser(
+  email: string,
+  password: string
+): Promise<CredentialsUser | null> {
   console.log('verifyCredentialsUser: Attempting sign-in for:', email)
-  
+
   const user = await findCredentialsUserByEmail(email)
   if (!user) {
     console.log('verifyCredentialsUser: No user found for email:', email)
@@ -175,7 +185,7 @@ export async function verifyCredentialsUser(email: string, password: string): Pr
   }
 
   console.log('verifyCredentialsUser: User found, checking password...')
-  
+
   const isValid = await verifyPassword(password, user.hashedPassword)
   if (!isValid) {
     console.log('verifyCredentialsUser: Invalid password for:', email)
@@ -183,17 +193,26 @@ export async function verifyCredentialsUser(email: string, password: string): Pr
   }
 
   console.log('verifyCredentialsUser: Password valid, checking email verification...')
-  console.log('verifyCredentialsUser: emailVerified value:', user.emailVerified, typeof user.emailVerified)
-  
-  // Check if email is verified - handle various data types
-  const isEmailVerified = user.emailVerified && (
-    user.emailVerified instanceof Date || 
-    typeof user.emailVerified === 'string' ||
-    typeof user.emailVerified === 'number'
+  console.log(
+    'verifyCredentialsUser: emailVerified value:',
+    user.emailVerified,
+    typeof user.emailVerified
   )
-  
+
+  // Check if email is verified - handle various data types
+  const isEmailVerified =
+    user.emailVerified &&
+    (user.emailVerified instanceof Date ||
+      typeof user.emailVerified === 'string' ||
+      typeof user.emailVerified === 'number')
+
   if (!isEmailVerified) {
-    console.log('verifyCredentialsUser: Email not verified for:', email, 'emailVerified:', user.emailVerified)
+    console.log(
+      'verifyCredentialsUser: Email not verified for:',
+      email,
+      'emailVerified:',
+      user.emailVerified
+    )
     return null
   }
 
@@ -236,7 +255,7 @@ export async function verifyEmailToken(token: string): Promise<{ email: string }
     if (!result.Item) return null
 
     const tokenData = result.Item as VerificationToken & { tokenType: string }
-    
+
     // Check if token is expired
     if (isTokenExpired(tokenData.createdAt)) {
       return null
@@ -259,8 +278,13 @@ export async function verifyEmailToken(token: string): Promise<{ email: string }
 
     if (userResult.Items && userResult.Items.length > 0) {
       const userId = userResult.Items[0].id
-      console.log('verifyEmailToken: Marking user as verified:', userId, 'for email:', tokenData.email)
-      
+      console.log(
+        'verifyEmailToken: Marking user as verified:',
+        userId,
+        'for email:',
+        tokenData.email
+      )
+
       // Mark user as verified using the primary key
       await client.update({
         TableName: TABLE_NAME,
@@ -273,7 +297,7 @@ export async function verifyEmailToken(token: string): Promise<{ email: string }
           ':now': new Date(),
         },
       })
-      
+
       console.log('verifyEmailToken: User marked as verified successfully')
     } else {
       console.log('verifyEmailToken: No user found for email:', tokenData.email)
@@ -411,7 +435,7 @@ export async function validatePasswordResetToken(token: string): Promise<{ email
     }
 
     const tokenData = result.Item as VerificationToken & { tokenType: string }
-    
+
     // Check if token is expired
     if (isTokenExpired(tokenData.createdAt)) {
       return null

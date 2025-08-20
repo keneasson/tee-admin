@@ -6,20 +6,20 @@ describe('Password Reset Functions - Basic Tests', () => {
     // Just test that the functions can be imported
     const { createPasswordResetToken } = await import('../utils/dynamodb/credentials-users')
     const { validatePassword } = await import('../utils/password')
-    
+
     expect(typeof createPasswordResetToken).toBe('function')
     expect(typeof validatePassword).toBe('function')
   })
 
   it('should validate passwords correctly', async () => {
     const { validatePassword } = await import('../utils/password')
-    
+
     // Test strong password
     const strongPassword = 'StrongPassword123!'
     const strongResult = validatePassword(strongPassword)
     expect(strongResult.isValid).toBe(true)
     expect(strongResult.errors).toEqual([])
-    
+
     // Test weak password
     const weakPassword = '123'
     const weakResult = validatePassword(weakPassword)
@@ -29,17 +29,17 @@ describe('Password Reset Functions - Basic Tests', () => {
 
   it('should generate secure tokens', async () => {
     const { generateSecureToken } = await import('../utils/dynamodb/credentials-users')
-    
+
     const token1 = generateSecureToken()
     const token2 = generateSecureToken()
-    
+
     // Tokens should be strings
     expect(typeof token1).toBe('string')
     expect(typeof token2).toBe('string')
-    
+
     // Tokens should be different
     expect(token1).not.toBe(token2)
-    
+
     // Tokens should be reasonable length (at least 32 characters)
     expect(token1.length).toBeGreaterThanOrEqual(32)
     expect(token2.length).toBeGreaterThanOrEqual(32)
@@ -47,19 +47,19 @@ describe('Password Reset Functions - Basic Tests', () => {
 
   it('should hash passwords correctly', async () => {
     const { hashPassword, verifyPassword } = await import('../utils/dynamodb/credentials-users')
-    
+
     const password = 'TestPassword123!'
     const hashedPassword = await hashPassword(password)
-    
+
     // Hashed password should be different from original
     expect(hashedPassword).not.toBe(password)
     expect(typeof hashedPassword).toBe('string')
     expect(hashedPassword.length).toBeGreaterThan(password.length)
-    
+
     // Should be able to verify the password
     const isValid = await verifyPassword(password, hashedPassword)
     expect(isValid).toBe(true)
-    
+
     // Wrong password should fail verification
     const isWrongValid = await verifyPassword('WrongPassword', hashedPassword)
     expect(isWrongValid).toBe(false)
@@ -67,15 +67,15 @@ describe('Password Reset Functions - Basic Tests', () => {
 
   it('should handle token expiration logic', async () => {
     const { isTokenExpired } = await import('../utils/dynamodb/credentials-users')
-    
+
     // Recent date should not be expired
     const recentDate = new Date()
     expect(isTokenExpired(recentDate)).toBe(false)
-    
+
     // Old date should be expired
     const oldDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) // 8 days ago
     expect(isTokenExpired(oldDate)).toBe(true)
-    
+
     // Future date should not be expired
     const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000) // 1 day in future
     expect(isTokenExpired(futureDate)).toBe(false)
@@ -92,7 +92,7 @@ describe('Password Reset Integration - Mock Database', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    
+
     // Reset mocks to default successful responses
     mockQuery.mockResolvedValue({ Items: [] })
     mockGet.mockResolvedValue({})
@@ -128,12 +128,12 @@ describe('Password Reset Integration - Mock Database', () => {
 
   it('should create password reset token successfully', async () => {
     const { createPasswordResetToken } = await import('../utils/dynamodb/credentials-users')
-    
+
     mockPut.mockResolvedValue({})
-    
+
     const email = 'test@example.com'
     const token = await createPasswordResetToken(email)
-    
+
     expect(typeof token).toBe('string')
     expect(token.length).toBeGreaterThan(0)
     expect(mockPut).toHaveBeenCalledWith(
@@ -150,10 +150,10 @@ describe('Password Reset Integration - Mock Database', () => {
 
   it('should validate password reset token successfully', async () => {
     const { validatePasswordResetToken } = await import('../utils/dynamodb/credentials-users')
-    
+
     const token = 'valid-token-123'
     const email = 'test@example.com'
-    
+
     // Mock successful token retrieval
     mockGet.mockResolvedValue({
       Item: {
@@ -165,9 +165,9 @@ describe('Password Reset Integration - Mock Database', () => {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     })
-    
+
     const result = await validatePasswordResetToken(token)
-    
+
     expect(result).toEqual({ email })
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -182,9 +182,9 @@ describe('Password Reset Integration - Mock Database', () => {
 
   it('should return null for expired token', async () => {
     const { validatePasswordResetToken } = await import('../utils/dynamodb/credentials-users')
-    
+
     const token = 'expired-token-123'
-    
+
     // Mock expired token retrieval
     mockGet.mockResolvedValue({
       Item: {
@@ -196,20 +196,20 @@ describe('Password Reset Integration - Mock Database', () => {
         expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
       },
     })
-    
+
     const result = await validatePasswordResetToken(token)
-    
+
     expect(result).toBeNull()
   })
 
   it('should return null for non-existent token', async () => {
     const { validatePasswordResetToken } = await import('../utils/dynamodb/credentials-users')
-    
+
     // Mock no token found
     mockGet.mockResolvedValue({})
-    
+
     const result = await validatePasswordResetToken('non-existent-token')
-    
+
     expect(result).toBeNull()
   })
 })

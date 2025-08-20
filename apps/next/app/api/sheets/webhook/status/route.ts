@@ -10,21 +10,15 @@ export async function GET(request: NextRequest) {
   try {
     // Check authentication
     const session = await auth()
-    
+
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     // Check if user has admin privileges
     const userRole = (session.user as any)?.role
     if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json(
-        { error: 'Admin privileges required' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 })
     }
 
     // Get sync status
@@ -47,14 +41,13 @@ export async function GET(request: NextRequest) {
         stage: process.env.STAGE,
       },
     })
-
   } catch (error) {
     console.error('❌ Error getting webhook status:', error)
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     )
@@ -66,30 +59,21 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await auth()
-    
+
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     // Check if user has admin privileges
     const userRole = (session.user as any)?.role
     if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json(
-        { error: 'Admin privileges required' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 })
     }
 
     const { sheetId } = await request.json()
-    
+
     if (!sheetId) {
-      return NextResponse.json(
-        { error: 'sheetId is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'sheetId is required' }, { status: 400 })
     }
 
     console.log(`🔧 Manual sync triggered by ${session.user.email} for sheet: ${sheetId}`)
@@ -104,14 +88,13 @@ export async function POST(request: NextRequest) {
       triggeredBy: session.user.email,
       timestamp: new Date().toISOString(),
     })
-
   } catch (error) {
     console.error('❌ Error triggering manual sync:', error)
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Sync failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     )
