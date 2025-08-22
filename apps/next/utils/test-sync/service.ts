@@ -9,9 +9,10 @@ import type { TestSyncStatus, TestSyncRecord, TestSyncDynamoRecord } from '@my/a
 
 // Test Google Sheet configuration
 export const TEST_SHEET_CONFIG = {
-  sheetId: process.env.TEST_SYNC_SHEET_ID || '1test-sheet-id', // You'll need to set this
+  sheetId: process.env.TEST_SYNC_SHEET_ID || '1test-sheet-id', // Will be set after manual sheet creation
   sheetName: 'TestSync',
   range: 'A:C', // Date, Name, Topic columns
+  sheetType: 'testSync' // Custom type that won't appear in production schedules
 }
 
 // Initialize DynamoDB client
