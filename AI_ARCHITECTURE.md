@@ -190,5 +190,20 @@ vercel deploy --prod
 **Check feature flag**: `isFeatureEnabled('flag-name')`
 **Invalidate cache**: `revalidateScheduleCache()`
 
+## 📚 RELATED DOCUMENTATION
+
+### Development Patterns
+- **Feature Development**: See `AI_FEATURE_DEVELOPMENT_PATTERNS.md`
+- **Navigation Audit**: See `AI_NAVIGATION_AUDIT.md`
+- **DynamoDB Contracts**: See `AI_DYNAMODB_CONTRACTS.md`
+- **Environment Variables**: See `COMPLETE_ENV_VAR_AUDIT.md`
+
+### Critical Rules
+1. **ALWAYS** test mobile responsiveness
+2. **NEVER** put business logic in routes/pages
+3. **ALWAYS** use repository pattern for data access
+4. **NEVER** create multiple versions of same component
+5. **ALWAYS** remove experiments after promotion
+
 ---
 **REMEMBER**: When in doubt, check existing patterns in repositories first!

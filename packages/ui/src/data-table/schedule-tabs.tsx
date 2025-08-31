@@ -9,8 +9,10 @@ import {
   Button,
   ScrollView,
   useThemeName,
+  useMedia,
 } from 'tamagui'
 import { brandColors } from '../branding/brand-colors'
+import { Clock, ChevronLeft } from '@tamagui/lucide-icons'
 
 export interface ScheduleTab {
   id: string
@@ -42,7 +44,125 @@ export function ScheduleTabs({
   const themeName = useThemeName()
   const mode = themeName.includes('dark') ? 'dark' : 'light'
   const colors = brandColors[mode]
+  const media = useMedia()
 
+  // Render mobile layout
+  if (media.sm) {
+    return (
+      <YStack flex={1} gap="$3">
+        {/* Mobile Tab Navigation - Stacked */}
+        <Tabs
+          value={currentTab}
+          onValueChange={onTabChange}
+          orientation="horizontal"
+          flexDirection="column"
+          width="100%"
+        >
+          {/* Mobile Header with Older Events Button */}
+          {onLoadOlder && (
+            <XStack
+              backgroundColor={colors.backgroundSecondary}
+              borderRadius="$4"
+              padding="$2"
+              alignItems="center"
+              justifyContent="flex-end"
+              marginBottom="$2"
+            >
+              <Button
+                size="$3"
+                onPress={hasOlder ? onLoadOlder : undefined}
+                disabled={loading || !hasOlder}
+                backgroundColor={!hasOlder ? colors.backgroundTertiary : colors.secondary}
+                color={!hasOlder ? colors.textDisabled : colors.secondaryForeground}
+                borderRadius="$3"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                opacity={!hasOlder ? 0.6 : 1}
+                icon={
+                  <XStack gap="$1" alignItems="center">
+                    <ChevronLeft size={16} color={!hasOlder ? colors.textDisabled : colors.secondaryForeground} />
+                    <Clock size={16} color={!hasOlder ? colors.textDisabled : colors.secondaryForeground} />
+                  </XStack>
+                }
+                hoverStyle={hasOlder ? {
+                  backgroundColor: colors.interactiveHover,
+                } : {}}
+                pressStyle={hasOlder ? {
+                  backgroundColor: colors.interactivePressed,
+                } : {}}
+              >
+                <Text
+                  fontSize="$2"
+                  fontWeight="600"
+                  color={!hasOlder ? colors.textDisabled : colors.secondaryForeground}
+                  numberOfLines={1}
+                >
+                  {loading ? 'Loading...' : (hasOlder ? 'Older' : 'No More')}
+                </Text>
+              </Button>
+            </XStack>
+          )}
+
+          {/* Mobile Tabs - Grid Layout */}
+          <Tabs.List
+            backgroundColor={colors.backgroundSecondary}
+            borderRadius="$4"
+            padding="$2"
+            gap="$2"
+            disablePassBorderRadius
+            flexDirection="row"
+            flexWrap="wrap"
+          >
+            {tabs.map((tab) => (
+              <Tabs.Tab
+                key={tab.id}
+                value={tab.id}
+                backgroundColor={currentTab === tab.id ? colors.primary : "transparent"}
+                borderRadius="$3"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                flex={1}
+                minWidth="45%"
+                justifyContent="center"
+                alignItems="center"
+                pressStyle={{
+                  backgroundColor: colors.primaryPressed,
+                }}
+                focusStyle={{
+                  backgroundColor: colors.primaryHover,
+                }}
+                animation="quick"
+                hoverStyle={{
+                  backgroundColor: colors.primaryHover,
+                }}
+              >
+                <Text
+                  fontWeight={currentTab === tab.id ? '600' : '400'}
+                  color={
+                    currentTab === tab.id 
+                      ? colors.primaryForeground 
+                      : colors.textSecondary
+                  }
+                  fontSize="$3"
+                  numberOfLines={1}
+                  textAlign="center"
+                >
+                  {tab.name}
+                </Text>
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+
+          {/* Tab Content Area */}
+          <YStack flex={1}>
+            {children}
+          </YStack>
+        </Tabs>
+      </YStack>
+    )
+  }
+
+  // Desktop layout (original)
   return (
     <YStack flex={1} gap="$4">
       {/* Horizontal Tab Navigation */}
@@ -117,7 +237,7 @@ export function ScheduleTabs({
             </ScrollView>
           </Tabs.List>
 
-          {/* Show Older Events Button - Always visible but disabled when no more data */}
+          {/* Show Older Events Button - Desktop */}
           {onLoadOlder && (
             <Button
               size="$3"
