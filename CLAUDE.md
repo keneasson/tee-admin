@@ -56,6 +56,7 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - **Email verification**: Required for new credential-based accounts
 - **Invitation system**: 8-character codes with 7-day expiry and single-use enforcement
 - **Password requirements**: Minimum 12 characters, spaces encouraged for passphrases
+- **CRITICAL**: Single production DynamoDB - all environments use the SAME tables (`tee-admin`, `tee-schedules`, `tee-sync-status`)
 - User data stored in DynamoDB with email-based account linking
 - Role-based access control (owner, admin, member, guest)
 - Google Sheets integration for schedules, contacts, and newsletters

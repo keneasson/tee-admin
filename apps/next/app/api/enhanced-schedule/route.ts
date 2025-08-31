@@ -325,26 +325,16 @@ export async function GET(request: NextRequest) {
     // Initialize schedule service
     const scheduleService = new ScheduleService()
     
-    // Fetch all requested schedule data
+    // Fetch all requested schedule data from DynamoDB only
     const schedulePromises = requestedTypes.map(async (type) => {
       try {
-        // Check if DynamoDB data is fresh (within 60 minutes)
-        const isDataFresh = await scheduleService.isDataFresh(type, 60)
-        
-        let data: GoogleSheetData | null
-        
-        if (!isDataFresh) {
-          // Fallback to Google Sheets
-          const { get_google_sheet } = await import('../../../utils/get-google-sheets')
-          data = await get_google_sheet(type)
-        } else {
-          // Fetch from DynamoDB cache
-          data = await scheduleService.getScheduleData(type)
-        }
-        
+        console.log(`🔄 Fetching ${type} schedule from DynamoDB (no fallback)`)
+        // Fetch directly from DynamoDB - no fallback
+        const data = await scheduleService.getScheduleData(type)
+        console.log(`✅ ${type} schedule: ${data?.content?.length || 0} records from DynamoDB`)
         return { type, data }
       } catch (error) {
-        console.error(`Error fetching ${type} schedule:`, error)
+        console.error(`❌ Error fetching ${type} schedule from DynamoDB:`, error)
         return { type, data: null }
       }
     })
@@ -439,7 +429,7 @@ export async function GET(request: NextRequest) {
       data: filteredData,
       currentUser,
       lastUpdated: new Date().toISOString(),
-      dataSource: 'dynamodb-with-google-sheets-fallback',
+      dataSource: 'dynamodb-only',
       totalEvents,
       hasMore: hasMoreEvents,
       hasOlder: hasMoreHistoricalData, // Show when more historical data is available
@@ -457,7 +447,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json(responseData)
     response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=600') // 5min client, 10min CDN
     response.headers.set('X-Data-Source', 'enhanced-schedule-api')
-    response.headers.set('X-Schedule-Source', 'dynamodb-with-fallback')
+    response.headers.set('X-Schedule-Source', 'dynamodb-only')
     
     return response
     

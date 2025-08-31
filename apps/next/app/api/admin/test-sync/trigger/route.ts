@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Retrieved ${sheetData.length} records from Google Sheets`)
 
     // Sync to DynamoDB
-    const result = await syncSheetToDynamo(sheetData)
+    const result = await syncSheetToDynamo(sheetData, 'manual')
     console.log('✅ Sync result:', result)
 
     return NextResponse.json({

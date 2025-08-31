@@ -1,6 +1,7 @@
 import { scheduleRepo, adminRepo } from '@my/app/provider/dynamodb'
 import { GoogleSheetsService } from './google-sheets-service'
 import { SheetTransformer } from './sheet-transformer'
+import { googleSheetsConfig } from '@my/app/config/google-sheets'
 import type { MigrationResult, SheetMigrationResult } from '@my/app/provider/dynamodb/types'
 
 // Webhook payload interface
@@ -24,51 +25,43 @@ export class WebhookSyncService {
   async handleWebhook(payload: SheetWebhookPayload): Promise<void> {
     const { sheetId } = payload
     
-    console.log(`🔄 Debouncing sync for sheet: ${sheetId}`)
     
-    // Clear existing timeout for this sheet
-    if (this.pendingSyncs.has(sheetId)) {
-      clearTimeout(this.pendingSyncs.get(sheetId)!)
-      console.log(`⏱️ Cleared existing timeout for sheet: ${sheetId}`)
+    // For serverless environments, process synchronously instead of debouncing
+    // (setTimeout gets killed when the serverless function ends)
+    try {
+      const result = await this.syncSheetToDynamoDB(sheetId)
+    } catch (error) {
+      console.error(`❌ Failed sync for sheet ${sheetId}:`, error)
+      throw error // Re-throw so webhook returns error status
     }
-    
-    // Set new debounced sync
-    const timeout = setTimeout(async () => {
-      try {
-        console.log(`🚀 Starting debounced sync for sheet: ${sheetId}`)
-        await this.syncSheetToDynamoDB(sheetId)
-        console.log(`✅ Completed sync for sheet: ${sheetId}`)
-      } catch (error) {
-        console.error(`❌ Failed sync for sheet ${sheetId}:`, error)
-      } finally {
-        this.pendingSyncs.delete(sheetId)
-      }
-    }, this.DEBOUNCE_DELAY)
-    
-    this.pendingSyncs.set(sheetId, timeout)
-    
-    console.log(`⏰ Scheduled sync for sheet ${sheetId} in ${this.DEBOUNCE_DELAY/1000}s`)
   }
 
   async syncSheetToDynamoDB(sheetId: string): Promise<SheetMigrationResult> {
     const startTime = Date.now()
     
     try {
-      // Check if data actually changed using version/checksum
-      const currentVersion = await this.getSheetVersion(sheetId)
-      const lastSyncedVersion = await this.getLastSyncedVersion(sheetId)
+      let currentVersion = Date.now().toString() // Default version
       
-      if (currentVersion === lastSyncedVersion) {
-        console.log(`📋 No changes detected for sheet ${sheetId}, skipping sync`)
-        return {
-          sheetId,
-          sheetType: 'unknown',
-          recordsProcessed: 0,
-          recordsSuccessful: 0,
-          recordsFailed: 0,
-          errors: [],
-          executionTime: Date.now() - startTime,
+      // Check if data actually changed using version/checksum (skip if Drive API unavailable)
+      try {
+        currentVersion = await this.getSheetVersion(sheetId)
+        const lastSyncedVersion = await this.getLastSyncedVersion(sheetId)
+        
+        if (currentVersion === lastSyncedVersion) {
+          return {
+            sheetId,
+            sheetType: 'unknown',
+            recordsProcessed: 0,
+            recordsSuccessful: 0,
+            recordsFailed: 0,
+            errors: [],
+            executionTime: Date.now() - startTime,
+          }
         }
+      } catch (versionError) {
+        console.warn(`⚠️ Version check failed for sheet ${sheetId}, proceeding with sync:`, (versionError as Error).message)
+        // Continue with sync even if version check fails - use timestamp as version
+        currentVersion = Date.now().toString()
       }
       
       // Determine sheet type and get data
@@ -113,7 +106,6 @@ export class WebhookSyncService {
         executionTime: Date.now() - startTime,
       }
       
-      console.log(`📊 Sync completed for ${sheetId}:`, migrationResult)
       return migrationResult
       
     } catch (error) {
@@ -132,7 +124,6 @@ export class WebhookSyncService {
         executionTime: Date.now() - startTime,
       }
       
-      console.error(`❌ Sync failed for ${sheetId}:`, failedResult)
       throw error
     }
   }
@@ -170,15 +161,21 @@ export class WebhookSyncService {
   }
 
   private async determineSheetType(sheetId: string): Promise<'schedule' | 'directory' | 'events'> {
-    // This would be configured based on known sheet IDs
-    // For now, we'll use a simple mapping
-    const sheetTypeMapping: Record<string, 'schedule' | 'directory' | 'events'> = {
-      // Add your actual sheet IDs here
-      // 'your-schedule-sheet-id': 'schedule',
-      // 'your-directory-sheet-id': 'directory',
+    // Get sheet type from centralized config
+    const sheetType = googleSheetsConfig.getSheetType(sheetId)
+    
+    if (!sheetType) {
+      console.warn(`⚠️ Unknown sheet ID: ${sheetId}, defaulting to 'schedule'`)
+      return 'schedule'
     }
     
-    return sheetTypeMapping[sheetId] || 'schedule' // Default to schedule
+    // Map config types to sync types
+    if (sheetType === 'directory') {
+      return 'directory'
+    }
+    
+    // All other types are schedules (memorial, sundaySchool, bibleClass, testSync)
+    return 'schedule'
   }
 
   private async updateSyncStatus(
@@ -190,7 +187,6 @@ export class WebhookSyncService {
   ): Promise<void> {
     try {
       // This will be implemented with the sync status repository
-      console.log(`📝 Sync status for ${sheetId}: ${status}`)
     } catch (error) {
       console.warn(`⚠️ Could not update sync status for sheet ${sheetId}:`, error)
     }
@@ -198,7 +194,6 @@ export class WebhookSyncService {
 
   // Manual sync trigger (for admin users)
   async triggerManualSync(sheetId: string): Promise<SheetMigrationResult> {
-    console.log(`🔧 Manual sync triggered for sheet: ${sheetId}`)
     
     // Clear any pending debounced sync
     if (this.pendingSyncs.has(sheetId)) {
@@ -226,7 +221,6 @@ export class WebhookSyncService {
 
   // Cleanup method for graceful shutdown
   async cleanup(): Promise<void> {
-    console.log('🧹 Cleaning up webhook sync service...')
     
     // Clear all pending timeouts
     this.pendingSyncs.forEach((timeout) => {
@@ -234,7 +228,6 @@ export class WebhookSyncService {
     })
     
     this.pendingSyncs.clear()
-    console.log('✅ Webhook sync service cleanup complete')
   }
 
   // Cache invalidation method
@@ -247,7 +240,6 @@ export class WebhookSyncService {
       // Determine the specific sheet type from the sheet ID
       const specificSheetType = getSheetTypeFromId(sheetId)
       
-      console.log(`🗄️ Invalidating cache for sheet ${sheetId} (type: ${specificSheetType})`)
       
       if (sheetType === 'directory') {
         await invalidateDirectoryCache()
@@ -256,7 +248,6 @@ export class WebhookSyncService {
         await invalidateScheduleCache(specificSheetType)
       }
       
-      console.log(`✅ Cache invalidation completed for sheet ${sheetId}`)
     } catch (error) {
       console.error(`❌ Failed to invalidate cache for sheet ${sheetId}:`, error)
       // Don't throw - cache invalidation failures shouldn't break the sync

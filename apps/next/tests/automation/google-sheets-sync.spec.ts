@@ -7,8 +7,9 @@ import * as path from 'path'
  * This simulates human interaction with Google Sheets to trigger webhooks
  */
 
-// Configuration - you'll need to set the actual sheet URL after creation
-const TEST_SHEET_URL = process.env.TEST_SYNC_SHEET_URL || 'https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit'
+// Configuration - uses the sheet ID from our configuration
+const TEST_SHEET_ID = '1ffB9-VWxaTQudAskm_m9vP2bbaFwA5l_tkGimTkzXAw'
+const TEST_SHEET_URL = process.env.TEST_SYNC_SHEET_URL || `https://docs.google.com/spreadsheets/d/${TEST_SHEET_ID}/edit`
 const SNAPSHOT_DIR = path.join(__dirname, '../../snapshots/sheets')
 
 // Ensure snapshot directory exists

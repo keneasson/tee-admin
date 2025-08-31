@@ -216,7 +216,7 @@ export function useEnhancedSchedule(
       // Set empty fallback data on error
       if (!loadOlder) {
         setData({})
-        setTabs([])
+        // Don't clear tabs - they are static
         setCurrentUser(null)
         setTotalEvents(0)
         setHasMore(false)

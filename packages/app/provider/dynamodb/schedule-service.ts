@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { GoogleSheetTypes, GoogleSheetData, ProgramTypeKeys } from '@my/app/types'
+import { tableNames } from './config'
 
 interface ScheduleRecord {
   PK: string
@@ -48,7 +49,7 @@ export class ScheduleService {
       console.log(`📊 Fetching ${sheetType} schedule from DynamoDB`)
 
       const response = await this.client.send(new QueryCommand({
-        TableName: 'dev-tee-schedules',
+        TableName: tableNames.schedules,
         KeyConditionExpression: 'PK = :pk',
         ExpressionAttributeValues: {
           ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
@@ -116,11 +117,43 @@ export class ScheduleService {
         details: Record<string, any>
       }> = []
 
-      // Fetch events for each schedule type in the date range
+      // Fetch events for each schedule type using the working getScheduleData method
       for (const sheetType of orderOfKeys) {
         try {
-          const events = await this.getEventsInDateRange(sheetType as any, twoHoursAgo, twoWeeksFromNow)
-          upcomingEvents.push(...events)
+          console.log(`🔄 Fetching ${sheetType} events for upcoming program`)
+          
+          // Get full schedule data using the working method
+          const scheduleData = await this.getScheduleData(sheetType)
+          
+          if (!scheduleData || !scheduleData.content) {
+            console.log(`📅 No ${sheetType} schedule data found`)
+            continue
+          }
+
+          // Filter events within the time range
+          const filteredEvents = scheduleData.content.filter((event: any) => {
+            const eventDate = new Date(event.Date || event.date)
+            if (isNaN(eventDate.getTime())) {
+              console.warn(`⚠️ Invalid date found in ${sheetType}:`, event.Date || event.date)
+              return false
+            }
+            return eventDate >= twoHoursAgo && eventDate <= twoWeeksFromNow
+          })
+
+          // Convert to the expected format
+          filteredEvents.forEach((event: any) => {
+            const eventDate = new Date(event.Date || event.date)
+            
+            upcomingEvents.push({
+              type: sheetType as ProgramTypeKeys,
+              title: this.getSheetTitle(sheetType),
+              date: eventDate,
+              details: event // The full event object
+            })
+          })
+
+          console.log(`📅 Found ${filteredEvents.length} upcoming events for ${sheetType}`)
+          
         } catch (error) {
           console.warn(`⚠️ Failed to get upcoming events for ${sheetType}:`, error)
           // Continue with other sheet types
@@ -139,63 +172,6 @@ export class ScheduleService {
     }
   }
 
-  /**
-   * Get events for a specific schedule type within a date range (DynamoDB optimized)
-   */
-  private async getEventsInDateRange(
-    sheetType: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc',
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{
-    type: ProgramTypeKeys
-    title: string
-    date: Date
-    details: Record<string, any>
-  }>> {
-    try {
-      // Query DynamoDB with date range filter
-      const response = await this.client.send(new QueryCommand({
-        TableName: 'dev-tee-schedules',
-        KeyConditionExpression: 'PK = :pk',
-        FilterExpression: '#dateField BETWEEN :startDate AND :endDate',
-        ExpressionAttributeNames: {
-          '#dateField': 'date'
-        },
-        ExpressionAttributeValues: {
-          ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
-          ':startDate': startDate.toISOString(),
-          ':endDate': endDate.toISOString(),
-        },
-        ScanIndexForward: true, // Chronological order
-      }))
-
-      if (!response.Items || response.Items.length === 0) {
-        console.log(`📅 No events found for ${sheetType} in date range`)
-        return []
-      }
-
-      const scheduleRecords = response.Items as ScheduleRecord[]
-      
-      // Convert to event format
-      const events = scheduleRecords.map(record => {
-        const eventDate = new Date(record.date)
-        
-        return {
-          type: sheetType as ProgramTypeKeys,
-          title: this.getSheetTitle(sheetType),
-          date: eventDate,
-          details: record.data, // The full data object from DynamoDB
-        }
-      })
-      
-      console.log(`📅 Found ${events.length} events for ${sheetType} in date range`)
-      return events
-      
-    } catch (error) {
-      console.error(`❌ Error fetching ${sheetType} events in date range:`, error)
-      return []
-    }
-  }
 
   /**
    * Get directory data for user lookup
@@ -207,7 +183,7 @@ export class ScheduleService {
 
       // Since we have indexed keys, we need to query by email
       const response = await this.client.send(new QueryCommand({
-        TableName: 'dev-tee-schedules',
+        TableName: tableNames.schedules,
         KeyConditionExpression: 'PK = :pk',
         FilterExpression: 'email = :email',
         ExpressionAttributeValues: {
@@ -240,7 +216,7 @@ export class ScheduleService {
       console.log('📋 Fetching directory data from DynamoDB')
 
       const response = await this.client.send(new QueryCommand({
-        TableName: 'dev-tee-schedules',
+        TableName: tableNames.schedules,
         KeyConditionExpression: 'PK = :pk',
         ExpressionAttributeValues: {
           ':pk': 'DIRECTORY#MEMBERS',
@@ -281,12 +257,16 @@ export class ScheduleService {
   }
 
   /**
-   * Check if data is fresh (for fallback strategy)
+   * Get sync status for a sheet type (for monitoring/debugging)
    */
-  async isDataFresh(sheetType: string, maxAgeMinutes: number = 60): Promise<boolean> {
+  async getSyncStatus(sheetType: string): Promise<{
+    lastSync?: string
+    status: 'synced' | 'missing' | 'error'
+    message: string
+  }> {
     try {
       const response = await this.client.send(new GetCommand({
-        TableName: 'dev-tee-sync-status',
+        TableName: tableNames.syncStatus,
         Key: {
           PK: `SYNC#${sheetType.toUpperCase()}`,
           SK: 'STATUS',
@@ -294,18 +274,23 @@ export class ScheduleService {
       }))
 
       if (!response.Item?.lastSync) {
-        return false
+        return {
+          status: 'missing',
+          message: `No sync status found for ${sheetType}`
+        }
       }
 
-      const lastSync = new Date(response.Item.lastSync)
-      const now = new Date()
-      const ageMinutes = (now.getTime() - lastSync.getTime()) / (1000 * 60)
-
-      return ageMinutes <= maxAgeMinutes
+      return {
+        lastSync: response.Item.lastSync,
+        status: 'synced',
+        message: `Last synced: ${response.Item.lastSync}`
+      }
 
     } catch (error) {
-      console.warn(`⚠️ Could not check data freshness for ${sheetType}:`, error)
-      return false
+      return {
+        status: 'error',
+        message: `Error checking sync status: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }
     }
   }
 

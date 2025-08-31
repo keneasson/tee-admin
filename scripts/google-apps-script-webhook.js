@@ -12,8 +12,8 @@
  */
 
 // Configuration - UPDATE THESE VALUES
-const WEBHOOK_URL = 'https://your-domain.com/api/sheets/webhook'  // UPDATE THIS
-const WEBHOOK_SECRET = 'tee-admin-webhook-secret-2025-change-in-production'  // UPDATE THIS
+const WEBHOOK_URL = 'https://www.tee-admin.com/api/sheets/webhook'  // Production URL
+const WEBHOOK_SECRET = '8e1008de928c5ebc36d5d234d3344e39840795d6456dd59a254e58b2d9e20220'  // Secure secret (must match server)
 const SHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId()
 
 /**

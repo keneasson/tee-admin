@@ -31,26 +31,72 @@ export class GoogleSheetsService {
         ],
       })
     } else {
-      // Use service account email and key from environment (fallback)
-      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+      // Try to load credentials from the service account file directly
+      let credentials: any = null
       
-      if (serviceAccountEmail && privateKey) {
-        const credentials = {
-          client_email: serviceAccountEmail,
-          private_key: privateKey,
+      try {
+        // Try to read from the standard service account file location
+        const fs = require('fs')
+        const path = require('path')
+        
+        // Check for the service account file in multiple locations
+        const possiblePaths = [
+          './apps/next/tee-services-db47a9e534d3.json',
+          '../apps/next/tee-services-db47a9e534d3.json',
+          '../../apps/next/tee-services-db47a9e534d3.json',
+          process.cwd() + '/apps/next/tee-services-db47a9e534d3.json'
+        ]
+        
+        for (const filePath of possiblePaths) {
+          try {
+            if (fs.existsSync(filePath)) {
+              credentials = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+              console.log('📊 Loaded Google service account from:', filePath)
+              break
+            }
+          } catch (e) {
+            // Continue to next path
+          }
+        }
+      } catch (e) {
+        // Fall back to environment variables
+      }
+      
+      if (!credentials) {
+        // Try GOOGLE_SERVICE_ACCOUNT_KEY first (full JSON as environment variable)
+        const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+        if (serviceAccountKey) {
+          try {
+            credentials = JSON.parse(serviceAccountKey)
+            console.log('📊 Loaded Google service account from GOOGLE_SERVICE_ACCOUNT_KEY environment variable')
+          } catch (e) {
+            console.error('❌ Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', e)
+          }
         }
         
-        auth = new google.auth.GoogleAuth({
-          credentials,
-          scopes: [
-            'https://www.googleapis.com/auth/spreadsheets.readonly',
-            'https://www.googleapis.com/auth/drive.readonly',
-          ],
-        })
-      } else {
-        throw new Error('Google Service Account credentials not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_FILE or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY')
+        // Fallback to individual environment variables
+        if (!credentials) {
+          const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+          const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+          
+          if (serviceAccountEmail && privateKey) {
+            credentials = {
+              client_email: serviceAccountEmail,
+              private_key: privateKey,
+            }
+          } else {
+            throw new Error('Google Service Account credentials not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_FILE, GOOGLE_SERVICE_ACCOUNT_KEY, or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY, or ensure tee-services-db47a9e534d3.json exists')
+          }
+        }
       }
+      
+      auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets.readonly',
+          'https://www.googleapis.com/auth/drive.readonly',
+        ],
+      })
     }
 
     this.sheets = google.sheets({ version: 'v4', auth })
@@ -63,21 +109,36 @@ export class GoogleSheetsService {
   async getSheetData(sheetId: string, range: string = 'A:Z'): Promise<any[][]> {
     try {
       console.log(`📊 Fetching data from sheet ${sheetId}, range: ${range}`)
+      console.log(`🔑 Using auth scopes: spreadsheets.readonly, drive.readonly`)
       
-      const response = await this.sheets.spreadsheets.values.get({
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sheet API request timed out after 30s')), 30000)
+      )
+      
+      const apiPromise = this.sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
         range,
         valueRenderOption: 'UNFORMATTED_VALUE',
         dateTimeRenderOption: 'FORMATTED_STRING',
       })
+      
+      console.log(`⏳ Making API request to Google Sheets...`)
+      const response = await Promise.race([apiPromise, timeoutPromise]) as any
+      console.log(`📡 API response received`)
 
       const rows = response.data.values || []
       console.log(`📈 Retrieved ${rows.length} rows from sheet ${sheetId}`)
       
       return rows
     } catch (error) {
-      console.error(`❌ Error fetching sheet data for ${sheetId}:`, error)
-      throw new Error(`Failed to fetch sheet data: ${error}`)
+      console.error(`❌ Error fetching sheet data for ${sheetId}:`, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        status: (error as any)?.status,
+        code: (error as any)?.code,
+        errors: (error as any)?.errors,
+      })
+      throw new Error(`Failed to fetch sheet data: ${error instanceof Error ? error.message : error}`)
     }
   }
 

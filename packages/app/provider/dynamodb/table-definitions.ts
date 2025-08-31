@@ -9,7 +9,7 @@ const commonTableConfig = {
   },
   Tags: [
     { Key: 'Project', Value: 'TEE-Admin' },
-    { Key: 'Environment', Value: process.env.STAGE || 'dev' },
+    { Key: 'Environment', Value: 'production' },
   ],
 }
 

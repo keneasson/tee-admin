@@ -1,4 +1,5 @@
 import { revalidateTag } from 'next/cache'
+import { googleSheetsConfig } from '@my/app/config/google-sheets'
 
 /**
  * Cache tags for different data types to enable selective invalidation
@@ -112,69 +113,13 @@ export async function invalidateAllCache(): Promise<void> {
   }
 }
 
-/**
- * Load sheet configuration from Google service account file or environment variables
- */
-function loadSheetConfig(): Record<string, string> {
-  try {
-    // Try to load from config file (development)
-    const serviceConfig = require('../tee-services-db47a9e534d3.json')
-    const sheetIds = serviceConfig.sheet_ids
-    
-    const sheetIdMap: Record<string, string> = {}
-    
-    // Build mapping from config file
-    Object.entries(sheetIds).forEach(([type, config]: [string, any]) => {
-      if (config.key) {
-        sheetIdMap[config.key] = type
-      }
-    })
-    
-    return sheetIdMap
-  } catch (error) {
-    console.warn('⚠️ Could not load sheet configuration from file (this is normal in production):', error.message)
-    
-    // Fallback: Load from environment variables (production)
-    const sheetIdMap: Record<string, string> = {}
-    
-    // Environment variable mapping for production
-    const envMapping = {
-      'GOOGLE_SHEET_MEMORIAL': 'memorial',
-      'GOOGLE_SHEET_BIBLE_CLASS': 'bibleClass', 
-      'GOOGLE_SHEET_SUNDAY_SCHOOL': 'sundaySchool',
-      'GOOGLE_SHEET_DIRECTORY': 'directory',
-      'GOOGLE_SHEET_CYC': 'cyc',
-    }
-    
-    Object.entries(envMapping).forEach(([envVar, type]) => {
-      const sheetId = process.env[envVar]
-      if (sheetId) {
-        sheetIdMap[sheetId] = type
-        console.log(`📋 Loaded ${type} sheet ID from environment variable ${envVar}`)
-      }
-    })
-    
-    if (Object.keys(sheetIdMap).length === 0) {
-      console.warn('⚠️ No sheet configuration found in file or environment variables')
-    }
-    
-    return sheetIdMap
-  }
-}
-
-// Cache the sheet config on first load
-let sheetIdMapCache: Record<string, string> | null = null
+// No longer needed - using GoogleSheetsConfig service
 
 /**
  * Determine sheet type from Google Sheets ID
  */
 export function getSheetTypeFromId(sheetId: string): string {
-  // Load config on first use
-  if (!sheetIdMapCache) {
-    sheetIdMapCache = loadSheetConfig()
-  }
-  
-  const sheetType = sheetIdMapCache[sheetId]
+  const sheetType = googleSheetsConfig.getSheetType(sheetId)
   
   if (!sheetType) {
     console.warn(`⚠️ Unknown sheet ID: ${sheetId}`)
@@ -189,82 +134,12 @@ export function getSheetTypeFromId(sheetId: string): string {
  * Get Google Sheet ID from sheet type (reverse mapping)
  */
 export function getSheetIdFromType(sheetType: string): string | null {
-  try {
-    // Try to load from config file first
-    const serviceConfig = require('../tee-services-db47a9e534d3.json')
-    const sheetIds = serviceConfig.sheet_ids
-    
-    const config = sheetIds[sheetType]
-    return config?.key || null
-  } catch (error) {
-    // Fallback to environment variables (production)
-    const envMapping: Record<string, string> = {
-      'memorial': process.env.GOOGLE_SHEET_MEMORIAL || '',
-      'bibleClass': process.env.GOOGLE_SHEET_BIBLE_CLASS || '',
-      'sundaySchool': process.env.GOOGLE_SHEET_SUNDAY_SCHOOL || '',
-      'directory': process.env.GOOGLE_SHEET_DIRECTORY || '',
-      'cyc': process.env.GOOGLE_SHEET_CYC || '',
-    }
-    
-    return envMapping[sheetType] || null
-  }
+  return googleSheetsConfig.getSheetId(sheetType)
 }
 
 /**
  * Get all configured Google Sheet IDs and their types
  */
 export function getAllSheetMappings(): Array<{id: string, type: string, name: string}> {
-  try {
-    // Try to load from config file first (development)
-    const serviceConfig = require('../tee-services-db47a9e534d3.json')
-    const sheetIds = serviceConfig.sheet_ids
-    
-    return Object.entries(sheetIds).map(([type, config]: [string, any]) => ({
-      id: config.key || 'not-configured',
-      type,
-      name: config.name || type,
-    }))
-  } catch (error) {
-    console.warn('⚠️ Could not load sheet configuration from file (this is normal in production):', error.message)
-    
-    // Fallback: Load from environment variables (production)
-    const envMappings = [
-      { 
-        id: process.env.GOOGLE_SHEET_MEMORIAL || 'not-configured',
-        type: 'memorial',
-        name: 'Memorial Service Schedule'
-      },
-      { 
-        id: process.env.GOOGLE_SHEET_BIBLE_CLASS || 'not-configured',
-        type: 'bibleClass',
-        name: 'Bible Class Schedule'
-      },
-      { 
-        id: process.env.GOOGLE_SHEET_SUNDAY_SCHOOL || 'not-configured',
-        type: 'sundaySchool',
-        name: 'Sunday School Schedule'
-      },
-      { 
-        id: process.env.GOOGLE_SHEET_DIRECTORY || 'not-configured',
-        type: 'directory',
-        name: 'Directory Data'
-      },
-      { 
-        id: process.env.GOOGLE_SHEET_CYC || 'not-configured',
-        type: 'cyc',
-        name: 'CYC Schedule'
-      },
-    ]
-    
-    // Filter out any entries that don't have valid sheet IDs
-    const validMappings = envMappings.filter(mapping => mapping.id !== 'not-configured')
-    
-    if (validMappings.length === 0) {
-      console.warn('⚠️ No valid sheet configuration found in environment variables')
-    } else {
-      console.log(`📋 Loaded ${validMappings.length} sheet mappings from environment variables`)
-    }
-    
-    return validMappings
-  }
+  return googleSheetsConfig.getAllSheets()
 }

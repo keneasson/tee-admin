@@ -6,6 +6,7 @@ import type {
   ProgramTypeKeys 
 } from '@my/app/types'
 import type { DirectoryRecord, ContactInfo } from '@my/app/provider/dynamodb/types'
+import { googleSheetsConfig } from '@my/app/config/google-sheets'
 
 interface ValidationResult {
   valid: boolean
@@ -44,10 +45,9 @@ export class SheetTransformer {
     const headers = sheetData[0] || []
     const rows = sheetData.slice(1)
 
-    console.log(`📊 Processing ${rows.length} schedule rows with headers:`, headers)
 
-    // Determine sheet type based on headers
-    const sheetType = this.determineScheduleType(headers)
+    // Determine sheet type based on sheet ID (fail fast if not found)
+    const sheetType = this.determineScheduleTypeBySheetId(sheetId)
     const ecclesia = this.extractEcclesia(sheetId, headers, rows)
 
     for (let i = 0; i < rows.length; i++) {
@@ -83,7 +83,6 @@ export class SheetTransformer {
       }
     }
 
-    console.log(`✅ Transformed ${records.length} schedule records from sheet ${sheetId}`)
     return records
   }
 
@@ -118,7 +117,6 @@ export class SheetTransformer {
     const headers = sheetData[0] || []
     const rows = sheetData.slice(1)
 
-    console.log(`📊 Processing ${rows.length} directory rows with headers:`, headers)
 
     // Create header mapping
     const headerMap = this.createHeaderMapping(headers, [
@@ -165,7 +163,6 @@ export class SheetTransformer {
       }
     }
 
-    console.log(`✅ Transformed ${records.length} directory records from sheet ${sheetId}`)
     return records
   }
 
@@ -216,11 +213,38 @@ export class SheetTransformer {
       }
     }
 
-    console.log(`📋 Validation result: ${result.valid ? 'VALID' : 'INVALID'}, ${result.errors.length} errors, ${result.warnings.length} warnings`)
     return result
   }
 
   // Helper methods
+
+  private determineScheduleTypeBySheetId(sheetId: string): ProgramTypeKeys | null {
+    // Use centralized GoogleSheetsConfig service
+    const sheetType = googleSheetsConfig.getSheetType(sheetId)
+    
+    if (!sheetType) {
+      // Get all configured sheets for error message
+      const configuredSheets = googleSheetsConfig.getAllSheets()
+      const knownSheetIds = configuredSheets.map(s => s.id)
+      throw new Error(`CRITICAL: Unknown sheet ID ${sheetId}. Known sheet IDs: ${knownSheetIds.join(', ')}. Check Google services configuration.`)
+    }
+    
+    // Map config types to program types
+    const typeMappings: Record<string, ProgramTypeKeys> = {
+      'memorial': 'memorial',
+      'bibleClass': 'bibleClass',
+      'sundaySchool': 'sundaySchool',
+      'testSync': 'sundaySchool' // Test sync uses Sunday School format
+    }
+    
+    const programType = typeMappings[sheetType]
+    
+    if (!programType) {
+      throw new Error(`CRITICAL: Sheet type ${sheetType} does not map to a valid program type`)
+    }
+    
+    return programType
+  }
 
   private determineScheduleType(headers: string[]): ProgramTypeKeys {
     const headerStr = headers.join(' ').toLowerCase()
