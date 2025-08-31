@@ -1,14 +1,15 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'solito/navigation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext } from '@my/ui'
+import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext, useMedia, Sheet } from '@my/ui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ThemeToggle } from './theme-toggle'
+import { Menu, X } from '@tamagui/lucide-icons'
 
 type SimpleEnhancedNavigationProps = {
   children: React.ReactNode
@@ -41,6 +42,8 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   const currentPath = usePathname()
   const themeName = useThemeName()
   const { setTheme } = useThemeContext()
+  const media = useMedia()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   
   // Use theme-aware colors
   const mode = themeName.includes('dark') ? 'dark' : 'light'
@@ -48,45 +51,83 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
 
   const navigateTo = (path: string) => () => {
     router.push(path)
+    // Close mobile menu after navigation
+    setMobileMenuOpen(false)
   }
 
-  return (
-    <View 
-      flex={1} 
-      flexDirection="row" 
-      backgroundColor={colors.background} 
-      style={{ minHeight: '100vh' }}
-    >
-      {/* Simple Navigation Sidebar */}
-      <View
-        backgroundColor={colors.backgroundSecondary}
-        borderRightWidth={1}
-        borderRightColor={colors.border}
-        width={250}
-        style={{ height: '100vh' }}
-        padding="$3"
-      >
-        <YStack gap="$3">
-          {/* Header */}
-          <View flexDirection="row" alignItems="center" justifyContent="space-between">
-            <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
-              TEE Portal
-            </Text>
-            <ThemeToggle onThemeChange={setTheme} />
-          </View>
-
-          {session?.user && (
-            <View backgroundColor={colors.backgroundTertiary} padding="$2" borderRadius="$2">
-              <Text fontSize="$3" fontWeight="600" color={colors.textPrimary}>
-                {session.user.name}
-              </Text>
-              <Text fontSize="$2" color={colors.textSecondary}>
-                {(session.user as any)?.role || 'Guest'}
-              </Text>
-            </View>
+  // Navigation content component (shared between desktop and mobile)
+  const NavigationContent = () => (
+    <YStack gap="$3" flex={1}>
+      {/* Header */}
+      <View flexDirection="row" alignItems="center" justifyContent="space-between">
+        <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
+          TEE Portal
+        </Text>
+        <XStack gap="$2" alignItems="center">
+          <ThemeToggle onThemeChange={setTheme} />
+          {/* Close button for mobile */}
+          {media.sm && (
+            <Button
+              size="$3"
+              circular
+              icon={X}
+              onPress={() => setMobileMenuOpen(false)}
+              backgroundColor="transparent"
+            />
           )}
+        </XStack>
+      </View>
 
-          {/* Main Navigation */}
+      {session?.user && (
+        <View backgroundColor={colors.backgroundTertiary} padding="$2" borderRadius="$2">
+          <Text fontSize="$3" fontWeight="600" color={colors.textPrimary}>
+            {session.user.name}
+          </Text>
+          <Text fontSize="$2" color={colors.textSecondary}>
+            {(session.user as any)?.role || 'Guest'}
+          </Text>
+        </View>
+      )}
+
+      {/* Main Navigation */}
+      <YStack gap="$1">
+        <Text
+          fontSize="$2"
+          fontWeight="600"
+          color={colors.textSecondary}
+          textTransform="uppercase"
+        >
+          Main Menu
+        </Text>
+        {pages.map((page) => (
+          <Button
+            key={page.path}
+            onPress={navigateTo(page.path)}
+            backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+            borderRadius="$2"
+            justifyContent="flex-start"
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            hoverStyle={{
+              backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+            }}
+          >
+            <Text
+              color={currentPath === page.path ? colors.primaryForeground : colors.textPrimary}
+              fontWeight={currentPath === page.path ? '600' : '400'}
+              hoverStyle={{
+                color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+              }}
+            >
+              {page.label}
+            </Text>
+          </Button>
+        ))}
+      </YStack>
+
+      {/* Admin Navigation */}
+      {session?.user &&
+        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
           <YStack gap="$1">
             <Text
               fontSize="$2"
@@ -94,9 +135,9 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               color={colors.textSecondary}
               textTransform="uppercase"
             >
-              Main Menu
+              Admin Tools
             </Text>
-            {pages.map((page) => (
+            {adminPages.map((page) => (
               <Button
                 key={page.path}
                 onPress={navigateTo(page.path)}
@@ -110,7 +151,9 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                 }}
               >
                 <Text
-                  color={currentPath === page.path ? colors.primaryForeground : colors.textPrimary}
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
                   fontWeight={currentPath === page.path ? '600' : '400'}
                   hoverStyle={{
                     color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
@@ -121,53 +164,84 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               </Button>
             ))}
           </YStack>
+        )}
 
-          {/* Admin Navigation */}
-          {session?.user &&
-            ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
-              <YStack gap="$1">
-                <Text
-                  fontSize="$2"
-                  fontWeight="600"
-                  color={colors.textSecondary}
-                  textTransform="uppercase"
-                >
-                  Admin Tools
-                </Text>
-                {adminPages.map((page) => (
-                  <Button
-                    key={page.path}
-                    onPress={navigateTo(page.path)}
-                    backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
-                    borderRadius="$2"
-                    justifyContent="flex-start"
-                    paddingHorizontal="$3"
-                    paddingVertical="$2"
-                    hoverStyle={{
-                      backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
-                    }}
-                  >
-                    <Text
-                      color={
-                        currentPath === page.path ? colors.primaryForeground : colors.textPrimary
-                      }
-                      fontWeight={currentPath === page.path ? '600' : '400'}
-                      hoverStyle={{
-                        color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
-                      }}
-                    >
-                      {page.label}
-                    </Text>
-                  </Button>
-                ))}
-              </YStack>
-            )}
+      {/* Auth */}
+      <YStack gap="$2" marginTop="auto">
+        {session?.user ? <NavitemLogout /> : <LogInUser />}
+      </YStack>
+    </YStack>
+  )
 
-          {/* Auth */}
-          <YStack gap="$2" marginTop="auto">
-            {session?.user ? <NavitemLogout /> : <LogInUser />}
-          </YStack>
-        </YStack>
+  // Mobile layout (hamburger menu)
+  if (media.sm) {
+    return (
+      <View flex={1} backgroundColor={colors.background}>
+        {/* Mobile Header */}
+        <XStack
+          backgroundColor={colors.backgroundSecondary}
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+          padding="$3"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
+            TEE Portal
+          </Text>
+          <Button
+            size="$3"
+            circular
+            icon={Menu}
+            onPress={() => setMobileMenuOpen(true)}
+            backgroundColor="transparent"
+          />
+        </XStack>
+
+        {/* Mobile Menu Sheet */}
+        <Sheet
+          modal
+          open={mobileMenuOpen}
+          onOpenChange={setMobileMenuOpen}
+          snapPoints={[85]}
+          position={0}
+          dismissOnSnapToBottom
+        >
+          <Sheet.Overlay />
+          <Sheet.Frame
+            backgroundColor={colors.backgroundSecondary}
+            padding="$4"
+          >
+            <NavigationContent />
+          </Sheet.Frame>
+        </Sheet>
+
+        {/* Main Content */}
+        <View flex={1}>
+          {children}
+        </View>
+      </View>
+    )
+  }
+
+  // Desktop layout (sidebar)
+  return (
+    <View 
+      flex={1} 
+      flexDirection="row" 
+      backgroundColor={colors.background} 
+      style={{ minHeight: '100vh' }}
+    >
+      {/* Desktop Navigation Sidebar */}
+      <View
+        backgroundColor={colors.backgroundSecondary}
+        borderRightWidth={1}
+        borderRightColor={colors.border}
+        width={250}
+        style={{ height: '100vh' }}
+        padding="$3"
+      >
+        <NavigationContent />
       </View>
 
       {/* Main Content Area */}
