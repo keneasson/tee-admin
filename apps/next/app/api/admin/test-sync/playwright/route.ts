@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     // Run the Playwright test
     try {
       const { stdout, stderr } = await execAsync(
-        'npx playwright test tests/automation/google-sheets-sync.spec.ts --headed',
+        'npx playwright test apps/next/tests/automation/google-sheets-sync.spec.ts --headed',
         { 
           cwd: path.join(process.cwd()),
           timeout: 180000 // 3 minutes

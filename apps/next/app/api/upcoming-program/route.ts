@@ -4,8 +4,8 @@ import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { ProgramTypeKeys } from '@my/app/types'
 import { CACHE_TAGS } from '../../../utils/cache'
 
-// Cache for 1 hour in production (we can cache longer now with tag-based invalidation)
-const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 3600 : 0
+// Cache for 15 minutes in production (shorter for faster updates when debugging)
+const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
 
 const scheduleService = new ScheduleService()
 
@@ -48,51 +48,23 @@ export async function GET(request: NextRequest) {
 
     console.log('📅 API request for upcoming program events')
 
-    // Check data freshness for all schedule types
-    const dataFreshnessChecks = await Promise.all(
-      orderOfKeys.map(async (type) => ({
-        type,
-        fresh: await scheduleService.isDataFresh(type, 60) // 1 hour freshness
-      }))
-    )
-
-    const staleTypes = dataFreshnessChecks.filter(check => !check.fresh).map(check => check.type)
-    
-    if (staleTypes.length > 0) {
-      console.warn(`⚠️ Stale data detected for: ${staleTypes.join(', ')}, falling back to Google Sheets`)
-      
-      // Fallback to original Google Sheets API
-      try {
-        const { get_upcoming_program } = await import('../../../utils/get-upcoming-program')
-        const upcomingProgram = await get_upcoming_program(orderOfKeys)
-        
-        return NextResponse.json(upcomingProgram, {
-          headers: {
-            'Cache-Control': `public, max-age=300, stale-while-revalidate=60`, // 5 min cache for fallback
-            'X-Data-Source': 'google-sheets-fallback',
-            'X-Stale-Types': staleTypes.join(','),
-          },
-        })
-      } catch (fallbackError) {
-        console.error('❌ Fallback to Google Sheets failed for upcoming program:', fallbackError)
-        return NextResponse.json(
-          { error: 'Upcoming program data temporarily unavailable' },
-          { status: 503 }
-        )
-      }
-    }
-
-    // Fetch from DynamoDB with caching
+    // Fetch from DynamoDB with caching (no fallback)
     const upcomingEvents = await getCachedUpcomingProgram(orderOfKeys)
     
     console.log(`✅ Served upcoming program from DynamoDB cache (${upcomingEvents.length} events)`)
 
     // Transform to match the original Google Sheets format that newsletter expects
     const responseData = upcomingEvents.map(event => {
-      // The newsletter expects Date objects or parseable date strings
-      // Based on the original get-upcoming-program.tsx, dates can be strings or Date objects
-      // Keep it simple - the current format "Sunday, July 6, 2025" is actually working fine
+      // The newsletter expects human-readable formatted date strings like "Sunday, August 31, 2025"
       const dateValue = event.date instanceof Date ? event.date : new Date(event.date)
+      
+      // Format date to match production format: "Sunday, August 31, 2025"
+      const formattedDate = dateValue.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric', 
+        month: 'long',
+        day: 'numeric'
+      })
       
       // Extract Date from details to avoid override, then spread the rest
       const { Date: _, ...detailsWithoutDate } = event.details
@@ -101,7 +73,7 @@ export async function GET(request: NextRequest) {
       const result: any = {
         ...detailsWithoutDate, // Flatten all the detail fields except Date
         Key: event.type, // Override with the correct Key field
-        Date: dateValue, // Set the Date field explicitly
+        Date: formattedDate, // Set the Date field with human-readable format
       }
       
       return result

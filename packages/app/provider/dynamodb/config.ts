@@ -6,7 +6,7 @@ export const dynamoConfig = {
   region: process.env.AWS_REGION || 'ca-central-1', // Canada Central as default
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  endpoint: process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : undefined,
+  endpoint: undefined, // Always use AWS DynamoDB (single production database)
 }
 
 // Create DynamoDB client
@@ -15,11 +15,11 @@ export const dynamoClient = new DynamoDBClient(dynamoConfig)
 // Create document client for easier JSON operations
 export const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
-// Table names with environment prefix
+// Table names - no stage prefix (single production database)
 export const tableNames = {
-  admin: `${process.env.STAGE || 'dev'}-tee-admin`, // EXISTING table - enhanced
-  schedules: `${process.env.STAGE || 'dev'}-tee-schedules`, // NEW table
-  syncStatus: `${process.env.STAGE || 'dev'}-tee-sync-status`, // Helper table
+  admin: 'tee-admin', // EXISTING table - enhanced
+  schedules: 'tee-schedules', // NEW table
+  syncStatus: 'tee-sync-status', // Helper table
 } as const
 
 export type TableName = keyof typeof tableNames

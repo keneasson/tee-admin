@@ -12379,6 +12379,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"buffer-crc32@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "buffer-crc32@npm:1.0.0"
+  checksum: 10/ef3b7c07622435085c04300c9a51e850ec34a27b2445f758eef69b859c7827848c2282f3840ca6c1eef3829145a1580ce540cab03ccf4433827a2b95d3b09ca7
+  languageName: node
+  linkType: hard
+
 "buffer-crc32@npm:~0.2.3":
   version: 0.2.13
   resolution: "buffer-crc32@npm:0.2.13"
@@ -19586,6 +19593,7 @@ __metadata:
     "@vercel/analytics": "npm:^1.5.0"
     "@vitest/ui": "npm:^3.2.4"
     bcryptjs: "npm:^3.0.2"
+    buffer-crc32: "npm:^1.0.0"
     eslint-config-next: "npm:^14.2.3"
     google-auth-library: "npm:^9.15.0"
     google-spreadsheet: "npm:^4.1.4"

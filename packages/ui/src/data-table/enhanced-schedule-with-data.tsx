@@ -48,11 +48,13 @@ export function EnhancedScheduleWithData({
   const mode = themeName.includes('dark') ? 'dark' : 'light'
   const colors = brandColors[mode]
 
-  // Loading state
-  if (loading && Object.keys(data).length === 0) {
+  // Loading state - show during initial load or when switching tabs with no existing data
+  // Don't show full loading screen if we already have some data (e.g., loading older events)
+  const hasExistingData = Object.keys(data).length > 0 && totalEvents > 0
+  if (loading && !hasExistingData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
-        <Spinner size="large" color={colors.primary} />
+        <Spinner size={20} color={colors.primary} />
         <Text color={colors.textSecondary} fontSize="$4">
           Loading schedule data...
         </Text>
@@ -60,8 +62,8 @@ export function EnhancedScheduleWithData({
     )
   }
 
-  // Error state
-  if (error && Object.keys(data).length === 0) {
+  // Error state - only show if not loading and there's actually an error with no data
+  if (error && !loading && Object.keys(data).length === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
         <YStack gap="$3" alignItems="center" maxWidth={400}>
@@ -84,8 +86,8 @@ export function EnhancedScheduleWithData({
     )
   }
 
-  // No data state
-  if (tabs.length === 0) {
+  // No data state - only show after loading is complete and there's actually no data
+  if (!loading && !error && Object.keys(data).length === 0 && totalEvents === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
         <YStack gap="$3" alignItems="center" maxWidth={400}>

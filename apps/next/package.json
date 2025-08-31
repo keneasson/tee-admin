@@ -26,6 +26,7 @@
     "@tamagui/next-theme": "^1.129.11",
     "@vercel/analytics": "^1.5.0",
     "bcryptjs": "^3.0.2",
+    "buffer-crc32": "^1.0.0",
     "google-auth-library": "^9.15.0",
     "google-spreadsheet": "^4.1.4",
     "next": "15.3.4",

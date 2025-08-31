@@ -1,0 +1,14 @@
+{
+  "name": "tee-admin-scripts",
+  "version": "1.0.0",
+  "description": "Scripts for TEE Admin maintenance",
+  "scripts": {
+    "migrate-tables": "node migrate-dynamodb-tables.js migrate",
+    "list-tables": "node migrate-dynamodb-tables.js list",
+    "delete-old-table": "node migrate-dynamodb-tables.js delete-old"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  }
+}

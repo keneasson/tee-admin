@@ -17,16 +17,18 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   }
 
   // Key builders for unified schedule/event table
-  private buildSchedulePK(date: string): string {
-    return `SCHEDULE#${date}`
+  private buildSchedulePK(type: string): string {
+    return `SCHEDULE#${type.toUpperCase()}`
   }
 
   private buildEventPK(eventId: string): string {
     return `EVENT#${eventId}`
   }
 
-  private buildScheduleSK(ecclesia: string, type: string, time: string = '09:00'): string {
-    return `${ecclesia}#${type}#${time}`
+  private buildScheduleSK(date: string, index: number = 0): string {
+    // Match the existing format: DATE#2025-01-02T00:30:00.000Z#0
+    const isoDate = new Date(date).toISOString()
+    return `DATE#${isoDate}#${index}`
   }
 
   private buildEcclesiaGSI1PK(ecclesia: string): string {
@@ -52,22 +54,18 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     eventType: ProgramTypeKeys,
     date: string,
     data: ProgramTypes,
-    time: string = '09:00'
+    time: string = '09:00',
+    index: number = 0
   ): Promise<ScheduleRecord> {
     const record: ScheduleRecord = {
-      PK: this.buildSchedulePK(date),
-      SK: this.buildScheduleSK(ecclesia, eventType, time),
-      GSI1PK: this.buildEcclesiaGSI1PK(ecclesia),
-      GSI1SK: this.buildEcclesiaGSI1SK(date, eventType, time),
-      GSI2PK: this.buildTypeGSI2PK(eventType),
-      GSI2SK: `${date}#${time}`,
-      ecclesia,
-      date,
-      type: eventType,
-      scheduleData: data,
+      PK: this.buildSchedulePK(eventType),
+      SK: this.buildScheduleSK(date, index),
+      sheetType: eventType,
       sheetId,
+      date,
+      data,  // Use 'data' not 'scheduleData' to match ScheduleService
       lastUpdated: new Date().toISOString(),
-      version: 1,
+      version: '1',
     }
 
     await this.put(record)
@@ -207,11 +205,12 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     date: string,
     ecclesia: string,
     eventType: string,
-    time: string = '09:00'
+    time: string = '09:00',
+    index: number = 0
   ): Promise<ScheduleRecord | null> {
     return this.get(
-      this.buildSchedulePK(date),
-      this.buildScheduleSK(ecclesia, eventType, time)
+      this.buildSchedulePK(eventType),
+      this.buildScheduleSK(date, index)
     )
   }
 
@@ -257,12 +256,13 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     ecclesia: string,
     eventType: string,
     data: ProgramTypes,
-    time: string = '09:00'
+    time: string = '09:00',
+    index: number = 0
   ): Promise<ScheduleRecord> {
     return this.update(
-      this.buildSchedulePK(date),
-      this.buildScheduleSK(ecclesia, eventType, time),
-      { scheduleData: data }
+      this.buildSchedulePK(eventType),
+      this.buildScheduleSK(date, index),
+      { data: data }  // Use 'data' not 'scheduleData'
     )
   }
 
@@ -283,11 +283,12 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     date: string,
     ecclesia: string,
     eventType: string,
-    time: string = '09:00'
+    time: string = '09:00',
+    index: number = 0
   ): Promise<void> {
     return this.delete(
-      this.buildSchedulePK(date),
-      this.buildScheduleSK(ecclesia, eventType, time)
+      this.buildSchedulePK(eventType),
+      this.buildScheduleSK(date, index)
     )
   }
 
@@ -296,7 +297,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return this.delete(this.buildEventPK(eventId), 'DETAILS')
   }
 
-  // Bulk operations for sheet sync
+  // Bulk operations for sheet sync - SAFE CHECKSUM-BASED APPROACH
   async replaceSheetSchedules(
     sheetId: string,
     schedules: Array<{
@@ -307,33 +308,95 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       time?: string
     }>
   ): Promise<{ successful: number; failed: number; errors: string[] }> {
-    // Clear existing records for this sheet
-    await this.clearSheetScheduleRecords(sheetId)
-
-    // Create new records with proper keys
-    const records: ScheduleRecord[] = schedules.map(schedule => ({
-      PK: this.buildSchedulePK(schedule.date),
-      SK: this.buildScheduleSK(schedule.ecclesia, schedule.type, schedule.time || '09:00'),
-      GSI1PK: this.buildEcclesiaGSI1PK(schedule.ecclesia),
-      GSI1SK: this.buildEcclesiaGSI1SK(schedule.date, schedule.type, schedule.time || '09:00'),
-      GSI2PK: this.buildTypeGSI2PK(schedule.type),
-      GSI2SK: `${schedule.date}#${schedule.time || '09:00'}`,
-      ecclesia: schedule.ecclesia,
-      date: schedule.date,
-      type: schedule.type,
-      scheduleData: schedule.scheduleData,
-      sheetId,
-      lastUpdated: new Date().toISOString(),
-      version: 1,
-    }))
-
-    // Batch write new records
-    const result = await this.batchWrite(records)
-    return { 
-      successful: result.successful, 
-      failed: result.failed, 
-      errors: result.errors 
+    
+    // Get existing records for this sheet
+    const existingResult = await this.scan({
+      filterExpression: 'sheetId = :sheetId',
+      expressionAttributeValues: { ':sheetId': sheetId },
+    })
+    
+    
+    // All schedules from the same sheet will have the same type
+    const sheetType = schedules[0]?.type
+    if (!sheetType) {
+      return { successful: 0, failed: 0, errors: [] }
     }
+    
+    // Create checksums for new data
+    const newRecordsMap = new Map<string, ScheduleRecord>()
+    const newRecords: ScheduleRecord[] = schedules.map((schedule, index) => {
+      const record: ScheduleRecord = {
+        PK: this.buildSchedulePK(schedule.type),
+        SK: this.buildScheduleSK(schedule.date, index),
+        sheetType: schedule.type,
+        sheetId,
+        date: schedule.date,
+        data: schedule.scheduleData,  // This is the actual schedule data
+        lastUpdated: new Date().toISOString(),
+        version: '1',  // version should be string to match ScheduleService
+      }
+      
+      // Create checksum key for comparison
+      const checksumKey = `${record.PK}#${record.SK}`
+      newRecordsMap.set(checksumKey, record)
+      return record
+    })
+
+    // Find records to delete (exist in DB but not in new data)
+    const recordsToDelete: Array<{PK: string, SK: string}> = []
+    const existingChecksums = new Set<string>()
+    
+    existingResult.items.forEach(existingRecord => {
+      const checksumKey = `${existingRecord.PK}#${existingRecord.SK}`
+      existingChecksums.add(checksumKey)
+      
+      if (!newRecordsMap.has(checksumKey)) {
+        recordsToDelete.push({
+          PK: existingRecord.PK,
+          SK: existingRecord.SK
+        })
+      }
+    })
+
+    // Find records to add/update (new data that doesn't exist or has changed)
+    const recordsToUpsert: ScheduleRecord[] = []
+    newRecords.forEach(newRecord => {
+      const checksumKey = `${newRecord.PK}#${newRecord.SK}`
+      recordsToUpsert.push(newRecord) // Always upsert for now - could add content comparison later
+    })
+
+
+    let successful = 0
+    let failed = 0
+    const errors: string[] = []
+
+    // Delete removed records
+    try {
+      const deletePromises = recordsToDelete.map(record => 
+        this.delete(record.PK, record.SK)
+      )
+      await Promise.all(deletePromises)
+    } catch (error) {
+      console.error('❌ Error deleting records:', error)
+      errors.push(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      failed += recordsToDelete.length
+    }
+
+    // Upsert new/updated records
+    if (recordsToUpsert.length > 0) {
+      try {
+        const result = await this.batchWrite(recordsToUpsert)
+        successful += result.successful
+        failed += result.failed
+        errors.push(...result.errors)
+      } catch (error) {
+        console.error('❌ Error upserting records:', error)
+        errors.push(`Upsert failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        failed += recordsToUpsert.length
+      }
+    }
+
+    return { successful, failed, errors }
   }
 
   // Clear schedule records for a specific sheet

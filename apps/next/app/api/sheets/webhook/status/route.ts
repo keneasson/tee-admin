@@ -44,7 +44,6 @@ export async function GET(request: NextRequest) {
       environment: {
         nodeEnv: process.env.NODE_ENV,
         webhookSecret: process.env.WEBHOOK_SECRET ? '***configured***' : 'NOT_SET',
-        stage: process.env.STAGE,
       },
     })
 

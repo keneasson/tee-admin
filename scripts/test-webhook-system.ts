@@ -18,7 +18,7 @@ import { createHmac } from 'crypto'
 config({ path: join(process.cwd(), '.env') })
 
 const WEBHOOK_URL = 'http://localhost:4000/api/sheets/webhook'
-const WEBHOOK_SECRET = 'tee-admin-webhook-secret-2025-change-in-production'
+const WEBHOOK_SECRET = '8e1008de928c5ebc36d5d234d3344e39840795d6456dd59a254e58b2d9e20220'
 
 // Sheet IDs from the JSON file
 const SHEET_IDS = {

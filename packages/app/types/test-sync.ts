@@ -34,9 +34,11 @@ export interface TestSyncDynamoRecord {
 }
 
 export interface TestSyncStatus {
-  lastSync: string | null
+  lastSync: string | null        // Most recent sync across all sources
   totalRecords: number
-  lastWebhook: string | null
+  lastWebhook: string | null     // Most recent webhook-triggered sync
+  lastManual: string | null      // Most recent manual sync
+  lastCron: string | null        // Most recent cron-triggered sync (future)
   sheetVersion: string | null
   dynamoVersion: string | null
   cacheStatus: 'hot' | 'cold' | 'stale'
