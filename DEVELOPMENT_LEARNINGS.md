@@ -723,6 +723,62 @@ export async function GET() {
 
 ---
 
-*Last Updated: August 31, 2025*
+### **React Native Text Node in View Error (September 5, 2025)**
+
+#### **The Problem**
+```jsx
+// ❌ WRONG: Inconsistent indentation creates phantom text nodes
+<YStack>
+  <XStack>
+      <FormInput />  // Extra spaces = text node!
+  </XStack>
+</YStack>
+
+// Error: Unexpected text node: . A text node cannot be a child of a <View>
+```
+
+#### **Root Cause**
+- **React Native strict rendering**: Tamagui uses React Native under the hood
+- **Whitespace is text**: Any spaces, tabs, or newlines between JSX elements become text nodes
+- **Views can't contain text**: Only Text components can contain text in React Native
+
+#### **Solution - Consistent Indentation**
+```jsx
+// ✅ CORRECT: Consistent indentation, no extra whitespace
+<YStack>
+  <XStack>
+    <FormInput />  // Aligned properly
+  </XStack>
+</YStack>
+```
+
+#### **Prevention Rules**
+1. **Consistent indentation**: Every child element at same indent level
+2. **No trailing spaces**: Use editor to show/trim trailing whitespace
+3. **Text in Text only**: All strings must be wrapped in `<Text>` components
+4. **Watch JSX formatting**: Prettier can sometimes introduce problematic spacing
+5. **Comments carefully**: Comments between JSX elements can also cause issues
+
+#### **Common Patterns That Cause This**
+```jsx
+// ❌ Bare string in View
+<YStack>Hello</YStack>
+
+// ❌ Conditional with string fallback
+<YStack>{condition && "text"}</YStack>
+
+// ❌ Extra spaces in formatting
+<YStack>
+  <Text>Hi</Text>  {/* space before comment */}
+</YStack>
+
+// ✅ CORRECT: Always wrap text
+<YStack><Text>Hello</Text></YStack>
+<YStack>{condition && <Text>text</Text>}</YStack>
+```
+
+---
+
+*Last Updated: September 5, 2025*
 *Contributors: Claude (AI Assistant), Ken Easson*
 *Review Schedule: Monthly*

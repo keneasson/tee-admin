@@ -155,55 +155,55 @@ export const Profile: React.FC<ProfileType> = ({}) => {
 
                 <YStack gap="$4" as="form" onSubmit={handleSubmit(onSubmitInvitation)}>
                   <XStack gap="$3">
-                      <FormInput
-                        control={control}
-                        name="firstName"
-                        label="First Name"
-                        placeholder="First Name"
-                        rules={{ required: 'First name is required' }}
-                        flex={1}
-                      />
-                      <FormInput
-                        control={control}
-                        name="lastName"
-                        label="Last Name"
-                        placeholder="Last Name"
-                        rules={{ required: 'Last name is required' }}
-                        flex={1}
-                      />
-                    </XStack>
-
                     <FormInput
                       control={control}
-                      name="ecclesia"
-                      label="Ecclesia"
-                      placeholder="e.g., TEE, Peterborough"
-                      rules={{ required: 'Ecclesia is required' }}
+                      name="firstName"
+                      label="First Name"
+                      placeholder="First Name"
+                      rules={{ required: 'First name is required' }}
+                      flex={1}
                     />
-
                     <FormInput
                       control={control}
-                      name="role"
-                      label="Role"
-                      placeholder="Select role"
-                      rules={{ required: 'Role is required' }}
-                      defaultValue={ROLES.GUEST}
+                      name="lastName"
+                      label="Last Name"
+                      placeholder="Last Name"
+                      rules={{ required: 'Last name is required' }}
+                      flex={1}
                     />
+                  </XStack>
 
-                    {/* Error and Success Messages */}
-                    {invitationError && (
-                      <Text fontSize="$3" color="$red10">
-                        {invitationError}
-                      </Text>
-                    )}
+                  <FormInput
+                    control={control}
+                    name="ecclesia"
+                    label="Ecclesia"
+                    placeholder="e.g., TEE, Peterborough"
+                    rules={{ required: 'Ecclesia is required' }}
+                  />
 
-                    {invitationMessage && (
-                      <Text fontSize="$3" color="$green10">
-                        {invitationMessage}
-                      </Text>
-                    )}
+                  <FormInput
+                    control={control}
+                    name="role"
+                    label="Role"
+                    placeholder="Select role"
+                    rules={{ required: 'Role is required' }}
+                    defaultValue={ROLES.GUEST}
+                  />
 
-                    {generatedCode && (
+                  {/* Error and Success Messages */}
+                  {invitationError && (
+                    <Text fontSize="$3" color="$red10">
+                      {invitationError}
+                    </Text>
+                  )}
+
+                  {invitationMessage && (
+                    <Text fontSize="$3" color="$green10">
+                      {invitationMessage}
+                    </Text>
+                  )}
+
+                  {generatedCode && (
                       <YStack gap="$2" padding="$4" backgroundColor="$green2" borderRadius="$4">
                         <Text fontSize="$4" fontWeight="bold" color="$green11">
                           Invitation Code Created!
@@ -225,7 +225,7 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                           Share this code with the person you want to invite. It expires in 7 days.
                         </Text>
                       </YStack>
-                    )}
+                  )}
 
                   <Button
                     type="submit"
