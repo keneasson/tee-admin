@@ -511,8 +511,218 @@ modularizeImports: {
 #### **Key Lesson**
 **Check build tool configurations first**: When imports work in isolation but fail in the build, investigate webpack/Next.js transform rules before changing code patterns.
 
+### **Environment Variables Anti-Pattern (August 31, 2025)**
+
+#### **The Problem**
+```bash
+# ❌ WRONG: Configuration values scattered in environment variables
+MEMORIAL_SHEET_ID=...
+BIBLE_CLASS_SHEET_ID=...
+SUNDAY_SCHOOL_SHEET_ID=...
+DYNAMODB_TABLE_NAME=tee-admin
+
+# Result: Deployment failures, can't fork repository, config in wrong layer
+```
+
+#### **Root Cause**
+- **Configuration treated as secrets**: Sheet IDs and table names aren't secrets
+- **Environment variables leaked into business logic**: Direct `process.env` calls everywhere
+- **Silent fallbacks hiding issues**: Code had hardcoded defaults masking missing config
+- **Can't fork repository**: Private configuration in environment variables
+
+#### **Solution - Fail-Fast Config Service**
+```typescript
+// ✅ CORRECT: Centralized config with fail-fast behavior
+class GoogleSheetsConfig {
+  constructor() {
+    const configFile = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE
+    if (!configFile) {
+      throw new Error('CRITICAL: GOOGLE_SERVICE_ACCOUNT_KEY_FILE not set')
+    }
+    
+    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'))
+    // NO FALLBACKS - fail immediately if config missing
+  }
+
+  getSheetId(type: string): string | null {
+    return this.sheets[type] || null  // Explicit null, no silent defaults
+  }
+}
+```
+
+#### **Prevention Strategy**
+1. **Environment variables ONLY for secrets**: AWS keys, OAuth tokens, API keys
+2. **Configuration in files**: Sheet IDs, table names, feature flags
+3. **Fail-fast architecture**: No silent fallbacks, clear error messages
+4. **Single source of truth**: One config service per domain
+
 ---
 
-*Last Updated: July 4, 2025*
-*Contributors: Claude (AI Assistant)*
+### **Mobile-First Development Crisis (August 31, 2025)**
+
+#### **The Problem**
+```typescript
+// ❌ WRONG: Desktop-only navigation deployed to production
+<XStack width={250} position="fixed">
+  {/* No mobile support, no hamburger menu */}
+  <NavigationContent />
+</XStack>
+
+// Result: Navigation took 80% of mobile screen at church service
+```
+
+#### **Root Cause**
+- **Testing on desktop only**: Developed without checking mobile viewport
+- **Multiple navigation implementations**: 3 different versions causing confusion
+- **No responsive testing in workflow**: Deployed without mobile verification
+- **useMedia() hook not used**: Tamagui's responsive utilities ignored
+
+#### **Solution - Mobile-First with useMedia()**
+```typescript
+// ✅ CORRECT: Always check mobile layout first
+const media = useMedia()
+
+if (media.sm) {  // Mobile layout
+  return (
+    <Sheet modal open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+      <Sheet.Overlay />
+      <Sheet.Frame>
+        <NavigationContent />
+      </Sheet.Frame>
+    </Sheet>
+  )
+}
+
+// Desktop layout
+return <XStack>...</XStack>
+```
+
+#### **Prevention Strategy**
+1. **Mobile-first development**: Design for mobile, enhance for desktop
+2. **useMedia() hook always**: Never assume single layout
+3. **Test at 375px width**: iPhone SE is smallest common device
+4. **Remove experiments after promotion**: Don't leave multiple implementations
+
+---
+
+### **Git Secrets in Documentation (August 31, 2025)**
+
+#### **The Problem**
+```markdown
+# ❌ WRONG: Actual AWS credentials in markdown documentation
+AWS_ACCESS_KEY_ID=AKIA[REDACTED]
+AWS_SECRET_ACCESS_KEY=[REDACTED]
+
+# Result: GitHub push protection blocked all pushes
+```
+
+#### **Root Cause**
+- **Documentation not sanitized**: Real credentials copied into test results
+- **Git history contaminated**: Secrets persisted in commit history
+- **Push protection triggered**: GitHub's security scanning blocked repository
+
+#### **Solution - History Rewrite**
+```bash
+# ✅ CORRECT: Clean git history with filter-branch
+git filter-branch --force --tree-filter \
+  'sed -i "s/AKIA[A-Z0-9]*/AKIA***/g" DATA_SYNC_TEST_RESULTS.md' \
+  --prune-empty --tag-name-filter cat -- --all
+
+git push --force  # After verifying cleanup
+```
+
+#### **Prevention Strategy**
+1. **Always mask credentials**: Use `***` in documentation
+2. **Check before committing**: `git diff` to review changes
+3. **Use .gitignore properly**: Ensure sensitive files excluded
+4. **Enable secret scanning**: GitHub security features
+
+---
+
+### **Single Production Database Pattern (August 31, 2025)**
+
+#### **The Problem**
+```javascript
+// ❌ WRONG: Attempting to create staging/dev environment splits
+if (process.env.NODE_ENV === 'development') {
+  tableName = 'tee-admin-dev'
+} else if (process.env.NODE_ENV === 'staging') {
+  tableName = 'tee-admin-staging'
+}
+
+// Reality: All environments use SAME production tables
+```
+
+#### **Root Cause**
+- **Misunderstanding architecture**: Assumed multiple database environments
+- **Traditional deployment mindset**: Expected dev/staging/prod separation
+- **Documentation gaps**: Pattern not clearly stated
+
+#### **Solution - Everything Production-Ready**
+```typescript
+// ✅ CORRECT: Single set of production tables
+const tableNames = {
+  admin: 'tee-admin',        // Same in ALL environments
+  schedules: 'tee-schedules', // Same in ALL environments
+  syncStatus: 'tee-sync-status' // Same in ALL environments
+}
+
+// Use feature flags for gradual rollout
+if (isFeatureEnabled('new-feature')) {
+  // New code path
+}
+```
+
+#### **Prevention Strategy**
+1. **No environment splits**: Everything is production
+2. **Feature flags for safety**: Control rollout, not environments
+3. **Test with production data**: Same database, careful testing
+4. **Document in AI_ARCHITECTURE.md**: Clear statement of pattern
+
+---
+
+### **Repository Pattern Enforcement (August 31, 2025)**
+
+#### **The Problem**
+```typescript
+// ❌ WRONG: Direct DynamoDB calls in routes
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+
+export async function GET() {
+  const client = new DynamoDBClient()
+  const result = await client.send(...)  // Direct database access
+}
+```
+
+#### **Root Cause**
+- **Bypassing abstraction layers**: Direct database calls for "quick fixes"
+- **Scattered data access**: No single source of truth for data operations
+- **Inconsistent error handling**: Each route handling errors differently
+
+#### **Solution - Always Use Repositories**
+```typescript
+// ✅ CORRECT: Repository pattern for all data access
+import { scheduleRepo } from '@my/app/provider/dynamodb/repositories/schedule-repository'
+
+export async function GET() {
+  try {
+    const schedules = await scheduleRepo.getSchedulesByType('memorial')
+    return NextResponse.json(schedules)
+  } catch (error) {
+    // Centralized error handling
+    return handleRepositoryError(error)
+  }
+}
+```
+
+#### **Prevention Strategy**
+1. **Never import DynamoDB client directly in routes**
+2. **All data access through repositories**
+3. **Document in AI_DYNAMODB_CONTRACTS.md**
+4. **Code review enforcement**
+
+---
+
+*Last Updated: August 31, 2025*
+*Contributors: Claude (AI Assistant), Ken Easson*
 *Review Schedule: Monthly*

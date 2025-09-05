@@ -165,39 +165,39 @@ const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
     <>
       <NavigationButtonItem
         key="emailTester"
-        linkTo={linkTo('/email-tester')}
+        linkTo={linkTo('/admin/(admin-plus)/email/tester')}
         text="Email Tester"
-        active={path === '/email-tester'}
+        active={path === '/admin/(admin-plus)/email/tester'}
       />
       <NavigationButtonItem
         key="brandColours"
-        linkTo={linkTo('/brand/colours')}
+        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/colours')}
         text="Brand Colors"
-        active={path === '/brand/colours'}
+        active={path === '/admin/(admin-plus)/ui-ux/brand/colours'}
       />
       <NavigationButtonItem
         key="brandTypography"
-        linkTo={linkTo('/brand/typography')}
+        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/typography')}
         text="Brand Typography"
-        active={path === '/brand/typography'}
+        active={path === '/admin/(admin-plus)/ui-ux/brand/typography'}
       />
       <NavigationButtonItem
         key="brandComponents"
-        linkTo={linkTo('/brand/components')}
+        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/components')}
         text="Component Showcase"
-        active={path === '/brand/components'}
+        active={path === '/admin/(admin-plus)/ui-ux/brand/components'}
       />
       <NavigationButtonItem
         key="brandNavigation"
-        linkTo={linkTo('/brand/navigation')}
+        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/navigation')}
         text="Navigation Testing"
-        active={path === '/brand/navigation'}
+        active={path === '/admin/(admin-plus)/ui-ux/brand/navigation'}
       />
       <NavigationButtonItem
         key="brandPlayground"
-        linkTo={linkTo('/brand/playground')}
+        linkTo={linkTo('/admin/(admin-plus)/evolution/feature-flags')}
         text="Feature Playground"
-        active={path === '/brand/playground'}
+        active={path === '/admin/(admin-plus)/evolution/feature-flags'}
       />
     </>
   )
@@ -207,9 +207,9 @@ const MemberMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
   return (
     <NavigationButtonItem
       key="profile"
-      linkTo={linkTo('/profile')}
+      linkTo={linkTo('/admin/profile')}
       text="Profile"
-      active={path === '/profile'}
+      active={path === '/admin/profile'}
     />
   )
 }

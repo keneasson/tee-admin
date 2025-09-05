@@ -28,12 +28,14 @@ const pages: MainPageType[] = [
 ]
 
 const adminPages: MainPageType[] = [
-  { path: '/email-tester', label: 'Email Tester' },
-  { path: '/brand/colours', label: 'Brand Colors' },
-  { path: '/brand/typography', label: 'Typography' },
-  { path: '/brand/components', label: 'Components' },
-  { path: '/brand/navigation', label: 'Navigation' },
-  { path: '/brand/playground', label: 'Feature Flags' },
+  { path: '/admin/(admin-plus)/email/tester', label: 'Email Tester' },
+  { path: '/admin/(admin-plus)/ui-ux/brand/colours', label: 'Brand Colors' },
+  { path: '/admin/(admin-plus)/ui-ux/brand/typography', label: 'Typography' },
+  { path: '/admin/(admin-plus)/ui-ux/brand/components', label: 'Components' },
+  { path: '/admin/(admin-plus)/ui-ux/brand/navigation', label: 'Navigation' },
+  { path: '/admin/(admin-plus)/evolution/feature-flags', label: 'Feature Flags' },
+  { path: '/admin/(owner)/data-sync', label: 'Data Sync' },
+  { path: '/admin/profile', label: 'Profile' },
 ]
 
 export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children }) => {
