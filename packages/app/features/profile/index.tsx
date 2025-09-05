@@ -23,7 +23,7 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   const { data: session, status } = useSession()
   const router = useRouter()
   const isHydrated = useHydrated()
-  
+
   const [user, setUser] = useState<DirectoryType>()
   const [invitationLoading, setInvitationLoading] = useState(false)
   const [invitationMessage, setInvitationMessage] = useState('')
@@ -51,7 +51,8 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   }, [session])
 
   // Check if user can create invitation codes
-  const canCreateInvitations = session?.user?.role && [ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER].includes(session.user.role)
+  const canCreateInvitations =
+    session?.user?.role && [ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER].includes(session.user.role)
 
   const onSubmitInvitation: SubmitHandler<InvitationFormData> = async (data) => {
     setInvitationLoading(true)
@@ -89,7 +90,9 @@ export const Profile: React.FC<ProfileType> = ({}) => {
       <Wrapper>
         <Section gap={'$4'}>
           <YStack gap="$4" alignItems="center">
-            <Text fontSize="$4" theme="alt2">Loading...</Text>
+            <Text fontSize="$4" theme="alt2">
+              Loading...
+            </Text>
           </YStack>
         </Section>
       </Wrapper>
@@ -102,7 +105,9 @@ export const Profile: React.FC<ProfileType> = ({}) => {
       <Wrapper>
         <Section gap={'$4'}>
           <YStack gap="$4" alignItems="center">
-            <Text fontSize="$4" theme="alt2">Loading...</Text>
+            <Text fontSize="$4" theme="alt2">
+              Loading...
+            </Text>
           </YStack>
         </Section>
       </Wrapper>
@@ -145,99 +150,91 @@ export const Profile: React.FC<ProfileType> = ({}) => {
 
           {/* Invitation Code Creation Section */}
           {canCreateInvitations && (
-            <>
+            <YStack gap="$4">
               <Separator />
+              <Heading size={4}>Invite New Users</Heading>
+              <Text fontSize="$3" theme="alt2">
+                Create invitation codes for new users to join the system.
+              </Text>
               <YStack gap="$4">
-                <Heading size={4}>Invite New Users</Heading>
-                <Text fontSize="$3" theme="alt2">
-                  Create invitation codes for new users to join the system.
-                </Text>
-
-                <YStack gap="$4" as="form" onSubmit={handleSubmit(onSubmitInvitation)}>
-                  <XStack gap="$3">
-                    <FormInput
-                      control={control}
-                      name="firstName"
-                      label="First Name"
-                      placeholder="First Name"
-                      rules={{ required: 'First name is required' }}
-                      flex={1}
-                    />
-                    <FormInput
-                      control={control}
-                      name="lastName"
-                      label="Last Name"
-                      placeholder="Last Name"
-                      rules={{ required: 'Last name is required' }}
-                      flex={1}
-                    />
-                  </XStack>
-
+                <XStack gap="$3">
                   <FormInput
                     control={control}
-                    name="ecclesia"
-                    label="Ecclesia"
-                    placeholder="e.g., TEE, Peterborough"
-                    rules={{ required: 'Ecclesia is required' }}
+                    name="firstName"
+                    label="First Name"
+                    placeholder="First Name"
+                    rules={{ required: 'First name is required' }}
+                    flex={1}
                   />
-
                   <FormInput
                     control={control}
-                    name="role"
-                    label="Role"
-                    placeholder="Select role"
-                    rules={{ required: 'Role is required' }}
-                    defaultValue={ROLES.GUEST}
+                    name="lastName"
+                    label="Last Name"
+                    placeholder="Last Name"
+                    rules={{ required: 'Last name is required' }}
+                    flex={1}
                   />
+                </XStack>
+                <FormInput
+                  control={control}
+                  name="ecclesia"
+                  label="Ecclesia"
+                  placeholder="e.g., TEE, Peterborough"
+                  rules={{ required: 'Ecclesia is required' }}
+                />
+                <FormInput
+                  control={control}
+                  name="role"
+                  label="Role"
+                  placeholder="Select role"
+                  rules={{ required: 'Role is required' }}
+                  defaultValue={ROLES.GUEST}
+                />
+                {invitationError ? (
+                  <Text fontSize="$3" color="$red10">
+                    {invitationError}
+                  </Text>
+                ) : null}
 
-                  {/* Error and Success Messages */}
-                  {invitationError && (
-                    <Text fontSize="$3" color="$red10">
-                      {invitationError}
+                {invitationMessage ? (
+                  <Text fontSize="$3" color="$green10">
+                    {invitationMessage}
+                  </Text>
+                ) : null}
+
+                {generatedCode ? (
+                  <YStack gap="$2" padding="$4" backgroundColor="$green2" borderRadius="$4">
+                    <Text fontSize="$4" fontWeight="bold" color="$green11">
+                      Invitation Code Created!
                     </Text>
-                  )}
-
-                  {invitationMessage && (
-                    <Text fontSize="$3" color="$green10">
-                      {invitationMessage}
+                    <XStack gap="$2" alignItems="center">
+                      <Text fontSize="$6" fontWeight="bold" fontFamily="monospace">
+                        {generatedCode}
+                      </Text>
+                      <Button
+                        size="$2"
+                        onPress={() => {
+                          navigator.clipboard.writeText(generatedCode)
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </XStack>
+                    <Text fontSize="$2" theme="alt2">
+                      Share this code with the person you want to invite. It expires in 7 days.
                     </Text>
-                  )}
-
-                  {generatedCode && (
-                      <YStack gap="$2" padding="$4" backgroundColor="$green2" borderRadius="$4">
-                        <Text fontSize="$4" fontWeight="bold" color="$green11">
-                          Invitation Code Created!
-                        </Text>
-                        <XStack gap="$2" alignItems="center">
-                          <Text fontSize="$6" fontWeight="bold" fontFamily="monospace">
-                            {generatedCode}
-                          </Text>
-                          <Button
-                            size="$2"
-                            onPress={() => {
-                              navigator.clipboard.writeText(generatedCode)
-                            }}
-                          >
-                            Copy
-                          </Button>
-                        </XStack>
-                        <Text fontSize="$2" theme="alt2">
-                          Share this code with the person you want to invite. It expires in 7 days.
-                        </Text>
-                      </YStack>
-                  )}
-
-                  <Button
-                    type="submit"
-                    size="$4"
-                    disabled={invitationLoading}
-                    theme="blue"
-                  >
-                    {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
-                  </Button>
-                </YStack>
+                  </YStack>
+                ) : null}
+                <Button
+                  size="$4"
+                  disabled={invitationLoading}
+                  theme="blue"
+                  onPress={handleSubmit(onSubmitInvitation)}
+                >
+                  {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
+                </Button>
               </YStack>
-            </>
+            </YStack>
           )}
         </YStack>
       </Section>

@@ -772,10 +772,42 @@ export async function GET() {
   <Text>Hi</Text>  {/* space before comment */}
 </YStack>
 
+// ❌ HTML form elements (not supported in React Native)
+<YStack as="form" onSubmit={handleSubmit}>
+  <FormInput />
+</YStack>
+
+// ❌ CRITICAL: && operator returns false (rendered as text!)
+<YStack>
+  {someCondition && (
+    <Text>This creates text node when false!</Text>
+  )}
+</YStack>
+
 // ✅ CORRECT: Always wrap text
 <YStack><Text>Hello</Text></YStack>
 <YStack>{condition && <Text>text</Text>}</YStack>
+
+// ✅ CORRECT: Use ternary with explicit null
+<YStack>
+  {someCondition ? (
+    <Text>Safe to render</Text>
+  ) : null}
+</YStack>
+
+// ✅ CORRECT: Use onPress instead of forms
+<YStack>
+  <FormInput />
+  <Button onPress={handleSubmit(onSubmit)}>Submit</Button>
+</YStack>
 ```
+
+#### **Important: No HTML Elements in React Native**
+React Native doesn't support HTML elements like `<form>`, `<div>`, `<span>`, etc. Tamagui's `as` prop with HTML elements will cause rendering errors. Always use:
+- `onPress` for buttons instead of form submission
+- `YStack`/`XStack` instead of `div`
+- `Text` instead of `span`/`p`
+- No `form` elements - handle submission via button `onPress`
 
 ---
 
