@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(yarn workspace next-app:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(grep:*)",
+      "Bash(yarn web)",
+      "Bash(curl:*)",
+      "Bash(timeout:*)",
+      "Bash(find:*)",
+      "Bash(lsof:*)",
+      "WebFetch(domain:tamagui.dev)",
+      "Bash(docker run:*)",
+      "Bash(yarn test-webhook:health:*)",
+      "Bash(yarn test-api-migration:health:*)",
+      "Bash(ls:*)",
+      "Bash(npx tsx:*)",
+      "WebFetch(domain:tee-admin-buux8mr2s-ken-eassons-projects.vercel.app)",
+      "WebFetch(domain:www.tee-admin.com)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(yarn add:*)",
+      "Bash(yarn build)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(yarn:*)",
+      "Bash(node:*)",
+      "Bash(aws dynamodb list-tables:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": []
+  }
+}

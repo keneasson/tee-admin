@@ -129,10 +129,15 @@ export const Profile: React.FC<ProfileType> = ({}) => {
             </Text>
             {user &&
               Object.keys(user).map((key, index) => {
+                const value = user[key]
+                // Skip rendering if value is undefined, null, or an object
+                if (value === undefined || value === null || typeof value === 'object') {
+                  return null
+                }
                 return (
                   <XStack key={index} gap="$2">
                     <Text fontWeight="bold">{key}:</Text>
-                    <Text>{user[key]}</Text>
+                    <Text>{String(value)}</Text>
                   </XStack>
                 )
               })}
