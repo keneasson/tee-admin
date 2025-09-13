@@ -20,3 +20,6 @@ export * from './theme-provider'
 export * from './theme-aware-provider'
 export * from './data-table'
 export { EnhancedScheduleWithData } from './data-table/enhanced-schedule-with-data'
+
+// Event System
+export * from './events'

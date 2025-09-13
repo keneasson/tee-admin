@@ -72,7 +72,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return record
   }
 
-  // Create a new event record (standalone events)
+  // Create a new event record (standalone events) - DEPRECATED: Use put() directly with ScheduleRecord
   async createEventRecord(
     eventId: string,
     ecclesia: string,
@@ -93,7 +93,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       title: eventData.title,
       time: eventData.time,
       description: eventData.description,
-      details: eventData.details,
+      details: JSON.stringify(eventData.details), // Ensure it's a string
       lastUpdated: new Date().toISOString(),
       version: 1,
     }

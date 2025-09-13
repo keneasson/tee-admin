@@ -13,6 +13,7 @@ type FormCheckboxProps<T extends FieldValues> = Omit<CheckboxProps, 'name'> & {
   label?: string
   rules?: object
   name: Path<T>
+  onCheckChange?: (checked: boolean) => void
 }
 
 export const CheckboxWithCheck = <T extends FieldValues>({
@@ -21,9 +22,17 @@ export const CheckboxWithCheck = <T extends FieldValues>({
   name,
   label,
   size,
+  onCheckChange,
   ...checkboxProps
 }: FormCheckboxProps<T>) => {
   const id = useId()
+  
+  const handleChange = (checked: boolean) => {
+    // Call the onChange handler immediately for checkboxes
+    if (onCheckChange) {
+      onCheckChange(checked)
+    }
+  }
   
   return (
     <>
@@ -31,7 +40,13 @@ export const CheckboxWithCheck = <T extends FieldValues>({
         control={control}
         name={name}
         rules={rules}
-        render={({ field: { value, onChange }, fieldState: { error } }) => (
+        render={({ field: { value, onChange }, fieldState: { error } }) => {
+          const handleCheckChange = (checked: boolean) => {
+            onChange(checked) // Update form state
+            handleChange(checked) // Trigger immediate callback
+          }
+          
+          return (
           <FormFieldset>
             <YStack>
               <XStack>
@@ -43,7 +58,7 @@ export const CheckboxWithCheck = <T extends FieldValues>({
                 <Checkbox
                   id={id}
                   size={size}
-                  onCheckedChange={onChange}
+                  onCheckedChange={handleCheckChange}
                   checked={value}
                   labelledBy={label}
                   value={value}
@@ -57,7 +72,8 @@ export const CheckboxWithCheck = <T extends FieldValues>({
               {error && <Text>{error.message}</Text>}
             </YStack>
           </FormFieldset>
-        )}
+          )
+        }}
       />
     </>
   )

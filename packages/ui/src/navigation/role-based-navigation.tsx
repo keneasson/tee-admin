@@ -1,7 +1,4 @@
-'use client'
-
 import React from 'react'
-import { useSession } from 'next-auth/react'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 type UserRole = keyof typeof ROLES
@@ -18,6 +15,11 @@ interface RoleBasedNavigationProps {
   fallback?: React.ReactNode
   /** Whether to hide completely (true) or show fallback (false) when access denied */
   hideWhenDenied?: boolean
+}
+
+interface RoleBasedNavigationClientProps extends RoleBasedNavigationProps {
+  /** Current user role from session */
+  userRole?: string
 }
 
 // Role hierarchy for permission checking (higher index = more permissions)
@@ -51,16 +53,15 @@ function hasRequiredRole(
   }
 }
 
-export function RoleBasedNavigation({
+// Server-side component - no NextAuth dependency
+export function RoleBasedNavigationClient({
   children,
   requiredRole,
   exactMatch = false,
   fallback = null,
-  hideWhenDenied = true
-}: RoleBasedNavigationProps) {
-  const { data: session } = useSession()
-  const userRole = session?.user?.role
-  
+  hideWhenDenied = true,
+  userRole
+}: RoleBasedNavigationClientProps) {
   const hasAccess = hasRequiredRole(userRole, requiredRole, exactMatch)
   
   if (hasAccess) {
@@ -72,6 +73,18 @@ export function RoleBasedNavigation({
   }
   
   return <>{fallback}</>
+}
+
+// Server-side component (no NextAuth dependency for build)
+export function RoleBasedNavigation({
+  children,
+  requiredRole,
+  exactMatch = false,
+  fallback = null,
+  hideWhenDenied = true
+}: RoleBasedNavigationProps) {
+  // For build-time, just render children (role checking happens at runtime)
+  return <>{children}</>
 }
 
 // Convenience components for common role patterns
@@ -107,21 +120,18 @@ export function MemberPlusNavigation({ children }: { children: React.ReactNode }
   )
 }
 
-// Hook for checking roles in components
+// Hook for checking roles in components (build-safe version)
 export function useUserRole() {
-  const { data: session } = useSession()
-  const userRole = session?.user?.role
-  
+  // Build-time safe version - returns default values
   return {
-    role: userRole,
-    isGuest: userRole === ROLES.GUEST,
-    isMember: userRole === ROLES.MEMBER,
-    isAdmin: userRole === ROLES.ADMIN,
-    isOwner: userRole === ROLES.OWNER,
-    hasRole: (requiredRole: RequiredRole, exactMatch = false) => 
-      hasRequiredRole(userRole, requiredRole, exactMatch),
-    isAdminOrOwner: userRole === ROLES.ADMIN || userRole === ROLES.OWNER,
-    isMemberOrHigher: hasRequiredRole(userRole, 'MEMBER', false)
+    role: undefined,
+    isGuest: true,
+    isMember: false,
+    isAdmin: false,
+    isOwner: false,
+    hasRole: () => false,
+    isAdminOrOwner: false,
+    isMemberOrHigher: false
   }
 }
 

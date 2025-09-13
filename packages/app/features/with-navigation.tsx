@@ -164,40 +164,46 @@ const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
   return (
     <>
       <NavigationButtonItem
+        key="eventManagement"
+        linkTo={linkTo('/admin/events')}
+        text="Event Management"
+        active={path === '/admin/events'}
+      />
+      <NavigationButtonItem
         key="emailTester"
-        linkTo={linkTo('/admin/(admin-plus)/email/tester')}
+        linkTo={linkTo('/admin/email/tester')}
         text="Email Tester"
-        active={path === '/admin/(admin-plus)/email/tester'}
+        active={path === '/admin/email/tester'}
       />
       <NavigationButtonItem
         key="brandColours"
-        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/colours')}
+        linkTo={linkTo('/admin/ui-ux/brand/colours')}
         text="Brand Colors"
-        active={path === '/admin/(admin-plus)/ui-ux/brand/colours'}
+        active={path === '/admin/ui-ux/brand/colours'}
       />
       <NavigationButtonItem
         key="brandTypography"
-        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/typography')}
+        linkTo={linkTo('/admin/ui-ux/brand/typography')}
         text="Brand Typography"
-        active={path === '/admin/(admin-plus)/ui-ux/brand/typography'}
+        active={path === '/admin/ui-ux/brand/typography'}
       />
       <NavigationButtonItem
         key="brandComponents"
-        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/components')}
+        linkTo={linkTo('/admin/ui-ux/brand/components')}
         text="Component Showcase"
-        active={path === '/admin/(admin-plus)/ui-ux/brand/components'}
+        active={path === '/admin/ui-ux/brand/components'}
       />
       <NavigationButtonItem
         key="brandNavigation"
-        linkTo={linkTo('/admin/(admin-plus)/ui-ux/brand/navigation')}
+        linkTo={linkTo('/admin/ui-ux/brand/navigation')}
         text="Navigation Testing"
-        active={path === '/admin/(admin-plus)/ui-ux/brand/navigation'}
+        active={path === '/admin/ui-ux/brand/navigation'}
       />
       <NavigationButtonItem
         key="brandPlayground"
-        linkTo={linkTo('/admin/(admin-plus)/evolution/feature-flags')}
+        linkTo={linkTo('/admin/evolution/feature-flags')}
         text="Feature Playground"
-        active={path === '/admin/(admin-plus)/evolution/feature-flags'}
+        active={path === '/admin/evolution/feature-flags'}
       />
     </>
   )

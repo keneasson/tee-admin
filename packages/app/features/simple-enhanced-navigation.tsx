@@ -28,13 +28,14 @@ const pages: MainPageType[] = [
 ]
 
 const adminPages: MainPageType[] = [
-  { path: '/admin/(admin-plus)/email/tester', label: 'Email Tester' },
-  { path: '/admin/(admin-plus)/ui-ux/brand/colours', label: 'Brand Colors' },
-  { path: '/admin/(admin-plus)/ui-ux/brand/typography', label: 'Typography' },
-  { path: '/admin/(admin-plus)/ui-ux/brand/components', label: 'Components' },
-  { path: '/admin/(admin-plus)/ui-ux/brand/navigation', label: 'Navigation' },
-  { path: '/admin/(admin-plus)/evolution/feature-flags', label: 'Feature Flags' },
-  { path: '/admin/(owner)/data-sync', label: 'Data Sync' },
+  { path: '/admin/events', label: 'Event Management' },
+  { path: '/admin/email/tester', label: 'Email Tester' },
+  { path: '/admin/ui-ux/brand/colours', label: 'Brand Colors' },
+  { path: '/admin/ui-ux/brand/typography', label: 'Typography' },
+  { path: '/admin/ui-ux/brand/components', label: 'Components' },
+  { path: '/admin/ui-ux/brand/navigation', label: 'Navigation' },
+  { path: '/admin/evolution/feature-flags', label: 'Feature Flags' },
+  { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/profile', label: 'Profile' },
 ]
 

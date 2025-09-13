@@ -41,8 +41,8 @@ export const authOptions = {
   },
   providers: [
     GoogleProvider({
-      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENTID as string,
-      clientSecret: process.env.NEXT_PUBLIC_GOOGLE_ACCOUNT_SECRET as string,
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     }),
     CredentialsProvider({
       name: 'credentials',
@@ -205,7 +205,7 @@ export const authOptions = {
       }
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || process.env.NEXT_PUBLIC_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
 }
 

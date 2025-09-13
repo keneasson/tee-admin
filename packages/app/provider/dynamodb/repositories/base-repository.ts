@@ -57,14 +57,28 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       const expressionAttributeNames: Record<string, string> = {}
       const expressionAttributeValues: Record<string, any> = {}
 
+      // Filter out primary key fields, automatic fields, and undefined/null values
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([key, value]) => 
+          key !== 'PK' &&          // Primary key - cannot update
+          key !== 'SK' &&          // Sort key - cannot update
+          key !== 'lastUpdated' &&  // Automatically managed
+          key !== 'version' &&      // Automatically managed
+          value !== undefined &&
+          value !== null
+        )
+      )
+
       // Build update expression
-      Object.entries(updates).forEach(([key, value], index) => {
+      let index = 0
+      Object.entries(filteredUpdates).forEach(([key, value]) => {
         const nameKey = `#attr${index}`
         const valueKey = `:val${index}`
         
         updateExpressions.push(`${nameKey} = ${valueKey}`)
         expressionAttributeNames[nameKey] = key
         expressionAttributeValues[valueKey] = value
+        index++
       })
 
       // Add automatic lastUpdated and version increment

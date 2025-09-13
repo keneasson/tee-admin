@@ -2,6 +2,42 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Model Selection Guidelines (Opus vs Sonnet)
+
+### Use Sonnet (3.5) for:
+- **File Operations**: Reading, searching, grepping files
+- **Simple Edits**: Straightforward code changes, fixing typos, updating imports
+- **Bash Commands**: Running builds, tests, checking git status
+- **Documentation**: Writing comments, updating READMEs
+- **Type Checking**: Running TypeScript compiler, fixing simple type errors
+- **Todo Management**: Updating task lists, marking items complete
+- **Code Formatting**: Fixing indentation, organizing imports
+- **Search & Discovery**: Finding files, understanding project structure
+
+### Use Opus (4.1) for:
+- **Architecture Decisions**: Designing system components, data models
+- **Complex Debugging**: Solving tricky bugs requiring deep analysis
+- **Algorithm Design**: Creating efficient solutions to complex problems
+- **Security Analysis**: Reviewing authentication, authorization logic
+- **Performance Optimization**: Analyzing and improving slow code
+- **API Design**: Creating clean, extensible interfaces
+- **Complex Refactoring**: Restructuring code while maintaining functionality
+- **Cross-System Integration**: Coordinating changes across multiple services
+- **Business Logic**: Implementing complex domain rules and workflows
+
+### Prompting for Efficiency
+When starting a task, consider prefixing with:
+- "Using Sonnet would be fine for this:" - for routine tasks
+- "This needs Opus:" - for complex reasoning
+- "Start with Sonnet, then switch to Opus if needed:" - for exploration
+
+### Task Breakdown Strategy
+1. **Discovery Phase** (Sonnet): Understand the problem, search codebase, read files
+2. **Planning Phase** (Opus): Design the solution, identify edge cases
+3. **Implementation Phase** (Sonnet): Make the code changes
+4. **Verification Phase** (Sonnet): Run tests, check types
+5. **Complex Issues** (Opus): Debug failures, solve unexpected problems
+
 ## Project Overview
 
 TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Ecclesia administrative system. Built with Turborepo, it includes web (Next.js), mobile (Expo), and email template (React Email) applications sharing common business logic and UI components.

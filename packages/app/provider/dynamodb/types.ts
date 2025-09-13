@@ -55,10 +55,10 @@ export interface MemberData {
 export interface ScheduleRecord extends BaseRecord {
   PK: string // 'SCHEDULE#{date}' OR 'EVENT#{eventId}' 
   SK: string // '{ecclesia}#{type}#{time}' OR 'DETAILS'
-  GSI1PK: string // 'ECCLESIA#{ecclesia}'
-  GSI1SK: string // '{date}#{type}#{time}' - for ecclesia + date range queries
-  GSI2PK: string // 'TYPE#{type}' OR 'DATE#{date}'
-  GSI2SK: string // '{date}#{time}' OR '{type}'
+  GSI1PK?: string // 'ECCLESIA#{ecclesia}' - Optional for backward compatibility
+  GSI1SK?: string // '{date}#{type}#{time}' - for ecclesia + date range queries
+  GSI2PK?: string // 'TYPE#{type}' OR 'DATE#{date}' - Optional for backward compatibility
+  GSI2SK?: string // '{date}#{time}' OR '{type}'
   
   // Common fields
   ecclesia: string
@@ -66,15 +66,30 @@ export interface ScheduleRecord extends BaseRecord {
   type: 'memorial' | 'sundaySchool' | 'bibleClass' | 'cyc' | 'event'
   
   // Schedule-specific fields (for memorial, sundaySchool, etc.)
-  scheduleData?: MemorialServiceType | SundaySchoolType | BibleClassType | CycType
+  data?: MemorialServiceType | SundaySchoolType | BibleClassType | CycType // Changed from scheduleData for consistency
   sheetId?: string // Source sheet for schedule data
+  sheetType?: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc' // For schedule records
   
   // Event-specific fields (for standalone events)
   eventId?: string
   title?: string
   time?: string
   description?: string
-  details?: Record<string, string | string[]> // Flexible structure for speakers, topics, etc.
+  details?: string // JSON string for complex Event data - changed from Record for Events
+  
+  // Enhanced fields for Events
+  status?: string // EventStatus as string
+  published?: boolean
+  featured?: boolean
+  createdBy?: string
+  createdAt?: string // ISO string
+  updatedAt?: string // ISO string
+  publishDate?: string // ISO string
+  hostingEcclesia?: string // Name of hosting ecclesia for Events
+  
+  // Search and metadata fields
+  searchableContent?: string // Flattened text content for search
+  tags?: string[] // Event tags for categorization
 }
 
 // Event data structure for new events
@@ -83,6 +98,48 @@ export interface EventData {
   time: string
   description: string
   details: Record<string, string | string[]>
+}
+
+// Enhanced Event data structure for comprehensive events
+export interface EventRecord extends BaseRecord {
+  // DynamoDB keys
+  PK: string // 'EVENT#{eventId}'
+  SK: string // 'DETAILS'
+  GSI1PK: string // 'ECCLESIA#{hostingEcclesiaName}' for filtering by ecclesia
+  GSI1SK: string // '{date}#{type}#{time}' for date range queries
+  GSI2PK: string // 'TYPE#{eventType}' or 'DATE#{date}' for type/date filtering  
+  GSI2SK: string // '{date}#{time}' or '{type}' 
+  
+  // Basic event metadata for queries and filtering
+  eventId: string
+  title: string
+  type: string // EventType as string for DynamoDB storage
+  status: string // EventStatus as string
+  published: boolean
+  featured?: boolean
+  date: string // Primary event date in ISO format
+  time?: string // Event time (HH:MM)
+  
+  // Hosting organization for GSI queries
+  hostingEcclesia?: string // Name of hosting ecclesia
+  ecclesia: string // For compatibility with existing GSI patterns
+  
+  // Creator and timestamps
+  createdBy: string
+  createdAt: string // ISO string
+  updatedAt: string // ISO string
+  publishDate?: string // ISO string
+  
+  // Rich event data stored as JSON objects
+  eventData: string // Serialized Event object (all the complex nested data)
+  
+  // Search and metadata fields (for future Elasticsearch integration)
+  searchableContent?: string // Flattened text content for search
+  tags?: string[] // Event tags for categorization
+  
+  // Legacy compatibility fields
+  description?: string
+  details?: Record<string, string | string[]>
 }
 
 // Sync Status Table - Track webhook processing and sync state
