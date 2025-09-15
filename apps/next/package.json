@@ -19,6 +19,7 @@
   "dependencies": {
     "@auth/dynamodb-adapter": "^2.7.4",
     "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/client-s3": "^3.750.0",
     "@aws-sdk/client-sesv2": "^3.750.0",
     "@aws-sdk/credential-provider-node": "^3.750.0",
     "@aws-sdk/lib-dynamodb": "^3.750.0",
@@ -36,6 +37,7 @@
     "raf": "^3.4.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-dropzone": "^14.3.8",
     "react-native": "^0.77.2",
     "react-native-web": "^0.20.0",
     "react-native-web-lite": "^1.112.4",

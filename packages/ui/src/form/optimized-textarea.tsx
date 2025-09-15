@@ -75,14 +75,22 @@ export function OptimizedTextarea<T extends FieldValues>({
         onChangeText={handleChangeText}
         onBlur={onBlur}
         placeholder={placeholder}
-        borderColor={error ? '$red8' : '$borderColor'}
+        borderWidth={2}
+        borderColor={error ? '$error' : '$textTertiary'}
+        backgroundColor="$background"
         focusStyle={{
-          borderColor: error ? '$red10' : '$blue10'
+          borderColor: error ? '$error' : '$primary',
+          borderWidth: 2
+        }}
+        hoverStyle={{
+          borderColor: error ? '$error' : '$textSecondary'
         }}
         disabled={disabled}
         rows={rows}
         autoComplete={autoComplete}
         maxLength={maxLength}
+        paddingHorizontal="$3"
+        paddingVertical="$2.5"
         // Performance optimizations
         textAlignVertical="top"
         multiline

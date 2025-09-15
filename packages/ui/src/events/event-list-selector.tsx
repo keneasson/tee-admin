@@ -17,10 +17,11 @@ interface EventListSelectorProps {
   events: Event[]
   onSelect: (event: Event) => void
   onCreateNew: () => void
+  onPreview?: (event: Event) => void
   isLoading?: boolean
 }
 
-function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event) => void }) {
+function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void }) {
   const getEventDateDisplay = (event: Event): string => {
     switch (event.type) {
       case 'study-weekend':
@@ -87,8 +88,9 @@ function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event)
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
-        return '$gray11'
+        return '$orange11'
       case 'published':
+      case 'ready':
         return '$green11'
       case 'archived':
         return '$red11'
@@ -100,13 +102,25 @@ function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event)
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'draft':
-        return '$gray8'
+        return '$orange3'
       case 'published':
-        return '$green8'
+      case 'ready':
+        return '$green3'
       case 'archived':
-        return '$red8'
+        return '$red3'
       default:
-        return '$blue8'
+        return '$blue3'
+    }
+  }
+
+  const getStatusDisplayName = (status: string) => {
+    switch (status) {
+      case 'published':
+        return 'Ready'
+      case 'ready':
+        return 'Ready'
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1)
     }
   }
 
@@ -140,7 +154,7 @@ function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event)
                 alignItems="center"
               >
                 <Text fontSize="$2" color={getStatusColor(event.status)} fontWeight="500">
-                  {event.status}
+                  {getStatusDisplayName(event.status)}
                 </Text>
               </XStack>
             </XStack>
@@ -158,19 +172,43 @@ function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event)
             )}
           </YStack>
 
-          {/* Action button */}
-          <Button size="$3" variant="outlined" icon={Pencil}>
-            Edit
-          </Button>
+          {/* Action buttons */}
+          <XStack space="$2" alignItems="center">
+            {onPreview && (
+              <Button 
+                size="$3" 
+                variant="ghost" 
+                icon={Eye}
+                onPress={(e) => {
+                  e.stopPropagation()
+                  onPreview(event)
+                }}
+              >
+                Preview
+              </Button>
+            )}
+            <Button 
+              size="$3" 
+              variant="outlined" 
+              icon={Pencil}
+              onPress={(e) => {
+                e.stopPropagation()
+                onSelect(event)
+              }}
+            >
+              Edit
+            </Button>
+          </XStack>
         </XStack>
 
-        <XStack space="$4" alignItems="center" flexWrap="wrap">
-          <XStack space="$1" alignItems="center">
-            <Calendar size="$1" color="$gray11" />
-            <Text fontSize="$3" color="$gray11">
-              {dateDisplay}
-            </Text>
-          </XStack>
+        <XStack justifyContent="space-between" alignItems="center">
+          <XStack space="$4" alignItems="center" flexWrap="wrap" flex={1}>
+            <XStack space="$1" alignItems="center">
+              <Calendar size="$1" color="$gray11" />
+              <Text fontSize="$3" color="$gray11">
+                {dateDisplay}
+              </Text>
+            </XStack>
 
           {(event.type === 'study-weekend' ||
             event.type === 'wedding' ||
@@ -205,6 +243,7 @@ function EventCard({ event, onSelect }: { event: Event; onSelect: (event: Event)
               </Text>
             </XStack>
           )}
+          </XStack>
         </XStack>
 
         <XStack justifyContent="space-between" alignItems="center">
@@ -230,6 +269,7 @@ export function EventListSelector({
   events,
   onSelect,
   onCreateNew,
+  onPreview,
   isLoading = false,
 }: EventListSelectorProps) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -405,7 +445,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {draftEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
                   ))}
                 </YStack>
               </ScrollView>
@@ -424,7 +464,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {publishedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
                   ))}
                 </YStack>
               </ScrollView>
@@ -440,7 +480,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {otherEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
                   ))}
                 </YStack>
               </ScrollView>

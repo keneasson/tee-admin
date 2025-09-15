@@ -133,12 +133,16 @@ export async function createEcclesia(data: {
     await client.put({
       TableName: TABLE_NAME,
       Item: {
-        pkey: `ECCLESIA#${data.name}`,
-        skey: `${data.country}|${data.province}|${data.city}`,
+        // New schema: Geographic hierarchy in PK for efficient geographic queries
+        pkey: `ECCLESIA#${data.country}|${data.province}`,
+        skey: `${data.city}#${data.name}`,
         type: 'ECCLESIA',
+        // GSI1 for name-based lookups
+        gsi1pk: `ECCLESIA#${data.name}`,
+        gsi1sk: `${data.country}|${data.province}|${data.city}`,
         ...ecclesia,
       },
-      ConditionExpression: 'attribute_not_exists(pkey)',
+      ConditionExpression: 'attribute_not_exists(gsi1pk)', // Prevent duplicate names
     })
 
     return ecclesia
@@ -155,12 +159,13 @@ export async function createEcclesia(data: {
   }
 }
 
-// Helper function to get ecclesia by name
+// Helper function to get ecclesia by name using GSI1
 export async function getEcclesiaByName(name: string): Promise<EcclesiaData | null> {
   try {
     const result = await client.query({
       TableName: TABLE_NAME,
-      KeyConditionExpression: 'pkey = :pk',
+      IndexName: 'gsi1', // Query the GSI1 for name-based lookups
+      KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: {
         ':pk': `ECCLESIA#${name}`,
       },
@@ -189,17 +194,13 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
 
 export async function searchEcclesia(query: string, limit: number = 5): Promise<EcclesiaData[]> {
   try {
-    // Use scan with filter for now - we can optimize later with GSI if needed
+    // Search using GSI1 for efficient name-based searches
     const result = await client.scan({
       TableName: TABLE_NAME,
-      FilterExpression: '#type = :ecclesiaType AND begins_with(#name, :query)',
+      IndexName: 'gsi1',
+      FilterExpression: 'begins_with(gsi1pk, :query)',
       ExpressionAttributeValues: {
-        ':ecclesiaType': 'ECCLESIA',
-        ':query': query,
-      },
-      ExpressionAttributeNames: {
-        '#type': 'type',
-        '#name': 'name',
+        ':query': `ECCLESIA#${query}`,
       },
       Limit: limit,
     })
@@ -217,6 +218,94 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
     }))
   } catch (error) {
     console.error('Error searching ecclesia:', error)
+    return []
+  }
+}
+
+// New geographic query functions enabled by the new schema
+export async function getEcclesiaByCountry(country: string): Promise<EcclesiaData[]> {
+  try {
+    // Use scan with filter since begins_with on PK isn't supported in Query
+    const result = await client.scan({
+      TableName: TABLE_NAME,
+      FilterExpression: 'begins_with(pkey, :prefix) AND #type = :ecclesiaType',
+      ExpressionAttributeValues: {
+        ':prefix': `ECCLESIA#${country}`,
+        ':ecclesiaType': 'ECCLESIA',
+      },
+      ExpressionAttributeNames: {
+        '#type': 'type',
+      },
+    })
+
+    if (!result.Items) return []
+
+    return result.Items.map((item) => ({
+      name: item.name,
+      country: item.country,
+      province: item.province,
+      city: item.city,
+      address: item.address,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }))
+  } catch (error) {
+    console.error('Error getting ecclesia by country:', error)
+    return []
+  }
+}
+
+export async function getEcclesiaByProvince(country: string, province: string): Promise<EcclesiaData[]> {
+  try {
+    const result = await client.query({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'pkey = :pk',
+      ExpressionAttributeValues: {
+        ':pk': `ECCLESIA#${country}|${province}`,
+      },
+    })
+
+    if (!result.Items) return []
+
+    return result.Items.map((item) => ({
+      name: item.name,
+      country: item.country,
+      province: item.province,
+      city: item.city,
+      address: item.address,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }))
+  } catch (error) {
+    console.error('Error getting ecclesia by province:', error)
+    return []
+  }
+}
+
+export async function getEcclesiaByCity(country: string, province: string, city: string): Promise<EcclesiaData[]> {
+  try {
+    const result = await client.query({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'pkey = :pk AND begins_with(skey, :city)',
+      ExpressionAttributeValues: {
+        ':pk': `ECCLESIA#${country}|${province}`,
+        ':city': `${city}#`,
+      },
+    })
+
+    if (!result.Items) return []
+
+    return result.Items.map((item) => ({
+      name: item.name,
+      country: item.country,
+      province: item.province,
+      city: item.city,
+      address: item.address,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }))
+  } catch (error) {
+    console.error('Error getting ecclesia by city:', error)
     return []
   }
 }

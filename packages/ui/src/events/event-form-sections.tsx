@@ -1,4 +1,6 @@
-import { Control, useFieldArray, useController, FieldValues, FieldPath } from 'react-hook-form'
+import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext } from 'react-hook-form'
+import { formatEcclesiaToLocation, createLocationFieldUpdates } from './location-utils'
+import { LocationFieldsContainer } from './location-components'
 import { YStack, XStack, Card, Text, Button, Separator, Checkbox } from 'tamagui'
 import { Plus, MapPin, User, Calendar, FileText, Trash2, Check } from '@tamagui/lucide-icons'
 import { EventFormInput } from '../form/event-form-input'
@@ -7,6 +9,7 @@ import { EventFormSelect } from '../form/event-form-select'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { CountrySelect, ProvinceSelect } from '../form/location-select'
 import { OptimizedTextarea } from '../form/optimized-textarea'
+import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { useAdminSpacing } from '../hooks/use-admin-spacing'
 
 // Sticky Header Component for Add buttons
@@ -60,6 +63,9 @@ interface LocationSectionProps<T extends FieldValues> {
   namePrefix: string
   title?: string
   required?: boolean
+  showAtTheHallOption?: boolean
+  hostingEcclesiaFieldName?: string
+  setValue?: any // Pass setValue from useForm
 }
 
 // Multiple Locations Section (for events with multiple venues)
@@ -74,9 +80,53 @@ export function LocationSection<T extends FieldValues>({
   control, 
   namePrefix, 
   title = "Location Details",
-  required = false 
+  required = false,
+  showAtTheHallOption = false,
+  hostingEcclesiaFieldName = "hostingEcclesia",
+  setValue: setValueProp
 }: LocationSectionProps<T>) {
   const { card, text, button } = useAdminSpacing()
+  
+  // Try to get setValue from prop first, then from context as fallback
+  const formContext = useFormContext()
+  const setValue = setValueProp || formContext?.setValue
+  
+  const hostingEcclesia = useWatch({
+    control,
+    name: hostingEcclesiaFieldName as FieldPath<T>
+  })
+  
+  // Use pure functions for data transformation
+  const handleAtTheHallChange = (checked: boolean) => {
+    // Only proceed if setValue is available
+    if (!setValue) {
+      console.warn('LocationSection: setValue not available - component must be used within a FormProvider')
+      return
+    }
+    
+    if (checked && hostingEcclesia) {
+      // Transform data using pure function
+      const locationData = formatEcclesiaToLocation(hostingEcclesia)
+      // Handle parkingInfo vs parking field name
+      locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      
+      // Get field updates and apply them
+      const updates = createLocationFieldUpdates(locationData, namePrefix)
+      // Rename parking to parkingInfo for this form
+      updates.forEach(({ field, value }) => {
+        const fieldName = field.includes('.parking') ? field.replace('.parking', '.parkingInfo') : field
+        setValue(fieldName as any, value)
+      })
+    } else if (!checked) {
+      // Clear all fields using empty location
+      const emptyLocation = formatEcclesiaToLocation(null)
+      const updates = createLocationFieldUpdates(emptyLocation, namePrefix)
+      updates.forEach(({ field, value }) => {
+        const fieldName = field.includes('.parking') ? field.replace('.parking', '.parkingInfo') : field
+        setValue(fieldName as any, value || '')
+      })
+    }
+  }
   
   return (
     <Card padding={card.padding} borderWidth={1} borderColor="$borderColor">
@@ -87,6 +137,16 @@ export function LocationSection<T extends FieldValues>({
         </XStack>
         
         <YStack space={card.space}>
+          {/* At the Hall convenience option */}
+          {showAtTheHallOption && hostingEcclesia && (
+            <CheckboxWithCheck
+              control={control}
+              name={`${namePrefix}._atTheHall` as any}
+              label={`At the Hall - Use ${hostingEcclesia.name}'s hall location`}
+              onCheckChange={handleAtTheHallChange}
+            />
+          )}
+          
           <EventFormInput
             control={control}
             name={`${namePrefix}.name` as any}

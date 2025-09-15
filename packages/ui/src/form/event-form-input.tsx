@@ -81,15 +81,23 @@ export function EventFormInput<T extends FieldValues>({
         onChangeText={handleChange}
         onBlur={onBlur}
         placeholder={placeholder}
-        borderColor={error ? '$red8' : '$borderColor'}
+        borderWidth={2}
+        borderColor={error ? '$error' : '$textTertiary'}
+        backgroundColor="$background"
         focusStyle={{
-          borderColor: error ? '$red10' : '$blue10'
+          borderColor: error ? '$error' : '$primary',
+          borderWidth: 2
+        }}
+        hoverStyle={{
+          borderColor: error ? '$error' : '$textSecondary'
         }}
         disabled={disabled}
         multiline={multiline}
         numberOfLines={multiline ? 4 : 1}
         autoComplete={autoComplete}
         keyboardType={type === 'email' ? 'email-address' : type === 'tel' ? 'phone-pad' : type === 'number' ? 'numeric' : 'default'}
+        paddingHorizontal="$3"
+        paddingVertical="$2.5"
       />
       
       {error && (

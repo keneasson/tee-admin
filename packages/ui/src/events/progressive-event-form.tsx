@@ -16,7 +16,7 @@ import {
 } from '@tamagui/lucide-icons'
 import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
-import { Button, Card, Circle, Separator, Text, XStack, YStack } from 'tamagui'
+import { Button, Card, Circle, Separator, Text, XStack, YStack, Dialog, AlertDialog } from 'tamagui'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventDateRangePicker } from '../form/event-date-range-picker'
@@ -29,6 +29,7 @@ import {
   ScheduleSection,
   SpeakerSection,
 } from './event-form-sections'
+import { DocumentsSection } from './form-sections/documents-section'
 import { EventTypeSelector } from './event-type-selector'
 import { EventStatusIndicator, EventValidationSummary } from './event-status-indicator'
 
@@ -72,23 +73,33 @@ function CollapsibleComponent({
   onRemove,
   defaultExpanded = true,
   onAdd,
-  addButtonText = "Add Item",
+  addButtonText = 'Add Item',
   icon: Icon,
-  iconColor = "$blue10"
+  iconColor = '$blue10',
 }: CollapsibleComponentProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const handleRemoveClick = () => {
+    setShowDeleteConfirm(true)
+  }
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false)
+    onRemove()
+  }
 
   return (
     <YStack borderWidth={1} borderColor="$borderColor" borderRadius="$4" overflow="visible">
       {/* Consolidated sticky header with all functionality */}
-      <XStack 
+      <XStack
         style={{ position: 'sticky', top: 0, zIndex: 15 }}
-        backgroundColor="$background"
+        backgroundColor="$borderContrast"
         padding="$3"
-        borderBottomWidth={isExpanded ? 1 : 0}
+        borderBottomWidth={isExpanded ? 2 : 0}
         borderBottomColor="$borderColor"
         gap="$2"
-        alignItems="center" 
+        alignItems="center"
         justifyContent="space-between"
         shadowColor="$shadowColor"
         shadowOffset={{ width: 0, height: 2 }}
@@ -112,43 +123,79 @@ function CollapsibleComponent({
           <Text fontSize="$4" fontWeight="600" flex={1}>
             {title}
           </Text>
-          {!isExpanded && (
-            <Text fontSize="$2" color="$gray11">
-              (collapsed)
-            </Text>
-          )}
         </XStack>
-        
+
         {/* Right side: Add button + Remove button */}
         <XStack gap="$2" alignItems="center">
           {onAdd && isExpanded && (
-            <Button
-              size="$3"
-              theme="blue"
-              icon={Plus}
-              onPress={onAdd}
-            >
+            <Button size="$3" theme="blue" icon={Plus} onPress={onAdd}>
               {addButtonText}
             </Button>
           )}
-          <Button 
-            size="$2" 
-            variant="outlined" 
-            color="$red10" 
-            onPress={onRemove}
+          <Button
+            size="$3"
+            theme="red"
+            onPress={handleRemoveClick}
             opacity={isExpanded ? 1 : 0.7}
           >
             Remove
           </Button>
         </XStack>
       </XStack>
-      
+
       {/* Content area */}
-      {isExpanded && (
-        <YStack padding="$3">
-          {children}
-        </YStack>
-      )}
+      {isExpanded && <YStack padding="$3" backgroundColor="$borderContrast">{children}</YStack>}
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay
+            key="overlay"
+            animation="quick"
+            opacity={0.5}
+            enterStyle={{ opacity: 0 }}
+            exitStyle={{ opacity: 0 }}
+          />
+          <AlertDialog.Content
+            bordered
+            elevate
+            key="content"
+            animation={[
+              'quick',
+              {
+                opacity: {
+                  overshootClamping: true,
+                },
+              },
+            ]}
+            enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+            exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+            x={0}
+            scale={1}
+            opacity={1}
+            y={0}
+            maxWidth={500}
+          >
+            <YStack space="$3">
+              <AlertDialog.Title>Remove {title}?</AlertDialog.Title>
+              <AlertDialog.Description>
+                Are you sure you want to remove this entire {title.toLowerCase()} section? This action cannot be undone.
+              </AlertDialog.Description>
+
+              <XStack space="$3" justifyContent="flex-end">
+                <AlertDialog.Cancel asChild>
+                  <Button variant="outlined">Cancel</Button>
+                </AlertDialog.Cancel>
+                <AlertDialog.Action asChild>
+                  <Button theme="red" onPress={handleConfirmDelete}>
+                    Remove Section
+                  </Button>
+                </AlertDialog.Action>
+              </XStack>
+            </YStack>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog>
     </YStack>
   )
 }
@@ -156,7 +203,7 @@ function CollapsibleComponent({
 // Event status summary component
 function EventStatusSection({
   formData,
-  currentSelectedType
+  currentSelectedType,
 }: {
   formData: any
   currentSelectedType?: EventType
@@ -165,12 +212,10 @@ function EventStatusSection({
 
   const eventData = {
     ...formData,
-    type: currentSelectedType
+    type: currentSelectedType,
   }
 
-  return (
-    <EventValidationSummary event={eventData} showWarnings />
-  )
+  return <EventValidationSummary event={eventData} showWarnings />
 }
 
 // Breadcrumb component
@@ -282,13 +327,7 @@ function StepBreadcrumb({
       )}
 
       {/* Unsaved changes and save status indicator */}
-      <XStack 
-        justifyContent="center" 
-        alignItems="center" 
-        space="$2" 
-        marginTop="$2"
-        minHeight="$2"
-      >
+      <XStack justifyContent="center" alignItems="center" space="$2" marginTop="$2" minHeight="$2">
         {/* Show unsaved changes indicator when dirty and not saving */}
         {isDirty && autoSaveStatus === 'idle' && (
           <>
@@ -301,7 +340,9 @@ function StepBreadcrumb({
         {autoSaveStatus === 'saving' && (
           <>
             <Circle size="$0.5" backgroundColor="$blue10" animation="spin" />
-            <Text fontSize="$2" color="$blue11">Saving...</Text>
+            <Text fontSize="$2" color="$blue11">
+              Saving...
+            </Text>
           </>
         )}
         {autoSaveStatus === 'saved' && (
@@ -316,10 +357,9 @@ function StepBreadcrumb({
           <>
             <Circle size="$0.5" backgroundColor="$red10" />
             <Text fontSize="$2" color="$red11">
-              {(autoSaveRetryCount && maxAutoSaveRetries && autoSaveRetryCount >= maxAutoSaveRetries) 
-                ? 'Auto-save failed (max retries)' 
-                : `Auto-save failed${autoSaveRetryCount && maxAutoSaveRetries ? ` (retry ${autoSaveRetryCount}/${maxAutoSaveRetries})` : ''}`
-              }
+              {autoSaveRetryCount && maxAutoSaveRetries && autoSaveRetryCount >= maxAutoSaveRetries
+                ? 'Auto-save failed (max retries)'
+                : `Auto-save failed${autoSaveRetryCount && maxAutoSaveRetries ? ` (retry ${autoSaveRetryCount}/${maxAutoSaveRetries})` : ''}`}
             </Text>
           </>
         )}
@@ -457,12 +497,14 @@ export function ProgressiveEventForm({
   const [selectedTypeState, setSelectedType] = useState<EventType | undefined>(
     selectedType || initialData?.type
   )
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle'
+  )
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [autoSaveRetryCount, setAutoSaveRetryCount] = useState(0)
   const [persistentEventId, setPersistentEventId] = useState<string | undefined>(initialData?.id)
   const maxAutoSaveRetries = 3
-  
+
   // Use prop selectedType if provided, otherwise use state
   const currentSelectedType = selectedType || selectedTypeState
 
@@ -621,7 +663,7 @@ export function ProgressiveEventForm({
           exceptions: [],
           location: '',
           description: '',
-          contactPerson: ''
+          contactPerson: '',
         },
         location: initialData?.location || {
           name: '',
@@ -631,7 +673,7 @@ export function ProgressiveEventForm({
           country: 'Canada',
           postalCode: '',
           directions: '',
-          parkingInfo: ''
+          parkingInfo: '',
         },
         documents: initialData?.documents || [],
       }),
@@ -662,19 +704,11 @@ export function ProgressiveEventForm({
         icon: FileText,
         description: 'Upload PDFs, images, and other files',
         component: (
-          <Card padding="$4" borderWidth={1} borderColor="$borderColor">
-            <YStack space="$3">
-              <XStack space="$2" alignItems="center">
-                <FileText size="$1" color="$blue10" />
-                <Text fontSize="$5" fontWeight="600">
-                  Documents & Files
-                </Text>
-              </XStack>
-              <Text color="$gray11" fontSize="$3">
-                Document upload functionality will be implemented here
-              </Text>
-            </YStack>
-          </Card>
+          <DocumentsSection
+            control={control}
+            documents={watch('documents') || []}
+            onChange={(documents) => setValue('documents', documents, { shouldDirty: true })}
+          />
         ),
       },
     ]
@@ -714,9 +748,12 @@ export function ProgressiveEventForm({
           component: (
             <LocationSection
               control={control}
+              setValue={setValue}
               namePrefix="location"
               title="Event Location"
               required
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
             />
           ),
         },
@@ -757,17 +794,20 @@ export function ProgressiveEventForm({
             <YStack space="$4">
               <LocationSection
                 control={control}
+                setValue={setValue}
                 namePrefix="locations.service"
                 title="Service Location"
                 required
               />
               <LocationSection
                 control={control}
+                setValue={setValue}
                 namePrefix="locations.viewing"
                 title="Viewing Location"
               />
               <LocationSection
                 control={control}
+                setValue={setValue}
                 namePrefix="locations.burial"
                 title="Burial Location"
               />
@@ -826,6 +866,7 @@ export function ProgressiveEventForm({
           component: (
             <LocationSection
               control={control}
+              setValue={setValue}
               namePrefix="ceremonyLocation"
               title="Ceremony Location"
               required
@@ -841,6 +882,7 @@ export function ProgressiveEventForm({
             <YStack space="$4">
               <LocationSection
                 control={control}
+                setValue={setValue}
                 namePrefix="reception.location"
                 title="Reception Location"
               />
@@ -889,6 +931,7 @@ export function ProgressiveEventForm({
           component: (
             <LocationSection
               control={control}
+              setValue={setValue}
               namePrefix="location"
               title="Event Location"
               required
@@ -954,7 +997,14 @@ export function ProgressiveEventForm({
           icon: MapPin,
           description: 'Event venue information',
           component: (
-            <LocationSection control={control} namePrefix="location" title="Event Location" />
+            <LocationSection 
+              control={control}
+              setValue={setValue} 
+              namePrefix="location" 
+              title="Event Location"
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
+            />
           ),
         },
         {
@@ -963,9 +1013,9 @@ export function ProgressiveEventForm({
           icon: MapPin,
           description: 'Multiple venues for different parts of the event',
           component: (
-            <MultipleLocationsSection 
-              control={control} 
-              namePrefix="locations" 
+            <MultipleLocationsSection
+              control={control}
+              namePrefix="locations"
               title="Event Locations"
             />
           ),
@@ -1003,9 +1053,10 @@ export function ProgressiveEventForm({
           icon: MapPin,
           description: 'Where the recurring event takes place',
           component: (
-            <LocationSection 
-              control={control} 
-              namePrefix="location" 
+            <LocationSection
+              control={control}
+              setValue={setValue}
+              namePrefix="location"
               title="Event Location"
               required={false}
             />
@@ -1039,26 +1090,26 @@ export function ProgressiveEventForm({
   const onSubmit = async (data: any) => {
     // Check if event passes validation
     const validation = EventValidator.canPublish({ ...data, type: currentSelectedType })
-    
+
     // Set status based on validation
     const status: EventStatus = validation.isValid ? 'ready' : 'draft'
-    
+
     const eventData = {
       ...data,
       type: currentSelectedType,
       id: persistentEventId, // Use persistent ID for final save too
-      status
+      status,
       // Note: No 'published' field needed - it's computed from status + publishDate
     }
     await onSave(eventData)
   }
 
   const currentFormData = watch()
-  
+
   // Manual save draft function
   const handleManualSave = async () => {
     if (!onAutoSave || !currentSelectedType) return
-    
+
     try {
       setAutoSaveStatus('saving')
       const eventData = {
@@ -1067,22 +1118,22 @@ export function ProgressiveEventForm({
         id: persistentEventId,
       }
       const savedEvent = await onAutoSave(eventData)
-      
+
       // Capture the ID from the first save for subsequent saves
       if (!persistentEventId && savedEvent?.id) {
         setPersistentEventId(savedEvent.id)
       }
-      
+
       setAutoSaveStatus('saved')
       setLastSaved(new Date())
       setAutoSaveRetryCount(0)
-      
+
       // Reset dirty state after successful save
       reset(currentFormData, { keepValues: true })
-      
+
       // Reset to idle after showing saved status briefly
       setTimeout(() => setAutoSaveStatus('idle'), 3000)
-      
+
       return true // Success
     } catch (error) {
       console.error('Manual save failed:', error)
@@ -1091,7 +1142,7 @@ export function ProgressiveEventForm({
       return false // Failure
     }
   }
-  
+
   // Save and navigate function
   const handleSaveAndContinue = async (nextStep: 'basic' | 'components' | 'review') => {
     if (isDirty) {
@@ -1100,7 +1151,7 @@ export function ProgressiveEventForm({
     }
     setStep(nextStep)
   }
-  
+
   // Helper for triggering saves on important field changes
   const handleFieldChange = async () => {
     // Save after short delay to allow form state to update
@@ -1117,21 +1168,21 @@ export function ProgressiveEventForm({
       let timeoutId: NodeJS.Timeout
       return (data: any) => {
         if (!onAutoSave) return
-        
+
         // Don't attempt auto-save if we're in error state and have exceeded retry limit
         if (autoSaveStatus === 'error' && autoSaveRetryCount >= maxAutoSaveRetries) {
           return
         }
-        
+
         // Don't auto-save if already saving
         if (autoSaveStatus === 'saving') {
           return
         }
-        
+
         clearTimeout(timeoutId)
         timeoutId = setTimeout(async () => {
           if (!currentSelectedType) return // Don't auto-save without a type
-          
+
           try {
             setAutoSaveStatus('saving')
             const eventData = {
@@ -1140,7 +1191,7 @@ export function ProgressiveEventForm({
               id: persistentEventId, // Use persistent ID for all saves
             }
             const savedEvent = await onAutoSave(eventData)
-            
+
             // Capture the ID from the first save for subsequent saves
             if (!persistentEventId && savedEvent?.id) {
               setPersistentEventId(savedEvent.id)
@@ -1149,14 +1200,14 @@ export function ProgressiveEventForm({
             setLastSaved(new Date())
             // Reset retry count on successful save
             setAutoSaveRetryCount(0)
-            
+
             // Reset to idle after showing saved status briefly
             setTimeout(() => setAutoSaveStatus('idle'), 3000)
           } catch (error) {
             console.error('Auto-save failed:', error)
-            setAutoSaveRetryCount(prev => prev + 1)
+            setAutoSaveRetryCount((prev) => prev + 1)
             setAutoSaveStatus('error')
-            
+
             // If we haven't exceeded retry limit, try again with incremental backoff
             if (autoSaveRetryCount < maxAutoSaveRetries - 1) {
               // Incremental delays: 0.5s, 1s, 3s, 6s, 20s...
@@ -1171,24 +1222,31 @@ export function ProgressiveEventForm({
         }, 5000) // 5 second debounce to reduce excessive triggers
       }
     })(),
-    [onAutoSave, currentSelectedType, initialData?.id, autoSaveStatus, autoSaveRetryCount, maxAutoSaveRetries]
+    [
+      onAutoSave,
+      currentSelectedType,
+      initialData?.id,
+      autoSaveStatus,
+      autoSaveRetryCount,
+      maxAutoSaveRetries,
+    ]
   )
 
   // DISABLED: Auto-save was too expensive and triggering before user changes
   // TODO: Implement smart widget-level change events instead
-  // - Text inputs: onChange after user stops typing (debounced)  
+  // - Text inputs: onChange after user stops typing (debounced)
   // - Calendar widget: onChange only when dismissed/closed
   // - Dropdowns: onChange when selection made
   // - Checkboxes: onChange immediately
-  
+
   // useEffect(() => {
   //   if (step !== 'type' && currentSelectedType) {
-  //     const hasMinimalData = currentFormData.title?.trim() || 
+  //     const hasMinimalData = currentFormData.title?.trim() ||
   //       currentFormData.theme?.trim() ||
   //       currentFormData.candidate?.firstName?.trim() ||
   //       currentFormData.couple?.bride?.firstName?.trim() ||
   //       currentFormData.deceased?.firstName?.trim()
-  //     
+  //
   //     if (hasMinimalData) {
   //       debouncedAutoSave(currentFormData)
   //     }
@@ -1232,10 +1290,7 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection 
-          formData={currentFormData} 
-          currentSelectedType={currentSelectedType}
-        />
+        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
         <StepSummary
           step="basic"
           currentSelectedType={currentSelectedType}
@@ -1448,11 +1503,11 @@ export function ProgressiveEventForm({
                   />
                 </YStack>
                 <YStack flex={1}>
-                  <EventDatePicker 
-                    control={control} 
-                    name="endDate" 
-                    label="End Date" 
-                    includeTime 
+                  <EventDatePicker
+                    control={control}
+                    name="endDate"
+                    label="End Date"
+                    includeTime
                     onDateChange={handleFieldChange}
                   />
                 </YStack>
@@ -1520,15 +1575,15 @@ export function ProgressiveEventForm({
         </Card>
 
         <XStack space="$3" justifyContent="space-between">
-          <Button 
-            variant="outlined" 
-            onPress={handleManualSave} 
+          <Button
+            variant="outlined"
+            onPress={handleManualSave}
             disabled={isLoading || autoSaveStatus === 'saving'}
             theme="green"
           >
             {autoSaveStatus === 'saving' ? 'Saving...' : 'Save Draft'}
           </Button>
-          
+
           <XStack space="$3">
             {!skipTypeSelection && (
               <Button variant="outlined" onPress={() => setStep('type')} disabled={isLoading}>
@@ -1558,10 +1613,7 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection 
-          formData={currentFormData} 
-          currentSelectedType={currentSelectedType}
-        />
+        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
         <StepSummary
           step="components"
           currentSelectedType={currentSelectedType}
@@ -1601,7 +1653,7 @@ export function ProgressiveEventForm({
           </YStack>
         </Card>
 
-        <YStack gap="$3">
+        <YStack gap="$3" padding="$3">
           {activeComponentsData.map((component) => {
             // Get add function and button text based on component type
             const getAddProps = () => {
@@ -1611,61 +1663,70 @@ export function ProgressiveEventForm({
                     onAdd: () => {
                       // Trigger the SpeakerSection's add function
                       const speakersField = getValues('speakers') || []
-                      setValue('speakers', [...speakersField, { firstName: '', lastName: '', ecclesia: '' }])
+                      setValue('speakers', [
+                        ...speakersField,
+                        { firstName: '', lastName: '', ecclesia: '' },
+                      ])
                     },
                     addButtonText: 'Add Speaker',
                     icon: User,
-                    iconColor: '$green10'
+                    iconColor: '$green10',
                   }
                 case 'schedule':
                   return {
                     onAdd: () => {
                       // Trigger the ScheduleSection's add function
                       const scheduleField = getValues('schedule') || []
-                      setValue('schedule', [...scheduleField, {
-                        title: '',
-                        startTime: new Date(),
-                        endTime: null,
-                        description: '',
-                        type: 'talk',
-                        notes: ''
-                      }])
+                      setValue('schedule', [
+                        ...scheduleField,
+                        {
+                          title: '',
+                          startTime: new Date(),
+                          endTime: null,
+                          description: '',
+                          type: 'talk',
+                          notes: '',
+                        },
+                      ])
                     },
                     addButtonText: 'Add Item',
                     icon: Calendar,
-                    iconColor: '$purple10'
+                    iconColor: '$purple10',
                   }
                 case 'locations':
                   return {
                     onAdd: () => {
                       // Trigger the MultipleLocationsSection's add function
                       const locationsField = getValues('locations') || []
-                      setValue('locations', [...locationsField, {
-                        type: 'main',
-                        name: '',
-                        address: '',
-                        city: '',
-                        province: '',
-                        country: 'Canada',
-                        postalCode: '',
-                        directions: '',
-                        parkingInfo: ''
-                      }])
+                      setValue('locations', [
+                        ...locationsField,
+                        {
+                          type: 'main',
+                          name: '',
+                          address: '',
+                          city: '',
+                          province: '',
+                          country: 'Canada',
+                          postalCode: '',
+                          directions: '',
+                          parkingInfo: '',
+                        },
+                      ])
                     },
                     addButtonText: 'Add Location',
                     icon: MapPin,
-                    iconColor: '$blue10'
+                    iconColor: '$blue10',
                   }
                 default:
                   return {
                     icon: component.icon,
-                    iconColor: '$gray10'
+                    iconColor: '$gray10',
                   }
               }
             }
-            
+
             const addProps = getAddProps()
-            
+
             return (
               <CollapsibleComponent
                 key={component.id}
@@ -1719,10 +1780,7 @@ export function ProgressiveEventForm({
         maxAutoSaveRetries={maxAutoSaveRetries}
         isDirty={isDirty}
       />
-      <EventStatusSection 
-        formData={currentFormData} 
-        currentSelectedType={currentSelectedType}
-      />
+      <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
       <StepSummary
         step="review"
         currentSelectedType={currentSelectedType}
@@ -1837,7 +1895,9 @@ export function ProgressiveEventForm({
                     <Text fontSize="$3" color="$gray11">
                       {currentFormData.location.address}
                       {currentFormData.location.city ? `, ${currentFormData.location.city}` : ''}
-                      {currentFormData.location.province ? `, ${currentFormData.location.province}` : ''}
+                      {currentFormData.location.province
+                        ? `, ${currentFormData.location.province}`
+                        : ''}
                     </Text>
                   )}
                 </YStack>
@@ -1852,7 +1912,9 @@ export function ProgressiveEventForm({
                   </Text>
                   {currentFormData.speakers.map((speaker: any, index: number) => (
                     <XStack key={index} space="$1" alignItems="center">
-                      <Text>{speaker.firstName} {speaker.lastName}</Text>
+                      <Text>
+                        {speaker.firstName} {speaker.lastName}
+                      </Text>
                       {speaker.ecclesia ? (
                         <Text color="$gray11"> ({speaker.ecclesia.name})</Text>
                       ) : null}

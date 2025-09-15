@@ -5,6 +5,7 @@ import { YStack, Text, Spinner, Heading, Tabs, Card, Button, XStack } from '@my/
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { ProgressiveEventForm } from '@my/ui/src/events/progressive-event-form'
 import { EventListSelector } from '@my/ui/src/events/event-list-selector'
+import { EventPreviewModal } from '@my/ui/src/events/event-preview-modal'
 import { useState, useEffect } from 'react'
 // Remove direct service imports - we'll use API routes instead
 import { Event } from '@my/app/types/events'
@@ -18,6 +19,8 @@ export default function AdminEventsPage() {
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [activeTab, setActiveTab] = useState('list')
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [previewData, setPreviewData] = useState<any>(null)
+  const [showPreview, setShowPreview] = useState(false)
   
   // Load events on mount
   useEffect(() => {
@@ -118,7 +121,8 @@ export default function AdminEventsPage() {
 
   const handlePreviewEvent = (eventData: any) => {
     console.log('Preview event:', eventData)
-    // TODO: Implement event preview
+    setPreviewData(eventData)
+    setShowPreview(true)
   }
   
   const handleSelectEvent = (event: Event) => {
@@ -173,6 +177,7 @@ export default function AdminEventsPage() {
               events={events}
               onSelect={handleSelectEvent}
               onCreateNew={handleCreateNew}
+              onPreview={handlePreviewEvent}
               isLoading={loadingEvents}
             />
           )}
@@ -212,6 +217,15 @@ export default function AdminEventsPage() {
           </Card>
         </Tabs.Content>
       </Tabs>
+
+      {/* Event Preview Modal */}
+      {previewData && (
+        <EventPreviewModal 
+          isOpen={showPreview}
+          onClose={() => setShowPreview(false)}
+          eventData={previewData}
+        />
+      )}
     </YStack>
   )
 }

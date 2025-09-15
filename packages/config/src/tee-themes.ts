@@ -131,6 +131,7 @@ export const teeThemes = {
     borderColorHover: brandColors.light.borderLight,
     borderColorPress: brandColors.light.border,
     borderColorFocus: brandColors.light.primary,
+    borderContrast: brandColors.light.borderLight, // For visual contrast and separation
     
     placeholderColor: brandColors.light.textTertiary,
     
@@ -192,6 +193,7 @@ export const teeThemes = {
     borderColorHover: brandColors.dark.borderLight,
     borderColorPress: brandColors.dark.border,
     borderColorFocus: brandColors.dark.primary,
+    borderContrast: brandColors.dark.borderLight, // For visual contrast and separation
     
     placeholderColor: brandColors.dark.textTertiary,
     

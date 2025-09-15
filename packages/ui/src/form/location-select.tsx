@@ -123,12 +123,20 @@ export function LocationSelect<T extends FieldValues>({
         disabled={disabled || loading || (type === 'province' && !selectedCountry && !options.length)}
       >
         <Select.Trigger
-          borderColor={fieldError ? '$red8' : '$borderColor'}
+          borderWidth={2}
+          borderColor={fieldError ? '$error' : '$textTertiary'}
+          backgroundColor="$background"
           focusStyle={{
-            borderColor: fieldError ? '$red10' : '$blue10'
+            borderColor: fieldError ? '$error' : '$primary',
+            borderWidth: 2
           }}
-          iconAfter={loading ? <Spinner size="small" /> : <ChevronDown size="$1" />}
+          hoverStyle={{
+            borderColor: fieldError ? '$error' : '$textSecondary'
+          }}
+          iconAfter={loading ? <Spinner size="small" /> : <ChevronDown size="$1" color="$textSecondary" />}
           disabled={disabled || loading}
+          paddingHorizontal="$3"
+          paddingVertical="$2.5"
         >
           <Select.Value placeholder={placeholder || `Select ${label}`}>
             {value ? (

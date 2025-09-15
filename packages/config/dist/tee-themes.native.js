@@ -155,6 +155,8 @@ var brandColors = {
     borderColorHover: brandColors.light.borderLight,
     borderColorPress: brandColors.light.border,
     borderColorFocus: brandColors.light.primary,
+    borderContrast: brandColors.light.borderLight,
+    // For visual contrast and separation
     placeholderColor: brandColors.light.textTertiary,
     // Brand-specific tokens
     primary: brandColors.light.primary,
@@ -208,6 +210,8 @@ var brandColors = {
     borderColorHover: brandColors.dark.borderLight,
     borderColorPress: brandColors.dark.border,
     borderColorFocus: brandColors.dark.primary,
+    borderContrast: brandColors.dark.borderLight,
+    // For visual contrast and separation
     placeholderColor: brandColors.dark.textTertiary,
     // Brand-specific tokens
     primary: brandColors.dark.primary,
