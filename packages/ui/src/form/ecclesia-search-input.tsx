@@ -1,7 +1,7 @@
-import { Plus, Search } from '@tamagui/lucide-icons'
-import { useEffect, useState, useRef } from 'react'
+import { Plus, Search, X } from '@tamagui/lucide-icons'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Control, FieldPath, FieldValues, useController } from 'react-hook-form'
-import { Button, Input, Label, Text, XStack, YStack } from 'tamagui'
+import { Button, Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
 import { AddEcclesiaModal } from './add-ecclesia-modal'
 
 interface EcclesiaSuggestion {
@@ -21,29 +21,14 @@ interface EcclesiaSearchInputProps<T extends FieldValues> {
   disabled?: boolean
 }
 
-// API function for searching ecclesiae
-const searchEcclesiae = async (query: string): Promise<EcclesiaSuggestion[]> => {
-  if (query.length < 3) return []
-
-  try {
-    const response = await fetch(`/api/ecclesia/search?q=${encodeURIComponent(query)}&limit=5`)
-    const data = await response.json()
-
-    if (data.success) {
-      return data.data
-    }
-    return []
-  } catch (error) {
-    console.error('Error searching ecclesiae:', error)
-    return []
-  }
-}
+// Cache for search results to avoid redundant API calls
+const searchCache = new Map<string, EcclesiaSuggestion[]>()
 
 export function EcclesiaSearchInput<T extends FieldValues>({
   control,
   name,
   label,
-  placeholder = 'Search ecclesiae...',
+  placeholder = 'Type ecclesia name...',
   required = false,
   disabled = false,
 }: EcclesiaSearchInputProps<T>) {
@@ -58,116 +43,153 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     },
   })
 
-  const [searchQuery, setSearchQuery] = useState<string>(value?.name || '')
+  // Initialize searchQuery from value on mount
+  const [searchQuery, setSearchQuery] = useState<string>(() => value?.name || '')
   const [suggestions, setSuggestions] = useState<EcclesiaSuggestion[]>([])
-  const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  
+  const containerRef = useRef<HTMLDivElement>(null)
+  const searchTimeoutRef = useRef<NodeJS.Timeout>()
 
-  // Handle click outside to close suggestions
+  // Update searchQuery when value changes externally
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      
-      // Don't close if clicking on a button or interactive element
-      if (target.tagName === 'BUTTON' || target.closest('button')) {
-        return
-      }
-      
-      // Don't close if clicking within our container
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        setShowSuggestions(false)
-      }
+    if (value?.name && value.name !== searchQuery) {
+      setSearchQuery(value.name)
+    }
+  }, [value])
+
+  // Perform search with caching
+  const performSearch = async (query: string) => {
+    if (query.length < 3) {
+      setSuggestions([])
+      return
     }
 
-    document.addEventListener('click', handleClickOutside)
-    return () => document.removeEventListener('click', handleClickOutside)
-  }, [])
+    // Check cache first
+    const cacheKey = query.toLowerCase()
+    if (searchCache.has(cacheKey)) {
+      setSuggestions(searchCache.get(cacheKey)!)
+      return
+    }
 
-  // Search for ecclesiae when query changes
-  useEffect(() => {
-    const searchEcclesiaes = async () => {
-      if (searchQuery.length >= 3) {
-        setIsSearching(true)
-        try {
-          const results = await searchEcclesiae(searchQuery)
-          setSuggestions(results)
-          setShowSuggestions(true)
-        } catch (error) {
-          console.error('Error searching ecclesiae:', error)
-          setSuggestions([])
-        }
-        setIsSearching(false)
+    setIsSearching(true)
+    try {
+      const response = await fetch(`/api/ecclesia/search?q=${encodeURIComponent(query)}&limit=5`)
+      const data = await response.json()
+      
+      if (data.success) {
+        const results = data.data || []
+        searchCache.set(cacheKey, results)
+        setSuggestions(results)
       } else {
         setSuggestions([])
-        setShowSuggestions(false)
       }
-    }
-
-    const debounceTimer = setTimeout(searchEcclesiaes, 300)
-    return () => clearTimeout(debounceTimer)
-  }, [searchQuery])
-
-  const handleInputChange = (text: string) => {
-    setSearchQuery(text)
-    // When user types, save as incomplete ecclesia (just name)
-    if (text !== value?.name) {
-      onChange({ name: text })
+    } catch (error) {
+      console.error('Search error:', error)
+      setSuggestions([])
+    } finally {
+      setIsSearching(false)
     }
   }
 
+  // Handle input change with debounced search
+  const handleInputChange = (text: string) => {
+    setSearchQuery(text)
+    
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // Update form value immediately with partial data
+    if (text !== value?.name) {
+      onChange({ name: text })
+    }
+
+    // Debounce search
+    if (text.length >= 3) {
+      searchTimeoutRef.current = setTimeout(() => {
+        performSearch(text)
+        setShowDropdown(true)
+      }, 300)
+    } else {
+      setSuggestions([])
+      setShowDropdown(false)
+    }
+  }
+
+  // Handle focus - show dropdown if we have a valid query or existing suggestions
+  const handleFocus = () => {
+    if (searchQuery.length >= 3 || suggestions.length > 0) {
+      setShowDropdown(true)
+      // Trigger search if we don't have suggestions
+      if (suggestions.length === 0 && searchQuery.length >= 3) {
+        performSearch(searchQuery)
+      }
+    }
+  }
+
+  // Handle blur - hide dropdown after a delay
+  const handleBlur = () => {
+    onBlur()
+    setTimeout(() => {
+      if (!containerRef.current?.contains(document.activeElement)) {
+        setShowDropdown(false)
+      }
+    }, 200)
+  }
+
+  // Handle selecting an ecclesia
   const handleSelectEcclesia = (suggestion: EcclesiaSuggestion) => {
     setSearchQuery(suggestion.name)
-    // Save minimal ecclesia key data for denormalization
     onChange({
       name: suggestion.name,
       city: suggestion.city,
       province: suggestion.province,
       country: suggestion.country
     })
-    setShowSuggestions(false)
+    setShowDropdown(false)
   }
 
+  // Handle adding a new ecclesia
   const handleEcclesiaAdded = (ecclesiaData: { name: string; city: string; province: string; country: string }) => {
-    // Update the form with the new ecclesia
     setSearchQuery(ecclesiaData.name)
     onChange(ecclesiaData)
-    setShowSuggestions(false)
+    setShowDropdown(false)
+    // Clear cache for this ecclesia name
+    searchCache.delete(ecclesiaData.name.toLowerCase())
   }
 
-  const showAddOption =
-    searchQuery.length >= 3 &&
-    !suggestions.find((s) => s.name.toLowerCase() === searchQuery.toLowerCase())
+  // Handle clearing the input
+  const handleClear = () => {
+    setSearchQuery('')
+    onChange(null)
+    setSuggestions([])
+    setShowDropdown(false)
+  }
+
+  // Check if we should show the add option
+  const showAddOption = useMemo(() => {
+    return searchQuery.length >= 3 && 
+           !suggestions.find(s => s.name.toLowerCase() === searchQuery.toLowerCase())
+  }, [searchQuery, suggestions])
 
   return (
-    <YStack gap="$2" position="relative" ref={containerRef} overflow="visible">
+    <YStack gap="$2" position="relative" ref={containerRef}>
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required && <Text color="$red10"> *</Text>}
       </Label>
 
-      <YStack position="relative" overflow="visible">
+      <YStack position="relative">
         <Input
-          ref={inputRef}
           id={name}
           value={searchQuery}
           onChangeText={handleInputChange}
-          onBlur={() => {
-            onBlur()
-            // Only hide suggestions if not interacting with them
-            setTimeout(() => {
-              if (!document.activeElement?.closest('[data-suggestions-container]')) {
-                setShowSuggestions(false)
-              }
-            }, 150)
-          }}
-          onFocus={() => {
-            if (searchQuery.length >= 3) {
-              setShowSuggestions(true)
-            }
-          }}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder={placeholder}
           autoComplete="off"
           autoCorrect={false}
@@ -184,27 +206,43 @@ export function EcclesiaSearchInput<T extends FieldValues>({
           }}
           disabled={disabled}
           paddingLeft="$3"
-          paddingRight="$5"
+          paddingRight={searchQuery ? "$9" : "$8"}
           paddingVertical="$2.5"
         />
 
+        {/* Icons */}
         <XStack
           position="absolute"
           right="$2"
           top="50%"
           transform="translateY(-50%)"
-          pointerEvents="none"
+          gap="$1"
         >
-          <Search size="$1" color="$gray11" />
+          {searchQuery && (
+            <Button
+              size="$2"
+              circular
+              icon={X}
+              variant="ghost"
+              onPress={handleClear}
+              hoverStyle={{ backgroundColor: '$gray3' }}
+            />
+          )}
+          {isSearching ? (
+            <Spinner size="small" color="$gray11" />
+          ) : (
+            <Search size="$1" color="$gray11" style={{ pointerEvents: 'none' }} />
+          )}
         </XStack>
 
-        {/* Suggestions dropdown */}
-        {showSuggestions && (suggestions.length > 0 || showAddOption) && (
+        {/* Dropdown */}
+        {showDropdown && (suggestions.length > 0 || showAddOption) && (
           <YStack
             position="absolute"
             top="100%"
             left={0}
             right={0}
+            marginTop="$1"
             backgroundColor="$background"
             borderWidth={2}
             borderColor="$textTertiary"
@@ -217,30 +255,25 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             shadowOffset={{ width: 0, height: 4 }}
             shadowOpacity={0.1}
             shadowRadius={8}
-            data-suggestions-container
           >
+            {/* Existing ecclesiae */}
             {suggestions.map((suggestion, index) => (
               <Button
-                key={suggestion.name}
+                key={`${suggestion.name}-${suggestion.city}`}
                 variant="ghost"
                 justifyContent="flex-start"
-                paddingHorizontal="$5"
-                paddingVertical="$4"
+                paddingHorizontal="$4"
+                paddingVertical="$3"
                 borderRadius={0}
                 backgroundColor="transparent"
-                hoverStyle={{
-                  backgroundColor: '$blue2'
-                }}
-                pressStyle={{
-                  backgroundColor: '$blue3'
-                }}
+                hoverStyle={{ backgroundColor: '$brandLight' }}
+                pressStyle={{ backgroundColor: '$brandLight' }}
                 onPress={() => handleSelectEcclesia(suggestion)}
-                borderBottomWidth={index < suggestions.length - 1 ? 1 : 0}
+                borderBottomWidth={index < suggestions.length - 1 || showAddOption ? 1 : 0}
                 borderBottomColor="$borderColor"
-                minHeight="$6"
               >
-                <YStack alignItems="flex-start" width="100%" gap="$3">
-                  <Text fontSize="$5" fontWeight="600" color="$textPrimary">
+                <YStack alignItems="flex-start" width="100%" gap="$1">
+                  <Text fontSize="$4" fontWeight="600" color="$textPrimary">
                     {suggestion.name}
                   </Text>
                   <Text fontSize="$3" color="$textTertiary">
@@ -250,28 +283,23 @@ export function EcclesiaSearchInput<T extends FieldValues>({
               </Button>
             ))}
 
-            {/* Add new ecclesia option */}
+            {/* Add new option */}
             {showAddOption && (
               <Button
                 variant="ghost"
                 justifyContent="flex-start"
-                paddingHorizontal="$5"
-                paddingVertical="$5"
+                paddingHorizontal="$4"
+                paddingVertical="$3"
                 borderRadius={0}
-                borderTopWidth={suggestions.length > 0 ? 2 : 0}
-                borderTopColor="$primary"
                 backgroundColor="$blue1"
-                hoverStyle={{
-                  backgroundColor: '$blue2'
+                hoverStyle={{ backgroundColor: '$blue2' }}
+                pressStyle={{ backgroundColor: '$blue3' }}
+                onPress={() => {
+                  setShowDropdown(false)
+                  setShowModal(true)
                 }}
-                pressStyle={{
-                  backgroundColor: '$blue3'
-                }}
-                onPress={() => setShowModal(true)}
                 icon={Plus}
-                iconAfter={false}
-                minHeight="$6"
-                gap="$3"
+                gap="$2"
               >
                 <Text fontSize="$4" color="$primary" fontWeight="600">
                   Add "{searchQuery}" as new ecclesia
@@ -280,22 +308,14 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             )}
           </YStack>
         )}
-
-        {/* Loading indicator */}
-        {isSearching && (
-          <XStack
-            position="absolute"
-            right="$2"
-            top="50%"
-            transform="translateY(-50%)"
-            pointerEvents="none"
-          >
-            <Text fontSize="$2" color="$gray11">
-              Searching...
-            </Text>
-          </XStack>
-        )}
       </YStack>
+
+      {/* Error message */}
+      {error && (
+        <Text color="$red11" fontSize="$3">
+          {error.message}
+        </Text>
+      )}
 
       {/* Add Ecclesia Modal */}
       <AddEcclesiaModal
@@ -304,12 +324,6 @@ export function EcclesiaSearchInput<T extends FieldValues>({
         initialName={searchQuery}
         onEcclesiaAdded={handleEcclesiaAdded}
       />
-
-      {error && (
-        <Text color="$red11" fontSize="$3">
-          {error.message}
-        </Text>
-      )}
     </YStack>
   )
 }

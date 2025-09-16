@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Control, useController, FieldPath, FieldValues, useWatch } from 'react-hook-form'
 import { Select, Label, Text, YStack, Spinner } from 'tamagui'
 import { ChevronDown } from '@tamagui/lucide-icons'
@@ -19,6 +19,66 @@ interface LocationOption {
   name: string
 }
 
+// Cache for location data
+const locationCache = {
+  countries: null as LocationOption[] | null,
+  provinces: new Map<string, LocationOption[]>()
+}
+
+// Fetch countries with caching
+const fetchCountries = async (): Promise<LocationOption[]> => {
+  if (locationCache.countries) {
+    return locationCache.countries
+  }
+
+  try {
+    const response = await fetch('/api/locations/countries')
+    if (!response.ok) throw new Error('Failed to fetch countries')
+    
+    const result = await response.json()
+    const data = result.success ? result.data : (Array.isArray(result) ? result : [])
+    
+    const countries = data.map((item: any) => ({
+      code: item.code,
+      name: item.name
+    }))
+    
+    locationCache.countries = countries
+    return countries
+  } catch (error) {
+    console.error('Error fetching countries:', error)
+    return []
+  }
+}
+
+// Fetch provinces with caching
+const fetchProvinces = async (countryCode: string): Promise<LocationOption[]> => {
+  if (!countryCode) return []
+  
+  if (locationCache.provinces.has(countryCode)) {
+    return locationCache.provinces.get(countryCode)!
+  }
+
+  try {
+    const response = await fetch(`/api/locations/${countryCode}/provinces`)
+    if (!response.ok) throw new Error('Failed to fetch provinces')
+    
+    const result = await response.json()
+    const data = result.success ? result.data : (Array.isArray(result) ? result : [])
+    
+    const provinces = data.map((item: any) => ({
+      code: item.code,
+      name: item.name
+    }))
+    
+    locationCache.provinces.set(countryCode, provinces)
+    return provinces
+  } catch (error) {
+    console.error('Error fetching provinces:', error)
+    return []
+  }
+}
+
 export function LocationSelect<T extends FieldValues>({
   control,
   name,
@@ -31,17 +91,18 @@ export function LocationSelect<T extends FieldValues>({
 }: LocationSelectProps<T>) {
   const [options, setOptions] = useState<LocationOption[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   // Watch the country field for province selects
   const selectedCountry = useWatch({
     control,
-    name: countryFieldName as any
+    name: countryFieldName as any,
+    defaultValue: ''
   })
 
   const {
     field: { value, onChange },
-    fieldState: { error: fieldError }
+    fieldState: { error }
   } = useController({
     name,
     control,
@@ -50,104 +111,101 @@ export function LocationSelect<T extends FieldValues>({
     }
   })
 
-  // Fetch options based on type
-  useEffect(() => {
-    async function fetchOptions() {
-      setLoading(true)
-      setError(null)
+  // Load data when needed
+  const loadOptions = async () => {
+    if (loading || (hasLoaded && type === 'country')) return
+    
+    setLoading(true)
+    try {
+      let data: LocationOption[] = []
       
-      try {
-        let url = ''
-        
-        if (type === 'country') {
-          url = '/api/locations/countries'
-        } else if (type === 'province' && selectedCountry) {
-          url = `/api/locations/${selectedCountry}/provinces`
-        } else if (type === 'province' && !selectedCountry) {
-          // Default to Canada if no country selected
-          url = '/api/locations/CA/provinces'
-        } else {
-          setOptions([])
-          setLoading(false)
-          return
-        }
-
-        const response = await fetch(url)
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${type} options`)
-        }
-
-        const result = await response.json()
-        const data = result.success ? result.data : result
-        
-        if (type === 'country') {
-          setOptions(data.map((country: any) => ({
-            code: country.code,
-            name: country.name
-          })))
-        } else {
-          setOptions(data.map((province: any) => ({
-            code: province.code,
-            name: province.name
-          })))
-        }
-      } catch (err) {
-        console.error(`Error fetching ${type} options:`, err)
-        setError(`Failed to load ${type} options`)
-        setOptions([])
-      } finally {
-        setLoading(false)
+      if (type === 'country') {
+        data = await fetchCountries()
+      } else if (type === 'province') {
+        // For provinces, use the selected country or default to CA
+        const countryToUse = selectedCountry || 'CA'
+        data = await fetchProvinces(countryToUse)
       }
+      
+      setOptions(data)
+      setHasLoaded(true)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchOptions()
+  // Load options when country changes (for provinces)
+  useEffect(() => {
+    if (type === 'province' && selectedCountry) {
+      setHasLoaded(false) // Force reload when country changes
+      loadOptions()
+    }
   }, [type, selectedCountry])
 
-  // Clear province when country changes
+  // Load countries on mount if type is country
+  useEffect(() => {
+    if (type === 'country' && !hasLoaded) {
+      loadOptions()
+    }
+  }, [type])
+
+  // Clear province value when country changes
   useEffect(() => {
     if (type === 'province' && countryFieldName) {
-      onChange('')
+      // Only clear if the value is not valid for the new country
+      const isValidForCountry = options.some(opt => opt.code === value)
+      if (!isValidForCountry && value) {
+        onChange('')
+      }
     }
-  }, [selectedCountry, type, countryFieldName, onChange])
+  }, [selectedCountry, options])
+
+  // Get display name for current value
+  const displayValue = useMemo(() => {
+    if (!value) return ''
+    const option = options.find(opt => opt.code === value)
+    return option?.name || value
+  }, [value, options])
+
+  // Determine if select should be disabled
+  const isDisabled = disabled || 
+                     loading || 
+                     (type === 'province' && !selectedCountry)
 
   return (
     <YStack gap="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required && <Text color="$red10"> *</Text>}
       </Label>
       
       <Select
         value={value || ''}
         onValueChange={onChange}
-        disabled={disabled || loading || (type === 'province' && !selectedCountry && !options.length)}
+        disabled={isDisabled}
+        onOpenChange={(open) => {
+          if (open && !hasLoaded) {
+            loadOptions()
+          }
+        }}
       >
         <Select.Trigger
           borderWidth={2}
-          borderColor={fieldError ? '$error' : '$textTertiary'}
+          borderColor={error ? '$error' : '$textTertiary'}
           backgroundColor="$background"
           focusStyle={{
-            borderColor: fieldError ? '$error' : '$primary',
+            borderColor: error ? '$error' : '$primary',
             borderWidth: 2
           }}
           hoverStyle={{
-            borderColor: fieldError ? '$error' : '$textSecondary'
+            borderColor: error ? '$error' : '$textSecondary'
           }}
-          iconAfter={loading ? <Spinner size="small" /> : <ChevronDown size="$1" color="$textSecondary" />}
-          disabled={disabled || loading}
+          iconAfter={loading ? <Spinner size="small" /> : <ChevronDown size="$1" />}
           paddingHorizontal="$3"
           paddingVertical="$2.5"
         >
-          <Select.Value placeholder={placeholder || `Select ${label}`}>
-            {value ? (
-              <Text>
-                {options.find(opt => opt.code === value)?.name || value}
-              </Text>
-            ) : (
-              <Text color="$placeholderColor">
-                {placeholder || `Select ${label}`}
-              </Text>
-            )}
+          <Select.Value>
+            {displayValue || placeholder || `Select ${label.toLowerCase()}`}
           </Select.Value>
         </Select.Trigger>
 
@@ -172,82 +230,65 @@ export function LocationSelect<T extends FieldValues>({
             {options.length > 0 ? (
               <>
                 {!required && (
-                  <Select.Group>
-                    <Select.Item value="" index={-1}>
-                      <Select.ItemText>
-                        <Text color="$placeholderColor">No selection</Text>
-                      </Select.ItemText>
-                    </Select.Item>
-                  </Select.Group>
+                  <Select.Item value="" index={-1}>
+                    <Select.ItemText>
+                      <Text color="$placeholderColor">No selection</Text>
+                    </Select.ItemText>
+                    <Select.ItemIndicator marginLeft="auto">
+                      <Text>✓</Text>
+                    </Select.ItemIndicator>
+                  </Select.Item>
                 )}
                 
                 {options.map((option, index) => (
-                  <Select.Group key={option.code}>
-                    <Select.Item value={option.code} index={index}>
-                      <Select.ItemText>{option.name}</Select.ItemText>
-                      <Select.ItemIndicator marginLeft="auto">
-                        <Text>✓</Text>
-                      </Select.ItemIndicator>
-                    </Select.Item>
-                  </Select.Group>
+                  <Select.Item key={option.code} value={option.code} index={index}>
+                    <Select.ItemText>{option.name}</Select.ItemText>
+                    <Select.ItemIndicator marginLeft="auto">
+                      <Text>✓</Text>
+                    </Select.ItemIndicator>
+                  </Select.Item>
                 ))}
               </>
             ) : loading ? (
-              <Select.Group>
-                <Select.Item value="" index={0} disabled>
-                  <Select.ItemText>
-                    <Text color="$placeholderColor">Loading...</Text>
-                  </Select.ItemText>
-                </Select.Item>
-              </Select.Group>
-            ) : error ? (
-              <Select.Group>
-                <Select.Item value="" index={0} disabled>
-                  <Select.ItemText>
-                    <Text color="$red10">{error}</Text>
-                  </Select.ItemText>
-                </Select.Item>
-              </Select.Group>
+              <Select.Item value="" index={0} disabled>
+                <Select.ItemText>
+                  <Text color="$placeholderColor">Loading...</Text>
+                </Select.ItemText>
+              </Select.Item>
             ) : (
-              <Select.Group>
-                <Select.Item value="" index={0} disabled>
-                  <Select.ItemText>
-                    <Text color="$placeholderColor">No options available</Text>
-                  </Select.ItemText>
-                </Select.Item>
-              </Select.Group>
+              <Select.Item value="" index={0} disabled>
+                <Select.ItemText>
+                  <Text color="$placeholderColor">
+                    {type === 'province' && !selectedCountry 
+                      ? 'Select a country first'
+                      : 'No options available'}
+                  </Text>
+                </Select.ItemText>
+              </Select.Item>
             )}
           </Select.Viewport>
           <Select.ScrollDownButton />
         </Select.Content>
       </Select>
       
-      {fieldError && (
-        <Text color="$red11" fontSize="$3">
-          {fieldError.message}
-        </Text>
-      )}
-      
       {error && (
         <Text color="$red11" fontSize="$3">
-          {error}
+          {error.message}
         </Text>
       )}
     </YStack>
   )
 }
 
-// Convenience components
-interface CountrySelectProps<T extends FieldValues> extends Omit<LocationSelectProps<T>, 'type'> {}
-
-export function CountrySelect<T extends FieldValues>(props: CountrySelectProps<T>) {
+// Convenience components for better API
+export function CountrySelect<T extends FieldValues>(
+  props: Omit<LocationSelectProps<T>, 'type'>
+) {
   return <LocationSelect {...props} type="country" />
 }
 
-interface ProvinceSelectProps<T extends FieldValues> extends Omit<LocationSelectProps<T>, 'type'> {
-  countryFieldName: FieldPath<T>
-}
-
-export function ProvinceSelect<T extends FieldValues>(props: ProvinceSelectProps<T>) {
+export function ProvinceSelect<T extends FieldValues>(
+  props: Omit<LocationSelectProps<T>, 'type'> & { countryFieldName: FieldPath<T> }
+) {
   return <LocationSelect {...props} type="province" />
 }
