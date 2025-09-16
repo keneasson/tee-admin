@@ -194,28 +194,51 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
 
 export async function searchEcclesia(query: string, limit: number = 5): Promise<EcclesiaData[]> {
   try {
-    // Search using GSI1 for efficient name-based searches
+    // For partial name matching, we need to scan all ECCLESIA records
+    // and do case-insensitive matching in JavaScript since DynamoDB doesn't support it
     const result = await client.scan({
       TableName: TABLE_NAME,
       IndexName: 'gsi1',
-      FilterExpression: 'begins_with(gsi1pk, :query)',
+      FilterExpression: 'begins_with(gsi1pk, :prefix)',
       ExpressionAttributeValues: {
-        ':query': `ECCLESIA#${query}`,
+        ':prefix': 'ECCLESIA#',  // Get all ECCLESIA records
       },
-      Limit: limit,
     })
 
     if (!result.Items) return []
 
-    return result.Items.map((item) => ({
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }))
+    // Filter items by query (case-insensitive)
+    const queryLower = query.toLowerCase()
+    const filteredItems = result.Items
+      .filter(item => item.name && item.name.toLowerCase().includes(queryLower))
+      .map((item) => ({
+        name: item.name,
+        country: item.country,
+        province: item.province,
+        city: item.city,
+        address: item.address,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }))
+    
+    // Sort results: exact matches first, then prefix matches, then contains
+    filteredItems.sort((a, b) => {
+      const aLower = a.name.toLowerCase()
+      const bLower = b.name.toLowerCase()
+      
+      // Exact match
+      if (aLower === queryLower) return -1
+      if (bLower === queryLower) return 1
+      
+      // Starts with query
+      if (aLower.startsWith(queryLower) && !bLower.startsWith(queryLower)) return -1
+      if (bLower.startsWith(queryLower) && !aLower.startsWith(queryLower)) return 1
+      
+      // Default to alphabetical
+      return a.name.localeCompare(b.name)
+    })
+    
+    return filteredItems.slice(0, limit)
   } catch (error) {
     console.error('Error searching ecclesia:', error)
     return []

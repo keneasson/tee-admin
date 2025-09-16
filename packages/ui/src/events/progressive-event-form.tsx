@@ -14,9 +14,9 @@ import {
   User,
   CheckCircle,
 } from '@tamagui/lucide-icons'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
-import { Button, Card, Circle, Separator, Text, XStack, YStack, Dialog, AlertDialog } from 'tamagui'
+import { Button, Card, Circle, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventDateRangePicker } from '../form/event-date-range-picker'
@@ -31,7 +31,7 @@ import {
 } from './event-form-sections'
 import { DocumentsSection } from './form-sections/documents-section'
 import { EventTypeSelector } from './event-type-selector'
-import { EventStatusIndicator, EventValidationSummary } from './event-status-indicator'
+import { EventValidationSummary } from './event-status-indicator'
 
 interface ProgressiveEventFormProps {
   initialData?: Partial<Event>
@@ -132,20 +132,19 @@ function CollapsibleComponent({
               {addButtonText}
             </Button>
           )}
-          <Button
-            size="$3"
-            theme="red"
-            onPress={handleRemoveClick}
-            opacity={isExpanded ? 1 : 0.7}
-          >
+          <Button size="$3" theme="red" onPress={handleRemoveClick} opacity={isExpanded ? 1 : 0.7}>
             Remove
           </Button>
         </XStack>
       </XStack>
 
       {/* Content area */}
-      {isExpanded && <YStack padding="$3" backgroundColor="$borderContrast">{children}</YStack>}
-      
+      {isExpanded && (
+        <YStack padding="$3" backgroundColor="$borderContrast">
+          {children}
+        </YStack>
+      )}
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialog.Portal>
@@ -179,7 +178,8 @@ function CollapsibleComponent({
             <YStack space="$3">
               <AlertDialog.Title>Remove {title}?</AlertDialog.Title>
               <AlertDialog.Description>
-                Are you sure you want to remove this entire {title.toLowerCase()} section? This action cannot be undone.
+                Are you sure you want to remove this entire {title.toLowerCase()} section? This
+                action cannot be undone.
               </AlertDialog.Description>
 
               <XStack space="$3" justifyContent="flex-end">
@@ -491,7 +491,6 @@ export function ProgressiveEventForm({
   isLoading = false,
   skipTypeSelection = false,
   selectedType,
-  compact = false,
   onCancel,
 }: ProgressiveEventFormProps) {
   const [selectedTypeState, setSelectedType] = useState<EventType | undefined>(
@@ -997,10 +996,10 @@ export function ProgressiveEventForm({
           icon: MapPin,
           description: 'Event venue information',
           component: (
-            <LocationSection 
+            <LocationSection
               control={control}
-              setValue={setValue} 
-              namePrefix="location" 
+              setValue={setValue}
+              namePrefix="location"
               title="Event Location"
               showAtTheHallOption={true}
               hostingEcclesiaFieldName="hostingEcclesia"

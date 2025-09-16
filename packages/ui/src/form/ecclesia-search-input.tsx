@@ -22,7 +22,12 @@ interface EcclesiaSearchInputProps<T extends FieldValues> {
 }
 
 // Cache for search results to avoid redundant API calls
+// Clear cache on hot reload to pick up backend changes
 const searchCache = new Map<string, EcclesiaSuggestion[]>()
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // Clear cache in development for testing
+  searchCache.clear()
+}
 
 export function EcclesiaSearchInput<T extends FieldValues>({
   control,
@@ -43,13 +48,15 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     },
   })
 
+  console.log('EcclesiaSearchInput', { name, value })
+
   // Initialize searchQuery from value on mount
   const [searchQuery, setSearchQuery] = useState<string>(() => value?.name || '')
   const [suggestions, setSuggestions] = useState<EcclesiaSuggestion[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [showModal, setShowModal] = useState(false)
-  
+
   const containerRef = useRef<HTMLDivElement>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout>()
 
@@ -58,7 +65,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     if (value?.name && value.name !== searchQuery) {
       setSearchQuery(value.name)
     }
-  }, [value])
+  }, [value?.name, searchQuery])
 
   // Perform search with caching
   const performSearch = async (query: string) => {
@@ -78,9 +85,10 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     try {
       const response = await fetch(`/api/ecclesia/search?q=${encodeURIComponent(query)}&limit=5`)
       const data = await response.json()
-      
+
       if (data.success) {
         const results = data.data || []
+        console.log('search for', query, 'results', results)
         searchCache.set(cacheKey, results)
         setSuggestions(results)
       } else {
@@ -97,7 +105,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
   // Handle input change with debounced search
   const handleInputChange = (text: string) => {
     setSearchQuery(text)
-    
+
     // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current)
@@ -148,13 +156,18 @@ export function EcclesiaSearchInput<T extends FieldValues>({
       name: suggestion.name,
       city: suggestion.city,
       province: suggestion.province,
-      country: suggestion.country
+      country: suggestion.country,
     })
     setShowDropdown(false)
   }
 
   // Handle adding a new ecclesia
-  const handleEcclesiaAdded = (ecclesiaData: { name: string; city: string; province: string; country: string }) => {
+  const handleEcclesiaAdded = (ecclesiaData: {
+    name: string
+    city: string
+    province: string
+    country: string
+  }) => {
     setSearchQuery(ecclesiaData.name)
     onChange(ecclesiaData)
     setShowDropdown(false)
@@ -172,8 +185,10 @@ export function EcclesiaSearchInput<T extends FieldValues>({
 
   // Check if we should show the add option
   const showAddOption = useMemo(() => {
-    return searchQuery.length >= 3 && 
-           !suggestions.find(s => s.name.toLowerCase() === searchQuery.toLowerCase())
+    return (
+      searchQuery.length >= 3 &&
+      !suggestions.find((s) => s.name.toLowerCase() === searchQuery.toLowerCase())
+    )
   }, [searchQuery, suggestions])
 
   return (
@@ -199,25 +214,19 @@ export function EcclesiaSearchInput<T extends FieldValues>({
           backgroundColor="$background"
           focusStyle={{
             borderColor: error ? '$error' : '$primary',
-            borderWidth: 2
+            borderWidth: 2,
           }}
           hoverStyle={{
-            borderColor: error ? '$error' : '$textSecondary'
+            borderColor: error ? '$error' : '$textSecondary',
           }}
           disabled={disabled}
           paddingLeft="$3"
-          paddingRight={searchQuery ? "$9" : "$8"}
+          paddingRight={searchQuery ? '$9' : '$8'}
           paddingVertical="$2.5"
         />
 
         {/* Icons */}
-        <XStack
-          position="absolute"
-          right="$2"
-          top="50%"
-          transform="translateY(-50%)"
-          gap="$1"
-        >
+        <XStack position="absolute" right="$2" top="50%" transform="translateY(-50%)" gap="$1">
           {searchQuery && (
             <Button
               size="$2"
@@ -256,7 +265,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             shadowOpacity={0.1}
             shadowRadius={8}
           >
-            {/* Existing ecclesiae */}
+            {/* Existing ecclesias */}
             {suggestions.map((suggestion, index) => (
               <Button
                 key={`${suggestion.name}-${suggestion.city}`}
