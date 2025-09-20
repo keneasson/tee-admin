@@ -103,12 +103,12 @@ export class ScheduleService {
     try {
       console.log('📅 Fetching upcoming program events from DynamoDB (newsletter optimized)')
 
-      // Newsletter time range: 2 hours ago to 2 weeks from now
+      // Newsletter time range: today (00:00:00) to 2 weeks from now
       const now = new Date()
-      const twoHoursAgo = new Date(now.getTime() - (2 * 60 * 60 * 1000)) // 2 hours ago
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Today at 00:00:00
       const twoWeeksFromNow = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)) // 2 weeks from now
-      
-      console.log(`📅 Date range: ${twoHoursAgo.toISOString()} to ${twoWeeksFromNow.toISOString()}`)
+
+      console.log(`📅 Date range: ${todayStart.toISOString()} to ${twoWeeksFromNow.toISOString()}`)
 
       const upcomingEvents: Array<{
         type: ProgramTypeKeys
@@ -137,7 +137,7 @@ export class ScheduleService {
               console.warn(`⚠️ Invalid date found in ${sheetType}:`, event.Date || event.date)
               return false
             }
-            return eventDate >= twoHoursAgo && eventDate <= twoWeeksFromNow
+            return eventDate >= todayStart && eventDate <= twoWeeksFromNow
           })
 
           // Convert to the expected format

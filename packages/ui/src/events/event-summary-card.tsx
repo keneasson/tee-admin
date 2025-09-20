@@ -28,42 +28,40 @@ export function EventSummaryCard({
       padding={isCompact ? "$3" : "$4"}
       borderRadius="$4" 
       backgroundColor="$background"
-      pressStyle={onPress ? { scale: 0.98, opacity: 0.8 } : undefined}
-      onPress={onPress}
-      animation="quick"
     >
       <YStack gap={isCompact ? "$2" : "$3"}>
-        {/* Event Type Badge */}
-        <XStack justifyContent="space-between" alignItems="center">
-          <XStack gap="$2" alignItems="center">
-            <Square
-              size={isCompact ? "$0.5" : "$1"}
-              backgroundColor={event.featured ? '$yellow10' : '$blue10'}
-              borderRadius="$2"
-              padding="$1"
-            >
-              <Text fontSize={isCompact ? "$1" : "$2"} color="white" fontWeight="600">
-                {event.type?.replace('-', ' ').toUpperCase()}
-              </Text>
-            </Square>
-            {event.featured && !isCompact && (
-              <Text fontSize="$2" color="$yellow10" fontWeight="600">
-                FEATURED
-              </Text>
-            )}
-          </XStack>
-          {!isNewsletter && (
-            <Text fontSize="$2" color="$gray10">
-              {event.status || 'DRAFT'}
-            </Text>
-          )}
-        </XStack>
-
-        {/* Title with optional theme */}
+        {/* Title with optional theme - Move to top for newsletter */}
         <H3 fontSize={isCompact ? "$5" : "$6"} fontWeight="700" color="$color">
-          {event.title || 'Untitled Event'}
-          {event.theme && ` - ${event.theme}`}
+          {event.title || 'Untitled Event'}{event.theme ? ` - ${event.theme}` : ''}
         </H3>
+
+        {/* Event Type Badge - Show only for non-newsletter views */}
+        {!isNewsletter && (
+          <XStack justifyContent="space-between" alignItems="center">
+            <XStack gap="$2" alignItems="center">
+              <Square
+                size={isCompact ? "$0.5" : "$1"}
+                backgroundColor={event.featured ? '$yellow10' : '$blue10'}
+                borderRadius="$2"
+                padding="$1"
+              >
+                <Text fontSize={isCompact ? "$1" : "$2"} color="white" fontWeight="600">
+                  {event.type?.replace('-', ' ').toUpperCase() || 'EVENT'}
+                </Text>
+              </Square>
+              {event.featured && !isCompact ? (
+                <Text fontSize="$2" color="$yellow10" fontWeight="600">
+                  FEATURED
+                </Text>
+              ) : null}
+            </XStack>
+            {event.status ? (
+              <Text fontSize="$2" color="$gray10">
+                {event.status}
+              </Text>
+            ) : null}
+          </XStack>
+        )}
 
         {/* Formatted Event Info */}
         <YStack gap="$1">
@@ -117,10 +115,54 @@ export function EventSummaryCard({
                 year: 'numeric'
               })
             }
+            // For recurring events
+            else if (event.type === 'recurring' && (event as any).recurringConfig) {
+              const config = (event as any).recurringConfig
+              const startDate = config.startDate || config.dateRange?.start
+              const endDate = config.endDate || config.dateRange?.end
+              
+              if (startDate) {
+                const start = new Date(startDate)
+                const startStr = start.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric' 
+                })
+                
+                // Get frequency info
+                const frequency = config.frequency
+                const daysOfWeek = config.daysOfWeek || []
+                
+                let frequencyText = 'recurring'
+                if (frequency === 'weekly' && daysOfWeek.length > 0) {
+                  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                  const selectedDays = daysOfWeek.map((d: number) => dayNames[d]).join(', ')
+                  frequencyText = `every ${selectedDays}`
+                } else if (frequency === 'biweekly' && daysOfWeek.length > 0) {
+                  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                  const selectedDays = daysOfWeek.map((d: number) => dayNames[d]).join(', ')
+                  frequencyText = `bi-weekly ${selectedDays}`
+                } else if (frequency === 'monthly') {
+                  frequencyText = 'monthly'
+                } else if ((frequency as any) === 'custom') {
+                  frequencyText = 'custom dates'
+                }
+                
+                if (endDate) {
+                  const end = new Date(endDate)
+                  const endStr = end.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })
+                  dateText = `${startStr} to ${endStr} ${start.getFullYear()} (${frequencyText})`
+                } else {
+                  dateText = `${startStr} ${start.getFullYear()} (${frequencyText})`
+                }
+              }
+            }
             // Fallback to startDate/endDate for any event type
-            else if (event.startDate) {
-              const startDate = new Date(event.startDate)
-              const endDate = event.endDate ? new Date(event.endDate) : null
+            else if ((event as any).startDate) {
+              const startDate = new Date((event as any).startDate)
+              const endDate = (event as any).endDate ? new Date((event as any).endDate) : null
               const startStr = startDate.toLocaleDateString('en-US', { 
                 month: 'short', 
                 day: 'numeric' 
@@ -145,52 +187,64 @@ export function EventSummaryCard({
           })()}
 
           {/* Speaker(s) - for study weekends */}
-          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 && (
-            <Text fontSize="$4" color="$gray11">
-              Speaker{event.speakers.length > 1 ? 's' : ''}: {
-                event.speakers
-                  .map(speaker => `${speaker.firstName || ''} ${speaker.lastName || ''}`.trim())
-                  .filter(Boolean)
-                  .join(', ')
-              }
-            </Text>
-          )}
+          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 && (() => {
+            const speakerNames = event.speakers
+              .map(speaker => `${speaker.firstName || ''} ${speaker.lastName || ''}`.trim())
+              .filter(Boolean)
+              .join(', ')
+            return speakerNames && (
+              <Text fontSize="$4" color="$gray11">
+                Speaker{event.speakers.length > 1 ? 's' : ''}: {speakerNames}
+              </Text>
+            )
+          })()}
 
           {/* Names for other event types */}
-          {event.type === 'wedding' && event.couple && (
-            <Text fontSize="$4" color="$gray11">
-              {(() => {
-                const bride = `${event.couple.bride?.firstName || ''} ${event.couple.bride?.lastName || ''}`.trim()
-                const groom = `${event.couple.groom?.firstName || ''} ${event.couple.groom?.lastName || ''}`.trim()
-                return bride && groom ? `${bride} & ${groom}` : bride || groom || ''
-              })()}
-            </Text>
-          )}
+          {event.type === 'wedding' && event.couple && (() => {
+            const bride = `${event.couple.bride?.firstName || ''} ${event.couple.bride?.lastName || ''}`.trim()
+            const groom = `${event.couple.groom?.firstName || ''} ${event.couple.groom?.lastName || ''}`.trim()
+            const coupleText = bride && groom ? `${bride} & ${groom}` : bride || groom
+            return coupleText && (
+              <Text fontSize="$4" color="$gray11">
+                {coupleText}
+              </Text>
+            )
+          })()}
 
-          {event.type === 'baptism' && event.candidate && (
-            <Text fontSize="$4" color="$gray11">
-              {`${event.candidate.firstName || ''} ${event.candidate.lastName || ''}`.trim()}
-            </Text>
-          )}
+          {event.type === 'baptism' && event.candidate && (() => {
+            const candidateName = `${event.candidate.firstName || ''} ${event.candidate.lastName || ''}`.trim()
+            return candidateName && (
+              <Text fontSize="$4" color="$gray11">
+                {candidateName}
+              </Text>
+            )
+          })()}
 
-          {event.type === 'funeral' && event.deceased && (
-            <Text fontSize="$4" color="$gray11">
-              {`${event.deceased.firstName || ''} ${event.deceased.lastName || ''}`.trim()}
-            </Text>
-          )}
+          {event.type === 'funeral' && event.deceased && (() => {
+            const deceasedName = `${event.deceased.firstName || ''} ${event.deceased.lastName || ''}`.trim()
+            return deceasedName && (
+              <Text fontSize="$4" color="$gray11">
+                {deceasedName}
+              </Text>
+            )
+          })()}
 
           {/* Hosting Ecclesia Location */}
-          {event.hostingEcclesia && (
-            <Text fontSize="$4" color="$gray11">
-              {typeof event.hostingEcclesia === 'string' 
-                ? event.hostingEcclesia 
-                : event.hostingEcclesia.name || formatLocation(event.hostingEcclesia)}
-            </Text>
-          )}
+          {(event as any).hostingEcclesia && (() => {
+            const hostingEcclesia = (event as any).hostingEcclesia
+            const ecclesiaText = typeof hostingEcclesia === 'string' 
+              ? hostingEcclesia 
+              : hostingEcclesia.name || formatLocation(hostingEcclesia)
+            return ecclesiaText && (
+              <Text fontSize="$4" color="$gray11">
+                Host: {ecclesiaText}
+              </Text>
+            )
+          })()}
         </YStack>
 
         {/* Description Preview */}
-        {event.description && !isCompact && (
+        {event.description && !isCompact ? (
           <Text 
             fontSize="$3" 
             color="$gray11" 
@@ -198,16 +252,24 @@ export function EventSummaryCard({
           >
             {event.description}
           </Text>
-        )}
+        ) : null}
 
         {/* Action Link */}
-        {onPress && (
+        {onPress ? (
           <XStack>
-            <Text fontSize="$3" color="$blue10" fontWeight="600">
+            <Text 
+              fontSize="$3" 
+              color="$blue10" 
+              fontWeight="600"
+              onPress={onPress}
+              cursor="pointer"
+              textDecorationLine="none"
+              hoverStyle={{ textDecorationLine: "underline" }}
+            >
               {isNewsletter ? 'View Details →' : 'Learn More →'}
             </Text>
           </XStack>
-        )}
+        ) : null}
       </YStack>
     </Card>
   )

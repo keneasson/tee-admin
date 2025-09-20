@@ -115,8 +115,8 @@ var brandColors = {
     // Background colors - Rich and warm dark tones
     background: "#0D1117",
     // Rich dark blue-black
-    backgroundSecondary: "#161B22",
-    // Slightly lighter
+    backgroundSecondary: "#1C2128",
+    // Better contrast for striping
     backgroundTertiary: "#21262D",
     // Medium dark
     // Surface colors
@@ -190,7 +190,10 @@ var brandColors = {
     interactive: brandColors.light.interactive,
     interactiveHover: brandColors.light.interactiveHover,
     interactivePress: brandColors.light.interactivePressed,
-    interactiveDisabled: brandColors.light.interactiveDisabled
+    interactiveDisabled: brandColors.light.interactiveDisabled,
+    // Background tokens for striping
+    backgroundSecondary: brandColors.light.backgroundSecondary,
+    backgroundTertiary: brandColors.light.backgroundTertiary
   },
   dark: {
     // Base Tamagui theme properties
@@ -245,7 +248,10 @@ var brandColors = {
     interactive: brandColors.dark.interactive,
     interactiveHover: brandColors.dark.interactiveHover,
     interactivePress: brandColors.dark.interactivePressed,
-    interactiveDisabled: brandColors.dark.interactiveDisabled
+    interactiveDisabled: brandColors.dark.interactiveDisabled,
+    // Missing background tokens for striping
+    backgroundSecondary: brandColors.dark.backgroundSecondary,
+    backgroundTertiary: brandColors.dark.backgroundTertiary
   }
 };
 // Annotate the CommonJS export names for ESM import in node:

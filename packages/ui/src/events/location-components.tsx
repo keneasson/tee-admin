@@ -123,7 +123,6 @@ export const LocationRegionFields = <T extends FieldValues>({
           control={control}
           name={`${namePrefix}.postalCode` as FieldPath<T>}
           label="Postal/Zip Code"
-          placeholder="e.g., M1A 1A1"
         />
       </YStack>
       <YStack flex={1}>

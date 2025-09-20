@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../../utils/auth'
-import { getFileStorageService } from '../../../../../utils/file-storage'
+import { auth } from '@/utils/auth'
+import { getFileStorageService } from '@/utils/file-storage'
 
 export async function DELETE(
   request: NextRequest,

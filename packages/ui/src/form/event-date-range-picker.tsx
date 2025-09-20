@@ -1,6 +1,6 @@
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 import React, { useState, useRef, useEffect } from 'react'
-import { Label, Text, YStack, XStack, Button, Popover, Card, Select, Adapt, Sheet, Checkbox, ScrollView } from 'tamagui'
+import { Label, Text, YStack, XStack, Button, Popover, Card, Select, Adapt, Sheet, ScrollView } from 'tamagui'
 import { Calendar, Clock, ChevronDown, ChevronUp, Check } from '@tamagui/lucide-icons'
 
 interface EventDateRange {
@@ -17,6 +17,7 @@ interface EventDateRangePickerProps<T extends FieldValues> {
   disabled?: boolean
   allowSingleDay?: boolean // Allow selecting just one day (end = start)
   allowHideTimes?: boolean // Allow hiding times for save-the-date events
+  hidesTimes?: boolean // Force date-only mode (no time selectors)
   onDateChange?: (dateRange: EventDateRange) => void
 }
 
@@ -273,6 +274,7 @@ export function EventDateRangePicker<T extends FieldValues>({
   disabled = false,
   allowSingleDay = true,
   allowHideTimes = false,
+  hidesTimes: forceHidesTimes = false,
   onDateChange
 }: EventDateRangePickerProps<T>) {
   const {
@@ -293,7 +295,7 @@ export function EventDateRangePicker<T extends FieldValues>({
   const [tempEndDate, setTempEndDate] = useState<Date | null>(
     value?.end ? new Date(value.end) : null
   )
-  const [hidesTimes, setHidesTimes] = useState(value?.hidesTimes || false)
+  const [hidesTimes, setHidesTimes] = useState(value?.hidesTimes || forceHidesTimes || false)
   const [shouldOpenUpward, setShouldOpenUpward] = useState(false)
   const buttonRef = useRef<any>(null)
   
@@ -469,25 +471,6 @@ export function EventDateRangePicker<T extends FieldValues>({
       </Label>
       
       {/* Hide Times Checkbox */}
-      {allowHideTimes && (
-        <XStack gap="$2" alignItems="center">
-          <Checkbox
-            id={`${name}-hide-times`}
-            size="$4"
-            checked={hidesTimes}
-            onCheckedChange={(checked) => {
-              setHidesTimes(!!checked)
-            }}
-          >
-            <Checkbox.Indicator>
-              <Check />
-            </Checkbox.Indicator>
-          </Checkbox>
-          <Label htmlFor={`${name}-hide-times`} fontSize="$3">
-            Hide times (save-the-date)
-          </Label>
-        </XStack>
-      )}
       
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <Popover.Trigger asChild>

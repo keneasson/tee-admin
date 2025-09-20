@@ -31,7 +31,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
         </Paragraph>
       ) : null}
       <Paragraph size={'$5'} fontWeight={600}>
-        Memorial Service
+        Memorial Service at 11:00am
       </Paragraph>
       <XStack $xs={{ flexDirection: 'column' }}>
         <YStack flexGrow={1}>

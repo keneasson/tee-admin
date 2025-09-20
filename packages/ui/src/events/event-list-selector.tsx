@@ -9,19 +9,22 @@ import {
   Eye,
   Plus,
   Mic,
+  Trash,
 } from '@tamagui/lucide-icons'
 import { useState } from 'react'
-import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input } from 'tamagui'
+import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet } from 'tamagui'
+import { brandColors } from '@my/ui/src/branding/brand-colors'
 
 interface EventListSelectorProps {
   events: Event[]
   onSelect: (event: Event) => void
   onCreateNew: () => void
   onPreview?: (event: Event) => void
+  onDelete?: (event: Event) => void
   isLoading?: boolean
 }
 
-function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void }) {
+function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void; onDelete?: (event: Event) => void }) {
   const getEventDateDisplay = (event: Event): string => {
     switch (event.type) {
       case 'study-weekend':
@@ -40,9 +43,37 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
       case 'general':
         return event.startDate ? new Date(event.startDate).toLocaleDateString() : 'Date TBD'
       case 'recurring':
-        return event.recurringConfig?.startDate
-          ? new Date(event.recurringConfig.startDate).toLocaleDateString() + ' (recurring)'
-          : 'Date TBD'
+        const startDate = event.recurringConfig?.startDate || event.recurringConfig?.dateRange?.start
+        if (startDate) {
+          const endDate = event.recurringConfig?.endDate || event.recurringConfig?.dateRange?.end
+          const formattedStart = new Date(startDate).toLocaleDateString()
+          
+          // Get frequency info
+          const frequency = event.recurringConfig?.frequency
+          const daysOfWeek = event.recurringConfig?.daysOfWeek || []
+          
+          let frequencyText = 'recurring'
+          if (frequency === 'weekly' && daysOfWeek.length > 0) {
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            const selectedDays = daysOfWeek.map((d: number) => dayNames[d]).join(', ')
+            frequencyText = `every ${selectedDays}`
+          } else if (frequency === 'biweekly' && daysOfWeek.length > 0) {
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            const selectedDays = daysOfWeek.map((d: number) => dayNames[d]).join(', ')
+            frequencyText = `bi-weekly ${selectedDays}`
+          } else if (frequency === 'monthly') {
+            frequencyText = 'monthly'
+          } else if ((frequency as any) === 'custom') {
+            frequencyText = 'custom dates'
+          }
+          
+          if (endDate) {
+            const formattedEnd = new Date(endDate).toLocaleDateString()
+            return `${formattedStart} - ${formattedEnd} (${frequencyText})`
+          }
+          return `${formattedStart} (${frequencyText})`
+        }
+        return 'Date TBD'
     }
     return 'Date TBD'
   }
@@ -126,38 +157,20 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
 
   const secondaryInfo = getEventSecondaryInfo(event)
   const dateDisplay = getEventDateDisplay(event)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   return (
     <Card
       padding="$4"
       borderWidth={1}
       borderColor="$borderColor"
-      pressStyle={{ scale: 0.98, borderColor: '$blue8' }}
-      hoverStyle={{ borderColor: '$blue6' }}
-      onPress={() => onSelect(event)}
-      cursor="pointer"
     >
-      <YStack space="$3">
+      <YStack>
         <XStack justifyContent="space-between" alignItems="flex-start">
           <YStack flex={1} space="$1">
-            <XStack space="$2" alignItems="center">
-              <Text fontSize="$5" fontWeight="600" flex={1}>
-                {event.title || 'Untitled Event'}
-              </Text>
-
-              {/* Status badge */}
-              <XStack
-                paddingHorizontal="$2"
-                paddingVertical="$1"
-                backgroundColor={getStatusBadgeColor(event.status)}
-                borderRadius="$2"
-                alignItems="center"
-              >
-                <Text fontSize="$2" color={getStatusColor(event.status)} fontWeight="500">
-                  {getStatusDisplayName(event.status)}
-                </Text>
-              </XStack>
-            </XStack>
+            <Text fontSize="$5" fontWeight="600">
+              {event.title || 'Untitled Event'}
+            </Text>
 
             {/* Event type */}
             <Text fontSize="$3" color="$gray11" fontWeight="500">
@@ -172,17 +185,30 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
             )}
           </YStack>
 
-          {/* Action buttons */}
+          {/* Status badge and Action buttons aligned */}
           <XStack space="$2" alignItems="center">
+            {/* Status badge */}
+            <XStack
+              paddingHorizontal="$2"
+              paddingVertical="$1"
+              backgroundColor={getStatusBadgeColor(event.status)}
+              borderRadius="$2"
+              alignItems="center"
+            >
+              <Text fontSize="$2" color={getStatusColor(event.status)} fontWeight="500">
+                {getStatusDisplayName(event.status)}
+              </Text>
+            </XStack>
+            
+            {/* Action buttons */}
             {onPreview && (
               <Button 
                 size="$3" 
                 variant="ghost" 
                 icon={Eye}
-                onPress={(e) => {
-                  e.stopPropagation()
-                  onPreview(event)
-                }}
+                borderWidth={2}
+                borderColor="$textTertiary"
+                onPress={() => onPreview(event)}
               >
                 Preview
               </Button>
@@ -191,17 +217,33 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
               size="$3" 
               variant="outlined" 
               icon={Pencil}
-              onPress={(e) => {
-                e.stopPropagation()
-                onSelect(event)
-              }}
+              borderWidth={2}
+              borderColor="$textTertiary"
+              onPress={() => onSelect(event)}
             >
               Edit
             </Button>
+            {onDelete && (
+              <Button 
+                size="$3" 
+                icon={Trash}
+                borderWidth={2}
+                borderColor={brandColors.light.error}
+                backgroundColor={brandColors.light.error}
+                color="white"
+                hoverStyle={{
+                  backgroundColor: brandColors.light.error,
+                  opacity: 0.9
+                }}
+                onPress={() => setShowDeleteConfirm(true)}
+              >
+                Delete
+              </Button>
+            )}
           </XStack>
         </XStack>
 
-        <XStack justifyContent="space-between" alignItems="center">
+        <XStack justifyContent="space-between" alignItems="center" marginTop="$2">
           <XStack space="$4" alignItems="center" flexWrap="wrap" flex={1}>
             <XStack space="$1" alignItems="center">
               <Calendar size="$1" color="$gray11" />
@@ -246,12 +288,12 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
           </XStack>
         </XStack>
 
-        <XStack justifyContent="space-between" alignItems="center">
+        <XStack justifyContent="space-between" alignItems="center" marginTop="$2">
           <Text fontSize="$2" color="$gray11">
             Updated: {new Date(event.updatedAt).toLocaleDateString()}
           </Text>
 
-          {event.published && (
+          {event.status === 'published' && (
             <XStack space="$1" alignItems="center">
               <Circle size="$0.5" backgroundColor="$green10" />
               <Text fontSize="$2" color="$green11" fontWeight="500">
@@ -261,6 +303,70 @@ function EventCard({ event, onSelect, onPreview }: { event: Event; onSelect: (ev
           )}
         </XStack>
       </YStack>
+      
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <Dialog.Portal>
+          <Dialog.Overlay
+            key="overlay"
+            animation="quick"
+            o={0.5}
+            enterStyle={{ o: 0 }}
+            exitStyle={{ o: 0 }}
+          />
+          <Dialog.Content
+            key="content"
+            bordered
+            elevate
+            animation={[
+              'quick',
+              {
+                opacity: {
+                  overshootClamping: true,
+                },
+              },
+            ]}
+            enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+            exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+            space
+          >
+            <Dialog.Title fontSize="$6" fontWeight="600">
+              Confirm Deletion
+            </Dialog.Title>
+            <Dialog.Description fontSize="$4" color="$gray11">
+              Are you sure you wish to delete the event "{event.title || 'Untitled Event'}", this cannot be undone
+            </Dialog.Description>
+            
+            <XStack space="$3" justifyContent="flex-end" marginTop="$4">
+              <Dialog.Close asChild>
+                <Button 
+                  variant="outlined"
+                  borderWidth={2}
+                  borderColor="$textTertiary"
+                >
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                backgroundColor={brandColors.light.error}
+                color="white"
+                borderWidth={2}
+                borderColor={brandColors.light.error}
+                hoverStyle={{
+                  backgroundColor: brandColors.light.error,
+                  opacity: 0.9
+                }}
+                onPress={() => {
+                  setShowDeleteConfirm(false)
+                  onDelete?.(event)
+                }}
+              >
+                Delete Event
+              </Button>
+            </XStack>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
     </Card>
   )
 }
@@ -270,6 +376,7 @@ export function EventListSelector({
   onSelect,
   onCreateNew,
   onPreview,
+  onDelete,
   isLoading = false,
 }: EventListSelectorProps) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -445,7 +552,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {draftEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
                   ))}
                 </YStack>
               </ScrollView>
@@ -464,7 +571,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {publishedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
                   ))}
                 </YStack>
               </ScrollView>
@@ -480,7 +587,7 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {otherEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} />
+                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
                   ))}
                 </YStack>
               </ScrollView>

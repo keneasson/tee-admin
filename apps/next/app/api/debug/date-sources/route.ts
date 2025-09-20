@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       // Google Sheets data
       (async () => {
         try {
-          const { get_google_sheet } = await import('../../../utils/get-google-sheets')
+          const { get_google_sheet } = await import('@/utils/get-google-sheets')
           return await get_google_sheet(scheduleType)
         } catch (err) {
           console.error('Google Sheets error:', err)

@@ -8,7 +8,9 @@ import {
   SundayEvents,
   SundaySchoolType,
 } from '@my/app/types'
+import { Event } from '@my/app/types/events'
 import MemorialService from 'email-builder/emails/Memorial'
+import Newsletter from 'email-builder/emails/Newsletter'
 import { emailReasons } from './email-send'
 import BibleClass from 'email-builder/emails/BibleClass'
 
@@ -38,6 +40,61 @@ function mergeSundayEvents(events: ProgramTypes[]): SundayEvents[] {
           },
         ]
   }, [] as SundayEvents[])
+}
+
+// Data fetching functions for newsletter - call functions directly, not APIs
+async function fetchEvents(): Promise<Event[]> {
+  try {
+    // Import the actual function that the /api/events/public route uses
+    const { getPublishedEvents } = await import('@my/app/services/event-service')
+    const events = await getPublishedEvents()
+    return events
+  } catch (error) {
+    console.error('Failed to fetch events for newsletter:', error)
+    return []
+  }
+}
+
+async function fetchBibleReadings(): Promise<any[]> {
+  try {
+    // Import the actual function that the /api/json/range route uses
+    const { default: dailyReadings } = await import('../../data/daily-readings.json')
+
+    // Use the same logic as the API route
+    const startRange = new Date()
+    const endRange = new Date()
+    const startMidnight = stripTime(startRange)
+    endRange.setDate(endRange.getDate() + 7)
+    const endMidnight = stripTime(endRange)
+
+    const filteredReadings = dailyReadings.filter((row: any) => {
+      const date = Object.keys(row)[0]
+      const dateObj = new Date(`${date}, ${startMidnight.getUTCFullYear()}`)
+      const dateOnly = stripTime(dateObj)
+      return dateOnly >= startMidnight && dateOnly <= endMidnight
+    })
+
+    // Transform the data structure for the email template
+    return filteredReadings.map((row: any) => {
+      const dateKey = Object.keys(row)[0]
+      const readings = row[dateKey]
+      const dateObj = new Date(`${dateKey}, ${startMidnight.getUTCFullYear()}`)
+
+      return {
+        date: dateObj,
+        reading1: readings[0] || '',
+        reading2: readings[1] || '',
+        reading3: readings[2] || ''
+      }
+    })
+  } catch (error) {
+    console.error('Failed to fetch readings for newsletter:', error)
+    return []
+  }
+}
+
+function stripTime(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
 }
 
 export const getEmailContent = async (reason: emailReasons): Promise<string[] | undefined[]> => {
@@ -72,6 +129,36 @@ export const getEmailContent = async (reason: emailReasons): Promise<string[] | 
         }
       )
       return [bibleClassHtmlContent, bibleClassTextContent]
+    case 'newsletter':
+      // Fetch all required data for newsletter
+      const [scheduleData, upcomingEvents, readingsData] = await Promise.all([
+        get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
+        fetchEvents(),
+        fetchBibleReadings()
+      ])
+
+      console.log('Newsletter data fetched:', {
+        scheduleData: scheduleData.length,
+        upcomingEvents: upcomingEvents.length,
+        readingsData: readingsData.length
+      })
+
+      const newsletterHtmlContent = await render(
+        <Newsletter
+          scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
+          upcomingEvents={upcomingEvents}
+          readings={readingsData}
+        />
+      )
+      const newsletterTextContent = await render(
+        <Newsletter
+          scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
+          upcomingEvents={upcomingEvents}
+          readings={readingsData}
+        />,
+        { plainText: true }
+      )
+      return [newsletterHtmlContent, newsletterTextContent]
     default:
       return [undefined]
   }

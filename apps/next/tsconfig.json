@@ -10,7 +10,13 @@
     "paths": {
       "react-native": [
         "react-native-web"
-      ]
+      ],
+      "@/utils/*": ["utils/*"],
+      "@/app/*": ["app/*"],
+      "@/types/*": ["types/*"],
+      "@/lib/*": ["lib/*"],
+      "@/components/*": ["components/*"],
+      "@/middleware": ["middleware.ts"]
     },
     "typeRoots": [
       "types"

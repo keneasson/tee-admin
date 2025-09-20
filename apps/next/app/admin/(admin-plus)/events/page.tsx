@@ -32,7 +32,7 @@ export default function AdminEventsPage() {
   const loadEvents = async () => {
     try {
       setLoadingEvents(true)
-      const response = await fetch('/api/events')
+      const response = await fetch('/api/admin/events')
       if (!response.ok) {
         throw new Error('Failed to fetch events')
       }
@@ -60,7 +60,7 @@ export default function AdminEventsPage() {
       setIsCreating(true)
       console.log('Creating/updating event:', eventData)
       
-      const response = await fetch('/api/events', {
+      const response = await fetch('/api/admin/events', {
         method: selectedEvent?.id || eventData.id ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ export default function AdminEventsPage() {
     try {
       console.log('Auto-saving event:', eventData)
       
-      const response = await fetch('/api/events', {
+      const response = await fetch('/api/admin/events', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -123,6 +123,29 @@ export default function AdminEventsPage() {
     console.log('Preview event:', eventData)
     setPreviewData(eventData)
     setShowPreview(true)
+  }
+
+  const handleDeleteEvent = async (event: Event) => {
+    try {
+      console.log('Deleting event:', event.id)
+      
+      const response = await fetch(`/api/admin/events?id=${event.id}`, {
+        method: 'DELETE',
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete event')
+      }
+      
+      console.log('Event deleted successfully')
+      
+      // Reload events list
+      await loadEvents()
+    } catch (error) {
+      console.error('Failed to delete event:', error)
+      alert(`Failed to delete event: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
   
   const handleSelectEvent = (event: Event) => {
@@ -178,6 +201,7 @@ export default function AdminEventsPage() {
               onSelect={handleSelectEvent}
               onCreateNew={handleCreateNew}
               onPreview={handlePreviewEvent}
+              onDelete={handleDeleteEvent}
               isLoading={loadingEvents}
             />
           )}

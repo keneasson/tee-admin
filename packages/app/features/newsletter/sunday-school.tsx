@@ -23,7 +23,7 @@ export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => 
         {event.Date.toString()}
       </Paragraph>
       <Paragraph size={'$5'} fontWeight={600}>
-        Sunday School starts at 9:30am
+        Sunday School at 9:30am
       </Paragraph>
       <Paragraph>Refreshments provided by: {event.Refreshments}</Paragraph>
     </Section>

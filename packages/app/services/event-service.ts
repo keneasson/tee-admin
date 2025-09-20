@@ -663,3 +663,14 @@ export const getEventValidationStatus = (event: Partial<Event>) => {
 export const validateSaveTheDate = (event: Partial<Event>) => {
   return EventValidator.validateSaveTheDate(event)
 }
+
+/**
+ * Get only published events for public consumption
+ * Used by newsletter, events page, and other public-facing components
+ */
+export const getPublishedEvents = async (): Promise<Event[]> => {
+  const allEvents = await getAllEvents(false)
+  return allEvents.filter(event =>
+    event.status === 'published' || event.status === 'ready'
+  )
+}

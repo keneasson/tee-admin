@@ -179,7 +179,7 @@ export class EventValidator {
 
       case 'recurring':
         const rEvent = event as any
-        if (!rEvent.recurringConfig?.startDate) {
+        if (!rEvent.recurringConfig?.startDate && !rEvent.recurringConfig?.dateRange?.start) {
           errors.push({
             field: 'recurringConfig.startDate',
             message: 'Start date is required for recurring event',
@@ -482,7 +482,7 @@ export class EventValidator {
 
     // Draft mode
     if (options.mode === 'draft') {
-      if (!event.recurringConfig?.startDate) {
+      if (!event.recurringConfig?.startDate && !event.recurringConfig?.dateRange?.start) {
         warnings.push({
           field: 'recurringConfig.startDate',
           message: 'Start date is recommended for recurring event',
@@ -495,7 +495,7 @@ export class EventValidator {
 
     // Publish mode
     if (options.mode === 'publish') {
-      if (!event.recurringConfig?.startDate) {
+      if (!event.recurringConfig?.startDate && !event.recurringConfig?.dateRange?.start) {
         errors.push({
           field: 'recurringConfig.startDate',
           message: 'Start date is required for published recurring event',

@@ -61,12 +61,8 @@ export const EmailTester: React.FC = () => {
       <Wrapper>
         <Section space={'$4'}>
           <Heading size={5}>Access Denied</Heading>
-          <Paragraph>
-            You need admin or owner permissions to access the Email Tester.
-          </Paragraph>
-          <Paragraph>
-            Current role: {userRole || 'None'}
-          </Paragraph>
+          <Paragraph>You need admin or owner permissions to access the Email Tester.</Paragraph>
+          <Paragraph>Current role: {userRole || 'None'}</Paragraph>
         </Section>
       </Wrapper>
     )
@@ -111,6 +107,9 @@ export const EmailTester: React.FC = () => {
               </YStack>
             ) : (
               <YStack gap={'$size.2'} justifyContent={'space-evenly'} margin={'$size.2'}>
+                <Button onPress={() => getEmail('newsletter')} size="$3">
+                  <Text>Newsletter</Text>
+                </Button>
                 <Button onPress={() => getEmail('recap')} size="$3">
                   <Text>Memorial Info</Text>
                 </Button>

@@ -14,14 +14,17 @@ import {
   User,
   CheckCircle,
 } from '@tamagui/lucide-icons'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button, Card, Circle, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventDateRangePicker } from '../form/event-date-range-picker'
 import { EventFormInput } from '../form/event-form-input'
+import { EventFormSelect } from '../form/event-form-select'
 import { OptimizedTextarea } from '../form/optimized-textarea'
+import { TimeSelector } from '../form/time-selector'
+import { MultiDateSelector } from '../form/multi-date-selector'
 import {
   LocationSection,
   MultipleLocationsSection,
@@ -441,7 +444,16 @@ function StepSummary({
                 <Text
                   fontSize="$3"
                   color="$blue11"
-                >{`${formData.couple.bride?.firstName || ''} & ${formData.couple.groom?.firstName || ''}`}</Text>
+                >
+                  {(() => {
+                    const brideName = formData.couple.bride?.firstName || ''
+                    const groomName = formData.couple.groom?.firstName || ''
+                    if (!brideName && !groomName) return 'Wedding Couple'
+                    if (!brideName) return groomName
+                    if (!groomName) return brideName
+                    return `${brideName} & ${groomName}`
+                  })()}
+                </Text>
               </XStack>
             ) : null}
           </XStack>
@@ -654,11 +666,15 @@ export function ProgressiveEventForm({
       ...(currentSelectedType === 'recurring' && {
         recurringConfig: initialData?.recurringConfig || {
           daysOfWeek: [],
-          startTime: '19:00',
-          endTime: '20:30',
+          startTime: '7:00 PM',
+          endTime: '8:30 PM',
           frequency: 'weekly',
-          startDate: new Date(),
-          endDate: undefined,
+          dateRange: {
+            start: new Date(),
+            end: new Date(new Date().getTime() + 365 * 24 * 60 * 60 * 1000), // 1 year later
+            hidesTimes: true,
+          },
+          customDates: [],
           exceptions: [],
           location: '',
           description: '',
@@ -1105,6 +1121,31 @@ export function ProgressiveEventForm({
 
   const currentFormData = watch()
 
+  // Initialize recurringConfig when type changes to recurring
+  useEffect(() => {
+    if (currentSelectedType === 'recurring') {
+      const currentConfig = getValues('recurringConfig')
+      if (!currentConfig || !currentConfig.frequency) {
+        setValue('recurringConfig', {
+          daysOfWeek: [],
+          startTime: '19:00',
+          endTime: '20:30', 
+          frequency: 'weekly',
+          dateRange: {
+            start: new Date(),
+            end: new Date(new Date().getTime() + 365 * 24 * 60 * 60 * 1000), // 1 year later
+            hidesTimes: false,
+          },
+          exceptions: [],
+          location: '',
+          description: '',
+          contactPerson: '',
+          ...currentConfig // Preserve any existing values
+        })
+      }
+    }
+  }, [currentSelectedType, setValue, getValues])
+
   // Manual save draft function
   const handleManualSave = async () => {
     if (!onAutoSave || !currentSelectedType) return
@@ -1524,35 +1565,126 @@ export function ProgressiveEventForm({
                   </Text>
                 </YStack>
 
+                {/* Recurrence Frequency */}
+                <YStack space="$2">
+                  <EventFormSelect
+                    control={control}
+                    name="recurringConfig.frequency"
+                    label="Repeat"
+                    placeholder="How often does this event occur?"
+                    required
+                    options={[
+                      { label: 'Weekly', value: 'weekly' },
+                      { label: 'Bi-weekly', value: 'biweekly' },
+                      { label: 'Monthly', value: 'monthly' },
+                      { label: 'Select specific dates', value: 'custom' },
+                    ]}
+                  />
+                </YStack>
+
+                {/* Days of Week - Show only for weekly/biweekly */}
+                {(watch('recurringConfig.frequency') === 'weekly' || 
+                  watch('recurringConfig.frequency') === 'biweekly') && (
+                  <YStack space="$2">
+                    <Text fontSize="$4" fontWeight="600">
+                      Repeat on these days:
+                      <Text fontSize="$3" color="$red10">*</Text>
+                    </Text>
+                    <XStack flexWrap="wrap" gap="$2">
+                      {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => {
+                        const daysOfWeek = watch('recurringConfig.daysOfWeek') || []
+                        const isChecked = daysOfWeek.includes(index)
+                        
+                        return (
+                          <Button
+                            key={day}
+                            size="$3"
+                            borderWidth={2}
+                            borderColor={isChecked ? '$primary' : '$textTertiary'}
+                            backgroundColor={isChecked ? '$primary' : 'transparent'}
+                            color={isChecked ? 'white' : '$color'}
+                            hoverStyle={{
+                              backgroundColor: isChecked ? '$primaryHover' : '$backgroundSecondary'
+                            }}
+                            onPress={() => {
+                              const currentDays = watch('recurringConfig.daysOfWeek') || []
+                              if (isChecked) {
+                                setValue('recurringConfig.daysOfWeek', 
+                                  currentDays.filter(d => d !== index),
+                                  { shouldDirty: true }
+                                )
+                              } else {
+                                setValue('recurringConfig.daysOfWeek', 
+                                  [...currentDays, index].sort(),
+                                  { shouldDirty: true }
+                                )
+                              }
+                              handleFieldChange()
+                            }}
+                          >
+                            {day.substring(0, 3)}
+                          </Button>
+                        )
+                      })}
+                    </XStack>
+                  </YStack>
+                )}
+
+                {/* Monthly Pattern Detection */}
+                {watch('recurringConfig.frequency') === 'monthly' && (
+                  <YStack space="$2" padding="$3" backgroundColor="$backgroundSecondary" borderRadius="$4">
+                    <Text fontSize="$4" fontWeight="600">Monthly Recurrence</Text>
+                    <Text fontSize="$3" color="$gray11">
+                      Event will occur on the same day each month as selected in the date range below.
+                    </Text>
+                  </YStack>
+                )}
+
+                {/* Custom Date Selection */}
+                {watch('recurringConfig.frequency') === 'custom' && (
+                  <YStack space="$2">
+                    <MultiDateSelector
+                      control={control}
+                      name="recurringConfig.customDates"
+                      label="Select Specific Dates"
+                      required
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                )}
+
+                {/* Time Selection */}
                 <XStack space="$3">
                   <YStack flex={1}>
-                    <EventFormInput
+                    <TimeSelector
                       control={control}
                       name="recurringConfig.startTime"
                       label="Start Time"
-                      placeholder="19:00"
                       required
                     />
                   </YStack>
                   <YStack flex={1}>
-                    <EventFormInput
+                    <TimeSelector
                       control={control}
                       name="recurringConfig.endTime"
                       label="End Time"
-                      placeholder="20:30"
                       required
                     />
                   </YStack>
                 </XStack>
 
-                <EventDatePicker
-                  control={control}
-                  name="recurringConfig.startDate"
-                  label="Start Date"
-                  placeholder="When does this recurring event begin?"
-                  required
-                  onDateChange={handleFieldChange}
-                />
+                {/* Date Range - only for non-custom recurring events */}
+                {watch('recurringConfig.frequency') !== 'custom' && (
+                  <EventDateRangePicker
+                    control={control}
+                    name="recurringConfig.dateRange"
+                    label="Date Range"
+                    onDateChange={handleFieldChange}
+                    required
+                    allowSingleDay={true}
+                    hidesTimes={true}
+                  />
+                )}
 
                 <EventFormInput
                   control={control}
@@ -1560,6 +1692,99 @@ export function ProgressiveEventForm({
                   label="Contact Person"
                   placeholder="e.g., Brother Smith"
                 />
+
+                {/* Recurrence Rules Summary */}
+                {(() => {
+                  const frequency = watch('recurringConfig.frequency')
+                  const startTime = watch('recurringConfig.startTime')
+                  const endTime = watch('recurringConfig.endTime')
+                  const daysOfWeek = watch('recurringConfig.daysOfWeek') || []
+                  const dateRange = watch('recurringConfig.dateRange')
+                  const customDates = watch('recurringConfig.customDates') || []
+
+                  if (!frequency) return null
+
+                  // Helper function to ensure 12-hour format
+                  const formatTime = (timeStr: string) => {
+                    if (!timeStr) return ''
+                    // If it's already in 12-hour format (contains AM/PM), return as is
+                    if (timeStr.match(/\s*(AM|PM)$/i)) {
+                      return timeStr
+                    }
+                    // Convert 24-hour to 12-hour if needed
+                    const [hours, minutes] = timeStr.split(':')
+                    const hour24 = parseInt(hours)
+                    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
+                    const period = hour24 >= 12 ? 'PM' : 'AM'
+                    return `${hour12}:${minutes} ${period}`
+                  }
+
+                  let summaryText = ''
+                  
+                  if (frequency === 'custom' && customDates.length > 0) {
+                    summaryText = `This event will occur on ${customDates.length} specific date${customDates.length > 1 ? 's' : ''}`
+                    if (startTime && endTime) {
+                      summaryText += ` from ${formatTime(startTime)} to ${formatTime(endTime)}`
+                    }
+                    summaryText += '.'
+                  } else if (frequency === 'weekly' && daysOfWeek.length > 0) {
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                    const selectedDays = daysOfWeek.map(d => dayNames[d]).join(', ')
+                    summaryText = `This event will occur every week on ${selectedDays}`
+                    if (startTime && endTime) {
+                      summaryText += ` from ${formatTime(startTime)} to ${formatTime(endTime)}`
+                    }
+                    if (dateRange?.start && dateRange?.end) {
+                      const startDate = new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      const endDate = new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      summaryText += `, starting ${startDate} and ending ${endDate}`
+                    }
+                    summaryText += '.'
+                  } else if (frequency === 'biweekly' && daysOfWeek.length > 0) {
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                    const selectedDays = daysOfWeek.map(d => dayNames[d]).join(', ')
+                    summaryText = `This event will occur every two weeks on ${selectedDays}`
+                    if (startTime && endTime) {
+                      summaryText += ` from ${formatTime(startTime)} to ${formatTime(endTime)}`
+                    }
+                    if (dateRange?.start && dateRange?.end) {
+                      const startDate = new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      const endDate = new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      summaryText += `, starting ${startDate} and ending ${endDate}`
+                    }
+                    summaryText += '.'
+                  } else if (frequency === 'monthly' && dateRange?.start) {
+                    const startDate = new Date(dateRange.start)
+                    const dayOfMonth = startDate.getDate()
+                    const weekOfMonth = Math.ceil(dayOfMonth / 7)
+                    const dayName = startDate.toLocaleDateString('en-US', { weekday: 'long' })
+                    
+                    const ordinals = ['', 'first', 'second', 'third', 'fourth', 'fifth']
+                    const ordinal = ordinals[weekOfMonth] || `${weekOfMonth}th`
+                    
+                    summaryText = `This event will occur on the ${ordinal} ${dayName} of every month`
+                    if (startTime && endTime) {
+                      summaryText += ` from ${formatTime(startTime)} to ${formatTime(endTime)}`
+                    }
+                    if (dateRange?.start && dateRange?.end) {
+                      const startDateStr = new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      const endDateStr = new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      summaryText += `, starting ${startDateStr} and ending ${endDateStr}`
+                    }
+                    summaryText += '.'
+                  }
+
+                  return summaryText ? (
+                    <YStack space="$2" padding="$3" backgroundColor="$blue1" borderRadius="$4" borderWidth={1} borderColor="$blue5">
+                      <Text fontSize="$4" fontWeight="600" color="$blue11">
+                        Recurrence Summary
+                      </Text>
+                      <Text fontSize="$3" color="$blue11">
+                        {summaryText}
+                      </Text>
+                    </YStack>
+                  ) : null
+                })()}
               </>
             )}
 
@@ -1822,7 +2047,14 @@ export function ProgressiveEventForm({
                   <>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Candidate:</Text>
-                      <Text>{`${currentFormData.candidate.firstName} ${currentFormData.candidate.lastName}`}</Text>
+                      <Text>
+                        {(() => {
+                          const firstName = currentFormData.candidate.firstName || ''
+                          const lastName = currentFormData.candidate.lastName || ''
+                          const fullName = `${firstName} ${lastName}`.trim()
+                          return fullName || 'TBA'
+                        })()}
+                      </Text>
                     </XStack>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Date:</Text>
@@ -1856,7 +2088,22 @@ export function ProgressiveEventForm({
                   <>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Couple:</Text>
-                      <Text>{`${currentFormData.couple.bride?.firstName || ''} ${currentFormData.couple.bride?.lastName || ''} & ${currentFormData.couple.groom?.firstName || ''} ${currentFormData.couple.groom?.lastName || ''}`}</Text>
+                      <Text>
+                        {(() => {
+                          const brideFirst = currentFormData.couple.bride?.firstName || ''
+                          const brideLast = currentFormData.couple.bride?.lastName || ''
+                          const groomFirst = currentFormData.couple.groom?.firstName || ''
+                          const groomLast = currentFormData.couple.groom?.lastName || ''
+                          
+                          const brideName = `${brideFirst} ${brideLast}`.trim()
+                          const groomName = `${groomFirst} ${groomLast}`.trim()
+                          
+                          if (!brideName && !groomName) return 'Wedding Couple'
+                          if (!brideName) return groomName
+                          if (!groomName) return brideName
+                          return `${brideName} & ${groomName}`
+                        })()}
+                      </Text>
                     </XStack>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Date:</Text>

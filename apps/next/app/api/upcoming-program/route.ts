@@ -59,11 +59,13 @@ export async function GET(request: NextRequest) {
       const dateValue = event.date instanceof Date ? event.date : new Date(event.date)
       
       // Format date to match production format: "Sunday, August 31, 2025"
+      // Use UTC timezone to ensure consistent formatting across environments
       const formattedDate = dateValue.toLocaleDateString('en-US', {
         weekday: 'long',
-        year: 'numeric', 
+        year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'UTC'
       })
       
       // Extract Date from details to avoid override, then spread the rest
