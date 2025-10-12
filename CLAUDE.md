@@ -4,39 +4,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Model Selection Guidelines (Opus vs Sonnet)
 
-### Use Sonnet (3.5) for:
+### Use Sonnet 4.5 for (Default):
+- **End-to-End Feature Development**: Discovery, planning, implementation, and verification
 - **File Operations**: Reading, searching, grepping files
-- **Simple Edits**: Straightforward code changes, fixing typos, updating imports
+- **Code Changes**: Simple edits, refactoring, restructuring
 - **Bash Commands**: Running builds, tests, checking git status
-- **Documentation**: Writing comments, updating READMEs
-- **Type Checking**: Running TypeScript compiler, fixing simple type errors
+- **Documentation**: Writing comments, updating READMEs, API docs
+- **Type Checking**: Running TypeScript compiler, fixing type errors
 - **Todo Management**: Updating task lists, marking items complete
 - **Code Formatting**: Fixing indentation, organizing imports
 - **Search & Discovery**: Finding files, understanding project structure
-
-### Use Opus (4.1) for:
-- **Architecture Decisions**: Designing system components, data models
-- **Complex Debugging**: Solving tricky bugs requiring deep analysis
-- **Algorithm Design**: Creating efficient solutions to complex problems
-- **Security Analysis**: Reviewing authentication, authorization logic
-- **Performance Optimization**: Analyzing and improving slow code
-- **API Design**: Creating clean, extensible interfaces
-- **Complex Refactoring**: Restructuring code while maintaining functionality
-- **Cross-System Integration**: Coordinating changes across multiple services
+- **Complex Debugging**: Root cause analysis, multi-step debugging
+- **API Design**: RESTful, GraphQL, following established patterns
+- **Multi-File Refactoring**: Cross-cutting changes with dependency tracking
 - **Business Logic**: Implementing complex domain rules and workflows
+- **Security Analysis**: Authentication, authorization, routine security reviews
+- **Performance Issues**: Identifying bottlenecks, standard optimizations
+
+### Use Opus (4.1) for (Rare Cases):
+- **Novel Architecture Design**: Completely new system components requiring deep innovation
+- **Algorithmic Innovation**: Creating new algorithms, complex mathematical solutions
+- **Critical Security Vulnerabilities**: Expert-level security analysis for zero-days
+- **Performance Breakthroughs**: Algorithmic optimization requiring novel approaches
+- **Complex Cross-System Design**: New integration patterns across multiple services
+- **Research & Proof of Concepts**: Exploring uncharted technical territory
+
+### Sonnet 4.5 Capabilities (New)
+- **Advanced reasoning**: Complex multi-step problem solving
+- **Deep code understanding**: Large codebase analysis and navigation
+- **Context utilization**: Effective use of large conversation contexts
+- **Error recovery**: Self-correction and debugging without escalation
+- **Pattern recognition**: Identifying architectural patterns and anti-patterns
+- **Dependency tracking**: Managing changes across related components
 
 ### Prompting for Efficiency
-When starting a task, consider prefixing with:
-- "Using Sonnet would be fine for this:" - for routine tasks
-- "This needs Opus:" - for complex reasoning
-- "Start with Sonnet, then switch to Opus if needed:" - for exploration
+Default to Sonnet 4.5 for all tasks. Only escalate when:
+- "This needs Opus:" - Novel problems, algorithmic innovation, or architectural redesign
+- "Try Sonnet first, escalate if needed:" - Uncertain complexity
 
-### Task Breakdown Strategy
-1. **Discovery Phase** (Sonnet): Understand the problem, search codebase, read files
-2. **Planning Phase** (Opus): Design the solution, identify edge cases
-3. **Implementation Phase** (Sonnet): Make the code changes
-4. **Verification Phase** (Sonnet): Run tests, check types
-5. **Complex Issues** (Opus): Debug failures, solve unexpected problems
+### Task Breakdown Strategy (Simplified)
+1. **Start with Sonnet 4.5** (Default): Handles discovery → planning → implementation → verification
+2. **Escalate to Opus only when**: Hitting novel problems, need algorithmic innovation, or major architectural redesign
+3. **Return to Sonnet**: Once Opus provides design/strategy, Sonnet implements
 
 ## Project Overview
 
@@ -96,7 +105,7 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - User data stored in DynamoDB with email-based account linking
 - Role-based access control (owner, admin, member, guest)
 - Google Sheets integration for schedules, contacts, and newsletters
-- Email campaigns triggered via Vercel cron jobs
+- Email campaigns scheduled via AWS EventBridge (migrated from Vercel cron)
 
 ### Cross-Platform Development
 - Business logic lives in `packages/app/features/`
@@ -145,7 +154,7 @@ export default function MyPage() {
 
 ```typescript
 // Standard form input pattern:
-<FormInput 
+<FormInput
   control={control}
   name="email"
   label="Email Address"
@@ -163,6 +172,47 @@ export default function MyPage() {
   rules={{ required: 'Password is required' }}
 />
 ```
+
+### Email Scheduling System
+
+TEE Admin uses a simple Vercel cron-based email system for scheduled test emails.
+
+#### Current Schedule
+- **Thursday 9:30pm** - Test newsletter email (via Vercel cron)
+  - Endpoint: `/api/email/test-thursday`
+  - Always runs in **TEST MODE** (sends to test list only)
+  - Uses newsletter template
+
+#### Configuration
+Scheduled emails are configured in `apps/next/vercel.json`:
+```json
+{
+  "crons": [
+    {
+      "path": "/api/email/test-thursday",
+      "schedule": "30 21 * * 4"  // Thursday 9:30pm
+    }
+  ]
+}
+```
+
+#### Security
+- All email endpoints require `EMAIL_SENDER_SECRET` authentication
+- Vercel automatically includes this in cron requests
+- Manual testing: `curl -H "Authorization: Bearer $EMAIL_SENDER_SECRET" https://your-domain.vercel.app/api/email/test-thursday`
+
+#### Email Types Available
+- `newsletter` - Weekly newsletter
+- `bible-class` - Bible class reminder
+- `sunday-school` - Sunday school reminder
+- `recap` - Memorial service (recap)
+
+#### Advanced System (Future)
+For advanced scheduling needs, see [`AWS_EVENTBRIDGE_SETUP.md`](./AWS_EVENTBRIDGE_SETUP.md) for the DynamoDB queue-based system with EventBridge integration.
+
+#### Environment Variables
+- `EMAIL_SENDER_SECRET` - Bearer token for authenticating cron requests
+- AWS credentials - Required for SES email delivery
 
 ## Configuration Requirements
 
