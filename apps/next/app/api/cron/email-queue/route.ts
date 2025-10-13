@@ -99,11 +99,16 @@ export async function GET(req: NextRequest) {
     // Step 3: Process ready emails that should be sent now
     const readyEmails = await sendQueueRepo.getReadyEmails()
     const emailsToSend = readyEmails.filter(entry => {
+      // Must be scheduled for today
+      if (entry.scheduledDate !== currentDate) {
+        return false
+      }
+
       const [emailHour, emailMinute] = entry.scheduledTime.split(':').map(Number)
       const emailMinutes = emailHour * 60 + emailMinute
       const currentMinutes = torontoTime.getHours() * 60 + torontoTime.getMinutes()
 
-      // Send if it's time (within 15 minutes of scheduled time)
+      // Send if it's time (within 2 hours of scheduled time for testing)
       const timeDiff = Math.abs(emailMinutes - currentMinutes)
       return timeDiff <= 120 // Extended to 2 hours for testing
     })
