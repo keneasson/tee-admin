@@ -304,14 +304,19 @@ export class SendQueueRepository {
       expressionAttributeValues[':lastRetry'] = new Date().toISOString()
     }
 
+    // Build ExpressionAttributeNames only for attributes actually used
+    const expressionAttributeNames: Record<string, string> = {
+      '#status': 'status'
+    }
+    if (metadata?.error) {
+      expressionAttributeNames['#error'] = 'error'
+    }
+
     await docClient.send(new UpdateCommand({
       TableName: this.tableName,
       Key: { PK: 'QUEUE', SK: sk },
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-      ExpressionAttributeNames: {
-        '#status': 'status',
-        '#error': 'error'
-      },
+      ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
     }))
 
