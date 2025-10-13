@@ -34,7 +34,7 @@ const extractHostingEcclesia = (event: Event): string => {
 
 const extractEventDate = (event: Event): string => {
   let date: Date
-  
+
   switch (event.type) {
     case 'funeral':
       date = event.serviceDate ? new Date(event.serviceDate) : new Date()
@@ -63,8 +63,39 @@ const extractEventDate = (event: Event): string => {
     console.warn('[extractEventDate] Invalid date detected, using current date as fallback')
     date = new Date()
   }
-  
+
   return date.toISOString().split('T')[0]
+}
+
+const extractEventEndDate = (event: Event): string | null => {
+  let date: Date | null = null
+
+  switch (event.type) {
+    case 'study-weekend':
+      // Multi-day event - use end date
+      date = event.dateRange?.end ? new Date(event.dateRange.end) : null
+      break
+    case 'general':
+      // May have end date for multi-day events
+      date = event.endDate ? new Date(event.endDate) : null
+      break
+    case 'funeral':
+    case 'wedding':
+    case 'baptism':
+    case 'recurring':
+      // Single day events - no end date needed
+      return null
+    default:
+      return null
+  }
+
+  // Validate the date
+  if (date && isNaN(date.getTime())) {
+    console.warn('[extractEventEndDate] Invalid end date detected')
+    return null
+  }
+
+  return date ? date.toISOString().split('T')[0] : null
 }
 
 const extractEventTime = (event: Event): string => {
@@ -665,12 +696,33 @@ export const validateSaveTheDate = (event: Partial<Event>) => {
 }
 
 /**
+ * Check if an event is currently active or upcoming
+ * For multi-day events, they remain active until the END date has passed
+ */
+const isEventActiveOrUpcoming = (event: Event): boolean => {
+  const today = new Date().toISOString().split('T')[0]
+  const endDate = extractEventEndDate(event)
+
+  if (endDate) {
+    // Multi-day event: show until end date has passed
+    return endDate >= today
+  } else {
+    // Single day event: show until event date has passed
+    const startDate = extractEventDate(event)
+    return startDate >= today
+  }
+}
+
+/**
  * Get only published events for public consumption
  * Used by newsletter, events page, and other public-facing components
+ * Includes ongoing multi-day events (shows until end date, not just start date)
  */
 export const getPublishedEvents = async (): Promise<Event[]> => {
   const allEvents = await getAllEvents(false)
-  return allEvents.filter(event =>
-    event.status === 'published' || event.status === 'ready'
-  )
+  return allEvents.filter(event => {
+    const isPublished = event.status === 'published' || event.status === 'ready'
+    const isActive = isEventActiveOrUpcoming(event)
+    return isPublished && isActive
+  })
 }
