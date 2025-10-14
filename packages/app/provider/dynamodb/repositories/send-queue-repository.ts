@@ -247,6 +247,60 @@ export class SendQueueRepository {
   }
 
   /**
+   * Atomically claim a queue entry for processing
+   * Uses conditional update to ensure only ONE process can claim it
+   * Returns the claimed entry if successful, null if already claimed
+   *
+   * @param emailType - Type of email
+   * @param date - Scheduled date (YYYY-MM-DD)
+   * @param time - Scheduled time (HH:MM)
+   * @param expectedStatus - Expected current status (defaults to 'ready', use 'failed' for retries)
+   */
+  async claimQueueEntry(
+    emailType: EmailType,
+    date: string,
+    time: string,
+    expectedStatus: QueueStatus = 'ready'
+  ): Promise<QueueEntry | null> {
+    const sk = `${emailType}#${date}#${time}`
+    const gsiSK = `${date}#${time}`
+    const now = new Date().toISOString()
+
+    try {
+      // Atomic update: only succeeds if status matches expected status
+      await docClient.send(new UpdateCommand({
+        TableName: this.tableName,
+        Key: { PK: 'QUEUE', SK: sk },
+        UpdateExpression: 'SET #status = :processing, GSI1PK = :processing, claimedAt = :now',
+        ConditionExpression: '#status = :expectedStatus', // CRITICAL: Only claim if still in expected state
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
+        ExpressionAttributeValues: {
+          ':expectedStatus': expectedStatus,
+          ':processing': 'processing',
+          ':now': now,
+        },
+      }))
+
+      // Successfully claimed! Return the entry
+      const entry = await this.getQueueEntry(emailType, date, time)
+      if (!entry) {
+        throw new Error('Failed to retrieve claimed entry')
+      }
+
+      return entry
+    } catch (error: any) {
+      // ConditionalCheckFailedException means someone else claimed it
+      if (error.name === 'ConditionalCheckFailedException') {
+        return null // Already claimed by another process
+      }
+      // Other errors should be thrown
+      throw error
+    }
+  }
+
+  /**
    * Update queue entry status
    */
   async updateQueueStatus(
@@ -366,13 +420,14 @@ export class SendQueueRepository {
 
     const summary: QueueSummary = {
       ready: 0,
+      processing: 0,
       complete: 0,
       failed: 0,
       byType: {
-        'newsletter': { ready: 0, complete: 0, failed: 0 },
-        'memorial': { ready: 0, complete: 0, failed: 0 },
-        'bible-class': { ready: 0, complete: 0, failed: 0 },
-        'sunday-school': { ready: 0, complete: 0, failed: 0 },
+        'newsletter': { ready: 0, processing: 0, complete: 0, failed: 0 },
+        'memorial': { ready: 0, processing: 0, complete: 0, failed: 0 },
+        'bible-class': { ready: 0, processing: 0, complete: 0, failed: 0 },
+        'sunday-school': { ready: 0, processing: 0, complete: 0, failed: 0 },
       }
     }
 
@@ -432,6 +487,7 @@ export class SendQueueRepository {
       scheduledTime: record.scheduledTime,
       status: record.status,
       created: record.created,
+      claimedAt: record.claimedAt,
       sent: record.sent,
       error: record.error,
       recipientCount: record.recipientCount,

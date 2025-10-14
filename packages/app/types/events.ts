@@ -1,6 +1,6 @@
 // Event Management System Types
 export type EventType = 'study-weekend' | 'funeral' | 'wedding' | 'baptism' | 'general' | 'recurring'
-export type EventStatus = 'draft' | 'published' | 'archived'
+export type EventStatus = 'draft' | 'ready' | 'published' | 'archived'
 
 export interface DocumentAttachment {
   id: string
@@ -30,9 +30,61 @@ export interface BaseEvent {
   documents: DocumentAttachment[]
 }
 
-// Minimal Event type for now (can be expanded later)
+// Event type with all possible type-specific fields
 export interface Event extends BaseEvent {
-  // Additional properties can be added as needed
+  // Study weekend fields
+  dateRange?: {
+    start: Date
+    end: Date
+  }
+  theme?: string
+  speakers?: Array<{
+    firstName: string
+    lastName: string
+  }>
+
+  // Wedding fields
+  ceremonyDate?: Date
+  couple?: {
+    bride: {
+      firstName: string
+      lastName: string
+    }
+    groom: {
+      firstName: string
+      lastName: string
+    }
+  }
+
+  // Baptism fields
+  baptismDate?: Date
+  candidate?: {
+    firstName: string
+    lastName: string
+  }
+
+  // Funeral fields
+  serviceDate?: Date
+  deceased?: {
+    firstName: string
+    lastName: string
+  }
+
+  // General event fields
+  startDate?: Date
+  endDate?: Date
+  customType?: string
+
+  // Recurring event fields
+  recurringConfig?: {
+    startDate: Date
+    startTime: string
+  }
+
+  // Hosting ecclesia (for most event types)
+  hostingEcclesia?: {
+    name: string
+  }
 }
 
 // Type guards for discriminated unions

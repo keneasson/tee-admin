@@ -7,6 +7,7 @@ import {
   getEventById,
   deleteEvent
 } from '@my/app/services/event-service'
+import { invalidateEventsCache } from '@/utils/cache'
 
 /**
  * Admin Events API - Authentication required
@@ -58,13 +59,20 @@ export async function POST(request: NextRequest) {
     eventData.createdBy = session.user.email
 
     // Determine if this is a draft save or full create
+    let event
     if (eventData.isDraft) {
-      const event = await saveEventDraft(eventData)
-      return NextResponse.json(event, { status: 201 })
+      event = await saveEventDraft(eventData)
     } else {
-      const event = await createEvent(eventData)
-      return NextResponse.json(event, { status: 201 })
+      event = await createEvent(eventData)
     }
+
+    // Invalidate events cache if the event is published/ready
+    if (event.status === 'published' || event.status === 'ready') {
+      console.log('📰 Invalidating events cache after creating published event')
+      await invalidateEventsCache()
+    }
+
+    return NextResponse.json(event, { status: 201 })
 
   } catch (error) {
     console.error('Error creating event:', error)
@@ -91,6 +99,13 @@ export async function PUT(request: NextRequest) {
 
     // Update uses saveEventDraft which handles both draft and published updates
     const event = await saveEventDraft(eventData)
+
+    // Invalidate events cache if the event is published/ready
+    if (event.status === 'published' || event.status === 'ready') {
+      console.log('📰 Invalidating events cache after updating published event')
+      await invalidateEventsCache()
+    }
+
     return NextResponse.json(event)
 
   } catch (error) {
@@ -122,6 +137,10 @@ export async function DELETE(request: NextRequest) {
     if (!success) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     }
+
+    // Always invalidate cache when deleting an event
+    console.log('📰 Invalidating events cache after deleting event')
+    await invalidateEventsCache()
 
     return NextResponse.json({ success: true })
 

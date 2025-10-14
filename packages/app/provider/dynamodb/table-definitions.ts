@@ -68,6 +68,33 @@ export const syncStatusTableDef: CreateTableInput = {
   ...commonTableConfig,
 }
 
+// Email Send Queue Table Definition (NEW)
+// Manages email schedules and send queue
+export const sendQueueTableDef: CreateTableInput = {
+  TableName: tableNames.sendQueue,
+  KeySchema: [
+    { AttributeName: 'PK', KeyType: 'HASH' }, // SCHEDULE | QUEUE
+    { AttributeName: 'SK', KeyType: 'RANGE' }, // {email_type}#{day}#{time} | {email_type}#{YYYY-MM-DD}#{HH:MM}
+  ],
+  AttributeDefinitions: [
+    { AttributeName: 'PK', AttributeType: 'S' },
+    { AttributeName: 'SK', AttributeType: 'S' },
+    { AttributeName: 'GSI1PK', AttributeType: 'S' },
+    { AttributeName: 'GSI1SK', AttributeType: 'S' },
+  ],
+  GlobalSecondaryIndexes: [
+    {
+      IndexName: 'StatusIndex', // For efficient queue status queries
+      KeySchema: [
+        { AttributeName: 'GSI1PK', KeyType: 'HASH' }, // {status} (ready/complete/failed)
+        { AttributeName: 'GSI1SK', KeyType: 'RANGE' }, // {YYYY-MM-DD}#{HH:MM}
+      ],
+      Projection: { ProjectionType: 'ALL' },
+    },
+  ],
+  ...commonTableConfig,
+}
+
 // Table creation helper
 export async function createTable(tableDef: CreateTableInput): Promise<void> {
   try {
@@ -91,6 +118,7 @@ export async function createAllTables(): Promise<void> {
   const tables = [
     schedulesTableDef, // NEW: tee-schedules (consolidated schedule/event data)
     syncStatusTableDef, // Helper table for sync tracking
+    sendQueueTableDef, // NEW: tee-send-queue (email scheduling system)
   ]
 
   for (const tableDef of tables) {

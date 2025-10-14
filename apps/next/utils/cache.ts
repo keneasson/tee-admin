@@ -11,14 +11,18 @@ export const CACHE_TAGS = {
   SCHEDULES_BIBLE_CLASS: 'schedules:bibleClass',
   SCHEDULES_SUNDAY_SCHOOL: 'schedules:sundaySchool',
   SCHEDULES_CYC: 'schedules:cyc',
-  
+
   // API endpoint tags
   UPCOMING_PROGRAM: 'api:upcoming-program',
   NEWSLETTER: 'api:newsletter',
-  
+
   // Directory data
   DIRECTORY: 'directory:all',
-  
+
+  // Events data tags
+  EVENTS_ALL: 'events:all',
+  EVENTS_PUBLIC: 'events:public',
+
   // Combined tags for bulk invalidation
   ALL_SCHEDULE_DATA: 'data:schedules',
   ALL_API_RESPONSES: 'api:all',
@@ -96,13 +100,36 @@ export async function invalidateDirectoryCache(): Promise<void> {
 }
 
 /**
+ * Invalidate cache for event updates
+ */
+export async function invalidateEventsCache(): Promise<void> {
+  const tags = [
+    CACHE_TAGS.EVENTS_ALL,
+    CACHE_TAGS.EVENTS_PUBLIC,
+    CACHE_TAGS.NEWSLETTER,
+    CACHE_TAGS.ALL_API_RESPONSES
+  ]
+
+  console.log('🗄️ Invalidating events cache tags:', tags)
+
+  for (const tag of tags) {
+    try {
+      revalidateTag(tag)
+      console.log(`✅ Invalidated cache tag: ${tag}`)
+    } catch (error) {
+      console.error(`❌ Failed to invalidate cache tag ${tag}:`, error)
+    }
+  }
+}
+
+/**
  * Invalidate all cached data (nuclear option)
  */
 export async function invalidateAllCache(): Promise<void> {
   const allTags = Object.values(CACHE_TAGS)
-  
+
   console.log('🗄️ Invalidating ALL cache tags:', allTags)
-  
+
   for (const tag of allTags) {
     try {
       revalidateTag(tag)

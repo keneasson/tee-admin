@@ -169,12 +169,32 @@ const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
         text="Event Management"
         active={path === '/admin/events'}
       />
+
+      {/* Admin Tools Sub-menu */}
+      <NavHeading>
+        <Text fontSize="$3" fontWeight="600" color="$gray11" marginTop="$2">
+          Admin Tools
+        </Text>
+      </NavHeading>
       <NavigationButtonItem
-        key="emailTester"
-        linkTo={linkTo('/admin/email/tester')}
-        text="Email Tester"
-        active={path === '/admin/email/tester'}
+        key="emailSender"
+        linkTo={linkTo('/admin/email/sender')}
+        text="Email Sender"
+        active={path === '/admin/email/sender'}
       />
+      <NavigationButtonItem
+        key="emailLists"
+        linkTo={linkTo('/admin/email/lists')}
+        text="Email Lists"
+        active={path === '/admin/email/lists'}
+      />
+
+      {/* Brand System Sub-menu */}
+      <NavHeading>
+        <Text fontSize="$3" fontWeight="600" color="$gray11" marginTop="$4">
+          Brand System
+        </Text>
+      </NavHeading>
       <NavigationButtonItem
         key="brandColours"
         linkTo={linkTo('/admin/ui-ux/brand/colours')}

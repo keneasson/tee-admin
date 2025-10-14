@@ -4,6 +4,9 @@ import { EmailType, QueueEntry } from '@my/app/types/send-queue'
 import { getEmailContent } from '@/utils/email/get-email-content'
 import { emailSend, emailReasons } from '@/utils/email/email-send'
 
+// Configure route for longer timeout (matches legacy cron jobs)
+export const maxDuration = 60 // 60 seconds
+
 // Map new email types to existing email system
 const emailTypeMap: Record<EmailType, emailReasons> = {
   'newsletter': 'newsletter',
@@ -145,14 +148,32 @@ export async function GET(req: NextRequest) {
     // Add failed emails to send list (they'll be retried)
     emailsToSend.push(...failedEmails)
 
-    // Step 4: Send the emails
+    // Step 4: Send the emails with atomic claiming to prevent duplicates
     for (const queueEntry of emailsToSend) {
       const isRetry = queueEntry.status === 'failed'
       const retryAttempt = (queueEntry.retryCount || 0) + 1
 
+      // ATOMIC CLAIM: Try to claim this entry for processing
+      // This ensures only ONE process can send this email, even if multiple cron jobs run simultaneously
+      // For retries, we claim from 'failed' status, for new sends we claim from 'ready' status
+      const claimedEntry = await sendQueueRepo.claimQueueEntry(
+        queueEntry.emailType,
+        queueEntry.scheduledDate,
+        queueEntry.scheduledTime,
+        isRetry ? 'failed' : 'ready' // Expected status depends on whether it's a retry
+      )
+
+      if (!claimedEntry) {
+        // Another process already claimed this entry - skip it
+        console.log(`⏭️  Skipping ${queueEntry.emailType} at ${queueEntry.scheduledTime} - already claimed by another process`)
+        continue
+      }
+
       try {
         if (isRetry) {
           console.log(`🔄 Retrying ${queueEntry.emailType} (attempt ${retryAttempt}/3)`)
+        } else {
+          console.log(`📧 Processing ${queueEntry.emailType} at ${queueEntry.scheduledTime} (claimed at ${claimedEntry.claimedAt})`)
         }
 
         const emailReason = emailTypeMap[queueEntry.emailType]

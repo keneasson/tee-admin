@@ -27,16 +27,27 @@ const pages: MainPageType[] = [
   { path: '/events', label: 'Events' },
 ]
 
-const adminPages: MainPageType[] = [
+// Admin Tools - Email Management
+const emailAdminPages: MainPageType[] = [
+  { path: '/admin/email/sender', label: 'Email Sender' },
+  { path: '/admin/email/lists', label: 'Email Lists' },
+  { path: '/admin/email/schedule', label: 'Schedule Emails to Send' },
+]
+
+// Admin Tools - System Management
+const systemAdminPages: MainPageType[] = [
   { path: '/admin/events', label: 'Event Management' },
-  { path: '/admin/email/tester', label: 'Email Tester' },
+  { path: '/admin/data-sync', label: 'Data Sync' },
+  { path: '/admin/profile', label: 'Profile' },
+]
+
+// Brand System Tools
+const brandAdminPages: MainPageType[] = [
   { path: '/admin/ui-ux/brand/colours', label: 'Brand Colors' },
   { path: '/admin/ui-ux/brand/typography', label: 'Typography' },
   { path: '/admin/ui-ux/brand/components', label: 'Components' },
   { path: '/admin/ui-ux/brand/navigation', label: 'Navigation' },
   { path: '/admin/evolution/feature-flags', label: 'Feature Flags' },
-  { path: '/admin/data-sync', label: 'Data Sync' },
-  { path: '/admin/profile', label: 'Profile' },
 ]
 
 export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children }) => {
@@ -128,7 +139,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         ))}
       </YStack>
 
-      {/* Admin Navigation */}
+{/* Email Admin Tools */}
       {session?.user &&
         ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
           <YStack gap="$1">
@@ -138,9 +149,91 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               color={colors.textSecondary}
               textTransform="uppercase"
             >
-              Admin Tools
+              Email Tools
             </Text>
-            {adminPages.map((page) => (
+            {emailAdminPages.map((page) => (
+              <Button
+                key={page.path}
+                onPress={navigateTo(page.path)}
+                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                borderRadius="$2"
+                justifyContent="flex-start"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
+              >
+                <Text
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
+                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                  }}
+                >
+                  {page.label}
+                </Text>
+              </Button>
+            ))}
+          </YStack>
+        )}
+
+      {/* System Admin Tools */}
+      {session?.user &&
+        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
+          <YStack gap="$1">
+            <Text
+              fontSize="$2"
+              fontWeight="600"
+              color={colors.textSecondary}
+              textTransform="uppercase"
+            >
+              System Tools
+            </Text>
+            {systemAdminPages.map((page) => (
+              <Button
+                key={page.path}
+                onPress={navigateTo(page.path)}
+                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                borderRadius="$2"
+                justifyContent="flex-start"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
+              >
+                <Text
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
+                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                  }}
+                >
+                  {page.label}
+                </Text>
+              </Button>
+            ))}
+          </YStack>
+        )}
+
+      {/* Brand System Tools */}
+      {session?.user &&
+        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
+          <YStack gap="$1">
+            <Text
+              fontSize="$2"
+              fontWeight="600"
+              color={colors.textSecondary}
+              textTransform="uppercase"
+            >
+              Brand System
+            </Text>
+            {brandAdminPages.map((page) => (
               <Button
                 key={page.path}
                 onPress={navigateTo(page.path)}

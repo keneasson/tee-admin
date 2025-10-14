@@ -13,20 +13,25 @@ interface EventSummaryCardProps {
  * Reusable Event Summary Card component
  * Used in: Event lists, Newsletter, Preview modal, Search results
  */
-export function EventSummaryCard({ 
-  event, 
+export function EventSummaryCard({
+  event,
   onPress,
-  variant = 'default' 
+  variant = 'default'
 }: EventSummaryCardProps) {
   const isCompact = variant === 'compact'
   const isNewsletter = variant === 'newsletter'
 
+  // Debug log in development
+  if (process.env.NODE_ENV === 'development' && isNewsletter) {
+    console.log(`📰 Newsletter card for "${event.title}": variant=${variant}, isNewsletter=${isNewsletter}`)
+  }
+
   return (
-    <Card 
+    <Card
       elevate={!isNewsletter}
-      bordered 
+      bordered
       padding={isCompact ? "$3" : "$4"}
-      borderRadius="$4" 
+      borderRadius="$4"
       backgroundColor="$background"
     >
       <YStack gap={isCompact ? "$2" : "$3"}>

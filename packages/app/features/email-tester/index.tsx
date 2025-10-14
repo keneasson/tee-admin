@@ -10,7 +10,7 @@ import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { ManageContacts } from './manage-contacts'
 import { emailReasons } from 'next-app/utils/email/email-send'
-import { Check } from '@tamagui/lucide-icons/icons/Check'
+import { Check } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
 // import { setRole } from '../../provider/auth/setRole'
 

@@ -1,6 +1,6 @@
 export type EmailType = 'newsletter' | 'memorial' | 'bible-class' | 'sunday-school'
 
-export type QueueStatus = 'ready' | 'complete' | 'failed'
+export type QueueStatus = 'ready' | 'processing' | 'complete' | 'failed'
 
 export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 
@@ -22,6 +22,7 @@ export interface QueueEntry {
   scheduledTime: string // HH:MM format
   status: QueueStatus
   created: string // ISO timestamp when added to queue
+  claimedAt?: string // ISO timestamp when claimed for processing (prevents duplicate sends)
   sent?: string // ISO timestamp when email was sent
   error?: string // Error message if failed
   recipientCount?: number // Number of recipients (for logging)
@@ -57,6 +58,7 @@ export interface QueueRecord {
   scheduledTime: string
   status: QueueStatus
   created: string
+  claimedAt?: string
   sent?: string
   error?: string
   recipientCount?: number
@@ -112,10 +114,12 @@ export interface ScheduleWithStats extends EmailSchedule {
 
 export interface QueueSummary {
   ready: number
+  processing: number
   complete: number
   failed: number
   byType: Record<EmailType, {
     ready: number
+    processing: number
     complete: number
     failed: number
   }>
