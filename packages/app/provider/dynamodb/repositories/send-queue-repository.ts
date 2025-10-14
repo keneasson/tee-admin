@@ -113,7 +113,7 @@ export class SendQueueRepository {
     }
 
     if (update.timezone !== undefined) {
-      updateExpressions.push('timezone = :timezone')
+      updateExpressions.push('#timezone = :timezone')
       expressionAttributeValues[':timezone'] = update.timezone
     }
 
@@ -139,7 +139,10 @@ export class SendQueueRepository {
       TableName: this.tableName,
       Key: { PK: 'SCHEDULE', SK: sk },
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-      ExpressionAttributeNames: { '#time': 'time' }, // 'time' is a reserved word
+      ExpressionAttributeNames: {
+        '#time': 'time',      // Reserved word
+        '#timezone': 'timezone' // Reserved word
+      },
       ExpressionAttributeValues: expressionAttributeValues,
     }))
 
