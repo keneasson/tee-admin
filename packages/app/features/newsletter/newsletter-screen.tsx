@@ -12,18 +12,46 @@ import { fetchUpcoming } from '@my/app/features/newsletter/fetch-upcoming'
 import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
 import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
+import { Event } from '@my/app/types/events'
+import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
+import { useRouter } from 'next/navigation'
 
 export const NewsletterScreen: React.FC = () => {
   const [program, setProgram] = useState<ProgramTypes[] | null>(null)
   const [readings, setReadings] = useState<[] | null>(null)
+  const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
   const isHydrated = useHydrated()
+  const router = useRouter()
 
   useEffect(() => {
     // Only fetch data after hydration to prevent hydration mismatches
     if (!isHydrated) return
-    
+
     console.log('in useEffect', { program, readings })
-    Promise.all([fetchUpcoming({}).then(setProgram), fetchReadings().then(setReadings)]).catch(
+
+    const fetchEvents = async () => {
+      try {
+        const cacheBuster = process.env.NODE_ENV === 'development' ? `?_t=${Date.now()}` : ''
+        const response = await fetch(`/api/events/public${cacheBuster}`, {
+          cache: 'no-store',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const publishedEvents = data.filter((event: Event) =>
+            event.status === 'published' || event.status === 'ready'
+          )
+          setUpcomingEvents(publishedEvents)
+        }
+      } catch (error) {
+        console.log('error fetching events', error)
+      }
+    }
+
+    Promise.all([
+      fetchUpcoming({}).then(setProgram),
+      fetchReadings().then(setReadings),
+      fetchEvents()
+    ]).catch(
       (error) => console.log('error fetching data', error)
     )
   }, [isHydrated])
@@ -107,19 +135,65 @@ export const NewsletterScreen: React.FC = () => {
                 )}
 
                 {/* Bible Class gets its own Card */}
-                {bibleClassEvents.map((event, index) => (
-                  <Card
-                    key={`${date}-bc-${index}`}
-                    elevate
-                    borderWidth={1}
-                    borderColor="$borderColor"
-                    padding="$4"
-                    borderRadius="$4"
-                    backgroundColor="$background"
-                  >
-                    <NextBibleClass event={event} />
-                  </Card>
-                ))}
+                {/* EXCEPTION: If Toronto East Business Meeting is on the same night, show that instead */}
+                {bibleClassEvents.map((event, index) => {
+                  // Check if there's a Business Meeting event on the same date
+                  const bibleClassDate = new Date(event.Date)
+                  const businessMeetingEvent = upcomingEvents.find((upcomingEvent) => {
+                    if (upcomingEvent.type !== 'general') return false
+                    if (!upcomingEvent.title?.toLowerCase().includes('business meeting')) return false
+
+                    // Compare dates
+                    const eventDate = (upcomingEvent as any).startDate
+                      ? new Date((upcomingEvent as any).startDate)
+                      : null
+
+                    if (!eventDate) return false
+
+                    // Same day comparison
+                    return (
+                      bibleClassDate.getFullYear() === eventDate.getFullYear() &&
+                      bibleClassDate.getMonth() === eventDate.getMonth() &&
+                      bibleClassDate.getDate() === eventDate.getDate()
+                    )
+                  })
+
+                  // If Business Meeting found, show that instead
+                  if (businessMeetingEvent) {
+                    return (
+                      <Card
+                        key={`${date}-bm-${index}`}
+                        elevate
+                        borderWidth={1}
+                        borderColor="$borderColor"
+                        padding="$4"
+                        borderRadius="$4"
+                        backgroundColor="$background"
+                      >
+                        <EventSummaryCard
+                          event={businessMeetingEvent}
+                          variant="newsletter"
+                          onPress={() => router.push(`/events/${businessMeetingEvent.id}`)}
+                        />
+                      </Card>
+                    )
+                  }
+
+                  // Otherwise, show normal Bible Class
+                  return (
+                    <Card
+                      key={`${date}-bc-${index}`}
+                      elevate
+                      borderWidth={1}
+                      borderColor="$borderColor"
+                      padding="$4"
+                      borderRadius="$4"
+                      backgroundColor="$background"
+                    >
+                      <NextBibleClass event={event} />
+                    </Card>
+                  )
+                })}
               </YStack>
             )
           })}

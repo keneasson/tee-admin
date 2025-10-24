@@ -257,13 +257,7 @@ export class EventValidator {
         })
       }
 
-      if (!event.hostingEcclesia?.name?.trim()) {
-        errors.push({
-          field: 'hostingEcclesia.name',
-          message: 'Hosting ecclesia is required for published events',
-          code: 'REQUIRED_FIELD'
-        })
-      }
+      // Hosting ecclesia is now optional - removed requirement
 
       if (!event.location?.name?.trim()) {
         errors.push({
@@ -328,13 +322,7 @@ export class EventValidator {
         })
       }
 
-      if (!event.hostingEcclesia?.name?.trim()) {
-        errors.push({
-          field: 'hostingEcclesia.name',
-          message: 'Hosting ecclesia is required for published wedding',
-          code: 'REQUIRED_FIELD'
-        })
-      }
+      // Hosting ecclesia is now optional - removed requirement
     }
 
     return { isValid: errors.length === 0, errors, warnings }
@@ -383,13 +371,7 @@ export class EventValidator {
         })
       }
 
-      if (!event.hostingEcclesia?.name?.trim()) {
-        errors.push({
-          field: 'hostingEcclesia.name',
-          message: 'Hosting ecclesia is required for published baptism',
-          code: 'REQUIRED_FIELD'
-        })
-      }
+      // Hosting ecclesia is now optional - removed requirement
 
       if (!event.location?.name?.trim()) {
         errors.push({

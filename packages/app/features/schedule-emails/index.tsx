@@ -19,10 +19,16 @@ import {
   ScrollView,
 } from '@my/ui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
-import { Edit3 as Edit, Clock, Mail, Calendar, Users } from '@tamagui/lucide-icons'
+import { Edit3 as Edit, Clock, Mail, Calendar, Users, Trash2 } from '@tamagui/lucide-icons'
 import { EmailType, EmailSchedule, QueueSummary, DayOfWeek } from '@my/app/types/send-queue'
 
 interface ScheduleEmailsProps {}
+
+interface AvailableEmailType {
+  type: string
+  name: string
+  description: string
+}
 
 const defaultSchedules: Omit<EmailSchedule, 'enabled' | 'testMode'>[] = [
   {
@@ -47,7 +53,7 @@ const defaultSchedules: Omit<EmailSchedule, 'enabled' | 'testMode'>[] = [
     description: 'Sunday school lesson preparation',
   },
   {
-    emailType: 'memorial',
+    emailType: 'recap',
     dayOfWeek: 'saturday',
     time: '15:00',
     timezone: 'America/Toronto',
@@ -59,7 +65,7 @@ const emailTypeLabels: Record<EmailType, string> = {
   newsletter: 'Newsletter',
   'bible-class': 'Bible Class',
   'sunday-school': 'Sunday School',
-  memorial: 'Memorial Service',
+  recap: 'Memorial Service',
 }
 
 const dayLabels: Record<DayOfWeek, string> = {
@@ -81,15 +87,18 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
 
   const [schedules, setSchedules] = useState<EmailSchedule[]>([])
   const [queueSummary, setQueueSummary] = useState<QueueSummary | null>(null)
+  const [availableTypes, setAvailableTypes] = useState<AvailableEmailType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<EmailType | null>(null)
+  const [creating, setCreating] = useState(false)
   const [editForm, setEditForm] = useState<Partial<EmailSchedule>>({})
 
   useEffect(() => {
     loadSchedules()
     loadQueueSummary()
+    loadAvailableTypes()
   }, [])
 
   const loadSchedules = async () => {
@@ -122,22 +131,52 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
     }
   }
 
+  const loadAvailableTypes = async () => {
+    try {
+      const response = await fetch('/api/email-types')
+      if (!response.ok) {
+        throw new Error('Failed to load available email types')
+      }
+      const data = await response.json()
+      setAvailableTypes(data.emailTypes || [])
+    } catch (error) {
+      console.error('Failed to load available email types:', error)
+    }
+  }
+
   const handleEdit = (emailType: EmailType) => {
     const schedule = schedules.find(s => s.emailType === emailType)
     if (schedule) {
       setEditForm(schedule)
       setEditing(emailType)
+      setCreating(false)
     }
   }
 
+  const handleCreate = () => {
+    setEditForm({
+      dayOfWeek: 'monday',
+      time: '09:00',
+      timezone: 'America/Toronto',
+      enabled: true,
+      testMode: true, // Default to test mode for safety
+      description: '',
+    })
+    setCreating(true)
+    setEditing(null)
+  }
+
   const handleSave = async () => {
-    if (!editing || !editForm) return
+    if ((!editing && !creating) || !editForm) return
 
     try {
       setSaving(true)
       setError(null)
 
       // Validate form data
+      if (!editForm.emailType && creating) {
+        throw new Error('Email type is required')
+      }
       if (!editForm.dayOfWeek || !editForm.time) {
         throw new Error('Day of week and time are required')
       }
@@ -148,25 +187,29 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
         throw new Error('Time must be in HH:MM format (24-hour)')
       }
 
-      // Update via API
+      // Create or update via API
+      const method = creating ? 'POST' : 'PATCH'
+      const body = creating ? editForm : { emailType: editing, ...editForm }
+
       const response = await fetch('/api/email-schedules', {
-        method: 'PATCH',
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailType: editing, ...editForm }),
+        body: JSON.stringify(body),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to save schedule')
+        throw new Error(error.error || `Failed to ${creating ? 'create' : 'save'} schedule`)
       }
 
       // Reload schedules to get updated data
       await loadSchedules()
       setEditing(null)
+      setCreating(false)
       setEditForm({})
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to save schedule')
-      console.error('Failed to save schedule:', error)
+      setError(error instanceof Error ? error.message : `Failed to ${creating ? 'create' : 'save'} schedule`)
+      console.error(`Failed to ${creating ? 'create' : 'save'} schedule:`, error)
     } finally {
       setSaving(false)
     }
@@ -216,6 +259,57 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
     }
   }
 
+  const handleDelete = async (schedule: EmailSchedule) => {
+    // Validate schedule data
+    if (!schedule || !schedule.emailType || !schedule.dayOfWeek || !schedule.time) {
+      const errorMsg = `Invalid schedule data - missing required fields`
+      console.error('Invalid schedule:', schedule)
+      alert(errorMsg)
+      return
+    }
+
+    // Get the type name
+    const typeName = emailTypeLabels[schedule.emailType]
+    if (!typeName) {
+      const errorMsg = `Unknown email type: "${schedule.emailType}"`
+      console.error(errorMsg)
+      alert(errorMsg)
+      return
+    }
+
+    // Confirm deletion
+    const confirmed = window.confirm(
+      `Delete ${typeName} schedule?\n\nThis will remove the ${schedule.dayOfWeek} ${formatTime(schedule.time)} schedule permanently.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      const params = new URLSearchParams({
+        emailType: schedule.emailType,
+        dayOfWeek: schedule.dayOfWeek,
+        time: schedule.time,
+      })
+
+      const response = await fetch(`/api/email-schedules?${params}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete schedule')
+      }
+
+      await loadSchedules()
+      await loadQueueSummary()
+    } catch (error) {
+      console.error('Failed to delete schedule:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete schedule'
+      setError(errorMessage)
+      alert(`Error: ${errorMessage}`)
+    }
+  }
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':')
     const hour = parseInt(hours)
@@ -229,6 +323,15 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
     if (processing > 0) return colors.info
     if (ready > 0) return colors.warning
     return colors.success
+  }
+
+  const getEmailTypeDisplay = (type: EmailType) => {
+    const availableType = availableTypes.find(t => t.type === type)
+    return availableType || {
+      type,
+      name: emailTypeLabels[type],
+      description: ''
+    }
   }
 
   if (loading) {
@@ -301,14 +404,32 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
 
           {/* Schedule Cards */}
           <YStack gap="$3">
-            <H3 color={colors.textPrimary}>Email Schedules</H3>
-            {schedules.map((schedule) => {
+            <XStack justifyContent="space-between" alignItems="center">
+              <H3 color={colors.textPrimary}>Email Schedules</H3>
+              <Button
+                size="$3"
+                onPress={handleCreate}
+                backgroundColor={colors.primary}
+                icon={Mail}
+                hoverStyle={{
+                  backgroundColor: colors.primary,
+                  opacity: 0.9,
+                }}
+                pressStyle={{
+                  backgroundColor: colors.primary,
+                  opacity: 0.8,
+                }}
+              >
+                <Text color={colors.primaryForeground}>Create New Schedule</Text>
+              </Button>
+            </XStack>
+            {schedules.map((schedule, index) => {
               const typeStats = queueSummary?.byType[schedule.emailType]
               const statusColor = typeStats ? getStatusColor(typeStats.ready, typeStats.processing, typeStats.failed) : colors.textSecondary
 
               return (
                 <Card
-                  key={schedule.emailType}
+                  key={`${schedule.emailType}-${schedule.dayOfWeek}-${schedule.time}-${index}`}
                   backgroundColor={colors.backgroundSecondary}
                   padding="$4"
                   borderLeftWidth={4}
@@ -392,8 +513,34 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                         circular
                         icon={Edit}
                         onPress={() => handleEdit(schedule.emailType)}
-                        backgroundColor="transparent"
+                        backgroundColor={colors.backgroundTertiary}
                         borderColor={colors.border}
+                        borderWidth={1}
+                        hoverStyle={{
+                          backgroundColor: colors.backgroundSecondary,
+                          borderColor: colors.textSecondary,
+                        }}
+                        pressStyle={{
+                          backgroundColor: colors.backgroundSecondary,
+                          opacity: 0.8,
+                        }}
+                      />
+                      <Button
+                        size="$3"
+                        circular
+                        icon={Trash2}
+                        onPress={() => handleDelete(schedule)}
+                        backgroundColor={colors.backgroundTertiary}
+                        borderColor={colors.border}
+                        borderWidth={1}
+                        hoverStyle={{
+                          backgroundColor: colors.error,
+                          borderColor: colors.error,
+                        }}
+                        pressStyle={{
+                          backgroundColor: colors.error,
+                          opacity: 0.8,
+                        }}
                       />
                     </XStack>
                   </XStack>
@@ -404,14 +551,16 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
         </YStack>
       </ScrollView>
 
-      {/* Edit Schedule Sheet */}
+      {/* Edit/Create Schedule Sheet */}
       <Sheet
         modal
-        open={editing !== null}
+        open={editing !== null || creating}
         onOpenChange={(open: boolean) => {
           if (!open) {
             setEditing(null)
+            setCreating(false)
             setEditForm({})
+            setError(null)
           }
         }}
         snapPoints={[90]}
@@ -421,7 +570,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
         <Sheet.Frame backgroundColor={colors.backgroundSecondary} padding="$4">
           <YStack gap="$4">
             <H3 color={colors.textPrimary}>
-              Edit {editing ? emailTypeLabels[editing] : ''} Schedule
+              {creating ? 'Create New Schedule' : `Edit ${editing ? emailTypeLabels[editing] : ''} Schedule`}
             </H3>
 
             {error && (
@@ -437,6 +586,90 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
             )}
 
             <YStack gap="$3">
+              {/* Email Type Display/Selector */}
+              <View>
+                <Text color={colors.textPrimary} marginBottom="$2">
+                  Email Type {!creating && <Text color={colors.textSecondary}>(cannot be changed)</Text>}
+                </Text>
+                {creating ? (
+                  <XStack gap="$2" flexWrap="wrap">
+                    {availableTypes.map((type) => (
+                      <Button
+                        key={type.type}
+                        size="$3"
+                        onPress={() => setEditForm({ ...editForm, emailType: type.type as EmailType })}
+                        backgroundColor={
+                          editForm.emailType === type.type ? colors.primary : colors.backgroundTertiary
+                        }
+                        borderColor={editForm.emailType === type.type ? colors.primary : colors.border}
+                        borderWidth={1}
+                        paddingHorizontal="$3"
+                        hoverStyle={{
+                          backgroundColor: editForm.emailType === type.type ? colors.primary : colors.backgroundSecondary,
+                          borderColor: editForm.emailType === type.type ? colors.primary : colors.textSecondary,
+                          opacity: 0.9,
+                        }}
+                        pressStyle={{
+                          backgroundColor: editForm.emailType === type.type ? colors.primary : colors.backgroundSecondary,
+                          opacity: 0.8,
+                        }}
+                      >
+                        <YStack alignItems="center">
+                          <Text
+                            color={
+                              editForm.emailType === type.type
+                                ? colors.primaryForeground
+                                : colors.textPrimary
+                            }
+                            fontWeight="600"
+                          >
+                            {type.name}
+                          </Text>
+                          {editForm.emailType === type.type && type.description && (
+                            <Text
+                              fontSize="$2"
+                              color={colors.primaryForeground}
+                              opacity={0.8}
+                              textAlign="center"
+                            >
+                              {type.description}
+                            </Text>
+                          )}
+                        </YStack>
+                      </Button>
+                    ))}
+                  </XStack>
+                ) : (
+                  // Read-only display when editing
+                  <View
+                    backgroundColor={colors.backgroundTertiary}
+                    padding="$3"
+                    borderRadius="$3"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                  >
+                    <XStack alignItems="center" gap="$2">
+                      <Mail size={20} color={colors.primary} />
+                      <YStack>
+                        <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
+                          {editing && getEmailTypeDisplay(editing).name}
+                        </Text>
+                        {editing && getEmailTypeDisplay(editing).description && (
+                          <Text fontSize="$2" color={colors.textSecondary}>
+                            {getEmailTypeDisplay(editing).description}
+                          </Text>
+                        )}
+                      </YStack>
+                    </XStack>
+                  </View>
+                )}
+                {creating && !editForm.emailType && (
+                  <Text fontSize="$2" color={colors.error} marginTop="$2">
+                    Please select an email type
+                  </Text>
+                )}
+              </View>
+
               <View>
                 <Text color={colors.textPrimary} marginBottom="$2">
                   Day of Week
@@ -448,10 +681,19 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                       size="$3"
                       onPress={() => setEditForm({ ...editForm, dayOfWeek: day })}
                       backgroundColor={
-                        editForm.dayOfWeek === day ? colors.primary : 'transparent'
+                        editForm.dayOfWeek === day ? colors.primary : colors.backgroundTertiary
                       }
-                      borderColor={colors.border}
+                      borderColor={editForm.dayOfWeek === day ? colors.primary : colors.border}
                       borderWidth={1}
+                      hoverStyle={{
+                        backgroundColor: editForm.dayOfWeek === day ? colors.primary : colors.backgroundSecondary,
+                        borderColor: editForm.dayOfWeek === day ? colors.primary : colors.textSecondary,
+                        opacity: 0.9,
+                      }}
+                      pressStyle={{
+                        backgroundColor: editForm.dayOfWeek === day ? colors.primary : colors.backgroundSecondary,
+                        opacity: 0.8,
+                      }}
                     >
                       <Text
                         color={
@@ -522,13 +764,22 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
               <Button
                 onPress={() => {
                   setEditing(null)
+                  setCreating(false)
                   setEditForm({})
                   setError(null)
                 }}
-                backgroundColor="transparent"
+                backgroundColor={colors.backgroundTertiary}
                 borderColor={colors.border}
                 borderWidth={1}
                 disabled={saving}
+                hoverStyle={{
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.textSecondary,
+                }}
+                pressStyle={{
+                  backgroundColor: colors.backgroundSecondary,
+                  opacity: 0.8,
+                }}
               >
                 <Text color={colors.textPrimary}>Cancel</Text>
               </Button>
@@ -537,14 +788,22 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                 backgroundColor={colors.primary}
                 disabled={saving}
                 opacity={saving ? 0.6 : 1}
+                hoverStyle={{
+                  backgroundColor: colors.primary,
+                  opacity: 0.9,
+                }}
+                pressStyle={{
+                  backgroundColor: colors.primary,
+                  opacity: 0.8,
+                }}
               >
                 {saving ? (
                   <XStack gap="$2" alignItems="center">
                     <Spinner size="small" color={colors.primaryForeground} />
-                    <Text color={colors.primaryForeground}>Saving...</Text>
+                    <Text color={colors.primaryForeground}>{creating ? 'Creating...' : 'Saving...'}</Text>
                   </XStack>
                 ) : (
-                  <Text color={colors.primaryForeground}>Save Schedule</Text>
+                  <Text color={colors.primaryForeground}>{creating ? 'Create Schedule' : 'Save Schedule'}</Text>
                 )}
               </Button>
             </XStack>

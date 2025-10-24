@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
     // Return document attachment object
     const documentAttachment = {
       id: randomUUID(),
+      documentType: 'upload' as const,
       fileName: uniqueFileName,
       originalName: file.name,
       fileUrl,
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date(),
       uploadedBy: session.user.id || session.user.email || 'unknown',
       description: description || undefined,
+      editable: false, // Uploaded files have fixed names
     }
 
     return NextResponse.json({

@@ -1,4 +1,4 @@
-export type EmailType = 'newsletter' | 'memorial' | 'bible-class' | 'sunday-school'
+export type EmailType = 'newsletter' | 'recap' | 'bible-class' | 'sunday-school'
 
 export type QueueStatus = 'ready' | 'processing' | 'complete' | 'failed'
 

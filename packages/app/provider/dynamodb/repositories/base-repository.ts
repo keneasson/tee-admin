@@ -12,17 +12,27 @@ import type { BatchWriteResult } from '../types'
 
 export abstract class BaseRepository<T extends Record<string, any>> {
   protected tableName: string
+  protected usesUppercaseKeys: boolean
 
-  constructor(tableKey: TableName) {
+  constructor(tableKey: TableName, usesUppercaseKeys: boolean = false) {
     this.tableName = tableNames[tableKey]
+    this.usesUppercaseKeys = usesUppercaseKeys
+  }
+
+  // Helper to get the correct key attribute names based on table schema
+  private getKeyAttributes() {
+    return this.usesUppercaseKeys
+      ? { pk: 'PK', sk: 'SK' }
+      : { pk: 'pkey', sk: 'skey' }
   }
 
   // Basic CRUD operations
   async get(pk: string, sk: string): Promise<T | null> {
     try {
+      const keys = this.getKeyAttributes()
       const command = new GetCommand({
         TableName: this.tableName,
-        Key: { PK: pk, SK: sk },
+        Key: { [keys.pk]: pk, [keys.sk]: sk },
       })
 
       const result = await docClient.send(command)
@@ -35,12 +45,23 @@ export abstract class BaseRepository<T extends Record<string, any>> {
 
   async put(item: T): Promise<void> {
     try {
+      // Version handling differs by table
+      let version: string | number
+      if (this.usesUppercaseKeys) {
+        // tee-schedules: string version
+        const currentVersion = parseInt(String(item.version || '0'), 10)
+        version = String(currentVersion + 1)
+      } else {
+        // tee-admin: numeric version
+        version = (item.version as number || 0) + 1
+      }
+
       const command = new PutCommand({
         TableName: this.tableName,
         Item: {
           ...item,
           lastUpdated: new Date().toISOString(),
-          version: (item.version || 0) + 1,
+          version,
         },
       })
 
@@ -59,9 +80,11 @@ export abstract class BaseRepository<T extends Record<string, any>> {
 
       // Filter out primary key fields, automatic fields, and undefined/null values
       const filteredUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([key, value]) => 
-          key !== 'PK' &&          // Primary key - cannot update
-          key !== 'SK' &&          // Sort key - cannot update
+        Object.entries(updates).filter(([key, value]) =>
+          key !== 'pkey' &&         // Primary key - cannot update
+          key !== 'skey' &&         // Sort key - cannot update
+          key !== 'PK' &&           // Alias - cannot update
+          key !== 'SK' &&           // Alias - cannot update
           key !== 'lastUpdated' &&  // Automatically managed
           key !== 'version' &&      // Automatically managed
           value !== undefined &&
@@ -81,19 +104,29 @@ export abstract class BaseRepository<T extends Record<string, any>> {
         index++
       })
 
-      // Add automatic lastUpdated and version increment
+      // Add automatic lastUpdated
       updateExpressions.push('#lastUpdated = :lastUpdated')
-      updateExpressions.push('#version = if_not_exists(#version, :zero) + :one')
-      
       expressionAttributeNames['#lastUpdated'] = 'lastUpdated'
-      expressionAttributeNames['#version'] = 'version'
       expressionAttributeValues[':lastUpdated'] = new Date().toISOString()
-      expressionAttributeValues[':zero'] = 0
-      expressionAttributeValues[':one'] = 1
 
+      // Version handling differs by table:
+      // - tee-schedules (uppercase keys): version is STRING
+      // - tee-admin (lowercase keys): version is NUMBER
+      if (this.usesUppercaseKeys) {
+        // Don't auto-increment string version - let DynamoDB handle it or skip it
+        // String version is managed by put() operations, not update()
+      } else {
+        // Old tables use numeric version
+        updateExpressions.push('#version = if_not_exists(#version, :zero) + :one')
+        expressionAttributeNames['#version'] = 'version'
+        expressionAttributeValues[':zero'] = 0
+        expressionAttributeValues[':one'] = 1
+      }
+
+      const keys = this.getKeyAttributes()
       const command = new UpdateCommand({
         TableName: this.tableName,
-        Key: { PK: pk, SK: sk },
+        Key: { [keys.pk]: pk, [keys.sk]: sk },
         UpdateExpression: `SET ${updateExpressions.join(', ')}`,
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,
@@ -110,9 +143,10 @@ export abstract class BaseRepository<T extends Record<string, any>> {
 
   async delete(pk: string, sk: string): Promise<void> {
     try {
+      const keys = this.getKeyAttributes()
       const command = new DeleteCommand({
         TableName: this.tableName,
-        Key: { PK: pk, SK: sk },
+        Key: { [keys.pk]: pk, [keys.sk]: sk },
       })
 
       await docClient.send(command)
@@ -190,15 +224,28 @@ export abstract class BaseRepository<T extends Record<string, any>> {
   }
 
   private async writeBatch(items: T[], maxRetries: number): Promise<BatchWriteResult> {
-    let requestItems = items.map(item => ({
-      PutRequest: {
-        Item: {
-          ...item,
-          lastUpdated: new Date().toISOString(),
-          version: (item.version || 0) + 1,
+    let requestItems = items.map(item => {
+      // Version handling differs by table
+      let version: string | number
+      if (this.usesUppercaseKeys) {
+        // tee-schedules: string version
+        const currentVersion = parseInt(String(item.version || '0'), 10)
+        version = String(currentVersion + 1)
+      } else {
+        // tee-admin: numeric version
+        version = (item.version as number || 0) + 1
+      }
+
+      return {
+        PutRequest: {
+          Item: {
+            ...item,
+            lastUpdated: new Date().toISOString(),
+            version,
+          },
         },
-      },
-    }))
+      }
+    })
 
     let retries = 0
     let successful = 0
@@ -281,16 +328,17 @@ export abstract class BaseRepository<T extends Record<string, any>> {
   // Helper method to clear all records for a sheet (for re-sync)
   async clearSheetRecords(sheetId: string): Promise<void> {
     const pk = this.buildSheetPK(sheetId)
-    
+    const keys = this.getKeyAttributes()
+
     // Query all items for this sheet
     const result = await this.query(
-      'PK = :pk',
+      `${keys.pk} = :pk`,
       { ':pk': pk }
     )
 
     // Delete in batches
-    const deletePromises = result.items.map(item => 
-      this.delete(item.PK, item.SK)
+    const deletePromises = result.items.map(item =>
+      this.delete(item[keys.pk] || item.PK || item.pkey, item[keys.sk] || item.SK || item.skey)
     )
 
     await Promise.all(deletePromises)

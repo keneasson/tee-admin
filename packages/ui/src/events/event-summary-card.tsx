@@ -1,3 +1,5 @@
+'use client'
+
 import { Card, YStack, XStack, Text, H3, Square } from 'tamagui'
 import { Calendar, MapPin, Users } from '@tamagui/lucide-icons'
 import { Event } from '@my/app/types/events'
@@ -7,6 +9,10 @@ interface EventSummaryCardProps {
   event: Partial<Event>
   onPress?: () => void
   variant?: 'default' | 'compact' | 'newsletter'
+  /** User role passed from platform-specific auth (Next.js or Expo) */
+  userRole?: string
+  /** Whether user is member or higher, passed from platform-specific auth */
+  isMemberOrHigher?: boolean
 }
 
 /**
@@ -16,7 +22,9 @@ interface EventSummaryCardProps {
 export function EventSummaryCard({
   event,
   onPress,
-  variant = 'default'
+  variant = 'default',
+  userRole,
+  isMemberOrHigher = false
 }: EventSummaryCardProps) {
   const isCompact = variant === 'compact'
   const isNewsletter = variant === 'newsletter'
@@ -36,9 +44,14 @@ export function EventSummaryCard({
     >
       <YStack gap={isCompact ? "$2" : "$3"}>
         {/* Title with optional theme - Move to top for newsletter */}
-        <H3 fontSize={isCompact ? "$5" : "$6"} fontWeight="700" color="$color">
-          {event.title || 'Untitled Event'}{event.theme ? ` - ${event.theme}` : ''}
-        </H3>
+        <XStack gap="$2" alignItems="center">
+          <H3 fontSize={isCompact ? "$5" : "$6"} fontWeight="700" color="$color">
+            {event.title || 'Untitled Event'}{event.theme ? ` - ${event.theme}` : ''}
+          </H3>
+          {event.membersOnly && (
+            <Users size={20} color="$green10" />
+          )}
+        </XStack>
 
         {/* Event Type Badge - Show only for non-newsletter views */}
         {!isNewsletter && (
@@ -164,23 +177,52 @@ export function EventSummaryCard({
                 }
               }
             }
-            // Fallback to startDate/endDate for any event type
+            // Fallback to startDate/endDate for general events and others
             else if ((event as any).startDate) {
               const startDate = new Date((event as any).startDate)
               const endDate = (event as any).endDate ? new Date((event as any).endDate) : null
-              const startStr = startDate.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
-              })
-              
-              if (endDate && endDate.getTime() !== startDate.getTime()) {
-                const endStr = endDate.toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric' 
-                })
-                dateText = `${startStr} to ${endStr} ${startDate.getFullYear()}`
+
+              // Check if it's a one-day event
+              const isSameDay = !endDate || (
+                startDate.getDate() === endDate.getDate() &&
+                startDate.getMonth() === endDate.getMonth() &&
+                startDate.getFullYear() === endDate.getFullYear()
+              )
+
+              if (isSameDay) {
+                // One-day event: Show date + time (e.g., "Oct 29, 2025 8:00pm")
+                const hasTime = startDate.getHours() !== 0 || startDate.getMinutes() !== 0
+
+                if (hasTime) {
+                  const hours = startDate.getHours()
+                  const minutes = startDate.getMinutes()
+                  const ampm = hours >= 12 ? 'pm' : 'am'
+                  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+                  const timeStr = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+
+                  dateText = startDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  }) + ` ${timeStr}`
+                } else {
+                  dateText = startDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })
+                }
               } else {
-                dateText = `${startStr} ${startDate.getFullYear()}`
+                // Multi-day event: Show date range only (e.g., "Oct 29 - Nov 2")
+                const startStr = startDate.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                })
+                const endStr = endDate!.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                })
+                dateText = `${startStr} - ${endStr}`
               }
             }
             
@@ -234,11 +276,55 @@ export function EventSummaryCard({
             )
           })()}
 
-          {/* Hosting Ecclesia Location */}
+          {/* Location - for general events and others */}
+          {(event.type === 'general' || event.type === 'study-weekend') && (event as any).location && (() => {
+            const location = (event as any).location
+
+            // Handle string location (legacy)
+            if (typeof location === 'string') {
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  Location: {location}
+                </Text>
+              )
+            }
+
+            // Handle object location with mode
+            const mode = location.mode || 'in-person'
+            const locationName = location.name
+            const platform = location.onlineMeeting?.platform
+
+            if (mode === 'in-person' && locationName) {
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  Location: {locationName}
+                </Text>
+              )
+            } else if (mode === 'online' && platform) {
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  Hosted on {platform}
+                </Text>
+              )
+            } else if (mode === 'hybrid' && (locationName || platform)) {
+              const parts = []
+              if (locationName) parts.push(`Location: ${locationName}`)
+              if (platform) parts.push(`on ${platform}`)
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  {parts.join(' & ')}
+                </Text>
+              )
+            }
+
+            return null
+          })()}
+
+          {/* Hosting Ecclesia */}
           {(event as any).hostingEcclesia && (() => {
             const hostingEcclesia = (event as any).hostingEcclesia
-            const ecclesiaText = typeof hostingEcclesia === 'string' 
-              ? hostingEcclesia 
+            const ecclesiaText = typeof hostingEcclesia === 'string'
+              ? hostingEcclesia
               : hostingEcclesia.name || formatLocation(hostingEcclesia)
             return ecclesiaText && (
               <Text fontSize="$4" color="$gray11">
@@ -262,17 +348,30 @@ export function EventSummaryCard({
         {/* Action Link */}
         {onPress ? (
           <XStack>
-            <Text 
-              fontSize="$3" 
-              color="$blue10" 
-              fontWeight="600"
-              onPress={onPress}
-              cursor="pointer"
-              textDecorationLine="none"
-              hoverStyle={{ textDecorationLine: "underline" }}
-            >
-              {isNewsletter ? 'View Details →' : 'Learn More →'}
-            </Text>
+            {event.membersOnly && !userRole ? (
+              // Not signed in
+              <Text fontSize="$3" color="$gray11">
+                Please Sign in to View
+              </Text>
+            ) : event.membersOnly && !isMemberOrHigher ? (
+              // Signed in but not a member/admin/owner (guest only)
+              <Text fontSize="$3" color="$gray11">
+                For Toronto East Ecclesia members only
+              </Text>
+            ) : (
+              // Normal access (no restriction OR user is member/admin/owner)
+              <Text
+                fontSize="$3"
+                color="$blue10"
+                fontWeight="600"
+                onPress={onPress}
+                cursor="pointer"
+                textDecorationLine="none"
+                hoverStyle={{ textDecorationLine: "underline" }}
+              >
+                {isNewsletter ? 'View Details →' : 'Learn More →'}
+              </Text>
+            )}
           </XStack>
         ) : null}
       </YStack>

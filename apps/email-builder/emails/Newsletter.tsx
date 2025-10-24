@@ -13,13 +13,7 @@ import {
 } from '@react-email/components'
 import { columnAlignTop, container, defaultText, globalCss, header, main, program } from '../styles'
 import React from 'react'
-import {
-  BibleClassType,
-  MemorialServiceType,
-  NextNewsletterProps,
-  ProgramsTypes,
-  SundaySchoolType,
-} from '@my/app/types'
+import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 import { Footer } from '../components/Footer'
 
@@ -120,30 +114,31 @@ const mockUpcomingEvents: Event[] = [
     type: 'study-weekend',
     status: 'published',
     published: true,
-    description: 'Join us for a weekend of spiritual fellowship and Bible study focused on the life and ministry of Jesus Christ.',
+    description:
+      'Join us for a weekend of spiritual fellowship and Bible study focused on the life and ministry of Jesus Christ.',
     theme: 'The Groups Jesus Worked With',
     dateRange: {
       start: '2024-10-11T00:00:00Z',
-      end: '2024-10-12T23:59:59Z'
+      end: '2024-10-12T23:59:59Z',
     },
     speakers: [
       {
         title: 'Bro.',
         firstName: 'John',
         lastName: 'Smith',
-        ecclesia: 'Toronto East'
+        ecclesia: 'Toronto East',
       },
       {
         title: 'Bro.',
         firstName: 'David',
         lastName: 'Wilson',
-        ecclesia: 'Hamilton'
-      }
+        ecclesia: 'Hamilton',
+      },
     ],
     hostingEcclesia: {
       name: 'Toronto East',
       province: 'ON',
-      country: 'Canada'
+      country: 'Canada',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
@@ -157,9 +152,9 @@ const mockUpcomingEvents: Event[] = [
         fileSize: 1024000,
         mimeType: 'application/pdf',
         uploadedAt: new Date('2024-01-10'),
-        uploadedBy: 'admin@tee.com'
-      }
-    ]
+        uploadedBy: 'admin@tee.com',
+      },
+    ],
   } as any,
 
   // Wedding
@@ -174,22 +169,22 @@ const mockUpcomingEvents: Event[] = [
     couple: {
       bride: {
         firstName: 'Sarah',
-        lastName: 'Johnson'
+        lastName: 'Johnson',
       },
       groom: {
         firstName: 'Michael',
-        lastName: 'Thompson'
-      }
+        lastName: 'Thompson',
+      },
     },
     hostingEcclesia: {
       name: 'Toronto East',
       province: 'ON',
-      country: 'Canada'
+      country: 'Canada',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-15'),
-    documents: []
+    documents: [],
   } as any,
 
   // Baptism
@@ -203,17 +198,17 @@ const mockUpcomingEvents: Event[] = [
     baptismDate: '2024-02-25T11:00:00Z',
     candidate: {
       firstName: 'Emily',
-      lastName: 'Davis'
+      lastName: 'Davis',
     },
     hostingEcclesia: {
       name: 'Toronto East',
       province: 'ON',
-      country: 'Canada'
+      country: 'Canada',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-15'),
-    documents: []
+    documents: [],
   } as any,
 
   // Funeral
@@ -227,17 +222,17 @@ const mockUpcomingEvents: Event[] = [
     serviceDate: '2024-04-08T14:00:00Z',
     deceased: {
       firstName: 'Robert',
-      lastName: 'Anderson'
+      lastName: 'Anderson',
     },
     hostingEcclesia: {
       name: 'Toronto East',
       province: 'ON',
-      country: 'Canada'
+      country: 'Canada',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-15'),
-    documents: []
+    documents: [],
   } as any,
 
   // General Event
@@ -247,17 +242,18 @@ const mockUpcomingEvents: Event[] = [
     type: 'general',
     status: 'published',
     published: true,
-    description: 'Annual summer picnic for all members and families. Bring your favorite dish to share!',
+    description:
+      'Annual summer picnic for all members and families. Bring your favorite dish to share!',
     startDate: '2024-06-22T12:00:00Z',
     endDate: '2024-06-22T17:00:00Z',
     location: {
       name: 'High Park',
-      address: '1873 Bloor St W, Toronto, ON'
+      address: '1873 Bloor St W, Toronto, ON',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-15'),
-    documents: []
+    documents: [],
   } as any,
 
   // Recurring Event
@@ -272,24 +268,59 @@ const mockUpcomingEvents: Event[] = [
       frequency: 'weekly',
       daysOfWeek: [3], // Wednesday
       startDate: '2024-01-10T19:00:00Z',
-      endDate: '2024-12-31T21:00:00Z'
+      endDate: '2024-12-31T21:00:00Z',
     },
     createdBy: 'admin@tee.com',
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-15'),
-    documents: []
-  } as any
+    documents: [],
+  } as any,
 ]
 
 // Mock Bible Readings - proper structure with 3 readings per day
 const mockReadings = [
-  { date: new Date('2024-02-26'), reading1: 'Genesis 1-2', reading2: 'Matthew 1-2', reading3: 'Psalms 1-2' },
-  { date: new Date('2024-02-27'), reading1: 'Genesis 3-4', reading2: 'Matthew 3-4', reading3: 'Psalms 3-4' },
-  { date: new Date('2024-02-28'), reading1: 'Genesis 5-6', reading2: 'Matthew 5-6', reading3: 'Psalms 5-6' },
-  { date: new Date('2024-02-29'), reading1: 'Genesis 7-8', reading2: 'Matthew 7-8', reading3: 'Psalms 7-8' },
-  { date: new Date('2024-03-01'), reading1: 'Genesis 9-10', reading2: 'Matthew 9-10', reading3: 'Psalms 9-10' },
-  { date: new Date('2024-03-02'), reading1: 'Genesis 11-12', reading2: 'Matthew 11-12', reading3: 'Psalms 11-12' },
-  { date: new Date('2024-03-03'), reading1: 'Genesis 13-14', reading2: 'Matthew 13-14', reading3: 'Psalms 13-14' }
+  {
+    date: new Date('2024-02-26'),
+    reading1: 'Genesis 1-2',
+    reading2: 'Matthew 1-2',
+    reading3: 'Psalms 1-2',
+  },
+  {
+    date: new Date('2024-02-27'),
+    reading1: 'Genesis 3-4',
+    reading2: 'Matthew 3-4',
+    reading3: 'Psalms 3-4',
+  },
+  {
+    date: new Date('2024-02-28'),
+    reading1: 'Genesis 5-6',
+    reading2: 'Matthew 5-6',
+    reading3: 'Psalms 5-6',
+  },
+  {
+    date: new Date('2024-02-29'),
+    reading1: 'Genesis 7-8',
+    reading2: 'Matthew 7-8',
+    reading3: 'Psalms 7-8',
+  },
+  {
+    date: new Date('2024-03-01'),
+    reading1: 'Genesis 9-10',
+    reading2: 'Matthew 9-10',
+    reading3: 'Psalms 9-10',
+  },
+  {
+    date: new Date('2024-03-02'),
+    reading1: 'Genesis 11-12',
+    reading2: 'Matthew 11-12',
+    reading3: 'Psalms 11-12',
+  },
+  {
+    date: new Date('2024-03-03'),
+    reading1: 'Genesis 13-14',
+    reading2: 'Matthew 13-14',
+    reading3: 'Psalms 13-14',
+  },
 ]
 
 function getDateFormatted(date: Date | string): string {
@@ -354,13 +385,13 @@ const EventDateDisplay = (event: Event): string => {
     const end = new Date(event.dateRange.end)
     const startStr = start.toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     })
 
     if (end.getTime() !== start.getTime()) {
       const endStr = end.toLocaleDateString('en-US', {
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
       })
       return `${startStr} to ${endStr} ${start.getFullYear()}`
     } else {
@@ -371,38 +402,80 @@ const EventDateDisplay = (event: Event): string => {
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     })
   } else if (event.type === 'baptism' && event.baptismDate) {
     const date = new Date(event.baptismDate)
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     })
   } else if (event.type === 'funeral' && event.serviceDate) {
     const date = new Date(event.serviceDate)
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     })
   } else if ((event as any).startDate) {
     const startDate = new Date((event as any).startDate)
     const endDate = (event as any).endDate ? new Date((event as any).endDate) : null
-    const startStr = startDate.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    })
 
-    if (endDate && endDate.getTime() !== startDate.getTime()) {
-      const endStr = endDate.toLocaleDateString('en-US', {
+    // Check if it's a one-day event (same year, month, day)
+    const isSameDay = !endDate || (
+      startDate.getDate() === endDate.getDate() &&
+      startDate.getMonth() === endDate.getMonth() &&
+      startDate.getFullYear() === endDate.getFullYear()
+    )
+
+    if (isSameDay) {
+      // One-day event: Show date + time range if times are specified
+      const startHasTime = startDate.getHours() !== 0 || startDate.getMinutes() !== 0
+      const endHasTime = endDate && (endDate.getHours() !== 0 || endDate.getMinutes() !== 0)
+
+      if (startHasTime || endHasTime) {
+        // Format time helper
+        const formatTime = (date: Date) => {
+          const hours = date.getHours()
+          const minutes = date.getMinutes()
+          const ampm = hours >= 12 ? 'pm' : 'am'
+          const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+          return `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+        }
+
+        const dateStr = startDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        })
+
+        if (endDate && endHasTime) {
+          return `${dateStr} ${formatTime(startDate)} to ${formatTime(endDate)}`
+        } else if (startHasTime) {
+          return `${dateStr} ${formatTime(startDate)}`
+        } else {
+          return dateStr
+        }
+      } else {
+        // No time specified, just show date
+        return startDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        })
+      }
+    } else {
+      // Multi-day event: Show date range
+      const startStr = startDate.toLocaleDateString('en-US', {
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+      })
+      const endStr = endDate!.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
       })
       return `${startStr} to ${endStr} ${startDate.getFullYear()}`
-    } else {
-      return `${startStr} ${startDate.getFullYear()}`
     }
   }
   return 'Date TBD'
@@ -416,8 +489,20 @@ const formatReadingDate = (date: Date | string): string => {
   if (isNaN(dateObj.getTime())) return 'Invalid date'
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
 
   const dayName = dayNames[dateObj.getDay()]
   const monthName = monthNames[dateObj.getMonth()]
@@ -435,7 +520,7 @@ interface EmailNewsletterProps {
 const Newsletter: React.FC<EmailNewsletterProps> = ({
   scheduleEvents,
   upcomingEvents = [],
-  readings = []
+  readings = [],
 }) => {
   const todaysDate = new Date().toDateString()
   const allScheduleEvents = scheduleEvents || mockEvents
@@ -444,7 +529,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
   // Group schedule events by date
   const groupedByDate: { [date: string]: typeof allScheduleEvents } = {}
-  allScheduleEvents.forEach(event => {
+  allScheduleEvents.forEach((event) => {
     const eventDateStr = String(event.Date)
     if (!groupedByDate[eventDateStr]) {
       groupedByDate[eventDateStr] = []
@@ -452,10 +537,20 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
     groupedByDate[eventDateStr].push(event)
   })
 
-  // Group upcoming events by type
+  // Group upcoming events by type (exclude LTRTBE as it has its own section)
   const groupedEvents: { [key: string]: Event[] } = {}
 
-  allUpcomingEvents.forEach(event => {
+  allUpcomingEvents.forEach((event) => {
+    // Skip LTRTBE recurring event - it has its own dedicated section
+    const isLTRTBE =
+      event.type === 'recurring' &&
+      (event.title?.toLowerCase().includes('learn to read the bible') ||
+        event.title?.toLowerCase().includes('ltrtbe'))
+
+    if (isLTRTBE) {
+      return // Skip this event
+    }
+
     const eventType = event?.type || 'general'
     if (!groupedEvents[eventType]) {
       groupedEvents[eventType] = []
@@ -535,7 +630,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
           <Heading>Toronto East Newsletter</Heading>
           <Text style={defaultText}>{todaysDate}</Text>
           <Text style={defaultText}>
-            This email is intended for Christadelphians and friends, whether we meet in person or on Zoom.
+            This email is intended for Christadelphians and friends, whether we meet in person or on
+            Zoom.
             <br />
             All plans are subject to God's will.
           </Text>
@@ -543,9 +639,15 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
         {/* Regular Services Section */}
         {Object.entries(groupedByDate).map(([date, events], dateIndex) => {
-          const sundayEvents = events.filter((e: any) =>
-            e.Key === 'sundaySchool' || e.Key === 'memorial'
-          )
+          const sundayEvents = events
+            .filter((e: any) => e.Key === 'sundaySchool' || e.Key === 'memorial')
+            // Sort so Sunday School always comes before Memorial
+            .sort((a: any, b: any) => {
+              if (a.Key === 'sundaySchool' && b.Key === 'memorial') return -1
+              if (a.Key === 'memorial' && b.Key === 'sundaySchool') return 1
+              return 0
+            })
+
           const bibleClassEvents = events.filter((e: any) => e.Key === 'bibleClass')
 
           return (
@@ -554,12 +656,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               {sundayEvents.length > 0 && (
                 <Container style={{ ...container, marginTop: '24px' }} className="container">
                   {dateIndex > 0 && (
-                    <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+                    <hr
+                      style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
+                    />
                   )}
 
-                  <Heading style={defaultText}>
-                    Arrangements for {getDateFormatted(date)}
-                  </Heading>
+                  <Heading style={defaultText}>Arrangements for {getDateFormatted(date)}</Heading>
 
                   {/* Sunday Services */}
                   {sundayEvents.map((event: any, index: number) => {
@@ -576,7 +678,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             <Text style={defaultText}>{'No Sunday school this week!'}</Text>
                           )}
                           {index < sundayEvents.length - 1 && (
-                            <hr style={{ borderWidth: '0', background: '#ddd', color: '#ddd', height: '1px' }} />
+                            <hr
+                              style={{
+                                borderWidth: '0',
+                                background: '#ddd',
+                                color: '#ddd',
+                                height: '1px',
+                              }}
+                            />
                           )}
                         </Section>
                       )
@@ -595,7 +704,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 // Two-column layout when hymns are present
                                 <>
                                   <Row align="left" width={'49%'} className="deviceWidth">
-                                    <Column style={columnAlignTop}>{MemorialServiceProgram(event)}</Column>
+                                    <Column style={columnAlignTop}>
+                                      {MemorialServiceProgram(event)}
+                                    </Column>
                                   </Row>
                                   <Row align="left" width={'49%'} className="deviceWidth">
                                     <Column style={columnAlignTop}>{hymnsContent}</Column>
@@ -604,7 +715,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               ) : (
                                 // Single column layout when no hymns
                                 <Row>
-                                  <Column style={columnAlignTop}>{MemorialServiceProgram(event)}</Column>
+                                  <Column style={columnAlignTop}>
+                                    {MemorialServiceProgram(event)}
+                                  </Column>
                                 </Row>
                               )}
                             </Column>
@@ -618,19 +731,105 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               )}
 
               {/* Bible Class - Standalone without "Arrangements" header */}
-              {bibleClassEvents.map((event: any, index: number) => (
-                <Container key={`bc-${date}-${index}`} style={{ ...container, marginTop: '24px' }} className="container">
-                  <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
-                  <Section style={program}>
-                    <Heading style={defaultText}>
-                      Bible Class for {getDateFormatted(event.Date)} at 7:30pm - on Zoom
-                    </Heading>
-                    <Row>
-                      <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
-                    </Row>
-                  </Section>
-                </Container>
-              ))}
+              {/* EXCEPTION: If Toronto East Business Meeting is on the same night, show that instead */}
+              {bibleClassEvents.map((event: any, index: number) => {
+                // Check if there's a Business Meeting event on the same date
+                const bibleClassDate = new Date(event.Date)
+                const businessMeetingEvent = allUpcomingEvents.find((upcomingEvent) => {
+                  if (upcomingEvent.type !== 'general') return false
+                  if (!upcomingEvent.title?.toLowerCase().includes('business meeting')) return false
+
+                  // Compare dates
+                  const eventDate = (upcomingEvent as any).startDate
+                    ? new Date((upcomingEvent as any).startDate)
+                    : null
+
+                  if (!eventDate) return false
+
+                  // Same day comparison
+                  return (
+                    bibleClassDate.getFullYear() === eventDate.getFullYear() &&
+                    bibleClassDate.getMonth() === eventDate.getMonth() &&
+                    bibleClassDate.getDate() === eventDate.getDate()
+                  )
+                })
+
+                // If Business Meeting found, show that instead
+                if (businessMeetingEvent) {
+                  return (
+                    <Container
+                      key={`bm-${date}-${index}`}
+                      style={{ ...container, marginTop: '24px' }}
+                      className="container"
+                    >
+                      <hr
+                        style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
+                      />
+                      <Section style={program}>
+                        <Text style={defaultText}>
+                          <Link
+                            href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${businessMeetingEvent.id}`}
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {businessMeetingEvent.title}
+                          </Link>
+                          <br />
+                          {EventDateDisplay(businessMeetingEvent)}
+                          {businessMeetingEvent.description && (
+                            <>
+                              <br />
+                              {businessMeetingEvent.description}
+                            </>
+                          )}
+                          <br />
+                          <em>(Replaces regular Bible Class for this date)</em>
+                          <br />
+                          <br />
+                          <Link
+                            href={
+                              businessMeetingEvent.membersOnly
+                                ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${businessMeetingEvent.id}`
+                                : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${businessMeetingEvent.id}`
+                            }
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: '600',
+                            }}
+                          >
+                            View Details →
+                          </Link>
+                        </Text>
+                      </Section>
+                    </Container>
+                  )
+                }
+
+                // Otherwise, show normal Bible Class
+                return (
+                  <Container
+                    key={`bc-${date}-${index}`}
+                    style={{ ...container, marginTop: '24px' }}
+                    className="container"
+                  >
+                    <hr
+                      style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
+                    />
+                    <Section style={program}>
+                      <Heading style={defaultText}>
+                        Bible Class for {getDateFormatted(event.Date)} at 7:30pm - on Zoom
+                      </Heading>
+                      <Row>
+                        <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
+                      </Row>
+                    </Section>
+                  </Container>
+                )
+              })}
             </React.Fragment>
           )
         })}
@@ -638,10 +837,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
         {/* Learn to Read the Bible Seminars */}
         {(() => {
           // Find the LTRTBE recurring event
-          const ltrtbeEvent = allUpcomingEvents.find(event =>
-            event.type === 'recurring' &&
-            (event.title?.toLowerCase().includes('learn to read the bible') ||
-             event.title?.toLowerCase().includes('ltrtbe'))
+          const ltrtbeEvent = allUpcomingEvents.find(
+            (event) =>
+              event.type === 'recurring' &&
+              (event.title?.toLowerCase().includes('learn to read the bible') ||
+                event.title?.toLowerCase().includes('ltrtbe'))
           )
 
           if (ltrtbeEvent && (ltrtbeEvent as any).recurringConfig) {
@@ -650,20 +850,53 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
             return (
               <Container style={container} className="container">
-                <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+                <hr
+                  style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
+                />
                 <Section>
-                  <Heading style={defaultText}>Learn To Read The Bible Effectively</Heading>
                   <Heading style={defaultText}>
-                    Next session: {nextDate ? nextDate.toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric'
-                    }) : 'Date TBD'} at 7:00-8:30 pm at the Hall
+                    <Link
+                      href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${ltrtbeEvent.id}`}
+                      style={{
+                        color: '#0066cc',
+                        textDecoration: 'none',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      Learn To Read The Bible Effectively
+                    </Link>
+                  </Heading>
+                  <Heading style={defaultText}>
+                    Next session:{' '}
+                    {nextDate
+                      ? nextDate.toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Date TBD'}{' '}
+                    at 7:00-8:30 pm at the Hall
                   </Heading>
                   <Text style={defaultText}>
                     Please join us for our seminars: Learn to Read the Bible Effectively.
                     <br />
                     All welcome!
+                    <br />
+                    <br />
+                    <Link
+                      href={
+                        ltrtbeEvent.membersOnly
+                          ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${ltrtbeEvent.id}`
+                          : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${ltrtbeEvent.id}`
+                      }
+                      style={{
+                        color: '#0066cc',
+                        textDecoration: 'none',
+                        fontWeight: '600',
+                      }}
+                    >
+                      View Details →
+                    </Link>
                   </Text>
                 </Section>
               </Container>
@@ -697,16 +930,24 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                   <React.Fragment key={event.id}>
                     {/* Add separator line between different events (not between event types) */}
                     {(groupIndex > 0 || eventIndex > 0) && (
-                      <hr style={{ borderWidth: '0', background: '#ccc', color: '#ccc', height: '1px', margin: '16px 0' }} />
+                      <hr
+                        style={{
+                          borderWidth: '0',
+                          background: '#ccc',
+                          color: '#ccc',
+                          height: '1px',
+                          margin: '16px 0',
+                        }}
+                      />
                     )}
                     <Section style={program}>
                       <Text style={defaultText}>
                         <Link
-                          href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://torontoeast.com'}/events/${event.id}`}
+                          href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
                           style={{
                             color: '#0066cc',
                             textDecoration: 'none',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
                           }}
                         >
                           {event.title}
@@ -720,6 +961,22 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             {event.description}
                           </>
                         )}
+                        <br />
+                        <br />
+                        <Link
+                          href={
+                            event.membersOnly
+                              ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${event.id}`
+                              : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`
+                          }
+                          style={{
+                            color: '#0066cc',
+                            textDecoration: 'none',
+                            fontWeight: '600',
+                          }}
+                        >
+                          View Details →
+                        </Link>
                       </Text>
                     </Section>
                   </React.Fragment>
@@ -740,38 +997,54 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               <table className="readings-table">
                 <thead>
                   <tr style={{ backgroundColor: '#f8f9fa' }}>
-                    <th style={{
-                      padding: '10px 8px',
-                      border: '1px solid #dee2e6',
-                      textAlign: 'left',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      color: '#495057'
-                    }}>Day</th>
-                    <th style={{
-                      padding: '10px 8px',
-                      border: '1px solid #dee2e6',
-                      textAlign: 'left',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      color: '#495057'
-                    }}>Reading 1</th>
-                    <th style={{
-                      padding: '10px 8px',
-                      border: '1px solid #dee2e6',
-                      textAlign: 'left',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      color: '#495057'
-                    }}>Reading 2</th>
-                    <th style={{
-                      padding: '10px 8px',
-                      border: '1px solid #dee2e6',
-                      textAlign: 'left',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      color: '#495057'
-                    }}>Reading 3</th>
+                    <th
+                      style={{
+                        padding: '10px 8px',
+                        border: '1px solid #dee2e6',
+                        textAlign: 'left',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        color: '#495057',
+                      }}
+                    >
+                      Day
+                    </th>
+                    <th
+                      style={{
+                        padding: '10px 8px',
+                        border: '1px solid #dee2e6',
+                        textAlign: 'left',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        color: '#495057',
+                      }}
+                    >
+                      Reading 1
+                    </th>
+                    <th
+                      style={{
+                        padding: '10px 8px',
+                        border: '1px solid #dee2e6',
+                        textAlign: 'left',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        color: '#495057',
+                      }}
+                    >
+                      Reading 2
+                    </th>
+                    <th
+                      style={{
+                        padding: '10px 8px',
+                        border: '1px solid #dee2e6',
+                        textAlign: 'left',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        color: '#495057',
+                      }}
+                    >
+                      Reading 3
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -781,38 +1054,46 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
                     return (
                       <tr key={index} style={{ backgroundColor: rowBgColor }}>
-                        <td style={{
-                          padding: '10px 8px',
-                          border: '1px solid #dee2e6',
-                          verticalAlign: 'top',
-                          minWidth: '90px',
-                          fontSize: '13px',
-                          fontWeight: 'bold'
-                        }}>
+                        <td
+                          style={{
+                            padding: '10px 8px',
+                            border: '1px solid #dee2e6',
+                            verticalAlign: 'top',
+                            minWidth: '90px',
+                            fontSize: '13px',
+                            fontWeight: 'bold',
+                          }}
+                        >
                           {formatReadingDate(reading.date)}
                         </td>
-                        <td style={{
-                          padding: '10px 8px',
-                          border: '1px solid #dee2e6',
-                          verticalAlign: 'top',
-                          fontSize: '13px'
-                        }}>
+                        <td
+                          style={{
+                            padding: '10px 8px',
+                            border: '1px solid #dee2e6',
+                            verticalAlign: 'top',
+                            fontSize: '13px',
+                          }}
+                        >
                           {reading.reading1}
                         </td>
-                        <td style={{
-                          padding: '10px 8px',
-                          border: '1px solid #dee2e6',
-                          verticalAlign: 'top',
-                          fontSize: '13px'
-                        }}>
+                        <td
+                          style={{
+                            padding: '10px 8px',
+                            border: '1px solid #dee2e6',
+                            verticalAlign: 'top',
+                            fontSize: '13px',
+                          }}
+                        >
                           {reading.reading2}
                         </td>
-                        <td style={{
-                          padding: '10px 8px',
-                          border: '1px solid #dee2e6',
-                          verticalAlign: 'top',
-                          fontSize: '13px'
-                        }}>
+                        <td
+                          style={{
+                            padding: '10px 8px',
+                            border: '1px solid #dee2e6',
+                            verticalAlign: 'top',
+                            fontSize: '13px',
+                          }}
+                        >
                           {reading.reading3}
                         </td>
                       </tr>
@@ -825,9 +1106,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               <div className="readings-mobile">
                 {allReadings.map((reading: any, index: number) => (
                   <div key={index} className="mobile-card">
-                    <div className="mobile-date">
-                      {formatReadingDate(reading.date)}
-                    </div>
+                    <div className="mobile-date">{formatReadingDate(reading.date)}</div>
                     <div className="mobile-reading">
                       <span className="mobile-reading-label">Reading 1:</span>
                       {reading.reading1}
@@ -877,7 +1156,7 @@ const MemorialServiceProgram = (event: SundayEvents) => {
           <Text>{event['Holidays and Special Events']}</Text>
         )}
       </Text>
-    );
+    )
   }
   return (
     <Text style={defaultText}>
@@ -890,7 +1169,7 @@ const MemorialServiceProgram = (event: SundayEvents) => {
       {'Keyboardist: '}
       <strong>{event.Organist}</strong>
       <br />
-      {'Stewart: '}
+      {'Steward: '}
       <strong>{event.Steward}</strong>
       <br />
       {'Doorkeeper: '}
@@ -912,10 +1191,11 @@ const MemorialServiceProgram = (event: SundayEvents) => {
 
 const Hymns = (event: MemorialServiceType) => {
   // Check if any hymn numbers are provided
-  const hasHymns = event['Hymn-opening'] ||
-                  event['Hymn-exhortation'] ||
-                  event['Hymn-memorial'] ||
-                  event['Hymn-closing']
+  const hasHymns =
+    event['Hymn-opening'] ||
+    event['Hymn-exhortation'] ||
+    event['Hymn-memorial'] ||
+    event['Hymn-closing']
 
   // Don't show hymns section if no numbers are available
   if (!hasHymns) {

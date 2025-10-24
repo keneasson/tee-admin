@@ -52,7 +52,14 @@ const extractEventDate = (event: Event): string => {
       date = event.startDate ? new Date(event.startDate) : new Date()
       break
     case 'recurring':
-      date = event.recurringConfig?.startDate ? new Date(event.recurringConfig.startDate) : new Date()
+      // Check both startDate and dateRange.start for recurring events
+      if (event.recurringConfig?.startDate) {
+        date = new Date(event.recurringConfig.startDate)
+      } else if ((event.recurringConfig as any)?.dateRange?.start) {
+        date = new Date((event.recurringConfig as any).dateRange.start)
+      } else {
+        date = new Date()
+      }
       break
     default:
       date = new Date()
@@ -137,12 +144,12 @@ const serializeEventData = (event: Event): string => {
 const deserializeEventData = (eventDataJson: string): Event => {
   try {
     const parsed = JSON.parse(eventDataJson)
-    
+
     // Convert date strings back to Date objects
     if (parsed.createdAt) parsed.createdAt = new Date(parsed.createdAt)
     if (parsed.updatedAt) parsed.updatedAt = new Date(parsed.updatedAt)
     if (parsed.publishDate) parsed.publishDate = new Date(parsed.publishDate)
-    
+
     // Convert event-specific dates
     if (parsed.serviceDate) parsed.serviceDate = new Date(parsed.serviceDate)
     if (parsed.ceremonyDate) parsed.ceremonyDate = new Date(parsed.ceremonyDate)
@@ -152,6 +159,25 @@ const deserializeEventData = (eventDataJson: string): Event => {
     if (parsed.dateRange) {
       parsed.dateRange.start = new Date(parsed.dateRange.start)
       parsed.dateRange.end = new Date(parsed.dateRange.end)
+    }
+
+    // Convert recurring event dates
+    if (parsed.recurringConfig) {
+      if (parsed.recurringConfig.startDate) {
+        parsed.recurringConfig.startDate = new Date(parsed.recurringConfig.startDate)
+      }
+      if (parsed.recurringConfig.endDate) {
+        parsed.recurringConfig.endDate = new Date(parsed.recurringConfig.endDate)
+      }
+      if (parsed.recurringConfig.dateRange) {
+        parsed.recurringConfig.dateRange.start = new Date(parsed.recurringConfig.dateRange.start)
+        parsed.recurringConfig.dateRange.end = new Date(parsed.recurringConfig.dateRange.end)
+      }
+    }
+
+    // Convert registration deadline
+    if (parsed.registration && parsed.registration.deadline) {
+      parsed.registration.deadline = new Date(parsed.registration.deadline)
     }
 
     return parsed as Event
@@ -338,6 +364,11 @@ export const createEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'u
       }
       break
   }
+
+  // Convert registration deadline if present
+  if (processedEventData.registration && processedEventData.registration.deadline) {
+    processedEventData.registration.deadline = new Date(processedEventData.registration.deadline)
+  }
   
   const event: Event = {
     ...processedEventData,
@@ -465,6 +496,11 @@ export const updateEvent = async (updateData: UpdateEventRequest): Promise<Event
         }
       }
       break
+  }
+
+  // Convert registration deadline if present
+  if (processedUpdateData.registration && processedUpdateData.registration.deadline) {
+    processedUpdateData.registration.deadline = new Date(processedUpdateData.registration.deadline)
   }
   
   const updatedEvent: Event = {
@@ -717,12 +753,27 @@ const isEventActiveOrUpcoming = (event: Event): boolean => {
  * Get only published events for public consumption
  * Used by newsletter, events page, and other public-facing components
  * Includes ongoing multi-day events (shows until end date, not just start date)
+ * Sorted by start date/time in ascending order (earliest first)
  */
 export const getPublishedEvents = async (): Promise<Event[]> => {
   const allEvents = await getAllEvents(false)
-  return allEvents.filter(event => {
+  const publishedEvents = allEvents.filter(event => {
     const isPublished = event.status === 'published' || event.status === 'ready'
     const isActive = isEventActiveOrUpcoming(event)
     return isPublished && isActive
+  })
+
+  // Sort by start date/time in ascending order (earliest first)
+  return publishedEvents.sort((a, b) => {
+    const aDate = extractEventDate(a)
+    const bDate = extractEventDate(b)
+    const dateCompare = new Date(aDate).getTime() - new Date(bDate).getTime()
+
+    if (dateCompare !== 0) return dateCompare
+
+    // If same date, sort by time
+    const aTime = extractEventTime(a)
+    const bTime = extractEventTime(b)
+    return aTime.localeCompare(bTime)
   })
 }

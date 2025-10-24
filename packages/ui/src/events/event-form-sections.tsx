@@ -2,7 +2,7 @@ import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch
 import { formatEcclesiaToLocation, createLocationFieldUpdates } from './location-utils'
 import { LocationFieldsContainer } from './location-components'
 import { YStack, XStack, Card, Text, Button, Separator, Checkbox } from 'tamagui'
-import { Plus, MapPin, User, Calendar, FileText, Trash2, Check } from '@tamagui/lucide-icons'
+import { Plus, MapPin, User, Calendar, FileText, Trash2, Check, Video, Globe } from '@tamagui/lucide-icons'
 import { EventFormInput } from '../form/event-form-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventFormSelect } from '../form/event-form-select'
@@ -76,9 +76,9 @@ interface MultipleLocationsSectionProps<T extends FieldValues> {
   allowCustomLocationTypes?: boolean
 }
 
-export function LocationSection<T extends FieldValues>({ 
-  control, 
-  namePrefix, 
+export function LocationSection<T extends FieldValues>({
+  control,
+  namePrefix,
   title = "Location Details",
   required = false,
   showAtTheHallOption = false,
@@ -86,16 +86,22 @@ export function LocationSection<T extends FieldValues>({
   setValue: setValueProp
 }: LocationSectionProps<T>) {
   const { card, text, button } = useAdminSpacing()
-  
+
   // Try to get setValue from prop first, then from context as fallback
   const formContext = useFormContext()
   const setValue = setValueProp || formContext?.setValue
-  
+
   const hostingEcclesia = useWatch({
     control,
     name: hostingEcclesiaFieldName as FieldPath<T>
   })
-  
+
+  // Watch the location mode to show/hide fields conditionally
+  const locationMode = (useWatch({
+    control,
+    name: `${namePrefix}.mode` as FieldPath<T>
+  }) as 'in-person' | 'online' | 'hybrid' | undefined) || 'in-person' // Default to in-person if not set
+
   // Use pure functions for data transformation
   const handleAtTheHallChange = (checked: boolean) => {
     // Only proceed if setValue is available
@@ -103,13 +109,13 @@ export function LocationSection<T extends FieldValues>({
       console.warn('LocationSection: setValue not available - component must be used within a FormProvider')
       return
     }
-    
+
     if (checked && hostingEcclesia) {
       // Transform data using pure function
       const locationData = formatEcclesiaToLocation(hostingEcclesia)
       // Handle parkingInfo vs parking field name
       locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
-      
+
       // Get field updates and apply them
       const updates = createLocationFieldUpdates(locationData, namePrefix)
       // Rename parking to parkingInfo for this form
@@ -127,7 +133,10 @@ export function LocationSection<T extends FieldValues>({
       })
     }
   }
-  
+
+  const showPhysicalLocation = locationMode === 'in-person' || locationMode === 'hybrid'
+  const showOnlineFields = locationMode === 'online' || locationMode === 'hybrid'
+
   return (
     <Card padding={card.padding} borderWidth={1} borderColor="$borderColor">
       <YStack space={card.space}>
@@ -135,94 +144,194 @@ export function LocationSection<T extends FieldValues>({
           <MapPin size={button.iconSize} color="$blue10" />
           <Text fontSize="$4" fontWeight="600">{title}</Text>
         </XStack>
-        
+
         <YStack space={card.space}>
-          {/* At the Hall convenience option */}
-          {showAtTheHallOption && hostingEcclesia && (
-            <CheckboxWithCheck
-              control={control}
-              name={`${namePrefix}._atTheHall` as any}
-              label={`At the Hall - Use ${hostingEcclesia.name}'s hall location`}
-              onCheckChange={handleAtTheHallChange}
-            />
+          {/* Location Mode Selector */}
+          <EventFormSelect
+            control={control}
+            name={`${namePrefix}.mode` as any}
+            label="Location Type"
+            placeholder="Select location type"
+            required
+            options={[
+              { value: 'in-person', label: 'In-Person Only' },
+              { value: 'online', label: 'Online Only' },
+              { value: 'hybrid', label: 'Hybrid (In-Person & Online)' }
+            ]}
+          />
+
+          {/* Physical Location Fields - shown for in-person and hybrid */}
+          {showPhysicalLocation && (
+            <>
+              <Separator marginVertical="$2" />
+              <XStack gap="$2" alignItems="center">
+                <MapPin size="$0.75" color="$green10" />
+                <Text fontSize="$3" fontWeight="600" color="$green11">
+                  Physical Location
+                </Text>
+              </XStack>
+
+              {/* At the Hall convenience option */}
+              {showAtTheHallOption && hostingEcclesia && (
+                <CheckboxWithCheck
+                  control={control}
+                  name={`${namePrefix}._atTheHall` as any}
+                  label={`At the Hall - Use ${hostingEcclesia.name}'s hall location`}
+                  onCheckChange={handleAtTheHallChange}
+                />
+              )}
+
+              <EventFormInput
+                control={control}
+                name={`${namePrefix}.name` as any}
+                label="Location Name"
+                placeholder="e.g., Toronto East Ecclesial Hall"
+                required={required && locationMode !== 'online'}
+              />
+
+              <EventFormInput
+                control={control}
+                name={`${namePrefix}.address` as any}
+                label="Address"
+                placeholder="123 Main Street"
+                required={required && locationMode !== 'online'}
+              />
+
+              <XStack space="$2">
+                <YStack flex={1}>
+                  <EventFormInput
+                    control={control}
+                    name={`${namePrefix}.city` as any}
+                    label="City"
+                    placeholder="Toronto"
+                    required={required && locationMode !== 'online'}
+                  />
+                </YStack>
+
+                <YStack flex={1}>
+                  <ProvinceSelect
+                    control={control}
+                    name={`${namePrefix}.province` as any}
+                    countryFieldName={`${namePrefix}.country` as any}
+                    label="Province"
+                    placeholder="Select Province"
+                    required={required && locationMode !== 'online'}
+                  />
+                </YStack>
+
+                <YStack flex={1}>
+                  <EventFormInput
+                    control={control}
+                    name={`${namePrefix}.postalCode` as any}
+                    label="Postal Code"
+                    placeholder="M1A 1A1"
+                  />
+                </YStack>
+              </XStack>
+
+              <XStack space="$2">
+                <YStack flex={1}>
+                  <CountrySelect
+                    control={control}
+                    name={`${namePrefix}.country` as any}
+                    label="Country"
+                    placeholder="Select Country"
+                  />
+                </YStack>
+              </XStack>
+
+              <OptimizedTextarea
+                control={control}
+                name={`${namePrefix}.directions` as any}
+                label="Directions"
+                placeholder="Additional directions or landmarks"
+                rows={3}
+                maxLength={500}
+              />
+
+              <OptimizedTextarea
+                control={control}
+                name={`${namePrefix}.parkingInfo` as any}
+                label="Parking Information"
+                placeholder="Parking details and restrictions"
+                rows={3}
+                maxLength={300}
+              />
+            </>
           )}
-          
-          <EventFormInput
-            control={control}
-            name={`${namePrefix}.name` as any}
-            label="Location Name"
-            placeholder="e.g., Toronto East Ecclesial Hall"
-            required={required}
-          />
-          
-          <EventFormInput
-            control={control}
-            name={`${namePrefix}.address` as any}
-            label="Address"
-            placeholder="123 Main Street"
-            required={required}
-          />
-          
-          <XStack space="$2">
-            <YStack flex={1}>
+
+          {/* Online Meeting Fields - shown for online and hybrid */}
+          {showOnlineFields && (
+            <>
+              <Separator marginVertical="$2" />
+              <XStack gap="$2" alignItems="center">
+                <Video size="$0.75" color="$purple10" />
+                <Text fontSize="$3" fontWeight="600" color="$purple11">
+                  Online Meeting Details
+                </Text>
+              </XStack>
+
               <EventFormInput
                 control={control}
-                name={`${namePrefix}.city` as any}
-                label="City"
-                placeholder="Toronto"
-                required={required}
+                name={`${namePrefix}.onlineMeeting.link` as any}
+                label="Meeting Link"
+                placeholder="https://zoom.us/j/123456789 or https://meet.google.com/..."
+                type="url"
+                required={required && locationMode !== 'in-person'}
               />
-            </YStack>
-            
-            <YStack flex={1}>
-              <ProvinceSelect
+
+              <EventFormSelect
                 control={control}
-                name={`${namePrefix}.province` as any}
-                countryFieldName={`${namePrefix}.country` as any}
-                label="Province"
-                placeholder="Select Province"
-                required={required}
+                name={`${namePrefix}.onlineMeeting.platform` as any}
+                label="Platform (Optional)"
+                placeholder="Select platform"
+                options={[
+                  { value: 'zoom', label: 'Zoom' },
+                  { value: 'google-meet', label: 'Google Meet' },
+                  { value: 'teams', label: 'Microsoft Teams' },
+                  { value: 'webex', label: 'Webex' },
+                  { value: 'other', label: 'Other' }
+                ]}
               />
-            </YStack>
-            
-            <YStack flex={1}>
+
+              <XStack space="$2">
+                <YStack flex={1}>
+                  <EventFormInput
+                    control={control}
+                    name={`${namePrefix}.onlineMeeting.meetingId` as any}
+                    label="Meeting ID (Optional)"
+                    placeholder="e.g., 123 456 789"
+                  />
+                </YStack>
+
+                <YStack flex={1}>
+                  <EventFormInput
+                    control={control}
+                    name={`${namePrefix}.onlineMeeting.password` as any}
+                    label="Passcode (Optional)"
+                    placeholder="Meeting passcode"
+                  />
+                </YStack>
+              </XStack>
+
               <EventFormInput
                 control={control}
-                name={`${namePrefix}.postalCode` as any}
-                label="Postal Code"
-                placeholder="M1A 1A1"
+                name={`${namePrefix}.onlineMeeting.dialInNumber` as any}
+                label="Dial-In Number (Optional)"
+                placeholder="+1 234 567 8900"
+                type="tel"
               />
-            </YStack>
-          </XStack>
-          
-          <XStack space="$2">
-            <YStack flex={1}>
-              <CountrySelect
+
+              <OptimizedTextarea
                 control={control}
-                name={`${namePrefix}.country` as any}
-                label="Country"
-                placeholder="Select Country"
+                name={`${namePrefix}.onlineMeeting.additionalInfo` as any}
+                label="Additional Online Info (Optional)"
+                placeholder="Any other relevant meeting details or instructions"
+                rows={3}
+                maxLength={500}
               />
-            </YStack>
-          </XStack>
-          
-          <OptimizedTextarea
-            control={control}
-            name={`${namePrefix}.directions` as any}
-            label="Directions"
-            placeholder="Additional directions or landmarks"
-            rows={3}
-            maxLength={500}
-          />
-          
-          <OptimizedTextarea
-            control={control}
-            name={`${namePrefix}.parkingInfo` as any}
-            label="Parking Information"
-            placeholder="Parking details and restrictions"
-            rows={3}
-            maxLength={300}
-          />
+            </>
+          )}
         </YStack>
       </YStack>
     </Card>

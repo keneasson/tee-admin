@@ -12,7 +12,7 @@ import {
   Trash,
 } from '@tamagui/lucide-icons'
 import { useState } from 'react'
-import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet } from 'tamagui'
+import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet, AnimatePresence } from 'tamagui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 
 interface EventListSelectorProps {
@@ -24,7 +24,7 @@ interface EventListSelectorProps {
   isLoading?: boolean
 }
 
-function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void; onDelete?: (event: Event) => void }) {
+function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void; onDelete?: (event: Event) => void; isDeleting?: boolean }) {
   const getEventDateDisplay = (event: Event): string => {
     switch (event.type) {
       case 'study-weekend':
@@ -159,11 +159,33 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
   const dateDisplay = getEventDateDisplay(event)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false)
+    // Trigger the parent's delete handler which will set isDeleting
+    onDelete?.(event)
+  }
+
   return (
     <Card
       padding="$4"
       borderWidth={1}
       borderColor="$borderColor"
+      animation="medium"
+      opacity={isDeleting ? 0 : 1}
+      height={isDeleting ? 0 : 'auto'}
+      overflow="hidden"
+      marginVertical={isDeleting ? 0 : '$2'}
+      scale={isDeleting ? 0.95 : 1}
+      enterStyle={{
+        opacity: 0,
+        height: 0,
+        scale: 0.95,
+      }}
+      exitStyle={{
+        opacity: 0,
+        height: 0,
+        scale: 0.95,
+      }}
     >
       <YStack>
         <XStack justifyContent="space-between" alignItems="flex-start">
@@ -356,10 +378,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
                   backgroundColor: brandColors.light.error,
                   opacity: 0.9
                 }}
-                onPress={() => {
-                  setShowDeleteConfirm(false)
-                  onDelete?.(event)
-                }}
+                onPress={handleConfirmDelete}
               >
                 Delete Event
               </Button>
@@ -384,6 +403,19 @@ export function EventListSelector({
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published' | 'archived'>(
     'all'
   )
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+
+  // Handle delete with animation
+  const handleDelete = (event: Event) => {
+    // Start the collapse animation
+    setDeletingEventId(event.id)
+
+    // Wait for animation to complete (400ms for "medium" animation), then actually delete
+    setTimeout(() => {
+      onDelete?.(event)
+      setDeletingEventId(null)
+    }, 400)
+  }
 
   // Filter events based on search and filters
   const filteredEvents = events.filter((event) => {
@@ -552,7 +584,14 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {draftEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onSelect={onSelect}
+                      onPreview={onPreview}
+                      onDelete={handleDelete}
+                      isDeleting={deletingEventId === event.id}
+                    />
                   ))}
                 </YStack>
               </ScrollView>
@@ -571,7 +610,14 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {publishedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onSelect={onSelect}
+                      onPreview={onPreview}
+                      onDelete={handleDelete}
+                      isDeleting={deletingEventId === event.id}
+                    />
                   ))}
                 </YStack>
               </ScrollView>
@@ -587,7 +633,14 @@ export function EventListSelector({
               <ScrollView maxHeight="400">
                 <YStack space="$3">
                   {otherEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onSelect={onSelect}
+                      onPreview={onPreview}
+                      onDelete={handleDelete}
+                      isDeleting={deletingEventId === event.id}
+                    />
                   ))}
                 </YStack>
               </ScrollView>

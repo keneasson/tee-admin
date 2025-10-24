@@ -1,7 +1,7 @@
 'use client'
 
-import { useAdminAccess } from '@my/ui/src/branding'
-import { YStack, Text, Spinner, Heading, Tabs, Card, Button, XStack } from '@my/ui'
+import { useAdminAccess } from '@/hooks/use-admin-access'
+import { YStack, Text, Spinner, Heading, Card, Button, XStack } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { ProgressiveEventForm } from '@my/ui/src/events/progressive-event-form'
 import { EventListSelector } from '@my/ui/src/events/event-list-selector'
@@ -94,24 +94,27 @@ export default function AdminEventsPage() {
   const handleAutoSave = async (eventData: any) => {
     try {
       console.log('Auto-saving event:', eventData)
-      
+
+      // Use POST for new events (no ID), PUT for updates (has ID)
+      const method = eventData.id ? 'PUT' : 'POST'
+
       const response = await fetch('/api/admin/events', {
-        method: 'PUT',
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(eventData)
       })
-      
+
       if (!response.ok) {
         const error = await response.json()
         console.error('Auto-save failed:', error)
         throw new Error(error.details || error.error || 'Auto-save failed')
       }
-      
+
       const savedEvent = await response.json()
       console.log('Auto-save successful:', savedEvent)
-      
+
       return savedEvent
     } catch (error) {
       console.error('Auto-save failed:', error)
@@ -166,31 +169,39 @@ export default function AdminEventsPage() {
           Create and manage events for the Toronto East Christadelphian Ecclesia
         </Text>
       </YStack>
-      
-      <Tabs 
-        value={activeTab} 
-        onValueChange={setActiveTab}
-        width="100%"
-        flex={1}
-        flexDirection="column"
-      >
-        <Tabs.List backgroundColor="$background" borderRadius="$4">
-          <Tabs.Tab value="list" flex={1}>
-            <XStack space="$2" alignItems="center">
-              <List size="$1" />
-              <Text>Event List</Text>
-            </XStack>
-          </Tabs.Tab>
-          <Tabs.Tab value="form" flex={1}>
-            <XStack space="$2" alignItems="center">
-              <Plus size="$1" />
-              <Text>{selectedEvent ? 'Edit Event' : 'Create Event'}</Text>
-            </XStack>
-          </Tabs.Tab>
-        </Tabs.List>
-        
-        <Tabs.Content value="list" flex={1} paddingTop="$4">
-          {loadingEvents ? (
+
+      {/* Button Navigation */}
+      <XStack space="$3" paddingBottom="$4">
+        <Button
+          size="$4"
+          icon={List}
+          onPress={() => {
+            setActiveTab('list')
+            setSelectedEvent(null)
+          }}
+          theme={activeTab === 'list' ? 'blue' : undefined}
+          variant={activeTab === 'list' ? undefined : 'outlined'}
+        >
+          Event List
+        </Button>
+        <Button
+          size="$4"
+          icon={Plus}
+          onPress={() => {
+            setSelectedEvent(null)
+            setActiveTab('form')
+          }}
+          theme={activeTab === 'form' ? 'blue' : undefined}
+          variant={activeTab === 'form' ? undefined : 'outlined'}
+        >
+          Create Event
+        </Button>
+      </XStack>
+
+      {/* Content Area */}
+      <YStack flex={1}>
+        {activeTab === 'list' ? (
+          loadingEvents ? (
             <YStack flex={1} justifyContent="center" alignItems="center">
               <Spinner size="large" />
               <Text marginTop="$4">Loading events...</Text>
@@ -204,10 +215,8 @@ export default function AdminEventsPage() {
               onDelete={handleDeleteEvent}
               isLoading={loadingEvents}
             />
-          )}
-        </Tabs.Content>
-        
-        <Tabs.Content value="form" flex={1} paddingTop="$4">
+          )
+        ) : (
           <Card padding="$4" borderWidth={1} borderColor="$borderColor">
             <YStack space="$3">
               {selectedEvent && (
@@ -239,8 +248,8 @@ export default function AdminEventsPage() {
               />
             </YStack>
           </Card>
-        </Tabs.Content>
-      </Tabs>
+        )}
+      </YStack>
 
       {/* Event Preview Modal */}
       {previewData && (

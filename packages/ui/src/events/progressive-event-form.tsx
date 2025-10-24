@@ -17,6 +17,7 @@ import {
 import { useState, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button, Card, Circle, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
+import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventDateRangePicker } from '../form/event-date-range-picker'
@@ -562,6 +563,18 @@ export function ProgressiveEventForm({
       if (initialData.eulogies && initialData.eulogies.length > 0) active.push('eulogies')
     }
 
+    if (currentSelectedType === 'general') {
+      if (initialData.location) active.push('location')
+      if (initialData.locations && initialData.locations.length > 0) active.push('locations')
+      if (initialData.speakers && initialData.speakers.length > 0) active.push('speakers')
+      if (initialData.schedule && initialData.schedule.length > 0) active.push('schedule')
+      if (initialData.registration) active.push('registration')
+    }
+
+    if (currentSelectedType === 'recurring') {
+      if (initialData.location) active.push('location')
+    }
+
     return active
   }
 
@@ -584,6 +597,7 @@ export function ProgressiveEventForm({
       title: initialData?.title || '',
       description: initialData?.description || '',
       publishDate: initialData?.publishDate,
+      membersOnly: initialData?.membersOnly || false,
       // Type-specific defaults
       ...(currentSelectedType === 'study-weekend' && {
         dateRange: initialData?.dateRange || {
@@ -593,10 +607,23 @@ export function ProgressiveEventForm({
         },
         hostingEcclesia: initialData?.hostingEcclesia || 'Toronto East Christadelphian Ecclesia',
         location: initialData?.location || {
+          mode: 'in-person', // Default to in-person
           name: '',
           address: '',
           city: '',
           province: '',
+          country: 'Canada',
+          postalCode: '',
+          directions: '',
+          parkingInfo: '',
+          onlineMeeting: {
+            link: '',
+            platform: '',
+            meetingId: '',
+            password: '',
+            dialInNumber: '',
+            additionalInfo: ''
+          }
         },
         theme: initialData?.theme || '',
         speakers: initialData?.speakers || [],
@@ -730,48 +757,6 @@ export function ProgressiveEventForm({
 
     if (currentSelectedType === 'study-weekend') {
       return [
-        {
-          id: 'hosting',
-          label: 'Hosting Ecclesia',
-          icon: User,
-          description: 'Which ecclesia is hosting this event',
-          component: (
-            <Card padding="$4" borderWidth={1} borderColor="$borderColor">
-              <YStack space="$3">
-                <XStack space="$2" alignItems="center">
-                  <User size="$1" color="$green10" />
-                  <Text fontSize="$5" fontWeight="600">
-                    Hosting Ecclesia
-                  </Text>
-                </XStack>
-                <EcclesiaSearchInput
-                  control={control}
-                  name="hostingEcclesia"
-                  label="Hosting Ecclesia"
-                  placeholder="Search for hosting ecclesia..."
-                />
-              </YStack>
-            </Card>
-          ),
-        },
-        {
-          id: 'location',
-          label: 'Event Location',
-          icon: MapPin,
-          description: 'Venue information and directions (e.g., camp, hall, hotel)',
-          required: true,
-          component: (
-            <LocationSection
-              control={control}
-              setValue={setValue}
-              namePrefix="location"
-              title="Event Location"
-              required
-              showAtTheHallOption={true}
-              hostingEcclesiaFieldName="hostingEcclesia"
-            />
-          ),
-        },
         {
           id: 'speakers',
           label: 'Speakers',
@@ -1369,6 +1354,23 @@ export function ProgressiveEventForm({
                   allowHideTimes={true}
                   onDateChange={handleFieldChange}
                 />
+
+                <EcclesiaSearchInput
+                  control={control}
+                  name="hostingEcclesia"
+                  label="Hosting Ecclesia (Optional)"
+                  placeholder="Search for hosting ecclesia..."
+                />
+
+                <LocationSection
+                  control={control}
+                  setValue={setValue}
+                  namePrefix="location"
+                  title="Event Location"
+                  required
+                  showAtTheHallOption={true}
+                  hostingEcclesiaFieldName="hostingEcclesia"
+                />
               </>
             )}
 
@@ -1787,6 +1789,12 @@ export function ProgressiveEventForm({
                 })()}
               </>
             )}
+
+            <CheckboxWithCheck
+              control={control}
+              name="membersOnly"
+              label="Members Only - Restrict viewing to Toronto East Ecclesia members"
+            />
 
             <EventDatePicker
               control={control}

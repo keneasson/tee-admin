@@ -62,11 +62,13 @@ function SignInPageContent() {
     const checkAuth = async () => {
       const session = await getSession()
       if (session) {
-        router.push('/profile')
+        // Redirect to callbackUrl if provided, otherwise go to profile
+        const callbackUrl = searchParams?.get('callbackUrl') || '/profile'
+        router.push(callbackUrl)
       }
     }
     checkAuth()
-  }, [isHydrated, router])
+  }, [isHydrated, router, searchParams])
 
   // Don't render until hydrated
   if (!isHydrated) {

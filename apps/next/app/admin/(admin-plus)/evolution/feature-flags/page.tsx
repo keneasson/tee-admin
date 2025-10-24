@@ -1,6 +1,7 @@
 'use client'
 
-import { FeaturePlayground, useAdminAccess } from '@my/ui/src/branding'
+import { FeaturePlayground } from '@my/ui/src/branding'
+import { useAdminAccess } from '@/hooks/use-admin-access'
 import { YStack, Text, Spinner } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 

@@ -1,5 +1,7 @@
+'use client'
+
 import { YStack, XStack, Text, H2, H4, Separator, Square, Card, Button } from 'tamagui'
-import { Download } from '@tamagui/lucide-icons'
+import { Download, ExternalLink, Lock } from '@tamagui/lucide-icons'
 import { Event } from '@my/app/types/events'
 import {
   formatDate,
@@ -14,13 +16,28 @@ import {
 interface EventDetailViewProps {
   event: Partial<Event>
   showAdminInfo?: boolean
+  /** User role passed from platform-specific auth (Next.js or Expo) */
+  userRole?: string
+  /** Whether user is member or higher, passed from platform-specific auth */
+  isMemberOrHigher?: boolean
+  /** Whether auth is loading */
+  isAuthLoading?: boolean
 }
 
 /**
  * Reusable Event Detail View component
  * Used in: Event detail pages, Preview modal, Admin views
  */
-export function EventDetailView({ event, showAdminInfo = false }: EventDetailViewProps) {
+export function EventDetailView({
+  event,
+  showAdminInfo = false,
+  userRole,
+  isMemberOrHigher = false,
+  isAuthLoading = false
+}: EventDetailViewProps) {
+  // Check access for members-only events (member, admin, or owner)
+  const hasAccess = !event.membersOnly || isMemberOrHigher
+
   // Format date for display
   const getFormattedDateRange = () => {
     // Check event-type specific date fields first
@@ -105,35 +122,85 @@ export function EventDetailView({ event, showAdminInfo = false }: EventDetailVie
       }
     } else if ((event as any).startDate) {
       const start = new Date((event as any).startDate)
-      if ((event as any).endDate && (event as any).endDate !== (event as any).startDate) {
-        const end = new Date((event as any).endDate)
+      const end = (event as any).endDate ? new Date((event as any).endDate) : null
 
-        // Same month: Oct 10-12, 2025
-        if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+      // Check if it's a one-day event
+      const isSameDay = !end || (
+        start.getDate() === end.getDate() &&
+        start.getMonth() === end.getMonth() &&
+        start.getFullYear() === end.getFullYear()
+      )
+
+      if (isSameDay) {
+        // One-day event: Show date + time (e.g., "October 29, 2025 8:00pm")
+        const hasTime = start.getHours() !== 0 || start.getMinutes() !== 0
+
+        if (hasTime) {
+          const hours = start.getHours()
+          const minutes = start.getMinutes()
+          const ampm = hours >= 12 ? 'pm' : 'am'
+          const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+          const timeStr = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+
+          return start.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          }) + ` ${timeStr}`
+        } else {
+          return start.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          })
+        }
+      } else {
+        // Multi-day event
+        const hasSchedule = event.schedule && event.schedule.length > 0
+        const startHasTime = start.getHours() !== 0 || start.getMinutes() !== 0
+        const endHasTime = end!.getHours() !== 0 || end!.getMinutes() !== 0
+
+        if (!hasSchedule && (startHasTime || endHasTime)) {
+          // Show full date + time range if times specified and no schedule
+          const formatDateTime = (date: Date) => {
+            const hours = date.getHours()
+            const minutes = date.getMinutes()
+            const ampm = hours >= 12 ? 'pm' : 'am'
+            const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+            const timeStr = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+
+            return date.toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric'
+            }) + ` ${timeStr}`
+          }
+
+          return `${formatDateTime(start)} to ${formatDateTime(end!)}`
+        } else {
+          // Show date range only (schedule will show times, or no times specified)
+          // Same month: Oct 10-12, 2025
+          if (start.getMonth() === end!.getMonth() && start.getFullYear() === end!.getFullYear()) {
+            return (
+              start.toLocaleDateString('en-US', { month: 'long' }) +
+              ' ' +
+              start.getDate() +
+              '-' +
+              end!.getDate() +
+              ', ' +
+              start.getFullYear()
+            )
+          }
+          // Different months: Oct 30 - Nov 2, 2025
           return (
-            start.toLocaleDateString('en-US', { month: 'short' }) +
-            ' ' +
-            start.getDate() +
-            '-' +
-            end.getDate() +
+            start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) +
+            ' - ' +
+            end!.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) +
             ', ' +
-            start.getFullYear()
+            end!.getFullYear()
           )
         }
-        // Different months: Oct 30 - Nov 2, 2025
-        return (
-          start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-          ' - ' +
-          end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-          ', ' +
-          end.getFullYear()
-        )
       }
-      return start.toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
     }
     return null
   }
@@ -158,6 +225,35 @@ export function EventDetailView({ event, showAdminInfo = false }: EventDetailVie
   const scheduleByDay = getScheduleByDay()
   const dateRange = getFormattedDateRange()
 
+  // If event is members-only and session is still loading, show loading state
+  if (event.membersOnly && isAuthLoading) {
+    return (
+      <YStack gap="$4" padding="$6" alignItems="center">
+        <Text fontSize="$4" color="$gray11">
+          Loading...
+        </Text>
+      </YStack>
+    )
+  }
+
+  // Show access-denied message if event is members-only and user doesn't have access
+  if (!hasAccess) {
+    return (
+      <YStack gap="$4" padding="$6" alignItems="center">
+        <Lock size={64} color="$gray10" />
+        <YStack gap="$2" alignItems="center">
+          <H2 fontSize="$7" fontWeight="700" color="$color" textAlign="center">
+            Members Only Event
+          </H2>
+          <Text fontSize="$4" color="$gray11" textAlign="center" maxWidth={500}>
+            This event is restricted to Toronto East Ecclesia members.
+            {!userRole && ' Please sign in to view event details.'}
+          </Text>
+        </YStack>
+      </YStack>
+    )
+  }
+
   return (
     <YStack gap="$4">
       {/* Clean Header */}
@@ -173,6 +269,133 @@ export function EventDetailView({ event, showAdminInfo = false }: EventDetailVie
       </YStack>
 
       <Separator />
+
+      {/* Location - for general events and study weekends */}
+      {(event.type === 'general' || event.type === 'study-weekend') && (event as any).location ? (
+        <YStack gap="$3">
+          {(() => {
+            const location = (event as any).location
+
+            // Handle string location (legacy)
+            if (typeof location === 'string') {
+              return (
+                <YStack gap="$2">
+                  <Text fontSize="$5" fontWeight="600" color="$color">
+                    Location
+                  </Text>
+                  <Text fontSize="$4" color="$gray11">
+                    {location}
+                  </Text>
+                </YStack>
+              )
+            }
+
+            const mode = location.mode || 'in-person'
+            const showInPerson = mode === 'in-person' || mode === 'hybrid'
+            const showOnline = mode === 'online' || mode === 'hybrid'
+
+            return (
+              <>
+                {/* In-Person Location */}
+                {showInPerson && location.name ? (
+                  <YStack gap="$2">
+                    <Text fontSize="$5" fontWeight="600" color="$color">
+                      {mode === 'hybrid' ? 'In-Person Location' : 'Location'}
+                    </Text>
+                    <Text fontSize="$4" fontWeight="500" color="$gray12">
+                      {location.name}
+                    </Text>
+                    {location.address ? (
+                      <YStack gap="$1">
+                        <Text fontSize="$4" color="$gray11">
+                          {location.address}
+                        </Text>
+                        {(location.city || location.province || location.postalCode) ? (
+                          <Text fontSize="$4" color="$gray11">
+                            {[location.city, location.province, location.postalCode]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </Text>
+                        ) : null}
+                        {location.country && location.country !== 'Canada' ? (
+                          <Text fontSize="$4" color="$gray11">
+                            {location.country}
+                          </Text>
+                        ) : null}
+                      </YStack>
+                    ) : null}
+                    {(event as any).hostingEcclesia ? (
+                      <Text fontSize="$4" color="$gray11">
+                        Hosted by: {typeof (event as any).hostingEcclesia === 'string'
+                          ? (event as any).hostingEcclesia
+                          : (event as any).hostingEcclesia.name}
+                      </Text>
+                    ) : null}
+                    {location.parkingInfo ? (
+                      <Text fontSize="$3" color="$gray10" fontStyle="italic">
+                        Parking: {location.parkingInfo}
+                      </Text>
+                    ) : null}
+                    {location.directions ? (
+                      <Text fontSize="$3" color="$gray10" fontStyle="italic">
+                        Directions: {location.directions}
+                      </Text>
+                    ) : null}
+                  </YStack>
+                ) : null}
+
+                {/* Online Meeting */}
+                {showOnline && location.onlineMeeting ? (
+                  <YStack gap="$2">
+                    <Text fontSize="$5" fontWeight="600" color="$color">
+                      {mode === 'hybrid' ? 'Online Access' : 'Meeting Details'}
+                    </Text>
+                    {location.onlineMeeting.platform ? (
+                      <Text fontSize="$4" color="$gray11">
+                        Platform: {location.onlineMeeting.platform}
+                      </Text>
+                    ) : null}
+                    {location.onlineMeeting.link ? (
+                      <XStack gap="$2" alignItems="center">
+                        <ExternalLink size={16} color="$blue10" />
+                        <Text
+                          fontSize="$4"
+                          color="$blue10"
+                          textDecorationLine="underline"
+                          cursor="pointer"
+                          onPress={() => window.open(location.onlineMeeting.link, '_blank')}
+                        >
+                          Join Meeting
+                        </Text>
+                      </XStack>
+                    ) : null}
+                    {location.onlineMeeting.meetingId ? (
+                      <Text fontSize="$4" color="$gray11">
+                        Meeting ID: {location.onlineMeeting.meetingId}
+                      </Text>
+                    ) : null}
+                    {location.onlineMeeting.password ? (
+                      <Text fontSize="$4" color="$gray11">
+                        Password: {location.onlineMeeting.password}
+                      </Text>
+                    ) : null}
+                    {location.onlineMeeting.dialInNumber ? (
+                      <Text fontSize="$4" color="$gray11">
+                        Dial-in: {location.onlineMeeting.dialInNumber}
+                      </Text>
+                    ) : null}
+                    {location.onlineMeeting.additionalInfo ? (
+                      <Text fontSize="$3" color="$gray10" fontStyle="italic">
+                        {location.onlineMeeting.additionalInfo}
+                      </Text>
+                    ) : null}
+                  </YStack>
+                ) : null}
+              </>
+            )
+          })()}
+        </YStack>
+      ) : null}
 
       {/* Theme and Speaker Info */}
       <YStack gap="$2">
@@ -311,6 +534,97 @@ export function EventDetailView({ event, showAdminInfo = false }: EventDetailVie
           </Text>
         </YStack>
       ) : null}
+
+      {/* Registration Information */}
+      {event.registration && (() => {
+        const reg = event.registration
+        const hasRegistrationInfo =
+          reg.required ||
+          reg.deadline ||
+          reg.registrationUrl ||
+          reg.contactEmail ||
+          reg.contactPhone ||
+          reg.fee ||
+          reg.paymentInstructions ||
+          reg.notes
+
+        if (!hasRegistrationInfo) return null
+
+        return (
+          <YStack gap="$2" marginTop="$2">
+            <Text fontSize="$5" fontWeight="600" color="$color">
+              Registration Information
+            </Text>
+
+            {reg.required && reg.required !== 'false' && reg.required !== false ? (
+              <Text fontSize="$4" color="$red10" fontWeight="600">
+                Registration Required
+              </Text>
+            ) : null}
+
+            {reg.deadline ? (
+              <Text fontSize="$4" color="$gray11">
+                Deadline: {new Date(reg.deadline).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                })}
+              </Text>
+            ) : null}
+
+            {reg.registrationUrl ? (
+              <XStack gap="$2" alignItems="center">
+                <ExternalLink size={16} color="$blue10" />
+                <Text
+                  fontSize="$4"
+                  color="$blue10"
+                  textDecorationLine="underline"
+                  cursor="pointer"
+                  onPress={() => window.open(reg.registrationUrl, '_blank')}
+                >
+                  Register Online
+                </Text>
+              </XStack>
+            ) : null}
+
+            {(reg.contactEmail || reg.contactPhone) ? (
+              <YStack gap="$1">
+                {reg.contactEmail ? (
+                  <Text fontSize="$4" color="$gray11">
+                    Email: <Text color="$blue10" textDecorationLine="underline" onPress={() => window.open(`mailto:${reg.contactEmail}`, '_blank')} cursor="pointer">{reg.contactEmail}</Text>
+                  </Text>
+                ) : null}
+                {reg.contactPhone ? (
+                  <Text fontSize="$4" color="$gray11">
+                    Phone: <Text color="$blue10" textDecorationLine="underline" onPress={() => window.open(`tel:${reg.contactPhone}`, '_blank')} cursor="pointer">{reg.contactPhone}</Text>
+                  </Text>
+                ) : null}
+              </YStack>
+            ) : null}
+
+            {(reg.hasFee || reg.fee) ? (
+              <YStack gap="$1">
+                <Text fontSize="$4" color="$gray11" fontWeight="600">
+                  Registration Fee: {typeof reg.fee === 'number' ? `$${reg.fee.toFixed(2)}` : reg.fee || 'TBA'}
+                </Text>
+                {reg.paymentInstructions ? (
+                  <Text fontSize="$3" color="$gray10" fontStyle="italic">
+                    {reg.paymentInstructions}
+                  </Text>
+                ) : null}
+              </YStack>
+            ) : null}
+
+            {reg.notes ? (
+              <Text fontSize="$3" color="$gray10" fontStyle="italic">
+                {reg.notes}
+              </Text>
+            ) : null}
+          </YStack>
+        )
+      })()}
 
       {/* Documents */}
       {event.documents && event.documents.length > 0 ? (

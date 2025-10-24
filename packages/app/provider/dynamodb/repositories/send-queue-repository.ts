@@ -88,6 +88,9 @@ export class SendQueueRepository {
 
   /**
    * Update an existing schedule
+   *
+   * IMPORTANT: If dayOfWeek or time changes, we must DELETE the old record and CREATE a new one
+   * because the SK is immutable and contains these values.
    */
   async updateSchedule(update: UpdateScheduleRequest): Promise<EmailSchedule> {
     // First get the existing schedule to build the SK
@@ -96,25 +99,42 @@ export class SendQueueRepository {
       throw new Error(`Schedule not found for email type: ${update.emailType}`)
     }
 
-    const sk = `${existing.emailType}#${existing.dayOfWeek}#${existing.time}`
+    const oldSK = `${existing.emailType}#${existing.dayOfWeek}#${existing.time}`
 
-    // Build update expression
+    // Check if day or time is changing (which requires delete + create)
+    const dayChanging = update.dayOfWeek !== undefined && update.dayOfWeek !== existing.dayOfWeek
+    const timeChanging = update.time !== undefined && update.time !== existing.time
+
+    if (dayChanging || timeChanging) {
+      // Delete the old record
+      await docClient.send(new DeleteCommand({
+        TableName: this.tableName,
+        Key: { PK: 'SCHEDULE', SK: oldSK },
+      }))
+
+      // Create new record with updated values
+      const newSchedule: CreateScheduleRequest = {
+        emailType: update.emailType,
+        dayOfWeek: update.dayOfWeek ?? existing.dayOfWeek,
+        time: update.time ?? existing.time,
+        timezone: update.timezone ?? existing.timezone,
+        enabled: update.enabled ?? existing.enabled,
+        description: update.description ?? existing.description,
+        testMode: update.testMode ?? existing.testMode,
+      }
+
+      return await this.putSchedule(newSchedule)
+    }
+
+    // Only updating metadata (enabled, testMode, description, timezone) - can use UpdateCommand
     const updateExpressions: string[] = []
     const expressionAttributeValues: Record<string, any> = {}
-
-    if (update.dayOfWeek !== undefined) {
-      updateExpressions.push('dayOfWeek = :dayOfWeek')
-      expressionAttributeValues[':dayOfWeek'] = update.dayOfWeek
-    }
-
-    if (update.time !== undefined) {
-      updateExpressions.push('#time = :time')
-      expressionAttributeValues[':time'] = update.time
-    }
+    const expressionAttributeNames: Record<string, string> = {}
 
     if (update.timezone !== undefined) {
       updateExpressions.push('#timezone = :timezone')
       expressionAttributeValues[':timezone'] = update.timezone
+      expressionAttributeNames['#timezone'] = 'timezone'
     }
 
     if (update.enabled !== undefined) {
@@ -137,12 +157,9 @@ export class SendQueueRepository {
 
     await docClient.send(new UpdateCommand({
       TableName: this.tableName,
-      Key: { PK: 'SCHEDULE', SK: sk },
+      Key: { PK: 'SCHEDULE', SK: oldSK },
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-      ExpressionAttributeNames: {
-        '#time': 'time',      // Reserved word
-        '#timezone': 'timezone' // Reserved word
-      },
+      ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
       ExpressionAttributeValues: expressionAttributeValues,
     }))
 
@@ -156,19 +173,33 @@ export class SendQueueRepository {
   }
 
   /**
-   * Delete a schedule
+   * Delete a schedule by email type
+   *
+   * NOTE: We query by emailType (not construct SK from provided data) because
+   * the SK may be out of sync with the data due to immutable key constraints.
    */
-  async deleteSchedule(emailType: EmailType): Promise<boolean> {
-    const existing = await this.getScheduleByType(emailType)
-    if (!existing) {
-      return false
+  async deleteSchedule(emailType: EmailType, dayOfWeek: DayOfWeek, time: string): Promise<boolean> {
+    // Query to find the actual record for this email type
+    const queryResult = await docClient.send(new QueryCommand({
+      TableName: this.tableName,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': 'SCHEDULE',
+        ':sk': emailType,
+      },
+    }))
+
+    if (!queryResult.Items || queryResult.Items.length === 0) {
+      throw new Error(`No schedule found for email type: ${emailType}`)
     }
 
-    const sk = `${existing.emailType}#${existing.dayOfWeek}#${existing.time}`
+    // Use the first matching record (there should only be one per email type)
+    const actualItem = queryResult.Items[0]
+    const actualSK = actualItem.SK as string
 
     await docClient.send(new DeleteCommand({
       TableName: this.tableName,
-      Key: { PK: 'SCHEDULE', SK: sk },
+      Key: { PK: 'SCHEDULE', SK: actualSK },
     }))
 
     return true
@@ -425,7 +456,7 @@ export class SendQueueRepository {
       failed: 0,
       byType: {
         'newsletter': { ready: 0, processing: 0, complete: 0, failed: 0 },
-        'memorial': { ready: 0, processing: 0, complete: 0, failed: 0 },
+        'recap': { ready: 0, processing: 0, complete: 0, failed: 0 },
         'bible-class': { ready: 0, processing: 0, complete: 0, failed: 0 },
         'sunday-school': { ready: 0, processing: 0, complete: 0, failed: 0 },
       }
@@ -469,8 +500,23 @@ export class SendQueueRepository {
   // ========== HELPER METHODS ==========
 
   private recordToSchedule(record: ScheduleRecord): EmailSchedule {
+    // Extract emailType from SK if not stored separately (handles legacy records)
+    // SK format: {emailType}#{dayOfWeek}#{time}
+    let emailType = record.emailType
+
+    if (!emailType && record.SK) {
+      const skParts = record.SK.split('#')
+      if (skParts.length >= 1) {
+        emailType = skParts[0] as EmailType
+      }
+    }
+
+    if (!emailType) {
+      throw new Error(`Cannot determine emailType from record with SK: ${record.SK}`)
+    }
+
     return {
-      emailType: record.emailType,
+      emailType: emailType,
       dayOfWeek: record.dayOfWeek,
       time: record.time,
       timezone: record.timezone,

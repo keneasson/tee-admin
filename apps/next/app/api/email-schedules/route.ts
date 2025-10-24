@@ -111,8 +111,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 /**
- * DELETE /api/email-schedules?emailType={type}
- * Delete an email schedule
+ * DELETE /api/email-schedules?emailType={type}&dayOfWeek={day}&time={time}
+ * Delete an email schedule by exact PK/SK
  */
 export async function DELETE(req: NextRequest) {
   try {
@@ -129,26 +129,24 @@ export async function DELETE(req: NextRequest) {
     }
 
     const emailType = req.nextUrl.searchParams.get('emailType')
-    if (!emailType) {
+    const dayOfWeek = req.nextUrl.searchParams.get('dayOfWeek')
+    const time = req.nextUrl.searchParams.get('time')
+
+    if (!emailType || !dayOfWeek || !time) {
       return NextResponse.json(
-        { error: 'Missing required parameter: emailType' },
+        { error: 'Missing required parameters: emailType, dayOfWeek, time' },
         { status: 400 }
       )
     }
 
-    const deleted = await sendQueueRepo.deleteSchedule(emailType as any)
-    if (!deleted) {
-      return NextResponse.json(
-        { error: 'Schedule not found' },
-        { status: 404 }
-      )
-    }
+    await sendQueueRepo.deleteSchedule(emailType as any, dayOfWeek as any, time)
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to delete schedule:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete schedule'
     return NextResponse.json(
-      { error: 'Failed to delete schedule' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

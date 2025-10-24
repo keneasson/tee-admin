@@ -9,7 +9,7 @@ import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
 
 export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   constructor() {
-    super('schedules') // Uses new tee-schedules table
+    super('schedules', true) // Uses new tee-schedules table with uppercase PK/SK
   }
 
   protected buildSheetPK(sheetId: string): string {

@@ -7,12 +7,12 @@ import { emailSend, emailReasons } from '@/utils/email/email-send'
 // Configure route for longer timeout (matches legacy cron jobs)
 export const maxDuration = 60 // 60 seconds
 
-// Map new email types to existing email system
+// Email types now align with email sending system (email-send.tsx)
 const emailTypeMap: Record<EmailType, emailReasons> = {
   'newsletter': 'newsletter',
   'bible-class': 'bible-class',
   'sunday-school': 'sunday-school',
-  'memorial': 'recap', // Memorial service uses 'recap' in the old system
+  'recap': 'recap',
 }
 
 export async function GET(req: NextRequest) {

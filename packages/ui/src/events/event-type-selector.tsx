@@ -13,7 +13,7 @@ interface EventTypeOption {
 const eventTypeOptions: EventTypeOption[] = [
   {
     type: 'study-weekend',
-    label: 'Study Weekend',
+    label: 'Bible Study',
     description: 'Multi-day ecclesial event with speakers, meals, and activities',
     icon: Calendar,
     color: '$blue10'

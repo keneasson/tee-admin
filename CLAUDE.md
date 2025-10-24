@@ -107,11 +107,51 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - Google Sheets integration for schedules, contacts, and newsletters
 - Email campaigns scheduled via AWS EventBridge (migrated from Vercel cron)
 
-### Cross-Platform Development
-- Business logic lives in `packages/app/features/`
-- UI components in `packages/ui/` work across web and mobile
-- Platform-specific code only in `apps/` directories
-- Shared navigation logic using Solito
+### Cross-Platform Development & Package Architecture Rules
+
+**CRITICAL**: The `packages/ui/` and `packages/app/` directories are shared between Next.js (web) and Expo (mobile). Follow these strict rules:
+
+#### Platform-Specific Code Separation
+- **Next.js-specific code** (e.g., `next-auth/react`, `next/navigation`) → **MUST** live in `apps/next/`
+- **Expo-specific code** (e.g., React Native APIs) → **MUST** live in `apps/expo/`
+- **Shared code** (business logic, UI components) → Lives in `packages/app/` and `packages/ui/`
+
+#### Authentication State Management
+- **Never import** `next-auth/react` or `next/navigation` in `packages/ui/` or `packages/app/`
+- **Auth state must be passed down** as props from platform-specific code
+- **Next.js auth hooks** → `apps/next/hooks/` (e.g., `use-user-role.tsx`, `use-admin-access.tsx`)
+- **Expo auth hooks** → `apps/expo/hooks/` (when implemented)
+- **Shared components** receive auth state as props (e.g., `userRole`, `isMemberOrHigher`)
+
+#### Example Pattern
+```typescript
+// ❌ WRONG - Don't import next-auth in shared UI package
+import { useSession } from 'next-auth/react'
+export function SharedComponent() {
+  const { data: session } = useSession() // Platform-specific!
+}
+
+// ✅ CORRECT - Receive auth state as props
+export function SharedComponent({ userRole, isMemberOrHigher }) {
+  // Use props passed from platform-specific parent
+}
+```
+
+#### Avoiding Circular Dependencies
+- Platform apps (`apps/next/`, `apps/expo/`) import from shared packages
+- Shared packages (`packages/ui/`, `packages/app/`) **never** import from platform apps
+- State flows downward: Platform → Shared, never upward: Shared → Platform
+
+#### Build System Compatibility
+- **Tamagui static extraction** runs during Next.js build and attempts to `require()` all UI components
+- Any component importing ESM-only modules (like `next-auth/react`) will cause build failures
+- Keep platform-specific dependencies out of shared packages to avoid `require()` errors
+
+#### Reference Implementation
+- `apps/next/hooks/use-user-role.tsx` - Next.js-specific auth hook
+- `apps/next/hooks/use-admin-access.tsx` - Next.js-specific admin access hook
+- `packages/ui/src/events/event-summary-card.tsx` - Shared component receiving auth props
+- `packages/ui/src/events/event-detail-view.tsx` - Shared component receiving auth props
 
 ### App Router Architecture & Patterns
 
