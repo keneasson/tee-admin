@@ -16,7 +16,13 @@ import { Event } from '@my/app/types/events'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { useRouter } from 'next/navigation'
 
-export const NewsletterScreen: React.FC = () => {
+type NewsletterScreenProps = {
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
+}
+
+export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({ userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
   const [program, setProgram] = useState<ProgramTypes[] | null>(null)
   const [readings, setReadings] = useState<[] | null>(null)
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
@@ -174,6 +180,8 @@ export const NewsletterScreen: React.FC = () => {
                           event={businessMeetingEvent}
                           variant="newsletter"
                           onPress={() => router.push(`/events/${businessMeetingEvent.id}`)}
+                          userRole={userRole}
+                          isMemberOrHigher={isMemberOrHigher}
                         />
                       </Card>
                     )

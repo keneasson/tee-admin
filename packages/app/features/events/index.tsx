@@ -12,29 +12,35 @@ import { Event } from '@my/app/types/events'
 
 type EventProps = {
   eventId?: string | string[]
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
 }
-export const Events: React.FC<EventProps> = ({ eventId }) => {
+export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
   if (!eventId) {
-    return <EventListing />
+    return <EventListing userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
   }
-  
+
   // Handle legacy study weekend
   if (eventId === 'study-weekend-2024') {
     return <StudyWeekend2024 />
   }
-  
+
   // Handle dynamic events
   if (typeof eventId === 'string') {
-    return <DynamicEventDetail eventId={eventId} />
+    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
   }
-  
-  return <EventListing isNotFound={true} />
+
+  return <EventListing isNotFound={true} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
 }
 
 type EventListingProps = {
   isNotFound?: boolean
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
 }
-export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
+export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
   const router = useRouter()
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,6 +109,8 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
                 event={event}
                 onPress={() => handleEventPress(event.id)}
                 variant="newsletter"
+                userRole={userRole}
+                isMemberOrHigher={isMemberOrHigher}
               />
             ))}
           </YStack>
@@ -118,9 +126,12 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
 
 type DynamicEventDetailProps = {
   eventId: string
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
 }
 
-export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId }) => {
+export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
   const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
@@ -174,7 +185,12 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId 
   return (
     <Wrapper subHheader={event.title || 'Event Details'}>
       <Section>
-        <EventDetailView event={event} />
+        <EventDetailView
+          event={event}
+          userRole={userRole}
+          isMemberOrHigher={isMemberOrHigher}
+          isAuthLoading={isAuthLoading}
+        />
         <EventsFooter />
       </Section>
     </Wrapper>
