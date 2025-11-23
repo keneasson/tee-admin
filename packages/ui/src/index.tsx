@@ -23,3 +23,10 @@ export { EnhancedScheduleWithData } from './data-table/enhanced-schedule-with-da
 
 // Event System
 export * from './events'
+
+// Email System
+export * from './email/contact-card'
+export * from './email/merge-dialog'
+export * from './email/add-email-dialog'
+export * from './email/migrate-email-dialog'
+export * from './email/person-selector-dialog'

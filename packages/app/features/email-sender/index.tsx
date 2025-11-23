@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import {
   Button,
@@ -8,18 +8,22 @@ import {
   Heading,
   Paragraph,
   Text,
+  TextArea,
   XStack,
   YStack,
   Card,
-  Separator
+  Separator,
+  Tabs,
 } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { emailReasons } from 'next-app/utils/email/email-send'
-import { Check, Send, Mail, AlertCircle } from '@tamagui/lucide-icons'
-import { sendEmail } from '../../provider/get-data'
+import { Check, Send, Mail, AlertCircle, Edit3 } from '@tamagui/lucide-icons'
+import { sendEmail, getContactsList } from '../../provider/get-data'
+import { CustomEmailCreator } from '../custom-email-creator'
+import { EmailListTypeKeys } from '@my/app/types'
 
 export const EmailSender: React.FC = () => {
   const { data: session } = useSession()
@@ -27,6 +31,29 @@ export const EmailSender: React.FC = () => {
   const [reason, setReason] = useState<string | null>(null)
   const [test, setTest] = useState<boolean>(true) // Default to test mode for safety
   const [sending, setSending] = useState<boolean>(false)
+  const [note, setNote] = useState<string>('')
+  const [availableLists, setAvailableLists] = useState<{ key: EmailListTypeKeys; label: string }[]>([])
+  const [activeTab, setActiveTab] = useState<string>('templates')
+
+  const MAX_NOTE_LENGTH = 500
+
+  // Load available email lists
+  useEffect(() => {
+    const loadLists = async () => {
+      try {
+        const lists = await getContactsList()
+        setAvailableLists(
+          lists.lists.map((list) => ({
+            key: list.key,
+            label: list.displayName,
+          }))
+        )
+      } catch (error) {
+        console.error('Failed to load email lists:', error)
+      }
+    }
+    loadLists()
+  }, [])
 
   // Define all hooks before conditional returns
   if (!(session && session.user)) {
@@ -59,11 +86,42 @@ export const EmailSender: React.FC = () => {
     setSending(true)
     setReason(reason)
     try {
-      const response = await sendEmail(reason, test)
+      const response = await sendEmail(reason, test, note)
       setEmail(response)
     } catch (error) {
       console.error('Error sending email:', error)
       setEmail({ error: 'Failed to send email', details: error })
+    } finally {
+      setSending(false)
+      setReason(null)
+    }
+  }
+
+  const handleCustomEmailSend = async (emailData: {
+    subject: string
+    htmlContent: string
+    selectedList: EmailListTypeKeys
+    note: string
+    draftId?: string
+  }) => {
+    setSending(true)
+    setReason('custom')
+    try {
+      // If sending to testList, always use test mode
+      const isTestSend = emailData.selectedList === 'testList'
+
+      const response = await sendEmail('custom', isTestSend, emailData.note, {
+        htmlContent: emailData.htmlContent,
+        subject: emailData.subject,
+        selectedList: emailData.selectedList,
+      })
+      setEmail(response)
+      // Switch to templates tab to show the response
+      setActiveTab('templates')
+    } catch (error) {
+      console.error('Error sending custom email:', error)
+      setEmail({ error: 'Failed to send custom email', details: error })
+      setActiveTab('templates')
     } finally {
       setSending(false)
       setReason(null)
@@ -98,13 +156,44 @@ export const EmailSender: React.FC = () => {
       description: 'Sunday school announcements',
       icon: Mail,
       color: '$orange10'
+    },
+    {
+      id: 'business-meeting',
+      label: 'Business Meeting',
+      description: 'Business meeting details with Zoom link and documents',
+      icon: Mail,
+      color: '$blue10'
     }
   ]
 
   return (
     <Wrapper subHheader="Email Sender">
       <Section gap={'$4'}>
-        <YStack gap="$4">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          orientation="horizontal"
+          flexDirection="column"
+          width="100%"
+        >
+          <Tabs.List separator={<Separator vertical />} backgroundColor="$background">
+            <Tabs.Tab flex={1} value="templates">
+              <XStack gap="$2" alignItems="center">
+                <Mail size={16} />
+                <Text>Email Templates</Text>
+              </XStack>
+            </Tabs.Tab>
+            <Tabs.Tab flex={1} value="custom">
+              <XStack gap="$2" alignItems="center">
+                <Edit3 size={16} />
+                <Text>Create Custom Email</Text>
+              </XStack>
+            </Tabs.Tab>
+          </Tabs.List>
+
+          {/* Email Templates Tab */}
+          <Tabs.Content value="templates" padding="$4">
+            <YStack gap="$4">
           {/* Test Mode Toggle */}
           <Card elevate bordered padding="$4" backgroundColor={test ? '$orange2' : '$red2'}>
             <XStack gap="$3" alignItems="center">
@@ -136,6 +225,36 @@ export const EmailSender: React.FC = () => {
                 ⚠️ WARNING: Emails will be sent to ALL subscribers (100+ recipients)
               </Text>
             ) : null}
+          </Card>
+
+          {/* Optional Note */}
+          <Card elevate bordered padding="$4" backgroundColor="$background">
+            <YStack gap="$3">
+              <Heading size={3}>Include a Brief Note (Optional)</Heading>
+              <Text fontSize="$3" color="$gray11">
+                Add a note to include at the top of the email (e.g., corrections, important updates)
+              </Text>
+              <TextArea
+                placeholder="Enter your note here... (e.g., 'Links were broken in previous email, resending with correct URLs')"
+                value={note}
+                onChangeText={(text) => setNote(text.slice(0, MAX_NOTE_LENGTH))}
+                size="$4"
+                minHeight={100}
+                borderColor="$gray6"
+                borderWidth={1}
+                backgroundColor="$background"
+              />
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize="$2" color={note.length >= MAX_NOTE_LENGTH ? '$red10' : '$gray11'}>
+                  {note.length} / {MAX_NOTE_LENGTH} characters
+                </Text>
+                {note.length > 0 && (
+                  <Button size="$2" variant="outlined" onPress={() => setNote('')}>
+                    Clear Note
+                  </Button>
+                )}
+              </XStack>
+            </YStack>
           </Card>
 
           <Separator />
@@ -243,7 +362,18 @@ export const EmailSender: React.FC = () => {
               </YStack>
             </Card>
           ) : null}
-        </YStack>
+            </YStack>
+          </Tabs.Content>
+
+          {/* Custom Email Tab */}
+          <Tabs.Content value="custom" padding="$4">
+            <CustomEmailCreator
+              onSend={handleCustomEmailSend}
+              availableLists={availableLists}
+              sending={sending}
+            />
+          </Tabs.Content>
+        </Tabs>
       </Section>
     </Wrapper>
   )

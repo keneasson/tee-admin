@@ -19,14 +19,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(404).json({ failed: 'Json Data Not Found' })
   }
   const isTest = !!req.query.test
+  const note = typeof req.query.note === 'string' ? req.query.note : undefined
   const reason = req.query.reason as emailReasons
+
+  // For custom emails, we need additional parameters from the request body
+  let customHtmlContent: string | undefined
+  let customSubject: string | undefined
+  let customList: string | undefined
+
+  if (reason === 'custom' && req.method === 'POST') {
+    const body = req.body
+    customHtmlContent = body.htmlContent
+    customSubject = body.subject
+    customList = body.selectedList
+
+    if (!customHtmlContent || !customSubject || !customList) {
+      return res.status(400).json({
+        failed: 'Custom email requires htmlContent, subject, and selectedList in request body'
+      })
+    }
+  }
+
   try {
-    const [emailHtml, emailText] = await getEmailContent(reason)
+    const [emailHtml, emailText] = await getEmailContent(reason, note, customHtmlContent, customSubject)
     if (!(emailHtml && emailText)) {
       return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }
-    console.log('IS sending as TEST: ', { isTest })
-    const result = await emailSend({ reason, emailHtml, emailText, test: isTest })
+    console.log('IS sending as TEST: ', { isTest, hasNote: !!note })
+    const result = await emailSend({
+      reason,
+      emailHtml,
+      emailText,
+      test: isTest,
+      customList,
+      customSubject,
+    })
     console.log('result from AWS.SES', result)
     return res.status(200).json(result)
   } catch (e) {

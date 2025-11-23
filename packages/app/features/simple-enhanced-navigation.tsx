@@ -38,6 +38,7 @@ const emailAdminPages: MainPageType[] = [
 const systemAdminPages: MainPageType[] = [
   { path: '/admin/events', label: 'Event Management' },
   { path: '/admin/data-sync', label: 'Data Sync' },
+  { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
   { path: '/admin/profile', label: 'Profile' },
 ]
 

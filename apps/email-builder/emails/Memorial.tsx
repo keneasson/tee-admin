@@ -93,7 +93,7 @@ function getDateFormatted(date: Date | string): string {
   return date.toDateString()
 }
 
-const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
+const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) => {
   const sundaysDateString = getNextDayOfTheWeek('sun').toDateString()
   const sundayEvents = events || mockEvents
 
@@ -107,8 +107,34 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events }) => {
         <Section style={header}>
           <Heading>Toronto East Christiadelphians</Heading>
           <Text style={defaultText}>{sundaysDateString}</Text>
-          <text>{'All arrangements are subject to God’s will.'}</text>
+          <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
         </Section>
+
+        {/* Optional Note Section */}
+        {note && note.trim() && (
+          <Section style={{
+            backgroundColor: '#fff3cd',
+            padding: '16px',
+            marginTop: '20px',
+            marginBottom: '20px',
+            borderRadius: '4px'
+          }}>
+            <Text style={{
+              ...defaultText,
+              margin: '0 0 8px 0',
+              fontWeight: 'bold'
+            }}>
+              Note:
+            </Text>
+            <Text style={{
+              ...defaultText,
+              margin: '0',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {note}
+            </Text>
+          </Section>
+        )}
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           {sundayEvents[0] !== undefined && (

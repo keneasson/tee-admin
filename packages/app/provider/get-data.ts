@@ -31,8 +31,40 @@ export const getData = async (key: string): Promise<DataTypes> => {
   } as CycType
 }
 
-export const sendEmail = async (key: emailReasons, isTest?: boolean): Promise<string> => {
-  const url = `${API_PATH}api/email/${key}${isTest ? '?test=true' : ''}`
+export const sendEmail = async (
+  key: emailReasons,
+  isTest?: boolean,
+  note?: string,
+  customData?: {
+    htmlContent?: string
+    subject?: string
+    selectedList?: string
+  }
+): Promise<string> => {
+  const params = new URLSearchParams()
+  if (isTest) {
+    params.append('test', 'true')
+  }
+  if (note && note.trim()) {
+    params.append('note', note.trim())
+  }
+  const queryString = params.toString()
+  const url = `${API_PATH}api/email/${key}${queryString ? `?${queryString}` : ''}`
+
+  // For custom emails, use POST with body data
+  if (key === 'custom' && customData) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(customData),
+      cache: 'no-store',
+    })
+    return await response.json()
+  }
+
+  // For other email types, use GET
   const rawSchedule = await fetch(url, { cache: 'no-store' })
   return await rawSchedule.json()
 }
@@ -87,4 +119,162 @@ export const updateContacts = async (contact: CreateContactType): Promise<string
   const body = JSON.stringify(contact)
   const response = await fetch(url, { cache: 'no-store', method: 'PATCH', body })
   return await response.json()
+}
+
+/**
+ * Search for contacts across both SES and DynamoDB directory
+ * @param searchTerm The search term (minimum 2 characters)
+ */
+export const searchContacts = async (searchTerm: string): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/search?q=${encodeURIComponent(searchTerm)}`
+  const response = await fetch(url, { cache: 'no-store', method: 'GET' })
+  return await response.json()
+}
+
+/**
+ * Merge two contact records into one
+ * @param sourcePK Source contact partition key
+ * @param sourceSK Source contact sort key
+ * @param targetPK Target contact partition key
+ * @param targetSK Target contact sort key
+ */
+export const mergeContacts = async (
+  sourcePK: string,
+  sourceSK: string,
+  targetPK: string,
+  targetSK: string
+): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'merge',
+    sourcePK,
+    sourceSK,
+    targetPK,
+    targetSK,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Merge failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
+}
+
+/**
+ * Migrate email: copy subscriptions from old email to new email, unsubscribe old, update primary
+ * @param oldEmail Old email address to migrate from
+ * @param newEmail New email address to migrate to
+ * @param pkey Person partition key
+ * @param skey Person sort key
+ */
+export const migrateEmail = async (
+  oldEmail: string,
+  newEmail: string,
+  pkey: string,
+  skey: string
+): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'migrate',
+    oldEmail,
+    newEmail,
+    pkey,
+    skey,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Migrate failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
+}
+
+/**
+ * Reorder emails for a person (first email becomes primary)
+ * @param pkey Person partition key
+ * @param emails Array of email addresses in desired order (max 2)
+ */
+export const reorderEmails = async (pkey: string, emails: string[]): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'reorder',
+    pkey,
+    emails,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Reorder failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
+}
+
+/**
+ * Global unsubscribe: unsubscribe email from all lists (compliance)
+ * @param email Email address to unsubscribe
+ */
+export const unsubscribeAllLists = async (email: string): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'unsubscribe-all',
+    email,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Unsubscribe failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
+}
+
+/**
+ * Archive an email: mark email as archived (max 2 active emails allowed)
+ * @param pkey Person partition key
+ * @param email Email address to archive
+ */
+export const archiveEmail = async (pkey: string, email: string): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'archive-email',
+    pkey,
+    email,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Archive failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
+}
+
+/**
+ * Unarchive an email: mark email as active (enforces max 2 active emails)
+ * @param pkey Person partition key
+ * @param email Email address to unarchive
+ */
+export const unarchiveEmail = async (pkey: string, email: string): Promise<any> => {
+  const url = `${API_PATH}api/admin/email/consolidate`
+  const body = JSON.stringify({
+    operation: 'unarchive-email',
+    pkey,
+    email,
+  })
+  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || `Unarchive failed: ${response.status} ${response.statusText}`)
+  }
+
+  return data
 }

@@ -30,6 +30,7 @@ export enum EmailListTypes {
   newsletter = 'newsletter',
   memorial = 'memorial',
   bibleClass = 'bibleClass',
+  members = 'members',
   testList = 'testList',
 }
 
@@ -71,6 +72,9 @@ export type ContactPreferences = {
   unsubscribed: boolean
   displayName: string
   preferences: ContactsEmailPreferences
+  firstName?: string
+  lastName?: string
+  isMember?: boolean
 }
 
 export type ContactListMeta = {
@@ -141,10 +145,12 @@ export type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
 export type NextMemorialServiceProps = {
   events: SundayEvents[]
+  note?: string
 }
 
 export type NextSundaySchoolProps = {
   events: SundaySchoolType[]
+  note?: string
 }
 
 export type BibleClassType = {
@@ -157,6 +163,7 @@ export type BibleClassType = {
 
 export type NextBibleClassProps = {
   events: BibleClassType[]
+  note?: string
 }
 
 export type NextNewsletterProps = {

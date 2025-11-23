@@ -8,7 +8,7 @@ const adminMailDomain = '@tee-admin.com'
 
 const SES_RATE_LIMIT = 14
 
-export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap'
+export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom'
 
 const senders = {
   'sunday-school': {
@@ -35,6 +35,18 @@ const senders = {
     subject: 'Memorial Service Tomorrow',
     contactList: 'memorial',
   },
+  'business-meeting': {
+    name: 'Toronto East Ecclesia',
+    email: 'business.meeting',
+    subject: 'Business Meeting Details',
+    contactList: 'members',
+  },
+  custom: {
+    name: 'Toronto East Ecclesia',
+    email: 'communications',
+    subject: 'Toronto East Communications',
+    contactList: 'testList', // Safe default - will be overridden by customList parameter
+  },
 }
 
 export type emailSendProps = {
@@ -42,6 +54,8 @@ export type emailSendProps = {
   emailHtml: string
   emailText: string
   test?: boolean
+  customList?: string // For custom emails to specify which list to send to
+  customSubject?: string // For custom emails to specify subject
 }
 
 type Sends = { sends: string[]; skips: string[] }
@@ -69,12 +83,15 @@ export const emailSend = async function ({
   emailHtml,
   emailText,
   test = false,
+  customList,
+  customSubject,
 }: emailSendProps): Promise<Sends | Error> {
   if (Object.keys(senders).findIndex((r) => r === reason) === -1) {
     throw new Error(`${reason} is not a valid email type`)
   }
   try {
-    const listTopic = test === true ? 'testList' : senders[reason].contactList
+    // For custom emails, use the provided list, otherwise use the default for that reason
+    const listTopic = test === true ? 'testList' : (customList || senders[reason].contactList)
     const sesClient = getSesClient()
     const result = { sends: [], skips: [] }
 
@@ -91,7 +108,9 @@ export const emailSend = async function ({
     const today = date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate()
 
     const from = `"${senders[reason].name}" <${senders[reason].email}${adminMailDomain}>`
-    const subject = `${test ? '[TEST] ' : ''}${senders[reason].subject} ${today}`
+    // For custom emails, use the provided subject, otherwise use the default
+    const defaultSubject = customSubject || senders[reason].subject
+    const subject = `${test ? '[TEST] ' : ''}${defaultSubject} ${today}`
 
     const sendChunks = chunkArray(senderEmails, SES_RATE_LIMIT)
     let allSent: Sends = { sends: [], skips: [] }

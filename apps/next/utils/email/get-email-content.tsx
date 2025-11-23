@@ -13,6 +13,8 @@ import MemorialService from 'email-builder/emails/Memorial'
 import Newsletter from 'email-builder/emails/Newsletter'
 import { emailReasons } from './email-send'
 import BibleClass from 'email-builder/emails/BibleClass'
+import BusinessMeeting from 'email-builder/emails/BusinessMeeting'
+import CustomEmail from 'email-builder/emails/CustomEmail'
 
 function mergeSundayEvents(events: ProgramTypes[]): SundayEvents[] {
   const memorial = events.filter((e) => e.Key === 'memorial') as MemorialServiceType[]
@@ -97,13 +99,18 @@ function stripTime(date: Date): Date {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
 }
 
-export const getEmailContent = async (reason: emailReasons): Promise<string[] | undefined[]> => {
+export const getEmailContent = async (
+  reason: emailReasons,
+  note?: string,
+  customHtmlContent?: string,
+  customSubject?: string
+): Promise<string[] | undefined[]> => {
   switch (reason) {
     case 'sunday-school':
       const events = await get_upcoming_program(['sundaySchool'])
       console.log('events', events)
-      const htmlContent = await render(<SundaySchool events={events as SundaySchoolType[]} />)
-      const textContent = await render(<SundaySchool events={events as SundaySchoolType[]} />, {
+      const htmlContent = await render(<SundaySchool events={events as SundaySchoolType[]} note={note} />)
+      const textContent = await render(<SundaySchool events={events as SundaySchoolType[]} note={note} />, {
         plainText: true,
       })
       return [htmlContent, textContent]
@@ -112,18 +119,18 @@ export const getEmailContent = async (reason: emailReasons): Promise<string[] | 
       console.log('memorialEvents', memorialEvents)
       const mergeEvents = mergeSundayEvents(memorialEvents)
       console.log('mergeEvents', mergeEvents)
-      const MemorialHtmlContent = await render(<MemorialService events={mergeEvents} />)
-      const MemorialTextContent = await render(<MemorialService events={mergeEvents} />, {
+      const MemorialHtmlContent = await render(<MemorialService events={mergeEvents} note={note} />)
+      const MemorialTextContent = await render(<MemorialService events={mergeEvents} note={note} />, {
         plainText: true,
       })
       return [MemorialHtmlContent, MemorialTextContent]
     case 'bible-class':
       const bibleClassEvents = await get_upcoming_program(['bibleClass'])
       const bibleClassHtmlContent = await render(
-        <BibleClass events={bibleClassEvents as BibleClassType[]} />
+        <BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />
       )
       const bibleClassTextContent = await render(
-        <BibleClass events={bibleClassEvents as BibleClassType[]} />,
+        <BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />,
         {
           plainText: true,
         }
@@ -148,6 +155,7 @@ export const getEmailContent = async (reason: emailReasons): Promise<string[] | 
           scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
           upcomingEvents={upcomingEvents}
           readings={readingsData}
+          note={note}
         />
       )
       const newsletterTextContent = await render(
@@ -155,10 +163,29 @@ export const getEmailContent = async (reason: emailReasons): Promise<string[] | 
           scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
           upcomingEvents={upcomingEvents}
           readings={readingsData}
+          note={note}
         />,
         { plainText: true }
       )
       return [newsletterHtmlContent, newsletterTextContent]
+    case 'business-meeting':
+      const businessMeetingHtmlContent = await render(<BusinessMeeting note={note} />)
+      const businessMeetingTextContent = await render(<BusinessMeeting note={note} />, {
+        plainText: true,
+      })
+      return [businessMeetingHtmlContent, businessMeetingTextContent]
+    case 'custom':
+      if (!customHtmlContent) {
+        throw new Error('Custom email requires htmlContent')
+      }
+      const customEmailHtmlContent = await render(
+        <CustomEmail htmlContent={customHtmlContent} subject={customSubject} note={note} />
+      )
+      const customEmailTextContent = await render(
+        <CustomEmail htmlContent={customHtmlContent} subject={customSubject} note={note} />,
+        { plainText: true }
+      )
+      return [customEmailHtmlContent, customEmailTextContent]
     default:
       return [undefined]
   }

@@ -37,7 +37,7 @@ const mockEvents: BibleClassType[] = [
   },
 ]
 
-const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
+const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   const bibleClassEvents = events || mockEvents
   return (
     <Html lang="en">
@@ -49,6 +49,33 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events }) => {
         <Section style={header}>
           <Heading>Toronto East Bible Class</Heading>
         </Section>
+
+        {/* Optional Note Section */}
+        {note && note.trim() && (
+          <Section style={{
+            backgroundColor: '#fff3cd',
+            padding: '16px',
+            marginTop: '20px',
+            marginBottom: '20px',
+            borderRadius: '4px'
+          }}>
+            <Text style={{
+              ...defaultText,
+              margin: '0 0 8px 0',
+              fontWeight: 'bold'
+            }}>
+              Note:
+            </Text>
+            <Text style={{
+              ...defaultText,
+              margin: '0',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {note}
+            </Text>
+          </Section>
+        )}
+
         <Container style={container} className="container">
           <Section style={program}>
             <Heading style={defaultText}>

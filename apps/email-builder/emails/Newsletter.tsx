@@ -515,12 +515,14 @@ interface EmailNewsletterProps {
   scheduleEvents?: (MemorialServiceType | BibleClassType | SundaySchoolType)[]
   upcomingEvents?: Event[]
   readings?: any[]
+  note?: string
 }
 
 const Newsletter: React.FC<EmailNewsletterProps> = ({
   scheduleEvents,
   upcomingEvents = [],
   readings = [],
+  note,
 }) => {
   const todaysDate = new Date().toDateString()
   const allScheduleEvents = scheduleEvents || mockEvents
@@ -636,6 +638,32 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             All plans are subject to God's will.
           </Text>
         </Section>
+
+        {/* Optional Note Section */}
+        {note && note.trim() && (
+          <Section style={{
+            backgroundColor: '#fff3cd',
+            padding: '16px',
+            marginTop: '20px',
+            marginBottom: '20px',
+            borderRadius: '4px'
+          }}>
+            <Text style={{
+              ...defaultText,
+              margin: '0 0 8px 0',
+              fontWeight: 'bold'
+            }}>
+              Note:
+            </Text>
+            <Text style={{
+              ...defaultText,
+              margin: '0',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {note}
+            </Text>
+          </Section>
+        )}
 
         {/* Regular Services Section */}
         {Object.entries(groupedByDate).map(([date, events], dateIndex) => {
