@@ -27,6 +27,7 @@ import React from 'react'
 import type { MemorialServiceType, NextMemorialServiceProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
   const dayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(
@@ -85,16 +86,26 @@ const mockEvents: SundayEvents[] = [
   },
 ]
 
+function formatDateToronto(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Toronto',
+  })
+}
+
 function getDateFormatted(date: Date | string): string {
   if (typeof date === 'string') {
     const when = new Date(date)
-    return when.toDateString()
+    return formatDateToronto(when)
   }
-  return date.toDateString()
+  return formatDateToronto(date)
 }
 
 const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) => {
-  const sundaysDateString = getNextDayOfTheWeek('sun').toDateString()
+  const sundaysDateString = formatDateToronto(getNextDayOfTheWeek('sun'))
   const sundayEvents = events || mockEvents
 
   return (
@@ -131,7 +142,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

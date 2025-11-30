@@ -19,6 +19,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 export type CustomEmailProps = {
   htmlContent: string
@@ -27,7 +28,13 @@ export type CustomEmailProps = {
 }
 
 const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note }) => {
-  const todaysDate = new Date().toDateString()
+  const todaysDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Toronto',
+  })
 
   return (
     <Html lang="en">
@@ -92,7 +99,7 @@ const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note })
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

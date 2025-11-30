@@ -6,8 +6,21 @@ import { useEffect, useState } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { getUserFromLegacyDirectory } from '@my/app/provider/auth/get-user-from-legacy'
-import { DirectoryType } from '@my/app/types'
+// User profile type from DynamoDB
+type UserProfile = {
+  id?: string
+  email?: string
+  name?: string
+  role?: string
+  ecclesia?: string
+  profile?: {
+    fname?: string
+    lname?: string
+    phone?: string
+    address?: string
+    children?: string
+  }
+}
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 
@@ -24,7 +37,7 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   const router = useRouter()
   const isHydrated = useHydrated()
   
-  const [user, setUser] = useState<DirectoryType>()
+  const [user, setUser] = useState<UserProfile | null>(null)
   const [invitationLoading, setInvitationLoading] = useState(false)
   const [invitationMessage, setInvitationMessage] = useState('')
   const [invitationError, setInvitationError] = useState('')
@@ -43,8 +56,15 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   useEffect(() => {
     async function getUser() {
       if (session?.user?.email) {
-        const user = await getUserFromLegacyDirectory({ email: session.user.email })
-        setUser(user)
+        try {
+          const response = await fetch('/api/user/profile')
+          if (response.ok) {
+            const data = await response.json()
+            setUser(data.user)
+          }
+        } catch (error) {
+          console.error('Failed to fetch user profile:', error)
+        }
       }
     }
     getUser()
@@ -127,15 +147,34 @@ export const Profile: React.FC<ProfileType> = ({}) => {
             <Text fontSize="$3" theme="alt2">
               Role: {session.user?.role || 'Guest'}
             </Text>
-            {user &&
-              Object.keys(user).map((key, index) => {
-                return (
-                  <XStack key={index} gap="$2">
-                    <Text fontWeight="bold">{key}:</Text>
-                    <Text>{user[key]}</Text>
+            {user && (
+              <YStack gap="$2">
+                {user.ecclesia && (
+                  <XStack gap="$2">
+                    <Text fontWeight="bold">Ecclesia:</Text>
+                    <Text>{user.ecclesia}</Text>
                   </XStack>
-                )
-              })}
+                )}
+                {user.profile?.fname && (
+                  <XStack gap="$2">
+                    <Text fontWeight="bold">First Name:</Text>
+                    <Text>{user.profile.fname}</Text>
+                  </XStack>
+                )}
+                {user.profile?.lname && (
+                  <XStack gap="$2">
+                    <Text fontWeight="bold">Last Name:</Text>
+                    <Text>{user.profile.lname}</Text>
+                  </XStack>
+                )}
+                {user.profile?.phone && (
+                  <XStack gap="$2">
+                    <Text fontWeight="bold">Phone:</Text>
+                    <Text>{user.profile.phone}</Text>
+                  </XStack>
+                )}
+              </YStack>
+            )}
           </YStack>
 
           {/* Invitation Code Creation Section */}

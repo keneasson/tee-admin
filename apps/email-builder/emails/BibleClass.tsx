@@ -26,6 +26,7 @@ import React from 'react'
 import type { BibleClassType, NextBibleClassProps } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 const mockEvents: BibleClassType[] = [
   {
@@ -71,7 +72,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

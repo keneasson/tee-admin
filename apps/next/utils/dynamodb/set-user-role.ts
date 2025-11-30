@@ -1,6 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand, UpdateCommandInput } from '@aws-sdk/lib-dynamodb'
-import { User } from 'next-auth'
 import { generateUpdateExpression } from '@auth/dynamodb-adapter'
 
 import { getAwsDbConfig } from '../email/sesClient'
@@ -14,19 +13,16 @@ type EmailUserProps = {
 
 const dbClientConfig = getAwsDbConfig()
 
-type DBUser = User & {
-  pkey: string
-  skey: string
-  gsi1sk: string
-  gsi1pk: string
-  image: string
-  id: string
+// Simplified user type - only needs id and role for this function
+type UserWithRole = {
+  id?: string | null
+  email?: string | null
+  role?: string
 }
 
-async function addUsersRoleToDB({ user, legacy }: { user: DBUser; legacy: DirectoryType }) {
+async function addUsersRoleToDB({ user, legacy }: { user: UserWithRole; legacy: DirectoryType }) {
   console.log('set-user-role addUsersRoleToDB', user)
   if (!user?.id) return
-  const { pkey, skey } = user
   try {
     const dbClient = new DynamoDBClient(dbClientConfig)
     const docClient = DynamoDBDocumentClient.from(dbClient)

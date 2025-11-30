@@ -438,7 +438,7 @@ export function DocumentUpload({
                   !isEditing && (
                     <Button
                       size="$2"
-                      variant="ghost"
+                      chromeless
                       icon={<X size={16} />}
                       onPress={() => handleRemove(document)}
                       disabled={disabled}

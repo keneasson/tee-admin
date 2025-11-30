@@ -1,7 +1,7 @@
 import React from 'react'
 import { Anchor, styled } from 'tamagui'
 import { color } from '@tamagui/themes'
-import { ExternalLink } from '@tamagui/lucide-icons/icons/ExternalLink'
+import { ExternalLink } from '@tamagui/lucide-icons'
 
 const StyledLink = styled(Anchor, {
   fontWeight: 'bold',

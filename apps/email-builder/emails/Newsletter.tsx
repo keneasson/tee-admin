@@ -16,6 +16,7 @@ import React from 'react'
 import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
   const dayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(
@@ -323,12 +324,22 @@ const mockReadings = [
   },
 ]
 
+function formatDateToronto(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Toronto',
+  })
+}
+
 function getDateFormatted(date: Date | string): string {
   if (typeof date === 'string') {
     const when = new Date(date)
-    return when.toDateString()
+    return formatDateToronto(when)
   }
-  return date.toDateString()
+  return formatDateToronto(date)
 }
 
 // Helper function to calculate next occurrence of a recurring event
@@ -524,7 +535,13 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
   readings = [],
   note,
 }) => {
-  const todaysDate = new Date().toDateString()
+  const todaysDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Toronto',
+  })
   const allScheduleEvents = scheduleEvents || mockEvents
   const allUpcomingEvents = upcomingEvents.length > 0 ? upcomingEvents : mockUpcomingEvents
   const allReadings = readings.length > 0 ? readings : mockReadings
@@ -660,7 +677,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

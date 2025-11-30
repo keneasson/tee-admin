@@ -19,6 +19,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 export type BusinessMeetingProps = {
   note?: string
@@ -59,7 +60,7 @@ const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note }) => {
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

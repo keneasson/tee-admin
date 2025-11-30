@@ -224,9 +224,9 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             
             {/* Action buttons */}
             {onPreview && (
-              <Button 
-                size="$3" 
-                variant="ghost" 
+              <Button
+                size="$3"
+                chromeless
                 icon={Eye}
                 borderWidth={2}
                 borderColor="$textTertiary"

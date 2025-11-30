@@ -62,7 +62,7 @@ export function EventPreviewModal({ isOpen, onClose, eventData }: EventPreviewMo
           <XStack justifyContent="space-between" alignItems="center">
             <Dialog.Title>Event Preview</Dialog.Title>
             <Dialog.Close asChild>
-              <Button size="$2" variant="ghost" icon={X} />
+              <Button size="$2" chromeless icon={X} />
             </Dialog.Close>
           </XStack>
 

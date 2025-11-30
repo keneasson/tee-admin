@@ -12,8 +12,7 @@ import {
   YStack,
 } from '@my/ui'
 import { usePathname, useRouter } from 'solito/navigation'
-import { Menu } from '@tamagui/lucide-icons/icons/Menu'
-import { X } from '@tamagui/lucide-icons/icons/X'
+import { Menu, X } from '@tamagui/lucide-icons'
 import { useSession } from 'next-auth/react'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'

@@ -27,6 +27,7 @@ import React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 const mockEvents: SundaySchoolType[] = [
   {
@@ -78,7 +79,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
               margin: '0',
               whiteSpace: 'pre-wrap'
             }}>
-              {note}
+              <AutoLinkText text={note} />
             </Text>
           </Section>
         )}

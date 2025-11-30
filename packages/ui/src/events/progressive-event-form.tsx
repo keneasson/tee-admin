@@ -117,7 +117,7 @@ function CollapsibleComponent({
         <XStack gap="$2" alignItems="center" flex={1}>
           <Button
             size="$2"
-            variant="ghost"
+            chromeless
             onPress={() => setIsExpanded(!isExpanded)}
             icon={isExpanded ? <ChevronUp size="$1" /> : <ChevronDown size="$1" />}
             padding="$2"

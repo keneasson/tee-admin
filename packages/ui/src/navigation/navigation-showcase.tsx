@@ -352,11 +352,11 @@ export function NavigationShowcase() {
               </Text>
               <Button
                 size="$3"
-                variant="ghost"
+                chromeless
                 backgroundColor="transparent"
                 borderWidth={0}
               >
-                <Text fontSize="$5" color={colors.textPrimary}>☰</Text>
+                <Text fontSize={18} color={colors.textPrimary}>☰</Text>
               </Button>
             </XStack>
           </View>

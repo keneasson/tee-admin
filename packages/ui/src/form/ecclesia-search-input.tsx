@@ -232,7 +232,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
               size="$2"
               circular
               icon={X}
-              variant="ghost"
+              chromeless
               onPress={handleClear}
               hoverStyle={{ backgroundColor: '$gray3' }}
             />
@@ -269,7 +269,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             {suggestions.map((suggestion, index) => (
               <Button
                 key={`${suggestion.name}-${suggestion.city}`}
-                variant="ghost"
+                chromeless
                 justifyContent="flex-start"
                 paddingHorizontal="$4"
                 paddingVertical="$3"
@@ -295,7 +295,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             {/* Add new option */}
             {showAddOption && (
               <Button
-                variant="ghost"
+                chromeless
                 justifyContent="flex-start"
                 paddingHorizontal="$4"
                 paddingVertical="$3"
