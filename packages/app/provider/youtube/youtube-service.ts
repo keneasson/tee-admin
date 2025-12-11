@@ -306,13 +306,68 @@ export class YouTubeService {
   }
 
   /**
+   * Find the "Default stream key" for the channel by looking for a stream
+   * named "Default stream key" with RTMP/variable settings.
+   * This is the reusable stream that doesn't require encoder reconfiguration.
+   */
+  async findDefaultStream(): Promise<YouTubeStream | null> {
+    try {
+      console.log(`📺 Looking for "Default stream key" on channel...`)
+
+      // List all streams for the channel
+      const streamsResponse = await this.youtube.liveStreams.list({
+        part: ['snippet', 'cdn', 'status'],
+        mine: true,
+        maxResults: 50,
+      })
+
+      if (!streamsResponse.data.items || streamsResponse.data.items.length === 0) {
+        console.log(`📺 No streams found on channel`)
+        return null
+      }
+
+      const streams = streamsResponse.data.items as YouTubeStream[]
+      console.log(`📺 Found ${streams.length} stream(s), searching for "Default stream key"...`)
+
+      // Look for the "Default stream key" by title
+      const defaultStream = streams.find((s: YouTubeStream) =>
+        s.snippet.title.toLowerCase().includes('default stream key')
+      )
+
+      if (defaultStream) {
+        console.log(`✅ Found "Default stream key": ${defaultStream.id}`)
+        console.log(`   Stream name (key): ${defaultStream.cdn.ingestionInfo.streamName}`)
+        return defaultStream
+      }
+
+      // Log available streams for debugging
+      console.log(`⚠️ "Default stream key" not found. Available streams:`)
+      streams.forEach((s: YouTubeStream) => {
+        console.log(`   - "${s.snippet.title}" (ID: ${s.id})`)
+      })
+
+      return null
+    } catch (error) {
+      console.error('❌ Error finding default stream:', error)
+      return null
+    }
+  }
+
+  /**
    * Create a new livestream broadcast
+   *
+   * IMPORTANT CHANGES (Dec 2025):
+   * 1. enableAutoStart defaults to FALSE - requires manual "Go Live" button
+   * 2. Always uses the "Default stream key" instead of creating new streams
+   *    This prevents encoder reconfiguration every week
    */
   async createLivestream(request: CreateLivestreamRequest): Promise<CreateLivestreamResponse> {
     try {
       console.log(`📺 Creating new livestream: ${request.title}`)
 
       // Step 1: Create the broadcast
+      // Category 22 = "People & Blogs"
+      // CRITICAL: enableAutoStart = FALSE to require manual "Go Live"
       const broadcastResponse = await this.youtube.liveBroadcasts.insert({
         part: ['snippet', 'status', 'contentDetails'],
         requestBody: {
@@ -320,6 +375,7 @@ export class YouTubeService {
             title: request.title,
             description: request.description,
             scheduledStartTime: request.scheduledStartTime,
+            categoryId: '22', // People & Blogs
           },
           status: {
             privacyStatus: request.privacyStatus || 'public',
@@ -327,7 +383,9 @@ export class YouTubeService {
           },
           contentDetails: {
             enableDvr: request.enableDvr !== false,
-            enableAutoStart: request.enableAutoStart !== false,
+            // CRITICAL FIX: Default to FALSE - requires manual "Go Live" button
+            // Previously was TRUE, causing auto-start when encoder connected (2 hours early!)
+            enableAutoStart: request.enableAutoStart === true,
             enableAutoStop: request.enableAutoStop !== false,
             enableEmbed: true,
             recordFromStart: true,
@@ -339,34 +397,36 @@ export class YouTubeService {
 
       const broadcast = broadcastResponse.data as YouTubeLivestream
       console.log(`✅ Broadcast created: ${broadcast.id}`)
+      console.log(`📺 Auto-start disabled: Will require manual "Go Live" button`)
 
-      // Step 2: Create or reuse a stream
-      let stream: YouTubeStream
+      // Step 2: Find and use the "Default stream key" (reusable stream)
+      // This ensures the encoder doesn't need to be reconfigured every week
+      let stream: YouTubeStream | null = await this.findDefaultStream()
 
-      if (request.templateBroadcastId) {
-        // Try to get the bound stream from the template broadcast
-        const templateBroadcast = await this.getLivestream(request.templateBroadcastId)
+      if (!stream) {
+        // Fallback: Try template broadcast's stream if provided
+        if (request.templateBroadcastId) {
+          console.log(`📺 No default stream found, trying template: ${request.templateBroadcastId}`)
+          const templateBroadcast = await this.getLivestream(request.templateBroadcastId)
 
-        if (templateBroadcast?.contentDetails?.boundStreamId) {
-          console.log(`📺 Reusing stream from template: ${templateBroadcast.contentDetails.boundStreamId}`)
+          if (templateBroadcast?.contentDetails?.boundStreamId) {
+            const streamResponse = await this.youtube.liveStreams.list({
+              part: ['snippet', 'cdn', 'status'],
+              id: [templateBroadcast.contentDetails.boundStreamId],
+            })
 
-          const streamResponse = await this.youtube.liveStreams.list({
-            part: ['snippet', 'cdn', 'status'],
-            id: [templateBroadcast.contentDetails.boundStreamId],
-          })
-
-          if (streamResponse.data.items && streamResponse.data.items.length > 0) {
-            stream = streamResponse.data.items[0] as YouTubeStream
-          } else {
-            // If template stream not found, create a new one
-            stream = await this.createStream(request.title)
+            if (streamResponse.data.items && streamResponse.data.items.length > 0) {
+              stream = streamResponse.data.items[0] as YouTubeStream
+              console.log(`✅ Using stream from template: ${stream.id}`)
+            }
           }
-        } else {
-          // Template has no bound stream, create new one
-          stream = await this.createStream(request.title)
         }
-      } else {
-        // No template specified, create new stream
+      }
+
+      if (!stream) {
+        // Last resort: Create new stream (should be avoided!)
+        console.warn(`⚠️ WARNING: No "Default stream key" found - creating new stream!`)
+        console.warn(`⚠️ This will require encoder reconfiguration. Consider creating a "Default stream key" in YouTube Studio.`)
         stream = await this.createStream(request.title)
       }
 
