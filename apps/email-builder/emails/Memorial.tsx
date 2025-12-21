@@ -96,16 +96,13 @@ function formatDateToronto(date: Date): string {
   })
 }
 
-function getDateFormatted(date: Date | string): string {
-  if (typeof date === 'string') {
-    const when = new Date(date)
-    return formatDateToronto(when)
-  }
-  return formatDateToronto(date)
-}
-
 const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) => {
-  const sundaysDateString = formatDateToronto(getNextDayOfTheWeek('sun'))
+  const firstSunday = getNextDayOfTheWeek('sun')
+  const sundaysDateString = formatDateToronto(firstSunday)
+  // Calculate second Sunday by adding 7 days (Memorial is ALWAYS Sunday)
+  const secondSunday = new Date(firstSunday)
+  secondSunday.setDate(secondSunday.getDate() + 7)
+  const secondSundayDateString = formatDateToronto(secondSunday)
   const sundayEvents = events || mockEvents
 
   return (
@@ -248,7 +245,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
         {(sundayEvents[1]?.Exhort || sundayEvents[1]?.['Holidays and Special Events']) && (
           <Container style={container} className="container youtube-info">
             <Heading style={defaultText}>
-              Arrangements for {getDateFormatted(sundayEvents[1].Date)}
+              Arrangements for {secondSundayDateString}
             </Heading>
             <Row>
               <Column style={columnAlignTop}>{MemorialServiceProgram(sundayEvents[1])}</Column>

@@ -1,7 +1,7 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { GoogleSheetTypes, GoogleSheetData, ProgramTypeKeys } from '@my/app/types'
-import { tableNames } from './config'
+import { tableNames, docClient } from './config'
 
 interface ScheduleRecord {
   PK: string
@@ -34,10 +34,8 @@ export class ScheduleService {
   private client: DynamoDBDocumentClient
 
   constructor() {
-    const dynamoClient = new DynamoDBClient({
-      region: process.env.AWS_REGION || 'ca-central-1',
-    })
-    this.client = DynamoDBDocumentClient.from(dynamoClient)
+    // Use the shared docClient from config which has proper AWS credentials
+    this.client = docClient
   }
 
   /**
