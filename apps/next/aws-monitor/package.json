@@ -1,0 +1,20 @@
+{
+  "name": "tee-admin-health-monitor",
+  "version": "1.0.0",
+  "description": "AWS Lambda health monitor for TEE Admin",
+  "main": "health-check.js",
+  "scripts": {
+    "test": "node health-check.js",
+    "deploy": "sam deploy --guided",
+    "deploy-quick": "sam deploy --no-confirm-changeset --no-fail-on-empty-changeset",
+    "build": "sam build",
+    "logs": "sam logs -n tee-admin-health-check --tail",
+    "invoke": "sam remote invoke tee-admin-health-check"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.450.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
