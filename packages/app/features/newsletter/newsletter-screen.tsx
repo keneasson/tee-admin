@@ -1,7 +1,7 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Wrapper } from '@my/app/provider/wrapper'
-import { H2, YStack, Card, Separator } from '@my/ui'
+import { H2, YStack, Card, Separator, XStack, Button, Text } from '@my/ui'
 import { ProgramTypes } from '@my/app/types'
 import { Loading } from '@my/app/provider/loading'
 import { NextBibleClass } from '@my/app/features/newsletter/bible-class'
@@ -20,14 +20,49 @@ type NewsletterScreenProps = {
   userRole?: string
   isMemberOrHigher?: boolean
   isAuthLoading?: boolean
+  isAdminOrOwner?: boolean
+  onClearCache?: () => Promise<void>
 }
 
-export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({ userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
+export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
+  userRole,
+  isMemberOrHigher = false,
+  isAuthLoading = false,
+  isAdminOrOwner = false,
+  onClearCache,
+}) => {
   const [program, setProgram] = useState<ProgramTypes[] | null>(null)
   const [readings, setReadings] = useState<[] | null>(null)
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
+  const [clearingCache, setClearingCache] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const isHydrated = useHydrated()
   const router = useRouter()
+
+  const refreshData = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const [newProgram, newReadings] = await Promise.all([
+        fetchUpcoming({}),
+        fetchReadings(),
+      ])
+      setProgram(newProgram)
+      setReadings(newReadings)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  const handleClearCache = useCallback(async () => {
+    if (!onClearCache) return
+    setClearingCache(true)
+    try {
+      await onClearCache()
+      await refreshData()
+    } finally {
+      setClearingCache(false)
+    }
+  }, [onClearCache, refreshData])
 
   useEffect(() => {
     // Only fetch data after hydration to prevent hydration mismatches
@@ -96,6 +131,42 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({ userRole, is
   return (
     <Wrapper subHeader={'Newsletter'}>
       <YStack gap="$4" padding="$4">
+        {/* Admin Toolbar */}
+        {isAdminOrOwner && (
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            paddingHorizontal="$4"
+            paddingVertical="$2"
+            backgroundColor="$backgroundSecondary"
+            borderRadius="$4"
+          >
+            <Text fontSize="$2" color="$colorSecondary">
+              Admin: {program?.length || 0} events loaded
+            </Text>
+            <XStack gap="$2">
+              {onClearCache && (
+                <Button
+                  size="$2"
+                  variant="outlined"
+                  onPress={handleClearCache}
+                  disabled={clearingCache || refreshing}
+                >
+                  {clearingCache ? 'Clearing...' : 'Clear Cache'}
+                </Button>
+              )}
+              <Button
+                size="$2"
+                variant="outlined"
+                onPress={refreshData}
+                disabled={clearingCache || refreshing}
+              >
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </XStack>
+          </XStack>
+        )}
+
         {/* Regular Services Section */}
         <YStack gap="$3">
           <H2 fontFamily="$body" fontWeight="600">Regular Services</H2>
@@ -207,10 +278,45 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({ userRole, is
           })}
         </YStack>
 
-        {/* Events Section */}
+        {/* Special Announcements - Baptisms, Weddings, Funerals */}
+        {/* These appear after regular services but before general upcoming events */}
+        {(() => {
+          const specialEvents = upcomingEvents.filter(
+            (event) => event.type === 'baptism' || event.type === 'wedding' || event.type === 'funeral'
+          )
+
+          if (specialEvents.length === 0) return null
+
+          return (
+            <YStack gap="$3">
+              <H2 fontFamily="$body" fontWeight="600">Special Announcements</H2>
+              {specialEvents.map((event) => (
+                <Card
+                  key={event.id}
+                  elevate
+                  borderWidth={1}
+                  borderColor="$borderColor"
+                  padding="$4"
+                  borderRadius="$4"
+                  backgroundColor="$background"
+                >
+                  <EventSummaryCard
+                    event={event}
+                    variant="newsletter"
+                    onPress={() => router.push(`/events/${event.id}`)}
+                    userRole={userRole}
+                    isMemberOrHigher={isMemberOrHigher}
+                  />
+                </Card>
+              ))}
+            </YStack>
+          )
+        })()}
+
+        {/* Events Section - excludes baptisms, weddings, funerals (shown above) */}
         <YStack gap="$3">
           <H2 fontFamily="$body" fontWeight="600">Upcoming Events</H2>
-          <NewsEvents />
+          <NewsEvents excludeTypes={['baptism', 'wedding', 'funeral']} />
         </YStack>
 
         {/* Daily Bible Reading Section */}

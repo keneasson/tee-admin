@@ -13,14 +13,18 @@ export interface EnhancedScheduleWithDataProps {
   initialTab?: string
   /** Show admin features */
   showAdminFeatures?: boolean
+  /** Callback to invalidate server cache (admin only) */
+  onClearCache?: () => Promise<void>
 }
 
 export function EnhancedScheduleWithData({
   types = ['memorial', 'bibleClass', 'sundaySchool', 'cyc'],
   initialTab,
   showAdminFeatures = false,
+  onClearCache,
 }: EnhancedScheduleWithDataProps) {
   const [activeTab, setActiveTab] = useState<string | undefined>(initialTab)
+  const [clearingCache, setClearingCache] = useState(false)
 
   const {
     data,
@@ -142,11 +146,32 @@ export function EnhancedScheduleWithData({
             )}
           </YStack>
 
-          {(showAdminFeatures || error) && (
-            <Button size="$2" variant="outlined" onPress={refetch} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
-          )}
+          <XStack gap="$2">
+            {showAdminFeatures && onClearCache && (
+              <Button
+                size="$2"
+                variant="outlined"
+                onPress={async () => {
+                  setClearingCache(true)
+                  try {
+                    await onClearCache()
+                    await refetch()
+                  } finally {
+                    setClearingCache(false)
+                  }
+                }}
+                disabled={loading || clearingCache}
+                borderColor={colors.warning}
+              >
+                {clearingCache ? 'Clearing...' : 'Clear Cache'}
+              </Button>
+            )}
+            {(showAdminFeatures || error) && (
+              <Button size="$2" variant="outlined" onPress={refetch} disabled={loading || clearingCache}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            )}
+          </XStack>
         </XStack>
       )}
 
