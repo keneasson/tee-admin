@@ -1,15 +1,17 @@
 'use client'
 
 import { useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { EnhancedScheduleWithData } from '@my/ui/src/data-table/enhanced-schedule-with-data'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Loading } from '@my/app/provider/loading'
 import { Wrapper } from '@my/app/provider/wrapper'
-import { useAdminAccess } from '@/hooks/use-admin-access'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 export default function SchedulePage() {
   const isHydrated = useHydrated()
-  const { isAdminOrOwner } = useAdminAccess()
+  const { data: session } = useSession()
+  const isAdminOrOwner = session?.user?.role === ROLES.ADMIN || session?.user?.role === ROLES.OWNER
 
   const handleClearCache = useCallback(async () => {
     const response = await fetch('/api/cache/invalidate', {
