@@ -1,6 +1,6 @@
 'use client'
 
-import { YStack, XStack, Text, H2, H4, Separator, Square, Card, Button, Image } from 'tamagui'
+import { YStack, XStack, Text, H2, H4, Separator, Card, Button, Image } from 'tamagui'
 import { Download, ExternalLink, Lock } from '@tamagui/lucide-icons'
 import { Event } from '@my/app/types/events'
 import {
@@ -289,10 +289,10 @@ export function EventDetailView({
             <YStack gap="$6" paddingVertical="$4">
               {/* Rings image + Congrats at the top, inline */}
               <XStack alignItems="center" gap="$4">
-                <Image
-                  source={{ uri: 'https://tee-admin-files.s3.ca-central-1.amazonaws.com/uploads/email-assets/engagement-rings.jpg' }}
-                  style={{ width: 60, height: 60 }}
-                  resizeMode="contain"
+                <img
+                  src="https://tee-admin-files.s3.ca-central-1.amazonaws.com/uploads/email-assets/engagement-rings.jpg"
+                  alt="Engagement rings"
+                  style={{ width: '60px', height: '60px', objectFit: 'contain' }}
                 />
                 <Text fontSize="$6" color="$color" fontWeight="700">
                   Congratulations!
