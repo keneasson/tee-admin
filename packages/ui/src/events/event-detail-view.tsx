@@ -1,7 +1,7 @@
 'use client'
 
-import { YStack, XStack, Text, H2, H4, Separator, Square, Card, Button } from 'tamagui'
-import { Download, ExternalLink, Lock } from '@tamagui/lucide-icons'
+import { YStack, XStack, Text, H2, H4, Separator, Square, Card, Button, Image } from 'tamagui'
+import { Download, ExternalLink, Lock, Gem } from '@tamagui/lucide-icons'
 import { Event } from '@my/app/types/events'
 import {
   formatDate,
@@ -247,7 +247,7 @@ export function EventDetailView({
           </H2>
           <Text fontSize="$4" color="$gray11" textAlign="center" maxWidth={500}>
             This event is restricted to Toronto East Ecclesia members.
-            {!userRole && ' Please sign in to view event details.'}
+            {!userRole ? ' Please sign in to view event details.' : null}
           </Text>
         </YStack>
       </YStack>
@@ -258,20 +258,112 @@ export function EventDetailView({
     <YStack gap="$4">
       {/* Clean Header */}
       <YStack gap="$2">
-        <H2 fontSize="$8" fontWeight="700" color="$color">
-          {event.title || 'Untitled Event'}
-        </H2>
-        {dateRange ? (
+        {/* Hide title for engagement events - blurb serves as the header */}
+        {event.type !== 'engagement' && (
+          <H2 fontSize="$8" fontWeight="700" color="$color">
+            {event.title || 'Untitled Event'}
+          </H2>
+        )}
+
+        {/* Engagement announcement - photo (if exists) | blurb, then names + date, then footer */}
+        {event.type === 'engagement' ? (() => {
+          const proposed = (event as any).engagementProposed || ''
+          const to = (event as any).engagementTo || ''
+          const blurb = (event as any).engagementAnnouncement || ''
+          const photo = (event as any).engagementPhoto
+
+          // Get the engagement date
+          let dateText = ''
+          if ((event as any).engagementDate) {
+            const date = new Date((event as any).engagementDate)
+            dateText = `. ${date.toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric'
+            })}`
+          }
+
+          const namesLine = proposed && to ? `${proposed} is engaged to ${to}${dateText}` : ''
+
+          return (
+            <YStack gap="$6" paddingVertical="$4">
+              {/* Icon + Congrats at the top, inline */}
+              <XStack alignItems="center" gap="$3">
+                <Gem size={100} color="$pink10" strokeWidth={1.5} />
+                <Text fontSize="$7" color="$pink10" fontWeight="700">
+                  Congrats!
+                </Text>
+              </XStack>
+
+              {/* Photo | Blurb row */}
+              {(photo?.url || blurb) && (
+                <XStack gap="$4" flexWrap="wrap">
+                  {photo?.url && (
+                    <Image
+                      source={{ uri: photo.url }}
+                      width={180}
+                      height={220}
+                      borderRadius="$3"
+                      objectFit="cover"
+                    />
+                  )}
+                  {blurb && (
+                    <YStack flex={1} minWidth={250} justifyContent="center">
+                      <Text fontSize="$5" color="$color" lineHeight="$5" whiteSpace="pre-wrap">
+                        {blurb}
+                      </Text>
+                    </YStack>
+                  )}
+                </XStack>
+              )}
+
+              {/* Names + date line below */}
+              {namesLine && (
+                <Text fontSize="$4" color="$gray11" fontStyle="italic">
+                  {namesLine}
+                </Text>
+              )}
+
+              {/* Footer with congratulations and bible verse */}
+              <YStack gap="$4" paddingTop="$4" alignItems="center">
+                <Text fontSize="$4" color="$color" fontWeight="600" textAlign="center">
+                  Congratulations from your Brothers and Sisters of Toronto East
+                </Text>
+                <Text fontSize="$3" color="$gray11" fontStyle="italic" textAlign="center" lineHeight="$4">
+                  Ephesians 5:1-2 Follow God's example, therefore, as dearly loved children and walk in the way of love, just as Christ loved us and gave himself up for us as a fragrant offering and sacrifice to God.
+                </Text>
+              </YStack>
+            </YStack>
+          )
+        })() : null}
+
+        {/* Baptism announcement - right after title, before date */}
+        {event.type === 'baptism' && event.candidate ? (
+          <Text fontSize="$5" color="$gray11">
+            {(() => {
+              const firstName = event.candidate.firstName || ''
+              const lastName = event.candidate.lastName || ''
+              const fullName = `${firstName} ${lastName}`.trim()
+              return fullName
+                ? `After a good confession of Faith, ${fullName} will be baptized into the saving name of our Lord.`
+                : ''
+            })()}
+          </Text>
+        ) : null}
+
+        {/* Show date for non-funeral and non-engagement events - engagement date is shown inline with blurb */}
+        {event.type !== 'funeral' && event.type !== 'engagement' && dateRange ? (
           <Text fontSize="$5" color="$gray11">
             {dateRange}
           </Text>
         ) : null}
+        {/* Funeral announcement only shown in summary/newsletter view, not detail view (would be redundant with aboutDeceased) */}
       </YStack>
 
       <Separator />
 
-      {/* Location - for general events and study weekends */}
-      {(event.type === 'general' || event.type === 'study-weekend') && (event as any).location ? (
+      {/* Location - for events that have location data (non-funeral) */}
+      {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') && (event as any).location ? (
         <YStack gap="$3">
           {(() => {
             const location = (event as any).location
@@ -397,6 +489,8 @@ export function EventDetailView({
         </YStack>
       ) : null}
 
+      {/* Funeral Service Location moved to after About section */}
+
       {/* Theme and Speaker Info */}
       <YStack gap="$2">
         {event.theme ? (
@@ -438,30 +532,186 @@ export function EventDetailView({
           </Text>
         ) : null}
 
-        {event.type === 'baptism' && event.candidate ? (
-          <Text fontSize="$4" color="$gray11">
-            Candidate:{' '}
-            {(() => {
-              const firstName = event.candidate.firstName || ''
-              const lastName = event.candidate.lastName || ''
-              const fullName = `${firstName} ${lastName}`.trim()
-              return fullName || 'TBA'
-            })()}
-          </Text>
-        ) : null}
-
-        {event.type === 'funeral' && event.deceased ? (
-          <Text fontSize="$4" color="$gray11">
-            Memorial for:{' '}
-            {(() => {
-              const firstName = event.deceased.firstName || ''
-              const lastName = event.deceased.lastName || ''
-              const fullName = `${firstName} ${lastName}`.trim()
-              return fullName || 'Beloved Brother/Sister'
-            })()}
-          </Text>
-        ) : null}
+{/* Funeral info moved to announcement section above */}
       </YStack>
+
+      {/* About the Deceased - photo on left, text on right (no header) */}
+      {event.type === 'funeral' && ((event as any).aboutDeceased || (event as any).deceasedPhoto) ? (
+        <YStack gap="$3" marginTop="$2">
+          {(event as any).deceasedPhoto ? (
+            // Layout with photo on left, text on right
+            <XStack gap="$4" flexWrap="wrap">
+              <Image
+                source={{ uri: (event as any).deceasedPhoto.url }}
+                width={180}
+                height={220}
+                borderRadius="$3"
+                objectFit="cover"
+              />
+              {(event as any).aboutDeceased ? (
+                <YStack flex={1} minWidth={250}>
+                  <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
+                    {(event as any).aboutDeceased}
+                  </Text>
+                </YStack>
+              ) : null}
+            </XStack>
+          ) : (event as any).aboutDeceased ? (
+            // Just text, no photo
+            <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
+              {(event as any).aboutDeceased}
+            </Text>
+          ) : null}
+        </YStack>
+      ) : null}
+
+      {/* Funeral Service Location and Date - shown at bottom */}
+      {event.type === 'funeral' ? (() => {
+        const locations = (event as any).locations
+        const serviceLocation = locations?.service
+        const simpleLocation = (event as any).location
+        const location = serviceLocation || simpleLocation
+
+        // Get service date for display
+        const serviceDateObj = event.serviceDate ? new Date(event.serviceDate) : null
+        const serviceDate = serviceDateObj
+          ? serviceDateObj.toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : null
+
+        // Get service time if set
+        const serviceTime = serviceDateObj && (serviceDateObj.getHours() !== 0 || serviceDateObj.getMinutes() !== 0)
+          ? (() => {
+              const hours = serviceDateObj.getHours()
+              const minutes = serviceDateObj.getMinutes()
+              const ampm = hours >= 12 ? 'pm' : 'am'
+              const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+              return `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+            })()
+          : null
+
+        // Get online meeting info
+        const onlineMeeting = location?.onlineMeeting
+
+        if (!location && !serviceDate) return null
+
+        return (
+          <YStack gap="$2" marginTop="$4">
+            <Text fontSize="$5" fontWeight="600" color="$color">
+              Service Details
+            </Text>
+            {serviceDate ? (
+              <Text fontSize="$4" color="$gray11">
+                {serviceDate}{serviceTime ? ` at ${serviceTime}` : ''}
+              </Text>
+            ) : null}
+            {location ? (() => {
+              // Handle string location (legacy)
+              if (typeof location === 'string') {
+                return (
+                  <Text fontSize="$4" color="$gray11">
+                    {location}
+                  </Text>
+                )
+              }
+
+              return location.name ? (
+                <YStack gap="$1">
+                  <Text fontSize="$4" fontWeight="500" color="$gray12">
+                    {location.name}
+                  </Text>
+                  {location.address ? (
+                    <Text fontSize="$4" color="$gray11">
+                      {location.address}
+                    </Text>
+                  ) : null}
+                  {(location.city || location.province || location.postalCode) ? (
+                    <Text fontSize="$4" color="$gray11">
+                      {[location.city, location.province, location.postalCode]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </Text>
+                  ) : null}
+                </YStack>
+              ) : null
+            })() : null}
+
+            {/* Online Meeting Info (Zoom, etc.) */}
+            {onlineMeeting ? (
+              <YStack gap="$1" marginTop="$2">
+                {onlineMeeting.platform ? (
+                  <Text fontSize="$4" fontWeight="500" color="$gray12">
+                    {onlineMeeting.platform}
+                  </Text>
+                ) : null}
+                {onlineMeeting.link ? (
+                  <Text
+                    fontSize="$4"
+                    color="$blue10"
+                    textDecorationLine="underline"
+                    cursor="pointer"
+                    onPress={() => window.open(onlineMeeting.link, '_blank')}
+                  >
+                    {onlineMeeting.link}
+                  </Text>
+                ) : null}
+                {onlineMeeting.meetingId ? (
+                  <Text fontSize="$4" color="$gray11">
+                    Meeting ID: {onlineMeeting.meetingId}
+                  </Text>
+                ) : null}
+                {onlineMeeting.password ? (
+                  <Text fontSize="$4" color="$gray11">
+                    Password: {onlineMeeting.password}
+                  </Text>
+                ) : null}
+                {onlineMeeting.dialInNumber ? (
+                  <Text fontSize="$4" color="$gray11">
+                    Dial-in: {onlineMeeting.dialInNumber}
+                  </Text>
+                ) : null}
+              </YStack>
+            ) : null}
+          </YStack>
+        )
+      })() : null}
+
+      {/* About the Candidate - with optional photo */}
+      {event.type === 'baptism' && ((event as any).aboutCandidate || (event as any).candidatePhoto) ? (
+        <YStack gap="$3" marginTop="$2">
+          <Text fontSize="$5" fontWeight="600" color="$color">
+            About the Candidate
+          </Text>
+          {(event as any).candidatePhoto ? (
+            // Layout with photo on left, text on right
+            <XStack gap="$4" flexWrap="wrap">
+              <Image
+                source={{ uri: (event as any).candidatePhoto.url }}
+                width={180}
+                height={220}
+                borderRadius="$3"
+                objectFit="cover"
+              />
+              {(event as any).aboutCandidate ? (
+                <YStack flex={1} minWidth={250}>
+                  <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
+                    {(event as any).aboutCandidate}
+                  </Text>
+                </YStack>
+              ) : null}
+            </XStack>
+          ) : (event as any).aboutCandidate ? (
+            // Just text, no photo
+            <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
+              {(event as any).aboutCandidate}
+            </Text>
+          ) : null}
+        </YStack>
+      ) : null}
 
       {/* Schedule - Clean format by day */}
       {scheduleByDay ? (
@@ -536,7 +786,7 @@ export function EventDetailView({
       ) : null}
 
       {/* Registration Information */}
-      {event.registration && (() => {
+      {event.registration ? (() => {
         const reg = event.registration
         const hasRegistrationInfo =
           reg.required ||
@@ -624,7 +874,7 @@ export function EventDetailView({
             ) : null}
           </YStack>
         )
-      })()}
+      })() : null}
 
       {/* Documents */}
       {event.documents && event.documents.length > 0 ? (
@@ -660,7 +910,7 @@ export function EventDetailView({
                   }}
                   onPress={handleDownload}
                 >
-                  Download Flyer
+                  Further Information
                 </Button>
               )
             } else {

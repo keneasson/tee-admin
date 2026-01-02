@@ -1,5 +1,5 @@
 // Event Management System Types
-export type EventType = 'study-weekend' | 'funeral' | 'wedding' | 'baptism' | 'general' | 'recurring'
+export type EventType = 'study-weekend' | 'funeral' | 'wedding' | 'baptism' | 'engagement' | 'general' | 'recurring' | 'election-cycle'
 export type EventStatus = 'draft' | 'ready' | 'published' | 'archived'
 export type LocationMode = 'in-person' | 'online' | 'hybrid'
 
@@ -99,18 +99,45 @@ export interface Event extends BaseEvent {
     }
   }
 
+  // Engagement fields
+  engagementDate?: Date
+  engagementProposed?: string // Free-form name text (e.g., "Brother Gord Easson")
+  engagementTo?: string // Free-form name text
+  engagementAnnouncement?: string // The announcement blurb
+  engagementPhoto?: {
+    url: string
+    fileName: string
+    originalName: string
+    uploadedAt: Date
+  }
+
   // Baptism fields
   baptismDate?: Date
   candidate?: {
     firstName: string
     lastName: string
   }
+  aboutCandidate?: string // Biography/testimony text for the candidate
+  candidatePhoto?: {
+    url: string
+    fileName: string
+    originalName: string
+    uploadedAt: Date
+  }
 
   // Funeral fields
   serviceDate?: Date
   deceased?: {
+    title?: 'Brother' | 'Sister' | 'Mr.' | 'Mrs.' | 'Ms.' | ''
     firstName: string
     lastName: string
+  }
+  aboutDeceased?: string // Biography/tribute text for the deceased
+  deceasedPhoto?: {
+    url: string
+    fileName: string
+    originalName: string
+    uploadedAt: Date
   }
 
   // General event fields
@@ -123,6 +150,10 @@ export interface Event extends BaseEvent {
     startDate: Date
     startTime: string
   }
+
+  // Election cycle fields
+  electionStartDate?: Date
+  electionEndDate?: Date
 
   // Hosting ecclesia (for most event types)
   hostingEcclesia?: {
@@ -149,6 +180,10 @@ export function isWeddingEvent(event: Event): boolean {
   return event.type === 'wedding'
 }
 
+export function isEngagementEvent(event: Event): boolean {
+  return event.type === 'engagement'
+}
+
 export function isBaptismEvent(event: Event): boolean {
   return event.type === 'baptism'
 }
@@ -159,4 +194,8 @@ export function isGeneralEvent(event: Event): boolean {
 
 export function isRecurringEvent(event: Event): boolean {
   return event.type === 'recurring'
+}
+
+export function isElectionCycleEvent(event: Event): boolean {
+  return event.type === 'election-cycle'
 }

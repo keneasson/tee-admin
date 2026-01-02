@@ -15,6 +15,18 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Event } from '@my/app/types/events'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { useRouter } from 'next/navigation'
+import { Vote } from '@tamagui/lucide-icons'
+
+// Helper function to check if an election-cycle event is currently active
+const isElectionActive = (event: Event): boolean => {
+  if (event.type !== 'election-cycle') return false
+  const electionEvent = event as any
+  if (!electionEvent.electionStartDate || !electionEvent.electionEndDate) return false
+  const now = new Date()
+  const start = new Date(electionEvent.electionStartDate)
+  const end = new Date(electionEvent.electionEndDate)
+  return now >= start && now <= end
+}
 
 type NewsletterScreenProps = {
   userRole?: string
@@ -42,12 +54,22 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
   const refreshData = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [newProgram, newReadings] = await Promise.all([
-        fetchUpcoming({}),
-        fetchReadings(),
+      const cacheBuster = `?_t=${Date.now()}`
+      const [newProgram, newReadings, eventsResponse] = await Promise.all([
+        fetchUpcoming({ bypassCache: true }),
+        fetchReadings(true),
+        fetch(`/api/events/public${cacheBuster}`, { cache: 'no-store' }),
       ])
       setProgram(newProgram)
       setReadings(newReadings)
+
+      if (eventsResponse.ok) {
+        const data = await eventsResponse.json()
+        const publishedEvents = data.filter((event: Event) =>
+          event.status === 'published' || event.status === 'ready'
+        )
+        setUpcomingEvents(publishedEvents)
+      }
     } finally {
       setRefreshing(false)
     }
@@ -130,10 +152,10 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
 
   return (
     <Wrapper subHeader={'Newsletter'}>
-      <YStack gap="$4" padding="$4">
+      <YStack gap="$4" padding="$4" testID="newsletter-container">
         {/* Admin Toolbar */}
-        {isAdminOrOwner && (
-          <XStack
+        {isAdminOrOwner ? <XStack
+            testID="newsletter-admin-toolbar"
             justifyContent="space-between"
             alignItems="center"
             paddingHorizontal="$4"
@@ -145,16 +167,14 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
               Admin: {program?.length || 0} events loaded
             </Text>
             <XStack gap="$2">
-              {onClearCache && (
-                <Button
+              {onClearCache ? <Button
                   size="$2"
                   variant="outlined"
                   onPress={handleClearCache}
                   disabled={clearingCache || refreshing}
                 >
                   {clearingCache ? 'Clearing...' : 'Clear Cache'}
-                </Button>
-              )}
+                </Button> : null}
               <Button
                 size="$2"
                 variant="outlined"
@@ -164,11 +184,10 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                 {refreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
             </XStack>
-          </XStack>
-        )}
+          </XStack> : null}
 
         {/* Regular Services Section */}
-        <YStack gap="$3">
+        <YStack gap="$3" testID="newsletter-regular-services">
           <H2 fontFamily="$body" fontWeight="600">Regular Services</H2>
 
           {/* Render services grouped by date */}
@@ -182,8 +201,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
             return (
               <YStack key={date} gap="$3">
                 {/* If there are Sunday events for this date, group them in one Card */}
-                {sundayEvents.length > 0 && (
-                  <Card
+                {sundayEvents.length > 0 ? <Card
                     elevation="$2"
                     borderWidth={1}
                     borderColor="$borderColor"
@@ -197,19 +215,16 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                         const checkSameDay = checkForSameDayEvents(thisEventDate)
                         return (
                           <YStack key={`${date}-${index}`}>
-                            {event.Key === 'sundaySchool' && (
-                              <>
+                            {event.Key === 'sundaySchool' ? <>
                                 <NextSundaySchool event={event} />
-                                {index < sundayEvents.length - 1 && <Separator marginVertical="$2" />}
-                              </>
-                            )}
-                            {event.Key === 'memorial' && <NextMemorial event={event} isSameDay={checkSameDay} />}
+                                {index < sundayEvents.length - 1 ? <Separator marginVertical="$2" /> : null}
+                              </> : null}
+                            {event.Key === 'memorial' ? <NextMemorial event={event} isSameDay={checkSameDay} /> : null}
                           </YStack>
                         )
                       })}
                     </YStack>
-                  </Card>
-                )}
+                  </Card> : null}
 
                 {/* Bible Class gets its own Card */}
                 {/* EXCEPTION: If Toronto East Business Meeting is on the same night, show that instead */}
@@ -278,54 +293,126 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
           })}
         </YStack>
 
-        {/* Special Announcements - Baptisms, Weddings, Funerals */}
-        {/* These appear after regular services but before general upcoming events */}
+        {/* Election Notice - Shows when there's an active election */}
         {(() => {
-          const specialEvents = upcomingEvents.filter(
-            (event) => event.type === 'baptism' || event.type === 'wedding' || event.type === 'funeral'
-          )
+          const activeElection = upcomingEvents.find((event) => isElectionActive(event))
+          if (!activeElection) return null
 
-          if (specialEvents.length === 0) return null
+          const electionEvent = activeElection as any
+          const endDate = new Date(electionEvent.electionEndDate)
+          const formattedEndDate = endDate.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
 
           return (
-            <YStack gap="$3">
+            <Card
+              testID="newsletter-election-notice"
+              elevation="$2"
+              borderWidth={2}
+              borderColor="$orange8"
+              padding="$4"
+              borderRadius="$4"
+              backgroundColor="$orange2"
+            >
+              <YStack gap="$2">
+                <XStack gap="$2" alignItems="center">
+                  <Vote size="$1" color="$orange10" />
+                  <Text fontSize="$5" fontWeight="600" color="$orange11">
+                    Election Notice
+                  </Text>
+                </XStack>
+                <Text fontSize="$4" color="$color">
+                  Elections for Service brethren are underway. Members should have received a link to the online ballot already—if not, please ask the Arranging brethren. You have 3 ways to vote: (1) online ballot, (2) asking another member to submit your vote, or (3) requesting a printed ballot. The election concludes {formattedEndDate}.
+                </Text>
+              </YStack>
+            </Card>
+          )
+        })()}
+
+        {/* Special Announcements - Baptisms, Weddings, Engagements, Funerals */}
+        {/* Smart sorting: fresh events (< 7 days from publish) first, then older */}
+        {/* Within each freshness group, sorted by type: funeral, engagement, wedding, baptism */}
+        {(() => {
+          // Type order for special announcements (lower = shown first)
+          const SPECIAL_TYPE_ORDER: { [key: string]: number } = {
+            'funeral': 1,
+            'engagement': 2,
+            'wedding': 3,
+            'baptism': 4,
+          }
+
+          // Get publish date for freshness calculation
+          const getPublishDate = (event: Event): Date => {
+            if (event.publishDate) return new Date(event.publishDate)
+            if (event.createdAt) return new Date(event.createdAt)
+            return new Date(0)
+          }
+
+          const FRESH_DAYS = 7
+          const now = new Date()
+          const freshThreshold = new Date(now.getTime() - FRESH_DAYS * 24 * 60 * 60 * 1000)
+
+          const specialEvents = upcomingEvents
+            .filter(
+              (event) => event.type === 'baptism' || event.type === 'wedding' || event.type === 'engagement' || event.type === 'funeral'
+            )
+
+          // Smart sort: fresh events first, then by type order, then by publish date
+          const smartSort = (a: Event, b: Event) => {
+            const aPublishDate = getPublishDate(a)
+            const bPublishDate = getPublishDate(b)
+            const aIsFresh = aPublishDate >= freshThreshold
+            const bIsFresh = bPublishDate >= freshThreshold
+
+            // Fresh events come before older events
+            if (aIsFresh && !bIsFresh) return -1
+            if (!aIsFresh && bIsFresh) return 1
+
+            // Within same freshness group, sort by type order
+            const aType = a.type || 'baptism'
+            const bType = b.type || 'baptism'
+            const typeOrderDiff = (SPECIAL_TYPE_ORDER[aType] || 999) - (SPECIAL_TYPE_ORDER[bType] || 999)
+            if (typeOrderDiff !== 0) return typeOrderDiff
+
+            // Same type: sort by publish date (newest first)
+            return bPublishDate.getTime() - aPublishDate.getTime()
+          }
+
+          // Sort all events with smart sorting
+          const sortedEvents = [...specialEvents].sort(smartSort)
+
+          if (sortedEvents.length === 0) return null
+
+          return (
+            <YStack gap="$3" testID="newsletter-special-announcements">
               <H2 fontFamily="$body" fontWeight="600">Special Announcements</H2>
-              {specialEvents.map((event) => (
-                <Card
+              {sortedEvents.map((event) => (
+                <EventSummaryCard
                   key={event.id}
-                  elevate
-                  borderWidth={1}
-                  borderColor="$borderColor"
-                  padding="$4"
-                  borderRadius="$4"
-                  backgroundColor="$background"
-                >
-                  <EventSummaryCard
-                    event={event}
-                    variant="newsletter"
-                    onPress={() => router.push(`/events/${event.id}`)}
-                    userRole={userRole}
-                    isMemberOrHigher={isMemberOrHigher}
-                  />
-                </Card>
+                  event={event}
+                  variant="newsletter"
+                  onPress={() => router.push(`/events/${event.id}`)}
+                  userRole={userRole}
+                  isMemberOrHigher={isMemberOrHigher}
+                />
               ))}
             </YStack>
           )
         })()}
 
-        {/* Events Section - excludes baptisms, weddings, funerals (shown above) */}
-        <YStack gap="$3">
+        {/* Events Section - excludes baptisms, weddings, engagements, funerals, election-cycle (shown above/as message) */}
+        <YStack gap="$3" testID="newsletter-upcoming-events">
           <H2 fontFamily="$body" fontWeight="600">Upcoming Events</H2>
-          <NewsEvents excludeTypes={['baptism', 'wedding', 'funeral']} />
+          <NewsEvents excludeTypes={['baptism', 'wedding', 'engagement', 'funeral', 'election-cycle']} />
         </YStack>
 
         {/* Daily Bible Reading Section */}
-        {readings && (
-          <YStack gap="$3">
+        {readings ? <YStack gap="$3" testID="newsletter-daily-readings">
             <H2 fontFamily="$body" fontWeight="600">Daily Bible Reading Planner</H2>
             <DailyReadings readings={readings} />
-          </YStack>
-        )}
+          </YStack> : null}
       </YStack>
     </Wrapper>
   )

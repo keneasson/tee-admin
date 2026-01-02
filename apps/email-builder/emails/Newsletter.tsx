@@ -31,18 +31,19 @@ function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new
 
 type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
+// Mock data uses same format as convertHumanReadableDate: "Weekday, Month Day, Year"
 const mockEvents: SundayEvents[] | BibleClassType[] = [
-  // Sunday School for Feb 25
+  // Sunday School for Feb 25 (Sunday)
   {
     Key: ProgramsTypes.sundaySchool,
-    Date: 'Feb 25, 2024',
+    Date: 'Sunday, February 25, 2024',
     Refreshments: 'Eassons',
     'Holidays and Special Events': undefined,
   } as any,
-  // Memorial for Feb 25
+  // Memorial for Feb 25 (Sunday)
   {
     Key: ProgramsTypes.memorial,
-    Date: 'Feb 25, 2024',
+    Date: 'Sunday, February 25, 2024',
     Preside: 'Presiding Brother',
     Exhort: 'Exhorting Brother',
     Organist: 'Keyboard Player',
@@ -60,25 +61,25 @@ const mockEvents: SundayEvents[] | BibleClassType[] = [
     Refreshments: 'Eassons',
     'Holidays and Special Events': undefined,
   },
-  // Bible Class for Feb 28
+  // Bible Class for Feb 28 (Wednesday)
   {
     Key: ProgramsTypes.bibleClass,
-    Date: 'Feb 28, 2024',
+    Date: 'Wednesday, February 28, 2024',
     Presider: 'Presiding',
     Speaker: 'Speaker',
     Topic: 'Bible Class Topic',
   },
-  // Sunday School for Mar 3
+  // Sunday School for Mar 3 (Sunday)
   {
     Key: ProgramsTypes.sundaySchool,
-    Date: 'Mar 3, 2024',
+    Date: 'Sunday, March 3, 2024',
     Refreshments: 'Johnson Family',
     'Holidays and Special Events': 'Toronto Fraternal Gathering',
   } as any,
-  // Memorial for Mar 3
+  // Memorial for Mar 3 (Sunday)
   {
     Key: ProgramsTypes.memorial,
-    Date: 'Mar 3, 2024',
+    Date: 'Sunday, March 3, 2024',
     Preside: 'Presiding Bro 2',
     Exhort: 'Exhort Bro 2',
     Organist: 'Keyboardist',
@@ -96,10 +97,10 @@ const mockEvents: SundayEvents[] | BibleClassType[] = [
     Refreshments: 'Johnson Family',
     'Holidays and Special Events': 'Toronto Fraternal Gathering',
   },
-  // Bible Class for Mar 6
+  // Bible Class for Mar 6 (Wednesday)
   {
     Key: ProgramsTypes.bibleClass,
-    Date: 'Mar 6, 2024',
+    Date: 'Wednesday, March 6, 2024',
     Presider: 'Presiding 2',
     Speaker: 'Speaker 2',
     Topic: 'Bible Class Topic 2',
@@ -195,11 +196,18 @@ const mockUpcomingEvents: Event[] = [
     type: 'baptism',
     status: 'published',
     published: true,
-    description: 'Rejoice with us as our brother/sister is baptized into Christ.',
+    description: 'Rejoice with us as our sister is baptized into Christ.',
     baptismDate: '2024-02-25T11:00:00Z',
     candidate: {
       firstName: 'Emily',
       lastName: 'Davis',
+    },
+    aboutCandidate: 'Sister Emily Davis has been attending Toronto East for two years and has made a good confession of faith. She is looking forward to walking in the Truth and serving the Lord.',
+    location: {
+      name: 'Toronto East Christadelphian Ecclesia',
+      address: '975 Cosburn Avenue',
+      city: 'Toronto',
+      province: 'ON',
     },
     hostingEcclesia: {
       name: 'Toronto East',
@@ -219,11 +227,21 @@ const mockUpcomingEvents: Event[] = [
     type: 'funeral',
     status: 'published',
     published: true,
-    description: 'Join us in remembering the life and faith of our beloved brother/sister.',
+    description: 'Join us in remembering the life and faith of our beloved brother.',
     serviceDate: '2024-04-08T14:00:00Z',
     deceased: {
       firstName: 'Robert',
       lastName: 'Anderson',
+    },
+    aboutDeceased: 'Brother Robert Anderson fell asleep in the Lord on April 1, 2024. He was baptized in 1975 and served faithfully as a brother at Toronto East for nearly 50 years. He is survived by his wife, Sister Mary, and their three children.',
+    locations: {
+      service: {
+        name: 'Toronto North Christadelphian Ecclesia',
+        address: '123 Church Street',
+        city: 'Toronto',
+        province: 'ON',
+        postalCode: 'M5V 2K1',
+      },
     },
     hostingEcclesia: {
       name: 'Toronto East',
@@ -324,23 +342,6 @@ const mockReadings = [
   },
 ]
 
-function formatDateToronto(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'America/Toronto',
-  })
-}
-
-function getDateFormatted(date: Date | string): string {
-  if (typeof date === 'string') {
-    const when = new Date(date)
-    return formatDateToronto(when)
-  }
-  return formatDateToronto(date)
-}
 
 // Helper function to calculate next occurrence of a recurring event
 function getNextRecurrenceDate(recurringConfig: any): Date | null {
@@ -389,6 +390,51 @@ function getNextRecurrenceDate(recurringConfig: any): Date | null {
   return null
 }
 
+// Helper function to get first paragraph of text (for shortened display)
+const getFirstParagraph = (text: string | undefined): string => {
+  if (!text) return ''
+  // Split by double newlines (paragraph breaks) and take the first one
+  const paragraphs = text.split(/\n\n+/)
+  return paragraphs[0]?.trim() || ''
+}
+
+// Helper function to format time from Date object
+const formatServiceTime = (date: Date | string | undefined): string => {
+  if (!date) return ''
+  const d = typeof date === 'string' ? new Date(date) : date
+  if (isNaN(d.getTime())) return ''
+  const hours = d.getHours()
+  const minutes = d.getMinutes()
+  const ampm = hours >= 12 ? 'p.m.' : 'a.m.'
+  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`
+}
+
+// Helper function to format date for service details
+const formatServiceDate = (date: Date | string | undefined): string => {
+  if (!date) return ''
+  const d = typeof date === 'string' ? new Date(date) : date
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Toronto',
+  })
+}
+
+// Helper function to check if an election-cycle event is currently active
+const isElectionActive = (event: Event): boolean => {
+  if (event.type !== 'election-cycle') return false
+  const electionEvent = event as any
+  if (!electionEvent.electionStartDate || !electionEvent.electionEndDate) return false
+  const now = new Date()
+  const start = new Date(electionEvent.electionStartDate)
+  const end = new Date(electionEvent.electionEndDate)
+  return now >= start && now <= end
+}
+
 // Helper function to display event dates for different event types
 const EventDateDisplay = (event: Event): string => {
   if (event.type === 'study-weekend' && event.dateRange) {
@@ -417,6 +463,13 @@ const EventDateDisplay = (event: Event): string => {
     })
   } else if (event.type === 'baptism' && event.baptismDate) {
     const date = new Date(event.baptismDate)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } else if (event.type === 'engagement' && (event as any).engagementDate) {
+    const date = new Date((event as any).engagementDate)
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -556,7 +609,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
     groupedByDate[eventDateStr].push(event)
   })
 
-  // Group upcoming events by type (exclude LTRTBE as it has its own section)
+  // Group upcoming events by type (exclude special events that have their own sections)
   const groupedEvents: { [key: string]: Event[] } = {}
 
   allUpcomingEvents.forEach((event) => {
@@ -568,6 +621,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
     if (isLTRTBE) {
       return // Skip this event
+    }
+
+    // Skip baptism, wedding, engagement, funeral - they have their own "Special Announcements" section
+    // Skip election-cycle - it triggers a special message, not displayed as an event
+    if (event.type === 'baptism' || event.type === 'wedding' || event.type === 'engagement' || event.type === 'funeral' || event.type === 'election-cycle') {
+      return // Skip - displayed in Special Announcements section or as special message
     }
 
     const eventType = event?.type || 'general'
@@ -706,21 +765,28 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                     />
                   )}
 
-                  <Heading style={defaultText}>Arrangements for {getDateFormatted(date)}</Heading>
+                  <Heading style={defaultText}>Arrangements for {date}</Heading>
 
                   {/* Sunday Services */}
                   {sundayEvents.map((event: any, index: number) => {
                     if (event.Key === 'sundaySchool') {
+                      // Only show full Sunday School section when there's class (has Refreshments)
+                      const hasSundaySchool = !!event.Refreshments
+
                       return (
                         <Section key={`ss-${index}`} style={program}>
-                          <Heading style={defaultText}>Sunday School at 9:30am</Heading>
-                          {event.Refreshments ? (
-                            <Text style={defaultText}>
-                              {'Refreshments: '}
-                              <strong>{event.Refreshments}</strong>
-                            </Text>
+                          {hasSundaySchool ? (
+                            <>
+                              <Heading style={defaultText}>Sunday School at 9:30am</Heading>
+                              <Text style={defaultText}>
+                                {'Refreshments: '}
+                                <strong>{event.Refreshments}</strong>
+                              </Text>
+                            </>
                           ) : (
-                            <Text style={defaultText}>{'No Sunday school this week!'}</Text>
+                            <Text style={defaultText}>
+                              <strong>No Sunday school this week!</strong>
+                            </Text>
                           )}
                           {index < sundayEvents.length - 1 && (
                             <hr
@@ -855,6 +921,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 }
 
                 // Otherwise, show normal Bible Class
+                // Check if there's no class - same logic as NextBibleClass component: !event.Speaker
+                const hasClass = !!event.Speaker
+
                 return (
                   <Container
                     key={`bc-${date}-${index}`}
@@ -865,12 +934,23 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                       style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
                     />
                     <Section style={program}>
-                      <Heading style={defaultText}>
-                        Bible Class for {getDateFormatted(event.Date)} at 7:30pm - on Zoom
-                      </Heading>
-                      <Row>
-                        <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
-                      </Row>
+                      {hasClass ? (
+                        <>
+                          <Heading style={defaultText}>
+                            Bible Class for {event.Date} at 7:30pm - on Zoom
+                          </Heading>
+                          <Row>
+                            <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
+                          </Row>
+                        </>
+                      ) : (
+                        <>
+                          <Heading style={defaultText}>{event.Date}</Heading>
+                          <Text style={defaultText}>
+                            <strong>No Bible Class tonight</strong>
+                          </Text>
+                        </>
+                      )}
                     </Section>
                   </Container>
                 )
@@ -878,6 +958,404 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             </React.Fragment>
           )
         })}
+
+        {/* Election Notice - Shows when there's an active election */}
+        {(() => {
+          const activeElection = allUpcomingEvents.find((event) => isElectionActive(event))
+          if (!activeElection) return null
+
+          const electionEvent = activeElection as any
+          const endDate = new Date(electionEvent.electionEndDate)
+          const formattedEndDate = endDate.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+
+          return (
+            <Container style={{ ...container, marginTop: '24px' }} className="container">
+              <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+              <Section style={{ ...program, backgroundColor: '#fff3e0', padding: '16px', borderRadius: '8px', border: '2px solid #ff9800' }}>
+                <Heading style={{ ...defaultText, color: '#e65100' }}>
+                  Election Notice
+                </Heading>
+                <Text style={defaultText}>
+                  Elections for Service brethren are underway. Members should have received a link to the online ballot already—if not, please ask the Arranging brethren. You have 3 ways to vote: (1) online ballot, (2) asking another member to submit your vote, or (3) requesting a printed ballot. The election concludes {formattedEndDate}.
+                </Text>
+              </Section>
+            </Container>
+          )
+        })()}
+
+        {/* Special Announcements - Baptisms, Weddings, Engagements, Funerals */}
+        {/* These appear after regular program but before LTRTBE and general events */}
+        {/* Sorted by date descending (newest first) */}
+        {(() => {
+          const specialEvents = allUpcomingEvents
+            .filter(
+              (event) => event.type === 'baptism' || event.type === 'wedding' || event.type === 'engagement' || event.type === 'funeral'
+            )
+            .sort((a, b) => {
+              // Get the relevant date for each event type
+              const getEventDate = (event: Event): Date => {
+                if (event.type === 'wedding' && event.ceremonyDate) return new Date(event.ceremonyDate)
+                if (event.type === 'baptism' && event.baptismDate) return new Date(event.baptismDate)
+                if (event.type === 'engagement' && (event as any).engagementDate) return new Date((event as any).engagementDate)
+                if (event.type === 'funeral' && event.serviceDate) return new Date(event.serviceDate)
+                return new Date(0) // fallback for events without dates
+              }
+              // Sort descending (newest first)
+              return getEventDate(b).getTime() - getEventDate(a).getTime()
+            })
+
+          if (specialEvents.length === 0) return null
+
+          return (
+            <Container style={container} className="container">
+              <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+              {specialEvents.map((event, index) => (
+                <React.Fragment key={event.id}>
+                  {index > 0 && (
+                    <hr
+                      style={{
+                        borderWidth: '0',
+                        background: '#000',
+                        color: '#000',
+                        height: '2px',
+                        margin: '16px 0',
+                      }}
+                    />
+                  )}
+                  <Section style={program}>
+                    {/* Skip title for engagements - the announcement blurb serves as intro */}
+                    {event.type !== 'engagement' && (
+                      <Heading style={defaultText}>
+                        <Link
+                          href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
+                          style={{
+                            color: '#0066cc',
+                            textDecoration: 'none',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {event.title}
+                        </Link>
+                      </Heading>
+                    )}
+                    <Text style={defaultText}>
+                      {/* Don't show date at top for funerals or engagements - shown in their specific sections */}
+                      {event.type !== 'funeral' && event.type !== 'engagement' && EventDateDisplay(event)}
+                      {/* Baptism-specific wording */}
+                      {event.type === 'baptism' && (event as any).candidate && (
+                        <>
+                          <br />
+                          <br />
+                          After a good confession of Faith, <strong>{`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}</strong> will be baptized into the saving name of our Lord.
+                        </>
+                      )}
+                      {/* Baptism - About the Candidate with optional photo */}
+                      {event.type === 'baptism' && ((event as any).aboutCandidate || (event as any).candidatePhoto) && (
+                        <>
+                          <br />
+                          <br />
+                          {(event as any).candidatePhoto ? (
+                            <Row>
+                              <Column style={{ width: '140px', verticalAlign: 'top', paddingRight: '16px' }}>
+                                <img
+                                  src={(event as any).candidatePhoto.url}
+                                  alt="Photo of the candidate"
+                                  style={{
+                                    width: '120px',
+                                    height: '150px',
+                                    objectFit: 'cover',
+                                    borderRadius: '4px',
+                                  }}
+                                />
+                              </Column>
+                              {(event as any).aboutCandidate && (
+                                <Column style={{ verticalAlign: 'top' }}>
+                                  <Text style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                    <AutoLinkText text={(event as any).aboutCandidate} />
+                                  </Text>
+                                </Column>
+                              )}
+                            </Row>
+                          ) : (event as any).aboutCandidate ? (
+                            <Text style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}>
+                              <AutoLinkText text={(event as any).aboutCandidate} />
+                            </Text>
+                          ) : null}
+                        </>
+                      )}
+                      {/* Baptism Location */}
+                      {event.type === 'baptism' && (event as any).location && (() => {
+                        const location = (event as any).location
+
+                        if (typeof location === 'string') {
+                          return (
+                            <>
+                              <br />
+                              <br />
+                              <strong>{location}</strong>
+                            </>
+                          )
+                        }
+
+                        return location.name ? (
+                          <>
+                            <br />
+                            <br />
+                            <strong>{location.name}</strong>
+                            {location.address && (
+                              <>
+                                <br />
+                                {location.address}
+                              </>
+                            )}
+                            {(location.city || location.province) && (
+                              <>
+                                <br />
+                                {[location.city, location.province, location.postalCode].filter(Boolean).join(', ')}
+                              </>
+                            )}
+                          </>
+                        ) : null
+                      })()}
+                      {/* Wedding-specific wording */}
+                      {event.type === 'wedding' && (event as any).couple && (
+                        <>
+                          <br />
+                          <br />
+                          <strong>
+                            {`${(event as any).couple.bride?.firstName || ''} ${(event as any).couple.bride?.lastName || ''}`.trim()}
+                            {' & '}
+                            {`${(event as any).couple.groom?.firstName || ''} ${(event as any).couple.groom?.lastName || ''}`.trim()}
+                          </strong>
+                        </>
+                      )}
+                      {/* Engagement-specific wording */}
+                      {event.type === 'engagement' && (
+                        <>
+                          {/* Rings image + Congratulations! header */}
+                          <Row>
+                            <Column style={{ width: '100px', verticalAlign: 'middle', paddingRight: '12px' }}>
+                              <img
+                                src="https://tee-admin-files.s3.ca-central-1.amazonaws.com/uploads/email-assets/engagement-rings.jpg"
+                                alt="Engagement rings"
+                                style={{
+                                  width: '100px',
+                                  height: 'auto',
+                                }}
+                              />
+                            </Column>
+                            <Column style={{ verticalAlign: 'middle' }}>
+                              <Text style={{ ...defaultText, margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+                                Congratulations!
+                              </Text>
+                            </Column>
+                          </Row>
+                          {/* Announcement blurb */}
+                          {(event as any).engagementAnnouncement && (
+                            <>
+                              <br />
+                              <Text style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                <AutoLinkText text={(event as any).engagementAnnouncement} />
+                              </Text>
+                            </>
+                          )}
+                          {/* Engagement line */}
+                          <br />
+                          <Text style={{ ...defaultText, margin: 0 }}>
+                            <strong>{(event as any).engagementProposed || ''}</strong> is engaged to <strong>{(event as any).engagementTo || ''}</strong>
+                            {(event as any).engagementDate && (
+                              <>, {new Date((event as any).engagementDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                            )}
+                            .
+                          </Text>
+                          {/* Congratulations and scripture */}
+                          <br />
+                          <Text style={{ ...defaultText, margin: 0, fontStyle: 'italic' }}>
+                            "Congratulations from your Brothers and Sisters of Toronto East
+                            <br />
+                            <br />
+                            Ephesians 5:1 Follow God's example, therefore, as dearly loved children 2 and walk in the way of love, just as Christ loved us and gave himself up for us as a fragrant offering and sacrifice to God."
+                          </Text>
+                        </>
+                      )}
+                      {/* Funeral - Photo and shortened about (first paragraph only) */}
+                      {event.type === 'funeral' && ((event as any).aboutDeceased || (event as any).deceasedPhoto) && (
+                        <>
+                          {(event as any).deceasedPhoto ? (
+                            <Row>
+                              <Column style={{ width: '140px', verticalAlign: 'top', paddingRight: '16px' }}>
+                                <img
+                                  src={(event as any).deceasedPhoto.url}
+                                  alt="Photo of the deceased"
+                                  style={{
+                                    width: '120px',
+                                    height: '150px',
+                                    objectFit: 'cover',
+                                    borderRadius: '4px',
+                                  }}
+                                />
+                              </Column>
+                              {(event as any).aboutDeceased && (
+                                <Column style={{ verticalAlign: 'top' }}>
+                                  <Text style={{ ...defaultText, margin: 0 }}>
+                                    <AutoLinkText text={getFirstParagraph((event as any).aboutDeceased)} />
+                                  </Text>
+                                </Column>
+                              )}
+                            </Row>
+                          ) : (event as any).aboutDeceased ? (
+                            <Text style={{ ...defaultText, margin: 0 }}>
+                              <AutoLinkText text={getFirstParagraph((event as any).aboutDeceased)} />
+                            </Text>
+                          ) : null}
+                        </>
+                      )}
+                      {/* Funeral Service Details - Visitation, Service, Graveside with times and locations */}
+                      {event.type === 'funeral' && (() => {
+                        const funeralEvent = event as any
+                        const serviceDate = funeralEvent.serviceDate
+                        const viewingDate = funeralEvent.viewingDate
+                        const gravesideDate = funeralEvent.gravesideDate
+                        const locations = funeralEvent.locations
+                        const simpleLocation = funeralEvent.location
+
+                        // Format location helper
+                        const formatLocation = (loc: any) => {
+                          if (!loc) return null
+                          if (typeof loc === 'string') return loc
+                          return loc.name || null
+                        }
+
+                        const hasVisitation = viewingDate || funeralEvent.viewingTime || funeralEvent.viewingLocation || locations?.visitation
+                        const hasService = serviceDate || simpleLocation || locations?.service
+                        const hasGraveside = gravesideDate || funeralEvent.gravesideTime || locations?.graveside
+
+                        if (!hasVisitation && !hasService && !hasGraveside) return null
+
+                        return (
+                          <>
+                            {/* Visitation (Optional) */}
+                            {hasVisitation && (() => {
+                              const visLoc = funeralEvent.viewingLocation || locations?.visitation
+                              return (
+                                <>
+                                  <br />
+                                  <br />
+                                  <strong>Visitation</strong>
+                                  <br />
+                                  {funeralEvent.viewingTime || (viewingDate && formatServiceTime(viewingDate))}
+                                  {visLoc && ` at ${formatLocation(visLoc)}`}
+                                </>
+                              )
+                            })()}
+                            {/* Service/Funeral/Celebration of Life */}
+                            {hasService && (() => {
+                              const serviceLoc = locations?.service || simpleLocation
+                              const serviceTime = funeralEvent.serviceTime || (serviceDate && formatServiceTime(serviceDate))
+                              const formattedDate = serviceDate && formatServiceDate(serviceDate)
+                              return (
+                                <>
+                                  <br />
+                                  <br />
+                                  <strong>Service</strong>
+                                  <br />
+                                  {formattedDate && <>{formattedDate}<br /></>}
+                                  {serviceTime}{serviceLoc && ` at ${formatLocation(serviceLoc)}`}
+                                  {serviceLoc && typeof serviceLoc !== 'string' && serviceLoc.address && (
+                                    <>
+                                      <br />
+                                      {serviceLoc.address}
+                                    </>
+                                  )}
+                                  {serviceLoc && typeof serviceLoc !== 'string' && (serviceLoc.city || serviceLoc.province) && (
+                                    <>
+                                      <br />
+                                      {[serviceLoc.city, serviceLoc.province, serviceLoc.postalCode].filter(Boolean).join(', ')}
+                                    </>
+                                  )}
+                                </>
+                              )
+                            })()}
+                            {/* Graveside Service (Optional) */}
+                            {hasGraveside && (() => {
+                              const graveLoc = locations?.graveside
+                              return (
+                                <>
+                                  <br />
+                                  <br />
+                                  <strong>Graveside Service</strong>
+                                  <br />
+                                  {funeralEvent.gravesideTime || (gravesideDate && formatServiceTime(gravesideDate))}
+                                  {graveLoc && ` at ${formatLocation(graveLoc)}`}
+                                </>
+                              )
+                            })()}
+                          </>
+                        )
+                      })()}
+                      {/* Location - for non-funeral events */}
+                      {event.type !== 'funeral' && (event as any).location && (
+                        <>
+                          <br />
+                          <br />
+                          {typeof (event as any).location === 'string' ? (
+                            (event as any).location
+                          ) : (
+                            <>
+                              {(event as any).location.name && <strong>{(event as any).location.name}</strong>}
+                              {(event as any).location.address && (
+                                <>
+                                  <br />
+                                  {(event as any).location.address}
+                                </>
+                              )}
+                              {((event as any).location.city || (event as any).location.province) && (
+                                <>
+                                  <br />
+                                  {[(event as any).location.city, (event as any).location.province, (event as any).location.postalCode].filter(Boolean).join(', ')}
+                                </>
+                              )}
+                              {(event as any).location.directions && (
+                                <>
+                                  <br />
+                                  <em>{(event as any).location.directions}</em>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                      {/* Description if provided */}
+                      {event.description && (
+                        <>
+                          <br />
+                          <br />
+                          {event.description}
+                        </>
+                      )}
+                      <br />
+                      <br />
+                      <Link
+                        href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
+                        style={{
+                          color: '#0066cc',
+                          textDecoration: 'none',
+                          fontWeight: '600',
+                        }}
+                      >
+                        View Details →
+                      </Link>
+                    </Text>
+                  </Section>
+                </React.Fragment>
+              ))}
+            </Container>
+          )
+        })()}
 
         {/* Learn to Read the Bible Seminars */}
         {(() => {
@@ -1000,7 +1478,48 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         {(event as any).theme && ` - ${(event as any).theme}`}
                         <br />
                         {EventDateDisplay(event)}
-                        {event.description && (
+                        {/* Baptism-specific wording */}
+                        {event.type === 'baptism' && (event as any).candidate && (
+                          <>
+                            <br />
+                            <br />
+                            After a good confession of Faith, <strong>{`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}</strong> will be baptized into the saving name of our Lord.
+                          </>
+                        )}
+                        {/* Location for events that have it */}
+                        {(event as any).location && (
+                          <>
+                            <br />
+                            <br />
+                            {typeof (event as any).location === 'string' ? (
+                              (event as any).location
+                            ) : (
+                              <>
+                                {(event as any).location.name && <strong>{(event as any).location.name}</strong>}
+                                {(event as any).location.address && (
+                                  <>
+                                    <br />
+                                    {(event as any).location.address}
+                                  </>
+                                )}
+                                {((event as any).location.city || (event as any).location.province) && (
+                                  <>
+                                    <br />
+                                    {[(event as any).location.city, (event as any).location.province, (event as any).location.postalCode].filter(Boolean).join(', ')}
+                                  </>
+                                )}
+                                {(event as any).location.directions && (
+                                  <>
+                                    <br />
+                                    <em>{(event as any).location.directions}</em>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
+                        {/* Description for non-baptism events (baptism uses the formal wording above) */}
+                        {event.type !== 'baptism' && event.description && (
                           <>
                             <br />
                             {event.description}

@@ -6,37 +6,47 @@ import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { Loading } from '@my/app/provider/loading'
 import { useRouter } from 'next/navigation'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
-import type { EventTypeRule } from '@my/app/types/newsletter-rules'
 
 type EventTypeOrder = {
   [key: string]: number
 }
 
+type EventTypeRule = {
+  displayDuration: string
+  priority: number
+  includeInSummary: boolean
+  requiresCTA: boolean
+}
+
 const EVENT_TYPE_ORDER: EventTypeOrder = {
   'recurring': 1,
   'funeral': 2,
-  'wedding': 3,
-  'baptism': 4,
-  'study-weekend': 5,
-  'general': 6
+  'engagement': 3,  // Grouped with wedding, but engagements first
+  'wedding': 4,
+  'baptism': 5,
+  'study-weekend': 6,
+  'general': 7,
+  'election-cycle': 8
 }
 
 const EVENT_TYPE_LABELS: { [key: string]: string } = {
   'recurring': 'Recurring Events',
   'funeral': 'Funerals',
+  'engagement': 'Engagements',
   'wedding': 'Weddings',
   'baptism': 'Baptisms',
   'study-weekend': 'Study Weekends',
-  'general': 'General Events'
+  'general': 'General Events',
+  'election-cycle': 'Election Cycles'
 }
 
 // Event display duration rules
 const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
-  'study-weekend': {
+  'recurring': {
     displayDuration: 'until_event_date',
-    priority: 5,
+    priority: 1,
     includeInSummary: true,
-    requiresCTA: true,
+    requiresCTA: false,
   },
   'funeral': {
     displayDuration: '3_weeks_after_event',
@@ -44,31 +54,46 @@ const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
     includeInSummary: true,
     requiresCTA: false,
   },
-  'wedding': {
+  'engagement': {
     displayDuration: '3_weeks_or_until_event_date',
     priority: 3,
     includeInSummary: true,
     requiresCTA: false,
   },
-  'baptism': {
-    displayDuration: '1_week_after_event',
+  'wedding': {
+    displayDuration: '3_weeks_or_until_event_date',
     priority: 4,
     includeInSummary: true,
     requiresCTA: false,
   },
-  'general': {
+  'baptism': {
+    displayDuration: '1_week_after_event',
+    priority: 5,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'study-weekend': {
     displayDuration: 'until_event_date',
     priority: 6,
     includeInSummary: true,
-    requiresCTA: false,
+    requiresCTA: true,
   },
-  'recurring': {
+  'general': {
     displayDuration: 'until_event_date',
-    priority: 1,
+    priority: 7,
     includeInSummary: true,
     requiresCTA: false,
   },
+  'election-cycle': {
+    displayDuration: 'until_event_date',
+    priority: 8,
+    includeInSummary: false, // Election cycle triggers a message, not shown as an event
+    requiresCTA: false,
+  },
 }
+
+// Fresh event threshold - events created within this time are sorted by creation date
+const FRESH_EVENT_DAYS = 7
 
 interface NewsletterEventsProps {
   // Optional prop to limit to specific date range for newsletter
@@ -76,9 +101,11 @@ interface NewsletterEventsProps {
     start: Date
     end: Date
   }
+  // Optional prop to exclude certain event types (e.g., baptism, wedding, funeral shown elsewhere)
+  excludeTypes?: string[]
 }
 
-export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
+export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, excludeTypes = [] }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -144,10 +171,16 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
 
         console.log(`✅ Filtered ${publishedEvents.length} events down to ${filteredByDuration.length} based on duration rules`)
 
-        // Filter by date range if provided (additional filtering on top of duration rules)
+        // Filter out excluded event types
         let filteredEvents = filteredByDuration
+        if (excludeTypes.length > 0) {
+          filteredEvents = filteredEvents.filter((event: Event) => !excludeTypes.includes(event.type))
+          console.log(`📋 Excluded types ${excludeTypes.join(', ')}: ${filteredByDuration.length} → ${filteredEvents.length} events`)
+        }
+
+        // Filter by date range if provided (additional filtering on top of duration rules)
         if (dateRange) {
-          filteredEvents = filteredByDuration.filter((event: Event) => {
+          filteredEvents = filteredEvents.filter((event: Event) => {
             // Check various date fields depending on event type
             let eventDate: Date | null = null
 
@@ -180,26 +213,47 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
     fetchEvents()
   }, [dateRange])
 
-  const groupEventsByType = (events: Event[]) => {
-    const grouped: { [key: string]: Event[] } = {}
-    
+  // Get the publish/announcement date for an event (publishDate if set, otherwise createdAt)
+  const getPublishDate = (event: Event): Date => {
+    if (event.publishDate) return new Date(event.publishDate)
+    if (event.createdAt) return new Date(event.createdAt)
+    return new Date(0)
+  }
+
+  // Sort events by type order, then by publish date within same type
+  const sortByTypeOrder = (a: Event, b: Event) => {
+    const aType = a.type || 'general'
+    const bType = b.type || 'general'
+    const typeOrderDiff = (EVENT_TYPE_ORDER[aType] || 999) - (EVENT_TYPE_ORDER[bType] || 999)
+    if (typeOrderDiff !== 0) return typeOrderDiff
+
+    // Same type: sort by publish date (newest first)
+    const aPublishDate = getPublishDate(a)
+    const bPublishDate = getPublishDate(b)
+    return bPublishDate.getTime() - aPublishDate.getTime()
+  }
+
+  const groupEventsByFreshness = (events: Event[]): { fresh: Event[], older: Event[] } => {
+    const now = new Date()
+    const freshThreshold = new Date(now.getTime() - FRESH_EVENT_DAYS * 24 * 60 * 60 * 1000)
+
+    const fresh: Event[] = []
+    const older: Event[] = []
+
     events.forEach(event => {
-      const eventType = event.type || 'general'
-      if (!grouped[eventType]) {
-        grouped[eventType] = []
+      const publishDate = getPublishDate(event)
+      if (publishDate >= freshThreshold) {
+        fresh.push(event)
+      } else {
+        older.push(event)
       }
-      grouped[eventType].push(event)
     })
-    
-    // Sort groups by the defined order
-    const sortedGroups: { [key: string]: Event[] } = {}
-    Object.keys(grouped)
-      .sort((a, b) => (EVENT_TYPE_ORDER[a] || 999) - (EVENT_TYPE_ORDER[b] || 999))
-      .forEach(key => {
-        sortedGroups[key] = grouped[key]
-      })
-    
-    return sortedGroups
+
+    // Sort each group by type order
+    fresh.sort(sortByTypeOrder)
+    older.sort(sortByTypeOrder)
+
+    return { fresh, older }
   }
 
   if (loading) {
@@ -222,17 +276,18 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
     )
   }
 
-  const groupedEvents = groupEventsByType(events)
+  const { fresh, older } = groupEventsByFreshness(events)
 
   return (
     <YStack gap="$4">
-      {Object.entries(groupedEvents).map(([eventType, typeEvents]) => (
-        <YStack key={eventType} gap="$3">
-          <Heading size={3} fontFamily="$body" fontWeight="500" color="$textSecondary">
-            {EVENT_TYPE_LABELS[eventType] || eventType}
+      {/* Fresh events (< 7 days old) - New Announcements */}
+      {fresh.length > 0 && (
+        <YStack gap="$3">
+          <Heading size={3} fontFamily="$body" fontWeight="500" color="$blue10">
+            New Announcements
           </Heading>
           <YStack gap="$3">
-            {typeEvents.map((event) => (
+            {fresh.map((event) => (
               <EventSummaryCard
                 key={event.id}
                 event={event}
@@ -242,7 +297,26 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
             ))}
           </YStack>
         </YStack>
-      ))}
+      )}
+
+      {/* Older events (>= 7 days old) - Ongoing */}
+      {older.length > 0 && (
+        <YStack gap="$3">
+          <Heading size={3} fontFamily="$body" fontWeight="500" color="$textSecondary">
+            {fresh.length > 0 ? 'Ongoing' : 'Announcements'}
+          </Heading>
+          <YStack gap="$3">
+            {older.map((event) => (
+              <EventSummaryCard
+                key={event.id}
+                event={event}
+                variant="newsletter"
+                onPress={() => router.push(`/events/${event.id}`)}
+              />
+            ))}
+          </YStack>
+        </YStack>
+      )}
     </YStack>
   )
 }

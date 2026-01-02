@@ -36,6 +36,9 @@ export function EventSummaryCard({
 
   return (
     <Card
+      testID={`event-card-${event.id || 'unknown'}`}
+      // @ts-ignore - data-event-type is a custom attribute for testing
+      data-event-type={event.type}
       elevate={!isNewsletter}
       bordered
       padding={isCompact ? "$3" : "$4"}
@@ -43,19 +46,18 @@ export function EventSummaryCard({
       backgroundColor="$background"
     >
       <YStack gap={isCompact ? "$2" : "$3"}>
-        {/* Title with optional theme - Move to top for newsletter */}
-        <XStack gap="$2" alignItems="center">
-          <H3 fontSize={isCompact ? "$5" : "$6"} fontWeight="700" color="$color">
-            {event.title || 'Untitled Event'}{event.theme ? ` - ${event.theme}` : ''}
-          </H3>
-          {event.membersOnly && (
-            <Users size={20} color="$green10" />
-          )}
-        </XStack>
+        {/* Title with optional theme - Skip for engagement in newsletter (shown inline with date) */}
+        {!(isNewsletter && event.type === 'engagement') && (
+          <XStack gap="$2" alignItems="center">
+            <H3 testID="event-card-title" fontSize={isCompact ? "$5" : "$6"} fontWeight="700" color="$color">
+              {event.title || 'Untitled Event'}{event.theme ? ` - ${event.theme}` : ''}
+            </H3>
+            {event.membersOnly ? <Users size={20} color="$green10" /> : null}
+          </XStack>
+        )}
 
-        {/* Event Type Badge - Show only for non-newsletter views */}
-        {!isNewsletter && (
-          <XStack justifyContent="space-between" alignItems="center">
+        {/* Event Type Badge - Show only for non-newsletter views, skip for engagements (redundant) */}
+        {!isNewsletter && event.type !== 'engagement' ? <XStack justifyContent="space-between" alignItems="center">
             <XStack gap="$2" alignItems="center">
               <Square
                 size={isCompact ? "$0.5" : "$1"}
@@ -78,11 +80,27 @@ export function EventSummaryCard({
                 {event.status}
               </Text>
             ) : null}
-          </XStack>
-        )}
+          </XStack> : null}
 
         {/* Formatted Event Info */}
         <YStack gap="$1">
+          {/* Baptism announcement - show first, right after title */}
+          {event.type === 'baptism' && event.candidate ? (() => {
+            const candidateName = `${event.candidate.firstName || ''} ${event.candidate.lastName || ''}`.trim()
+            return candidateName && (
+              <Text fontSize="$4" color="$gray11">
+                After a good confession of Faith, {candidateName} will be baptized into the saving name of our Lord.
+              </Text>
+            )
+          })() : null}
+
+          {/* About the Candidate - for baptisms */}
+          {event.type === 'baptism' && (event as any).aboutCandidate ? (
+            <Text fontSize="$3" color="$gray11" numberOfLines={3}>
+              {(event as any).aboutCandidate}
+            </Text>
+          ) : null}
+
           {/* Date Range - Check all possible date fields */}
           {(() => {
             let dateText = null
@@ -118,21 +136,22 @@ export function EventSummaryCard({
             // For baptisms
             else if (event.type === 'baptism' && event.baptismDate) {
               const date = new Date(event.baptismDate)
-              dateText = date.toLocaleDateString('en-US', { 
-                month: 'short', 
+              dateText = date.toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: 'numeric'
               })
             }
-            // For funerals
-            else if (event.type === 'funeral' && event.serviceDate) {
-              const date = new Date(event.serviceDate)
-              dateText = date.toLocaleDateString('en-US', { 
-                month: 'short', 
+            // For engagements - skip in newsletter mode (date shown inline with announcement)
+            else if (event.type === 'engagement' && (event as any).engagementDate && !isNewsletter) {
+              const date = new Date((event as any).engagementDate)
+              dateText = date.toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: 'numeric'
               })
             }
+            // For funerals - service time shown after location, not here
             // For recurring events
             else if (event.type === 'recurring' && (event as any).recurringConfig) {
               const config = (event as any).recurringConfig
@@ -234,7 +253,7 @@ export function EventSummaryCard({
           })()}
 
           {/* Speaker(s) - for study weekends */}
-          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 && (() => {
+          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 ? (() => {
             const speakerNames = event.speakers
               .map(speaker => `${speaker.firstName || ''} ${speaker.lastName || ''}`.trim())
               .filter(Boolean)
@@ -244,10 +263,10 @@ export function EventSummaryCard({
                 Speaker{event.speakers.length > 1 ? 's' : ''}: {speakerNames}
               </Text>
             )
-          })()}
+          })() : null}
 
           {/* Names for other event types */}
-          {event.type === 'wedding' && event.couple && (() => {
+          {event.type === 'wedding' && event.couple ? (() => {
             const bride = `${event.couple.bride?.firstName || ''} ${event.couple.bride?.lastName || ''}`.trim()
             const groom = `${event.couple.groom?.firstName || ''} ${event.couple.groom?.lastName || ''}`.trim()
             const coupleText = bride && groom ? `${bride} & ${groom}` : bride || groom
@@ -256,28 +275,63 @@ export function EventSummaryCard({
                 {coupleText}
               </Text>
             )
-          })()}
+          })() : null}
 
-          {event.type === 'baptism' && event.candidate && (() => {
-            const candidateName = `${event.candidate.firstName || ''} ${event.candidate.lastName || ''}`.trim()
-            return candidateName && (
-              <Text fontSize="$4" color="$gray11">
-                {candidateName}
+          {/* Engagement announcement - for newsletter, show as main content with date */}
+          {event.type === 'engagement' ? (() => {
+            const proposed = (event as any).engagementProposed || ''
+            const to = (event as any).engagementTo || ''
+            if (!proposed && !to) return null
+
+            // For newsletter variant, include the date in the announcement
+            let dateText = ''
+            if (isNewsletter && (event as any).engagementDate) {
+              const date = new Date((event as any).engagementDate)
+              dateText = `. ${date.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              })}`
+            }
+
+            return (
+              <Text fontSize={isNewsletter ? "$5" : "$4"} color={isNewsletter ? "$color" : "$gray11"} fontWeight={isNewsletter ? "600" : "400"}>
+                {proposed} is engaged to {to}{dateText}
               </Text>
             )
-          })()}
+          })() : null}
 
-          {event.type === 'funeral' && event.deceased && (() => {
-            const deceasedName = `${event.deceased.firstName || ''} ${event.deceased.lastName || ''}`.trim()
-            return deceasedName && (
+          {/* Funeral announcement */}
+          {event.type === 'funeral' ? (() => {
+            const deceased = event.deceased
+            if (!deceased) return null
+
+            const title = deceased.title || ''
+            const firstName = deceased.firstName || ''
+            const lastName = deceased.lastName || ''
+            const fullName = `${title} ${firstName} ${lastName}`.trim()
+
+            return fullName ? (
               <Text fontSize="$4" color="$gray11">
-                {deceasedName}
+                With sadness, we share the passing of {fullName}.
               </Text>
-            )
-          })()}
+            ) : null
+          })() : null}
 
-          {/* Location - for general events and others */}
-          {(event.type === 'general' || event.type === 'study-weekend') && (event as any).location && (() => {
+          {/* About the Deceased - first paragraph only */}
+          {event.type === 'funeral' && (event as any).aboutDeceased ? (() => {
+            const aboutText = (event as any).aboutDeceased as string
+            // Get first paragraph (split by double newline or just take first few sentences)
+            const firstParagraph = aboutText.split(/\n\n|\r\n\r\n/)[0]
+            return firstParagraph ? (
+              <Text fontSize="$3" color="$gray11" numberOfLines={4}>
+                {firstParagraph}
+              </Text>
+            ) : null
+          })() : null}
+
+          {/* Location - for all event types that have it */}
+          {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') && (event as any).location ? (() => {
             const location = (event as any).location
 
             // Handle string location (legacy)
@@ -318,10 +372,72 @@ export function EventSummaryCard({
             }
 
             return null
-          })()}
+          })() : null}
+
+          {/* Funeral Service Location - funerals use locations.service structure */}
+          {event.type === 'funeral' ? (() => {
+            // Check for service location in locations object
+            const locations = (event as any).locations
+            const serviceLocation = locations?.service
+            // Also check for simple location field as fallback
+            const simpleLocation = (event as any).location
+
+            const location = serviceLocation || simpleLocation
+            if (!location) return null
+
+            // Handle string location (legacy)
+            if (typeof location === 'string') {
+              return (
+                <Text fontSize="$4" color="$gray11" marginTop="$2">
+                  Location: {location}
+                </Text>
+              )
+            }
+
+            const locationName = location.name
+            if (locationName) {
+              return (
+                <Text fontSize="$4" color="$gray11" marginTop="$2">
+                  Location: {locationName}
+                </Text>
+              )
+            }
+
+            return null
+          })() : null}
+
+          {/* Funeral Service Time - shown after location */}
+          {event.type === 'funeral' && event.serviceDate ? (() => {
+            const date = new Date(event.serviceDate)
+            const dateStr = date.toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })
+            const hours = date.getHours()
+            const minutes = date.getMinutes()
+            const hasTime = hours !== 0 || minutes !== 0
+
+            if (hasTime) {
+              const ampm = hours >= 12 ? 'pm' : 'am'
+              const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+              const timeStr = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  Service time: {dateStr} {timeStr}
+                </Text>
+              )
+            }
+            return (
+              <Text fontSize="$4" color="$gray11">
+                Service time: {dateStr}
+              </Text>
+            )
+          })() : null}
 
           {/* Hosting Ecclesia */}
-          {(event as any).hostingEcclesia && (() => {
+          {(event as any).hostingEcclesia ? (() => {
             const hostingEcclesia = (event as any).hostingEcclesia
             const ecclesiaText = typeof hostingEcclesia === 'string'
               ? hostingEcclesia
@@ -331,7 +447,7 @@ export function EventSummaryCard({
                 Host: {ecclesiaText}
               </Text>
             )
-          })()}
+          })() : null}
         </YStack>
 
         {/* Description Preview */}
