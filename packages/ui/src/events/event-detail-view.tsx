@@ -288,14 +288,14 @@ export function EventDetailView({
           return (
             <YStack gap="$6" paddingVertical="$4">
               {/* Rings image + Congrats at the top, inline */}
-              <XStack alignItems="center" gap="$3">
+              <XStack alignItems="center" gap="$4">
                 <Image
                   source={{ uri: 'https://tee-admin-files.s3.ca-central-1.amazonaws.com/uploads/email-assets/engagement-rings.jpg' }}
-                  width={100}
-                  height={100}
+                  width={60}
+                  height={60}
                   objectFit="contain"
                 />
-                <Text fontSize="$7" color="$color" fontWeight="700">
+                <Text fontSize="$6" color="$color" fontWeight="700">
                   Congratulations!
                 </Text>
               </XStack>
