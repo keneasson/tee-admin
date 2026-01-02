@@ -8,7 +8,7 @@ const adminMailDomain = '@tee-admin.com'
 
 const SES_RATE_LIMIT = 14
 
-export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom'
+export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom' | 'event-announcement'
 
 const senders = {
   'sunday-school': {
@@ -46,6 +46,12 @@ const senders = {
     email: 'communications',
     subject: 'Toronto East Communications',
     contactList: 'testList', // Safe default - will be overridden by customList parameter
+  },
+  'event-announcement': {
+    name: 'Toronto East Ecclesia',
+    email: 'communications',
+    subject: 'Event Announcement',
+    contactList: 'newsletter', // Default - will be overridden by customList parameter
   },
 }
 
@@ -104,8 +110,8 @@ export const emailSend = async function ({
       .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
       .map((contact) => contact.EmailAddress as string)
 
-    const date = new Date()
-    const today = date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate()
+    // Format date in Toronto timezone to avoid UTC date issues when sending in evening EST
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
 
     const from = `"${senders[reason].name}" <${senders[reason].email}${adminMailDomain}>`
     // For custom emails, use the provided subject, otherwise use the default
