@@ -291,9 +291,8 @@ export function EventDetailView({
               <XStack alignItems="center" gap="$4">
                 <Image
                   source={{ uri: 'https://tee-admin-files.s3.ca-central-1.amazonaws.com/uploads/email-assets/engagement-rings.jpg' }}
-                  width={60}
-                  height={60}
-                  objectFit="contain"
+                  style={{ width: 60, height: 60 }}
+                  resizeMode="contain"
                 />
                 <Text fontSize="$6" color="$color" fontWeight="700">
                   Congratulations!
