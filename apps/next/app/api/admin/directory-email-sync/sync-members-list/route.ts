@@ -5,14 +5,15 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
 import { getSesClient } from '../../../../../utils/email/sesClient'
 import { inputTemplate } from '../../../../../utils/email/contact-lists'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -35,16 +36,19 @@ export async function POST() {
       TableName: 'tee-schedules',
       KeyConditionExpression: 'PK = :pk',
       ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS'
-      }
+        ':pk': 'DIRECTORY#MEMBERS',
+      },
     })
 
     const directoryResponse = await docClient.send(queryCommand)
 
     if (!directoryResponse.Items) {
-      return NextResponse.json({
-        error: 'No directory members found'
-      }, { status: 404 })
+      return NextResponse.json(
+        {
+          error: 'No directory members found',
+        },
+        { status: 404 }
+      )
     }
 
     // 2. Filter for TEE members and extract their emails
@@ -56,8 +60,8 @@ export async function POST() {
     }[] = []
 
     directoryResponse.Items.forEach((item: any) => {
-      // Check if member has ecclesia = 'TEE' (case insensitive)
-      if (item.ecclesia && item.ecclesia.toLowerCase() === 'tee') {
+      // Check if member has home ecclesia
+      if (HOME_ECCLESIA.isHomeEcclesia(item.ecclesia)) {
         const emailField = item.email || ''
 
         // Split multiple emails (semicolon, comma, pipe, or space separated)
@@ -72,7 +76,7 @@ export async function POST() {
             email,
             firstName: item.firstName || '',
             lastName: item.lastName || '',
-            sk: item.SK || ''
+            sk: item.SK || '',
           })
         })
       }
@@ -86,7 +90,7 @@ export async function POST() {
         message: 'No TEE members found',
         added: 0,
         updated: 0,
-        failed: 0
+        failed: 0,
       })
     }
 
@@ -102,7 +106,7 @@ export async function POST() {
         try {
           const getCommand = new GetContactCommand({
             ...inputTemplate,
-            EmailAddress: member.email
+            EmailAddress: member.email,
           })
           currentContact = await sesClient.send(getCommand)
         } catch (getError: any) {
@@ -111,7 +115,7 @@ export async function POST() {
             console.warn(`⚠️ ${member.email} not found in SES - skipping`)
             errors.push({
               email: member.email,
-              reason: 'Not in SES'
+              reason: 'Not in SES',
             })
             continue
           }
@@ -119,21 +123,22 @@ export async function POST() {
         }
 
         // Update only the members topic preference, keep others
-        const updatedTopicPreferences = currentContact.TopicPreferences?.map(pref => {
-          if (pref.TopicName === 'members') {
-            return {
-              ...pref,
-              SubscriptionStatus: SubscriptionStatus.OPT_IN
+        const updatedTopicPreferences =
+          currentContact.TopicPreferences?.map((pref) => {
+            if (pref.TopicName === 'members') {
+              return {
+                ...pref,
+                SubscriptionStatus: SubscriptionStatus.OPT_IN,
+              }
             }
-          }
-          return pref
-        }) || []
+            return pref
+          }) || []
 
         // If 'members' topic doesn't exist, add it
-        if (!updatedTopicPreferences.find(p => p.TopicName === 'members')) {
+        if (!updatedTopicPreferences.find((p) => p.TopicName === 'members')) {
           updatedTopicPreferences.push({
             TopicName: 'members',
-            SubscriptionStatus: SubscriptionStatus.OPT_IN
+            SubscriptionStatus: SubscriptionStatus.OPT_IN,
           })
         }
 
@@ -141,19 +146,20 @@ export async function POST() {
         const attributes = {
           firstName: member.firstName || '',
           lastName: member.lastName || '',
-          displayName: member.firstName && member.lastName
-            ? `${member.firstName} ${member.lastName}`.trim()
-            : '',
-          dynamodbSK: member.sk,  // Store the DynamoDB SK for linking
-          ecclesia: 'TEE',        // All members being synced here are TEE members
-          isMember: true          // All members being synced here are members
+          displayName:
+            member.firstName && member.lastName
+              ? `${member.firstName} ${member.lastName}`.trim()
+              : '',
+          dynamodbSK: member.sk, // Store the DynamoDB SK for linking
+          ecclesia: HOME_ECCLESIA.canonicalName, // All members being synced here are home ecclesia members
+          isMember: true, // All members being synced here are members
         }
 
         const updateCommand = new UpdateContactCommand({
           ...inputTemplate,
           EmailAddress: member.email,
           TopicPreferences: updatedTopicPreferences,
-          AttributesData: JSON.stringify(attributes)
+          AttributesData: JSON.stringify(attributes),
         })
 
         await sesClient.send(updateCommand)
@@ -162,16 +168,15 @@ export async function POST() {
           email: member.email,
           firstName: member.firstName,
           lastName: member.lastName,
-          success: true
+          success: true,
         })
 
         console.log(`✅ Added ${member.email} to SES Members list`)
-
       } catch (error: any) {
         console.error(`❌ Failed to update ${member.email}:`, error.message)
         errors.push({
           email: member.email,
-          error: error.message
+          error: error.message,
         })
       }
     }
@@ -185,14 +190,10 @@ export async function POST() {
       added: results.length,
       failed: errors.length,
       results,
-      errors
+      errors,
     })
-
   } catch (error) {
     console.error('❌ Error syncing members to SES:', error)
-    return NextResponse.json(
-      { error: 'Failed to sync members to SES' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to sync members to SES' }, { status: 500 })
   }
 }

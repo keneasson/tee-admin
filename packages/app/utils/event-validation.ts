@@ -94,12 +94,14 @@ export class EventValidator {
   static canSaveAsDraft(event: Partial<Event>): boolean {
     // Very minimal requirements for draft saving
     return Boolean(
-      event.title?.trim() || 
+      event.title?.trim() ||
       event.type ||
       (event as any).theme?.trim() ||
       (event as any).candidate?.firstName?.trim() ||
       (event as any).couple?.bride?.firstName?.trim() ||
-      (event as any).deceased?.firstName?.trim()
+      (event as any).deceased?.firstName?.trim() ||
+      (event as any).engagementProposed?.trim() ||
+      (event as any).engagementTo?.trim()
     )
   }
 
@@ -139,6 +141,17 @@ export class EventValidator {
           errors.push({
             field: 'ceremonyDate',
             message: 'Ceremony date is required for wedding save-the-date',
+            code: 'REQUIRED_DATE'
+          })
+        }
+        break
+
+      case 'engagement':
+        const engEvent = event as any
+        if (!engEvent.engagementDate) {
+          errors.push({
+            field: 'engagementDate',
+            message: 'Engagement date is required for engagement save-the-date',
             code: 'REQUIRED_DATE'
           })
         }
@@ -187,6 +200,24 @@ export class EventValidator {
           })
         }
         break
+
+      case 'election-cycle':
+        const ecEvent = event as any
+        if (!ecEvent.electionStartDate) {
+          errors.push({
+            field: 'electionStartDate',
+            message: 'Election start date is required',
+            code: 'REQUIRED_DATE'
+          })
+        }
+        if (!ecEvent.electionEndDate) {
+          errors.push({
+            field: 'electionEndDate',
+            message: 'Election end date is required',
+            code: 'REQUIRED_DATE'
+          })
+        }
+        break
     }
 
     return { isValid: errors.length === 0, errors, warnings }
@@ -201,6 +232,8 @@ export class EventValidator {
         return this.validateStudyWeekend(event as any, options)
       case 'wedding':
         return this.validateWedding(event as any, options)
+      case 'engagement':
+        return this.validateEngagement(event as any, options)
       case 'baptism':
         return this.validateBaptism(event as any, options)
       case 'funeral':
@@ -209,6 +242,8 @@ export class EventValidator {
         return this.validateGeneral(event as any, options)
       case 'recurring':
         return this.validateRecurring(event as any, options)
+      case 'election-cycle':
+        return this.validateElectionCycle(event as any, options)
     }
 
     return { isValid: true, errors, warnings }
@@ -328,6 +363,69 @@ export class EventValidator {
     return { isValid: errors.length === 0, errors, warnings }
   }
 
+  private static validateEngagement(event: any, options: ValidationOptions): EventValidationResult {
+    const errors: EventValidationError[] = []
+    const warnings: EventValidationError[] = []
+
+    // Draft mode
+    if (options.mode === 'draft') {
+      if (!event.engagementDate) {
+        warnings.push({
+          field: 'engagementDate',
+          message: 'Engagement date is recommended',
+          code: 'RECOMMENDED_FIELD'
+        })
+      }
+
+      if (!event.engagementProposed?.trim() && !event.engagementTo?.trim()) {
+        warnings.push({
+          field: 'engagementProposed',
+          message: 'Names help identify the engagement',
+          code: 'RECOMMENDED_FIELD'
+        })
+      }
+
+      return { isValid: true, errors, warnings }
+    }
+
+    // Publish mode
+    if (options.mode === 'publish') {
+      if (!event.engagementDate) {
+        errors.push({
+          field: 'engagementDate',
+          message: 'Engagement date is required for published engagement',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+
+      if (!event.engagementProposed?.trim()) {
+        errors.push({
+          field: 'engagementProposed',
+          message: '"Proposed" name is required for published engagement',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+
+      if (!event.engagementTo?.trim()) {
+        errors.push({
+          field: 'engagementTo',
+          message: '"To" name is required for published engagement',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+
+      if (!event.engagementAnnouncement?.trim()) {
+        errors.push({
+          field: 'engagementAnnouncement',
+          message: 'Announcement is required for published engagement',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+    }
+
+    return { isValid: errors.length === 0, errors, warnings }
+  }
+
   private static validateBaptism(event: any, options: ValidationOptions): EventValidationResult {
     const errors: EventValidationError[] = []
     const warnings: EventValidationError[] = []
@@ -410,16 +508,9 @@ export class EventValidator {
       return { isValid: true, errors, warnings }
     }
 
-    // Publish mode
+    // Publish mode - only deceased name is required, other details can come later
     if (options.mode === 'publish') {
-      if (!event.serviceDate) {
-        errors.push({
-          field: 'serviceDate',
-          message: 'Service date is required for published funeral',
-          code: 'REQUIRED_FIELD'
-        })
-      }
-
+      // Deceased name is the only required field for publishing
       if (!event.deceased?.firstName?.trim() || !event.deceased?.lastName?.trim()) {
         errors.push({
           field: 'deceased',
@@ -428,11 +519,21 @@ export class EventValidator {
         })
       }
 
+      // Service date and location are recommended but not required
+      // (allows publishing announcement early, then adding details later)
+      if (!event.serviceDate) {
+        warnings.push({
+          field: 'serviceDate',
+          message: 'Service date is recommended when available',
+          code: 'RECOMMENDED_FIELD'
+        })
+      }
+
       if (!event.locations?.service?.name?.trim()) {
-        errors.push({
+        warnings.push({
           field: 'locations.service.name',
-          message: 'Service location is required for published funeral',
-          code: 'REQUIRED_FIELD'
+          message: 'Service location is recommended when available',
+          code: 'RECOMMENDED_FIELD'
         })
       }
     }
@@ -499,6 +600,61 @@ export class EventValidator {
           message: 'Days of week are required for published recurring event',
           code: 'REQUIRED_FIELD'
         })
+      }
+    }
+
+    return { isValid: errors.length === 0, errors, warnings }
+  }
+
+  private static validateElectionCycle(event: any, options: ValidationOptions): EventValidationResult {
+    const errors: EventValidationError[] = []
+    const warnings: EventValidationError[] = []
+
+    // Draft mode
+    if (options.mode === 'draft') {
+      if (!event.electionStartDate) {
+        warnings.push({
+          field: 'electionStartDate',
+          message: 'Election start date is recommended',
+          code: 'RECOMMENDED_FIELD'
+        })
+      }
+      if (!event.electionEndDate) {
+        warnings.push({
+          field: 'electionEndDate',
+          message: 'Election end date is recommended',
+          code: 'RECOMMENDED_FIELD'
+        })
+      }
+
+      return { isValid: true, errors, warnings }
+    }
+
+    // Publish mode
+    if (options.mode === 'publish') {
+      if (!event.electionStartDate) {
+        errors.push({
+          field: 'electionStartDate',
+          message: 'Election start date is required',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+      if (!event.electionEndDate) {
+        errors.push({
+          field: 'electionEndDate',
+          message: 'Election end date is required',
+          code: 'REQUIRED_FIELD'
+        })
+      }
+      // Validate end date is after start date
+      if (event.electionStartDate && event.electionEndDate) {
+        if (new Date(event.electionEndDate) <= new Date(event.electionStartDate)) {
+          errors.push({
+            field: 'electionEndDate',
+            message: 'Election end date must be after start date',
+            code: 'INVALID_DATE_RANGE'
+          })
+        }
       }
     }
 

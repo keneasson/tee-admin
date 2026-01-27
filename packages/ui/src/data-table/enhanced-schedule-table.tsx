@@ -49,8 +49,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               day: 'numeric',
             })}
           </Text>
-          {isNextEvent && (
-            <Button 
+          {isNextEvent ? <Button 
               backgroundColor={colors.success} 
               color={colors.successForeground} 
               size="$1"
@@ -61,8 +60,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               fontSize={12}
             >
               Next
-            </Button>
-          )}
+            </Button> : null}
         </XStack>
       )
     },
@@ -104,8 +102,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
           >
             {name}
           </Text>
-          {hasConflict && (
-            <Button 
+          {hasConflict ? <Button 
               backgroundColor={colors.warning} 
               color={colors.warningForeground} 
               size="$1"
@@ -116,8 +113,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               fontSize={12}
             >
               Conflict
-            </Button>
-          )}
+            </Button> : null}
         </XStack>
       )
     },

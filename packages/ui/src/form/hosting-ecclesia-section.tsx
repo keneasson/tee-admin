@@ -3,6 +3,7 @@ import { YStack, XStack, Card, Text, Checkbox } from 'tamagui'
 import { Church, Check } from '@tamagui/lucide-icons'
 import { EventFormInput } from './event-form-input'
 import { CountrySelect, ProvinceSelect } from './location-select'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 interface HostingEcclesiaSectionProps<T extends FieldValues> {
   control: Control<T>
@@ -15,7 +16,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   control, 
   namePrefix, 
   title = "Hosting Ecclesia",
-  defaultEcclesiaName = "Toronto East Christadelphian Ecclesia"
+  defaultEcclesiaName = HOME_ECCLESIA.canonicalName
 }: HostingEcclesiaSectionProps<T>) {
   
   const {
@@ -102,8 +103,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
           </XStack>
 
           {/* Custom ecclesia name when not hosting */}
-          {!isHosting && (
-            <YStack space="$3">
+          {!isHosting ? <YStack space="$3">
               <EventFormInput
                 control={control}
                 name={`${namePrefix}.name` as FieldPath<T>}
@@ -144,8 +144,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
                   />
                 </YStack>
               </XStack>
-            </YStack>
-          )}
+            </YStack> : null}
 
           {/* Additional hosting details */}
           <EventFormInput

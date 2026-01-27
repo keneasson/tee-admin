@@ -121,21 +121,19 @@ export const EmailTester: React.FC = () => {
                 </Button>
               </YStack>
             )}
-            {email && (
-              <YStack borderColor={'$green9'} borderWidth={'$1'} gap={'$2'}>
+            {email ? <YStack borderColor={'$green9'} borderWidth={'$1'} gap={'$2'}>
                 <Button onPress={() => setEmail(null)}>
                   <Text>Hide Response</Text>
                 </Button>
                 <pre>{JSON.stringify(email, null, 2).replaceAll('/n', '<br />')}</pre>
-              </YStack>
-            )}
+              </YStack> : null}
           </YStack>
           <ManageContacts />
           {/* <br />
           <Button onPress={() => handleButtonPress()}>
             <Text>Add Role for Ken Easson</Text>
           </Button> */}
-          {buttonResponce && <Text>{buttonResponce}</Text>}
+          {buttonResponce ? <Text>{buttonResponce}</Text> : null}
         </YStack>
       </Section>
     </Wrapper>

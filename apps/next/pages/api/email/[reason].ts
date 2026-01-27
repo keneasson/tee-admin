@@ -26,6 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let customHtmlContent: string | undefined
   let customSubject: string | undefined
   let customList: string | undefined
+  let eventId: string | undefined
+  let eventType: string | undefined
 
   if (reason === 'custom' && req.method === 'POST') {
     const body = req.body
@@ -40,19 +42,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // For event announcements, we need eventId and eventType from request body
+  if (reason === 'event-announcement' && req.method === 'POST') {
+    const body = req.body
+    console.log('[event-announcement] Request body:', JSON.stringify(body, null, 2))
+    eventId = body.eventId
+    eventType = body.eventType
+    customList = body.selectedList || 'newsletter' // Default to newsletter list
+
+    if (!eventId || !eventType) {
+      console.log('[event-announcement] Missing eventId or eventType:', { eventId, eventType })
+      return res.status(400).json({
+        failed: 'Event announcement requires eventId and eventType in request body'
+      })
+    }
+    console.log('[event-announcement] Processing event:', { eventId, eventType })
+  }
+
+  // For inter-ecclesia announcements, we need eventId and eventType from request body
+  if (reason === 'inter-ecclesia' && req.method === 'POST') {
+    const body = req.body
+    console.log('[inter-ecclesia] Request body:', JSON.stringify(body, null, 2))
+    eventId = body.eventId
+    eventType = body.eventType
+
+    if (!eventId || !eventType) {
+      console.log('[inter-ecclesia] Missing eventId or eventType:', { eventId, eventType })
+      return res.status(400).json({
+        failed: 'Inter-ecclesia announcement requires eventId and eventType in request body'
+      })
+    }
+    console.log('[inter-ecclesia] Processing event:', { eventId, eventType })
+  }
+
   try {
-    const [emailHtml, emailText] = await getEmailContent(reason, note, customHtmlContent, customSubject)
+    const [emailHtml, emailText, generatedSubject] = await getEmailContent(reason, note, customHtmlContent, customSubject, eventId, eventType)
     if (!(emailHtml && emailText)) {
       return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }
-    console.log('IS sending as TEST: ', { isTest, hasNote: !!note })
+    console.log('IS sending as TEST: ', { isTest, hasNote: !!note, generatedSubject })
     const result = await emailSend({
       reason,
       emailHtml,
       emailText,
       test: isTest,
       customList,
-      customSubject,
+      customSubject: generatedSubject || customSubject, // Use generated subject if available
     })
     console.log('result from AWS.SES', result)
     return res.status(200).json(result)

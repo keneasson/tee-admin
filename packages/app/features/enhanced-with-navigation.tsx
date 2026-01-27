@@ -70,8 +70,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
       </View>
 
       {/* User Welcome */}
-      {session?.user && (
-        <View
+      {session?.user ? <View
           backgroundColor="$background"
           padding="$3"
           borderRadius="$3"
@@ -87,8 +86,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
           <Text fontSize="$2" color="$textTertiary">
             {session.user.role}
           </Text>
-        </View>
-      )}
+        </View> : null}
     </YStack>
   )
 

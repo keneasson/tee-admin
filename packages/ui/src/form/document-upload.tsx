@@ -261,8 +261,7 @@ export function DocumentUpload({
   return (
     <YStack gap="$3">
       {/* Google Doc URL Import */}
-      {documents.length < maxFiles && (
-        <YStack gap="$2">
+      {documents.length < maxFiles ? <YStack gap="$2">
           <Text fontSize="$4" fontWeight="500" color="$gray12">
             Insert Google Doc URL
           </Text>
@@ -288,12 +287,10 @@ export function DocumentUpload({
           <Text fontSize="$3" color="$gray10">
             Paste a link to a Google Doc, Sheet, or Slides. We'll ensure it's viewable by everyone.
           </Text>
-        </YStack>
-      )}
+        </YStack> : null}
 
       {/* Upload Area */}
-      {documents.length < maxFiles && (
-        <YStack
+      {documents.length < maxFiles ? <YStack
           {...getRootProps()}
           borderWidth={2}
           borderStyle="dashed"
@@ -315,12 +312,10 @@ export function DocumentUpload({
           <Text fontSize="$3" color="$gray10" textAlign="center">
             Max {maxFiles} files, up to {Math.round(maxSizeBytes / 1024 / 1024)}MB each
           </Text>
-        </YStack>
-      )}
+        </YStack> : null}
 
       {/* Error Messages */}
-      {errors.length > 0 && (
-        <YStack gap="$2">
+      {errors.length > 0 ? <YStack gap="$2">
           {errors.map((error, index) => (
             <XStack key={index} gap="$2" alignItems="center">
               <AlertCircle size={16} color="$red10" />
@@ -329,12 +324,10 @@ export function DocumentUpload({
               </Text>
             </XStack>
           ))}
-        </YStack>
-      )}
+        </YStack> : null}
 
       {/* Uploaded Documents */}
-      {documents.length > 0 && (
-        <YStack gap="$2">
+      {documents.length > 0 ? <YStack gap="$2">
           <Text fontSize="$4" fontWeight="500" color="$gray12">
             Documents ({documents.length}/{maxFiles})
           </Text>
@@ -405,15 +398,13 @@ export function DocumentUpload({
                         <Text fontSize="$4" fontWeight="500" color="$gray12">
                           {document.originalName}
                         </Text>
-                        {isGoogleDoc && document.editable && (
-                          <Button
+                        {isGoogleDoc && document.editable ? <Button
                             size="$2"
                             chromeless
                             icon={<Pencil size={14} />}
                             onPress={() => handleEditTitle(document)}
                             padding="$1"
-                          />
-                        )}
+                          /> : null}
                       </XStack>
                       <Text fontSize="$3" color="$gray10">
                         {isGoogleDoc ? (
@@ -448,8 +439,7 @@ export function DocumentUpload({
               </XStack>
             )
           })}
-        </YStack>
-      )}
+        </YStack> : null}
     </YStack>
   )
 }

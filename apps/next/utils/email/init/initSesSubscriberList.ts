@@ -39,6 +39,11 @@ export async function createList(): Promise<CreateContactListCommandOutput> {
         DisplayName: 'Sunday School', // required
         DefaultSubscriptionStatus: SubscriptionStatus.OPT_OUT, // required
       },
+      {
+        TopicName: 'interEcclesia', // required
+        DisplayName: 'Inter-Ecclesia Leaders', // required
+        DefaultSubscriptionStatus: SubscriptionStatus.OPT_OUT, // required
+      },
     ],
     Description: 'General Mailing lists for TEE Members, Friends and Family',
   }

@@ -96,8 +96,7 @@ const createPersonCell = (colors: any, currentUser?: string) => ({ row, getValue
       >
         {name || '—'}
       </Text>
-      {hasConflict && name && isUserHighlighted && (
-        <Button 
+      {hasConflict && name && isUserHighlighted ? <Button 
           backgroundColor={colors.warning} 
           color={colors.warningForeground} 
           size="$1"
@@ -108,8 +107,7 @@ const createPersonCell = (colors: any, currentUser?: string) => ({ row, getValue
           fontSize={12}
         >
           Conflict
-        </Button>
-      )}
+        </Button> : null}
     </XStack>
   )
 }
@@ -157,8 +155,7 @@ const createDateCell = (colors: any) => ({ row, getValue }: any) => {
       >
         {formattedDate}
       </Text>
-      {isNextEvent && (
-        <Button 
+      {isNextEvent ? <Button 
           backgroundColor={colors.success} 
           color={colors.successForeground} 
           size="$1"
@@ -169,8 +166,7 @@ const createDateCell = (colors: any) => ({ row, getValue }: any) => {
           fontSize={12}
         >
           Next
-        </Button>
-      )}
+        </Button> : null}
     </XStack>
   )
 }
@@ -268,41 +264,33 @@ export function EnhancedScheduleResponsive({
     
     return (
       <YStack gap="$2" padding="$2">
-        {scheduleType === 'bibleClass' && (event.Topic || event.topic) && (
-          <XStack gap="$2" alignItems="center">
+        {scheduleType === 'bibleClass' && (event.Topic || event.topic) ? <XStack gap="$2" alignItems="center">
             <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
               Topic:
             </Text>
             <Text fontSize="$3" color={colors.textPrimary} flex={1}>
               {event.Topic || event.topic}
             </Text>
-          </XStack>
-        )}
+          </XStack> : null}
         
-        {scheduleType === 'memorial' && (
-          <YStack gap="$1">
-            {(event.Lunch || event.lunch) && (
-              <XStack gap="$2" alignItems="center">
+        {scheduleType === 'memorial' ? <YStack gap="$1">
+            {(event.Lunch || event.lunch) ? <XStack gap="$2" alignItems="center">
                 <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
                   Lunch:
                 </Text>
                 <Text fontSize="$3" color={colors.textPrimary} flex={1}>
                   {event.Lunch || event.lunch}
                 </Text>
-              </XStack>
-            )}
-            {(event.Activities || event.activities) && (
-              <XStack gap="$2" alignItems="center">
+              </XStack> : null}
+            {(event.Activities || event.activities) ? <XStack gap="$2" alignItems="center">
                 <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
                   Activities:
                 </Text>
                 <Text fontSize="$3" color={colors.textPrimary} flex={1}>
                   {event.Activities || event.activities}
                 </Text>
-              </XStack>
-            )}
-          </YStack>
-        )}
+              </XStack> : null}
+          </YStack> : null}
       </YStack>
     )
   }, [colors])

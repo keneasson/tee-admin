@@ -49,7 +49,7 @@ const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
     requiresCTA: false,
   },
   'funeral': {
-    displayDuration: '3_weeks_after_event',
+    displayDuration: '2_weeks_then_thursday_before',
     priority: 2,
     includeInSummary: true,
     requiresCTA: false,

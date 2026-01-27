@@ -3,12 +3,13 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 import { getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
+import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 
 const adminMailDomain = '@tee-admin.com'
 
 const SES_RATE_LIMIT = 14
 
-export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom' | 'event-announcement'
+export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom' | 'event-announcement' | 'inter-ecclesia'
 
 const senders = {
   'sunday-school': {
@@ -52,6 +53,13 @@ const senders = {
     email: 'communications',
     subject: 'Event Announcement',
     contactList: 'newsletter', // Default - will be overridden by customList parameter
+  },
+  'inter-ecclesia': {
+    name: 'Toronto East Ecclesia',
+    email: 'communications',
+    subject: 'Inter-Ecclesia Announcement',
+    contactList: 'interEcclesia',
+    replyTo: 'teerecbro@gmail.com',
   },
 }
 
@@ -106,6 +114,7 @@ export const emailSend = async function ({
     if (!contacts) {
       return result
     }
+
     const senderEmails = contacts
       .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
       .map((contact) => contact.EmailAddress as string)
@@ -119,6 +128,7 @@ export const emailSend = async function ({
     const subject = `${test ? '[TEST] ' : ''}${defaultSubject} ${today}`
 
     const sendChunks = chunkArray(senderEmails, SES_RATE_LIMIT)
+    const replyTo = (senders[reason] as any).replyTo as string | undefined
     let allSent: Sends = { sends: [], skips: [] }
     for (let i = 0; i < sendChunks.length; i++) {
       const sends = await sendDeferred({
@@ -130,6 +140,7 @@ export const emailSend = async function ({
         emailHtml,
         reason,
         sesClient,
+        replyTo,
       })
       allSent = {
         sends: [...allSent.sends, ...sends.sends],
@@ -154,6 +165,7 @@ type SingleSendProps = {
   emailHtml: string
   reason: string
   sesClient: SESv2Client
+  replyTo?: string
 }
 
 /**
@@ -190,14 +202,29 @@ async function chunkSend({
   emailHtml,
   reason,
   sesClient,
+  replyTo,
 }: SingleSendProps): Promise<string[]> {
   const sent = []
   try {
     for (let i = 0; i < toArray.length; i++) {
+      const recipientEmail = toArray[i]
+
+      // Personalize email content for inter-ecclesia emails
+      let personalizedHtml = emailHtml
+      let personalizedText = emailText
+
+      if (reason === 'inter-ecclesia') {
+        // Generate token URL for this recipient (token maps to email → PersonRecord)
+        const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
+        personalizedHtml = emailHtml.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+        personalizedText = emailText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+      }
+
       const emailCmd = new SendEmailCommand({
         FromEmailAddress: from,
+        ReplyToAddresses: replyTo ? [replyTo] : undefined,
         Destination: {
-          ToAddresses: [toArray[i]],
+          ToAddresses: [recipientEmail],
         },
         ListManagementOptions: {
           ContactListName: 'TEEAdmin',
@@ -217,17 +244,17 @@ async function chunkSend({
             },
             Body: {
               Text: {
-                Data: emailText,
+                Data: personalizedText,
               },
               Html: {
-                Data: emailHtml,
+                Data: personalizedHtml,
               },
             },
           },
         },
       })
       await sesClient.send(emailCmd as any)
-      sent.push(toArray[i])
+      sent.push(recipientEmail)
     }
     return sent
   } catch (error) {

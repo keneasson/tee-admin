@@ -16,9 +16,7 @@ const Wrapper: React.FC<Contact> = ({ email, preferences, index }) => {
       backgroundColor={index % 2 ? '$color2' : 'white'}
     >
       <Text>{email}</Text>
-      {preferences && (
-        <Preferences email={email} preferences={preferences} index={index}></Preferences>
-      )}
+      {preferences ? <Preferences email={email} preferences={preferences} index={index}></Preferences> : null}
     </XStack>
   )
 }

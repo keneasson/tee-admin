@@ -1,18 +1,27 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'solito/navigation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext, useMedia, Sheet } from '@my/ui'
+import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext, useMedia, Sheet, ScrollView } from '@my/ui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ThemeToggle } from './theme-toggle'
 import { Menu, X } from '@tamagui/lucide-icons'
 
+type UserSession = {
+  name?: string | null
+  email?: string | null
+  role?: string
+}
+
 type SimpleEnhancedNavigationProps = {
   children: React.ReactNode
+  /** User session data passed from platform-specific auth */
+  user?: UserSession | null
+  /** Sign out function passed from platform-specific auth */
+  onSignOut?: () => void
 }
 
 type MainPageType = {
@@ -30,16 +39,23 @@ const pages: MainPageType[] = [
 // Admin Tools - Email Management
 const emailAdminPages: MainPageType[] = [
   { path: '/admin/email/sender', label: 'Email Sender' },
+  { path: '/admin/email/inter-ecclesia', label: 'Inter-Ecclesia' },
   { path: '/admin/email/lists', label: 'Email Lists' },
   { path: '/admin/email/schedule', label: 'Schedule Emails to Send' },
 ]
 
 // Admin Tools - System Management
 const systemAdminPages: MainPageType[] = [
+  { path: '/admin/youtube', label: 'YouTube' },
   { path: '/admin/events', label: 'Event Management' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
-  { path: '/admin/profile', label: 'Profile' },
+]
+
+// Community Tools
+const communityAdminPages: MainPageType[] = [
+  { path: '/admin/community/ecclesias', label: 'Ecclesial Directory' },
+  { path: '/admin/community/contacts', label: 'Contact List' },
 ]
 
 // Brand System Tools
@@ -51,8 +67,7 @@ const brandAdminPages: MainPageType[] = [
   { path: '/admin/evolution/feature-flags', label: 'Feature Flags' },
 ]
 
-export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children }) => {
-  const { data: session } = useSession()
+export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children, user, onSignOut }) => {
   const router = useRouter()
   const currentPath = usePathname()
   const themeName = useThemeName()
@@ -73,7 +88,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   // Navigation content component (shared between desktop and mobile)
   const NavigationContent = () => (
     <YStack gap="$3" flex={1}>
-      {/* Header */}
+      {/* Header - stays fixed at top */}
       <View flexDirection="row" alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
           TEE Portal
@@ -81,28 +96,38 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         <XStack gap="$2" alignItems="center">
           <ThemeToggle onThemeChange={setTheme} />
           {/* Close button for mobile */}
-          {media.sm && (
-            <Button
+          {media.sm ? <Button
               size="$3"
               circular
               icon={X}
               onPress={() => setMobileMenuOpen(false)}
               backgroundColor="transparent"
-            />
-          )}
+            /> : null}
         </XStack>
       </View>
 
-      {session?.user && (
-        <View backgroundColor={colors.backgroundTertiary} padding="$2" borderRadius="$2">
-          <Text fontSize="$3" fontWeight="600" color={colors.textPrimary}>
-            {session.user.name}
-          </Text>
-          <Text fontSize="$2" color={colors.textSecondary}>
-            {(session.user as any)?.role || 'Guest'}
-          </Text>
-        </View>
-      )}
+      {/* Scrollable navigation content */}
+      <ScrollView flex={1} showsVerticalScrollIndicator={true}>
+        <YStack gap="$3" paddingBottom="$4">
+      {user ? <Button
+          onPress={navigateTo('/profile')}
+          backgroundColor={colors.backgroundTertiary}
+          padding="$2"
+          borderRadius="$2"
+          justifyContent="flex-start"
+          hoverStyle={{
+            backgroundColor: colors.backgroundSecondary,
+          }}
+        >
+          <YStack>
+            <Text fontSize="$3" fontWeight="600" color={colors.textPrimary}>
+              {user.name}
+            </Text>
+            <Text fontSize="$2" color={colors.textSecondary}>
+              {user.role || 'Guest'}
+            </Text>
+          </YStack>
+        </Button> : null}
 
       {/* Main Navigation */}
       <YStack gap="$1">
@@ -141,9 +166,8 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       </YStack>
 
 {/* Email Admin Tools */}
-      {session?.user &&
-        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
-          <YStack gap="$1">
+      {user &&
+        (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
             <Text
               fontSize="$2"
               fontWeight="600"
@@ -178,13 +202,50 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                 </Text>
               </Button>
             ))}
-          </YStack>
-        )}
+          </YStack> : null}
+
+      {/* Community Tools */}
+      {user &&
+        (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
+            <Text
+              fontSize="$2"
+              fontWeight="600"
+              color={colors.textSecondary}
+              textTransform="uppercase"
+            >
+              Community
+            </Text>
+            {communityAdminPages.map((page) => (
+              <Button
+                key={page.path}
+                onPress={navigateTo(page.path)}
+                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                borderRadius="$2"
+                justifyContent="flex-start"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
+              >
+                <Text
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
+                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                  }}
+                >
+                  {page.label}
+                </Text>
+              </Button>
+            ))}
+          </YStack> : null}
 
       {/* System Admin Tools */}
-      {session?.user &&
-        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
-          <YStack gap="$1">
+      {user &&
+        (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
             <Text
               fontSize="$2"
               fontWeight="600"
@@ -219,13 +280,11 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                 </Text>
               </Button>
             ))}
-          </YStack>
-        )}
+          </YStack> : null}
 
       {/* Brand System Tools */}
-      {session?.user &&
-        ((session.user as any)?.role === ROLES.ADMIN || (session.user as any)?.role === ROLES.OWNER) && (
-          <YStack gap="$1">
+      {user &&
+        (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
             <Text
               fontSize="$2"
               fontWeight="600"
@@ -260,12 +319,13 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
                 </Text>
               </Button>
             ))}
-          </YStack>
-        )}
+          </YStack> : null}
+        </YStack>
+      </ScrollView>
 
-      {/* Auth */}
-      <YStack gap="$2" marginTop="auto">
-        {session?.user ? <NavitemLogout /> : <LogInUser />}
+      {/* Auth - stays fixed at bottom */}
+      <YStack gap="$2" paddingTop="$2">
+        {user ? <NavitemLogout onSignOut={onSignOut} /> : <LogInUser />}
       </YStack>
     </YStack>
   )

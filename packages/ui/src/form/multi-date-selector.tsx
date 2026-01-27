@@ -188,7 +188,7 @@ export function MultiDateSelector<T extends FieldValues>({
     <YStack space="$3">
       <Label fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
 
       {/* Calendar */}
@@ -225,8 +225,7 @@ export function MultiDateSelector<T extends FieldValues>({
           />
 
           {/* Selected dates list */}
-          {selectedDates.length > 0 && (
-            <YStack space="$2">
+          {selectedDates.length > 0 ? <YStack space="$2">
               <Text fontSize="$3" fontWeight="600" color="$gray11">
                 Selected Dates ({selectedDates.length}):
               </Text>
@@ -255,22 +254,17 @@ export function MultiDateSelector<T extends FieldValues>({
                   ))}
                 </XStack>
               </ScrollView>
-            </YStack>
-          )}
+            </YStack> : null}
 
-          {selectedDates.length === 0 && (
-            <Text fontSize="$3" color="$gray11" textAlign="center">
+          {selectedDates.length === 0 ? <Text fontSize="$3" color="$gray11" textAlign="center">
               Click on dates to select them
-            </Text>
-          )}
+            </Text> : null}
         </YStack>
       </Card>
 
-      {error && (
-        <Text fontSize="$3" color="$red10">
+      {error ? <Text fontSize="$3" color="$red10">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

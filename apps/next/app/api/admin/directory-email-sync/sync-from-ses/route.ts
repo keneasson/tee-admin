@@ -2,17 +2,23 @@ import { NextResponse } from 'next/server'
 import { auth } from '../../../../../utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { ListContactsCommand, ListContactsCommandOutput, GetContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
+import {
+  ListContactsCommand,
+  ListContactsCommandOutput,
+  GetContactCommand,
+  SubscriptionStatus,
+} from '@aws-sdk/client-sesv2'
 import { getSesClient } from '../../../../../utils/email/sesClient'
 import { inputTemplate } from '../../../../../utils/email/contact-lists'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -55,7 +61,7 @@ export async function POST() {
       const listCommand: ListContactsCommand = new ListContactsCommand({
         ...inputTemplate,
         PageSize: 100,
-        NextToken: nextToken
+        NextToken: nextToken,
       })
 
       const listResponse: ListContactsCommandOutput = await sesClient.send(listCommand)
@@ -77,7 +83,7 @@ export async function POST() {
         try {
           const getContactCmd = new GetContactCommand({
             ...inputTemplate,
-            EmailAddress: contact.EmailAddress
+            EmailAddress: contact.EmailAddress,
           })
           contactDetails = await sesClient.send(getContactCmd)
         } catch (error: any) {
@@ -101,7 +107,7 @@ export async function POST() {
           orphanedContacts.push({
             email: contact.EmailAddress,
             firstName: attributes?.firstName,
-            lastName: attributes?.lastName
+            lastName: attributes?.lastName,
           })
           continue
         }
@@ -113,8 +119,8 @@ export async function POST() {
             TableName: 'tee-schedules',
             Key: {
               PK: 'DIRECTORY#MEMBERS',
-              SK: attributes.dynamodbSK
-            }
+              SK: attributes.dynamodbSK,
+            },
           })
 
           const dynamoRecord = await docClient.send(getCommand)
@@ -124,7 +130,7 @@ export async function POST() {
             results.push({
               email: contact.EmailAddress,
               action: 'skipped',
-              reason: `Directory record ${attributes.dynamodbSK} not found`
+              reason: `Directory record ${attributes.dynamodbSK} not found`,
             })
             continue
           }
@@ -132,23 +138,23 @@ export async function POST() {
           // Check if member status changed in SES
           const isMemberInSes = attributes.isMember === true
           const ecclesiaInDynamo = dynamoRecord.Item.ecclesia || ''
-          const isMemberInDynamo = ecclesiaInDynamo.toLowerCase() === 'tee'
+          const isMemberInDynamo = HOME_ECCLESIA.isHomeEcclesia(ecclesiaInDynamo)
 
           if (isMemberInSes !== isMemberInDynamo) {
             // Member status mismatch - update DynamoDB to match SES
-            const newEcclesia = isMemberInSes ? 'TEE' : ''
+            const newEcclesia = isMemberInSes ? HOME_ECCLESIA.canonicalName : ''
 
             const updateCommand = new UpdateCommand({
               TableName: 'tee-schedules',
               Key: {
                 PK: 'DIRECTORY#MEMBERS',
-                SK: attributes.dynamodbSK
+                SK: attributes.dynamodbSK,
               },
               UpdateExpression: 'SET ecclesia = :ecclesia, lastUpdated = :lastUpdated',
               ExpressionAttributeValues: {
                 ':ecclesia': newEcclesia,
-                ':lastUpdated': new Date().toISOString()
-              }
+                ':lastUpdated': new Date().toISOString(),
+              },
             })
 
             await docClient.send(updateCommand)
@@ -156,25 +162,26 @@ export async function POST() {
             results.push({
               email: contact.EmailAddress,
               action: 'updated',
-              reason: `Updated ecclesia from "${ecclesiaInDynamo}" to "${newEcclesia}"`
+              reason: `Updated ecclesia from "${ecclesiaInDynamo}" to "${newEcclesia}"`,
             })
 
-            console.log(`✅ Updated ${contact.EmailAddress} ecclesia: ${ecclesiaInDynamo} → ${newEcclesia}`)
+            console.log(
+              `✅ Updated ${contact.EmailAddress} ecclesia: ${ecclesiaInDynamo} → ${newEcclesia}`
+            )
           } else {
             // No changes needed
             results.push({
               email: contact.EmailAddress,
               action: 'skipped',
-              reason: 'Already in sync'
+              reason: 'Already in sync',
             })
           }
-
         } catch (error: any) {
           console.error(`❌ Failed to sync ${contact.EmailAddress}:`, error.message)
           results.push({
             email: contact.EmailAddress,
             action: 'failed',
-            error: error.message
+            error: error.message,
           })
         }
       }
@@ -182,9 +189,9 @@ export async function POST() {
       nextToken = listResponse.NextToken
     } while (nextToken)
 
-    const updated = results.filter(r => r.action === 'updated').length
-    const skipped = results.filter(r => r.action === 'skipped').length
-    const failed = results.filter(r => r.action === 'failed').length
+    const updated = results.filter((r) => r.action === 'updated').length
+    const skipped = results.filter((r) => r.action === 'skipped').length
+    const failed = results.filter((r) => r.action === 'failed').length
 
     console.log(`✅ SES to DynamoDB sync complete:`)
     console.log(`   - Total processed: ${totalProcessed}`)
@@ -201,17 +208,13 @@ export async function POST() {
         updated,
         skipped,
         failed,
-        orphaned: orphanedContacts.length
+        orphaned: orphanedContacts.length,
       },
       results,
-      orphanedContacts
+      orphanedContacts,
     })
-
   } catch (error) {
     console.error('❌ Error syncing from SES to DynamoDB:', error)
-    return NextResponse.json(
-      { error: 'Failed to sync from SES to DynamoDB' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to sync from SES to DynamoDB' }, { status: 500 })
   }
 }

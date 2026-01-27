@@ -63,15 +63,14 @@ export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
           label="Display Name"
         />
         <CheckboxWithCheck control={control} name={'defaultOptIn'} label="Auto Opt In" />
-        {errors &&
-          Object.keys(errors).map((key, index) => {
+        {errors ? Object.keys(errors).map((key, index) => {
             console.log(`errors[${key}]`, errors[key])
             return (
               <XStack key={`errors-${index}`}>
                 <Text>{errors[key].displayName}</Text>
               </XStack>
             )
-          })}
+          }) : null}
         <XStack alignSelf="flex-end" gap="$4">
           <Form.Trigger asChild>
             <Button theme="active" aria-label="Save" disabled={isSubmitting}>

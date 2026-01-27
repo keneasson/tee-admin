@@ -6,11 +6,11 @@ import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/li
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
       TableName: 'tee-schedules',
       KeyConditionExpression: 'PK = :pk',
       ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS'
-      }
+        ':pk': 'DIRECTORY#MEMBERS',
+      },
     })
 
     const directoryResponse = await docClient.send(queryCommand)
@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
         // Split multiple emails (semicolon, comma, pipe, or space separated)
         const emails = emailField
           .split(/[;,|\s]/)
-          .map(e => e.trim())
-          .filter(e => e.length > 0)
+          .map((e) => e.trim())
+          .filter((e) => e.length > 0)
 
         if (emails.length === 0) {
           // No email - add single entry with empty email
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
             firstName: item.firstName || '',
             lastName: item.lastName || '',
             email: '',
-            ecclesia: item.ecclesia || ''
+            ecclesia: item.ecclesia || '',
           })
         } else {
           // Add one entry per email
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
               firstName: item.firstName || '',
               lastName: item.lastName || '',
               email: email,
-              ecclesia: item.ecclesia || ''
+              ecclesia: item.ecclesia || '',
             })
           })
         }
@@ -131,18 +131,20 @@ export async function GET(request: NextRequest) {
 
     // Create sets for comparison
     const directoryEmails = new Set(
-      directoryMembers.map(m => m.email.toLowerCase().trim()).filter(e => e)
+      directoryMembers.map((m) => m.email.toLowerCase().trim()).filter((e) => e)
     )
     const sesEmailSet = new Set(sesContacts)
     const sesMembersSet = new Set(sesMemberContacts)
 
     // Find matches and mismatches
-    const matched = Array.from(directoryEmails).filter(email => sesEmailSet.has(email)).length
+    const matched = Array.from(directoryEmails).filter((email) => sesEmailSet.has(email)).length
     const sesOnlyEmails = Array.from(sesEmailSet)
-      .filter(email => !directoryEmails.has(email))
-      .map(email => ({ email, hasMatch: false }))
+      .filter((email) => !directoryEmails.has(email))
+      .map((email) => ({ email, hasMatch: false }))
 
-    console.log(`✅ Sync analysis: ${directoryMembers.length} directory, ${sesContacts.length} SES total, ${sesMemberContacts.length} SES members, ${matched} matched`)
+    console.log(
+      `✅ Sync analysis: ${directoryMembers.length} directory, ${sesContacts.length} SES total, ${sesMemberContacts.length} SES members, ${matched} matched`
+    )
 
     return NextResponse.json({
       directoryMembers,
@@ -153,15 +155,11 @@ export async function GET(request: NextRequest) {
       totalSES: sesContacts.length,
       totalSESMembers: sesMemberContacts.length,
       matched,
-      unmatched: directoryMembers.length - matched
+      unmatched: directoryMembers.length - matched,
     })
-
   } catch (error) {
     console.error('❌ Error fetching directory-email-sync data:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch sync data' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch sync data' }, { status: 500 })
   }
 }
 
@@ -195,9 +193,9 @@ export async function PATCH(request: NextRequest) {
       UpdateExpression: 'SET email = :email, lastUpdated = :lastUpdated',
       ExpressionAttributeValues: {
         ':email': email,
-        ':lastUpdated': new Date().toISOString()
+        ':lastUpdated': new Date().toISOString(),
       },
-      ReturnValues: 'ALL_NEW'
+      ReturnValues: 'ALL_NEW',
     })
 
     const result = await docClient.send(updateCommand)
@@ -206,14 +204,10 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      updated: result.Attributes
+      updated: result.Attributes,
     })
-
   } catch (error) {
     console.error('❌ Error updating directory email:', error)
-    return NextResponse.json(
-      { error: 'Failed to update email' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to update email' }, { status: 500 })
   }
 }

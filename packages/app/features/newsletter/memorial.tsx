@@ -67,7 +67,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
         ) : null}
       </XStack>
       {event.Collection ? <Paragraph>Second Collection is for {event.Collection}</Paragraph> : null}
-      {event.Lunch ? <Paragraph>Lunch will be held at the hall</Paragraph> : null}
+      {event.Lunch ? <Paragraph fontWeight={600}>{event.Lunch}</Paragraph> : null}
       {event.Activities ? <Paragraph>{event.Activities}</Paragraph> : null}
       <Separator alignSelf="stretch" borderColor={'$light4grey'} />
       <Accordion overflow="hidden" type="multiple">

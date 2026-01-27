@@ -7,11 +7,19 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { IntLink } from '@my/ui/src'
 import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
 import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
-import { useSession } from 'next-auth/react'
 
-export function HomeScreen() {
+type HomeScreenProps = {
+  /** Whether user is authenticated (has a session) */
+  isAuthenticated?: boolean
+  /** Whether auth is still loading */
+  isAuthLoading?: boolean
+}
+
+export function HomeScreen({
+  isAuthenticated = false,
+  isAuthLoading = false,
+}: HomeScreenProps) {
   const [readings, setReadings] = useState<[] | false>(false)
-  const { data: session, status } = useSession()
 
   useEffect(() => {
     // Only fetch readings on client side
@@ -26,7 +34,7 @@ export function HomeScreen() {
   }, [])
 
   // Show loading during SSR or initial client hydration
-  if (status === "loading") {
+  if (isAuthLoading) {
     return (
       <Wrapper>
         <Section space={'$4'}>
@@ -47,7 +55,7 @@ export function HomeScreen() {
         </Paragraph>
         <Paragraph fontWeight={600}>News</Paragraph>
         <IntLink href="/newsletter">View Online Newsletter</IntLink>
-        {session && session.user && <IntLink href="/welfare">Welfare</IntLink>}
+        {isAuthenticated ? <IntLink href="/welfare">Welfare</IntLink> : null}
 
         <Paragraph fontWeight={600}>Programs for each Term</Paragraph>
         <IntLink href="/schedule">View Schedules</IntLink>
@@ -56,7 +64,7 @@ export function HomeScreen() {
         <IntLink href="/events/study-weekend-2024">Notes from March 2024 Study Day</IntLink>
 
         <Separator />
-        {readings && <DailyReadings readings={readings} />}
+        {readings ? <DailyReadings readings={readings} /> : null}
       </Section>
     </Wrapper>
   )

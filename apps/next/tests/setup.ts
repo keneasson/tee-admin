@@ -84,9 +84,9 @@ vi.mock('next-auth', () => ({
 vi.mock('next/server', () => ({
   NextRequest: vi.fn(),
   NextResponse: {
-    json: vi.fn((data, options) => ({ 
+    json: vi.fn((data, options) => ({
       json: () => Promise.resolve(data),
-      status: options?.status || 200 
+      status: options?.status || 200,
     })),
   },
 }))
@@ -94,7 +94,7 @@ vi.mock('next/server', () => ({
 // Mock environment variables
 process.env.AWS_ACCESS_KEY_ID = 'test-access-key'
 process.env.AWS_SECRET_ACCESS_KEY = 'test-secret-key'
-process.env.AWS_REGION = 'us-east-1'
+process.env.AWS_REGION = 'ca-central-1'
 process.env.NEXTAUTH_SECRET = 'test-secret'
 
 // Export mocks for use in tests

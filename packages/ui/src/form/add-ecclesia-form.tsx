@@ -13,13 +13,17 @@ interface EcclesiaFormData {
   province: string
   city: string
   address?: string
+  postalCode?: string
 }
 
 interface AddEcclesiaFormProps {
+  initialData?: Partial<EcclesiaFormData>
+  /** @deprecated Use initialData instead */
   initialName?: string
   onSave: (ecclesia: EcclesiaFormData) => Promise<boolean>
   onCancel: () => void
   isLoading?: boolean
+  mode?: 'add' | 'edit'
 }
 
 // Cache for location data
@@ -68,17 +72,20 @@ const fetchProvinces = async (countryCode: string): Promise<LocationOption[]> =>
 }
 
 export function AddEcclesiaForm({
+  initialData,
   initialName = '',
   onSave,
   onCancel,
-  isLoading = false
+  isLoading = false,
+  mode = 'add'
 }: AddEcclesiaFormProps) {
   const [formData, setFormData] = useState<EcclesiaFormData>({
-    name: initialName,
-    country: 'CA', // Default to Canada
-    province: '',
-    city: '',
-    address: ''
+    name: initialData?.name || initialName,
+    country: initialData?.country || 'CA', // Default to Canada
+    province: initialData?.province || '',
+    city: initialData?.city || '',
+    address: initialData?.address || '',
+    postalCode: initialData?.postalCode || ''
   })
   
   const [countries, setCountries] = useState<LocationOption[]>([])
@@ -86,6 +93,19 @@ export function AddEcclesiaForm({
   const [loadingCountries, setLoadingCountries] = useState(false)
   const [loadingProvinces, setLoadingProvinces] = useState(false)
   const [errors, setErrors] = useState<Partial<EcclesiaFormData>>({})
+
+  // Reset form when initialData changes (e.g., when editing different ecclesia)
+  useEffect(() => {
+    setFormData({
+      name: initialData?.name || initialName,
+      country: initialData?.country || 'CA',
+      province: initialData?.province || '',
+      city: initialData?.city || '',
+      address: initialData?.address || '',
+      postalCode: initialData?.postalCode || ''
+    })
+    setErrors({})
+  }, [initialData, initialName])
 
   // Load countries on mount
   useEffect(() => {
@@ -158,7 +178,8 @@ export function AddEcclesiaForm({
       country: formData.country,
       province: formData.province,
       city: formData.city.trim(),
-      address: formData.address?.trim() || undefined
+      address: formData.address?.trim() || undefined,
+      postalCode: formData.postalCode?.trim() || undefined
     })
 
     if (!success) {
@@ -208,7 +229,57 @@ export function AddEcclesiaForm({
           paddingVertical="$2.5"
           disabled={isLoading}
         />
-        {errors.name && <Text color="$red11" fontSize="$3">{errors.name}</Text>}
+        {errors.name ? <Text color="$red11" fontSize="$3">{errors.name}</Text> : null}
+      </YStack>
+
+      {/* Address Field (Optional) */}
+      <YStack gap="$2">
+        <Label fontSize="$4" fontWeight="600">
+          Hall Address (Optional)
+        </Label>
+        <Input
+          value={formData.address}
+          onChangeText={(text) => updateField('address', text)}
+          borderWidth={2}
+          borderColor="$textTertiary"
+          backgroundColor="$background"
+          focusStyle={{
+            borderColor: '$primary',
+            borderWidth: 2
+          }}
+          hoverStyle={{
+            borderColor: '$textSecondary'
+          }}
+          paddingHorizontal="$3"
+          paddingVertical="$2.5"
+          disabled={isLoading}
+        />
+      </YStack>
+
+      {/* City Field */}
+      <YStack gap="$2">
+        <Label fontSize="$4" fontWeight="600">
+          City <Text color="$red10">*</Text>
+        </Label>
+        <Input
+          value={formData.city}
+          onChangeText={(text) => updateField('city', text)}
+          placeholder="Enter city name"
+          borderWidth={2}
+          borderColor={errors.city ? '$error' : '$textTertiary'}
+          backgroundColor="$background"
+          focusStyle={{
+            borderColor: errors.city ? '$error' : '$primary',
+            borderWidth: 2
+          }}
+          hoverStyle={{
+            borderColor: errors.city ? '$error' : '$textSecondary'
+          }}
+          paddingHorizontal="$3"
+          paddingVertical="$2.5"
+          disabled={isLoading}
+        />
+        {errors.city ? <Text color="$red11" fontSize="$3">{errors.city}</Text> : null}
       </YStack>
 
       {/* Country Field */}
@@ -216,13 +287,13 @@ export function AddEcclesiaForm({
         <Label fontSize="$4" fontWeight="600">
           Country <Text color="$red10">*</Text>
         </Label>
-        <Select 
-          value={formData.country} 
+        <Select
+          value={formData.country}
           onValueChange={(value) => updateField('country', value)}
           disabled={isLoading || loadingCountries}
         >
-          <Select.Trigger 
-            width="100%" 
+          <Select.Trigger
+            width="100%"
             iconAfter={loadingCountries ? <Spinner size="small" /> : <ChevronDown size="$1" />}
             borderWidth={2}
             borderColor={errors.country ? '$error' : '$textTertiary'}
@@ -256,7 +327,7 @@ export function AddEcclesiaForm({
             <Select.ScrollDownButton />
           </Select.Content>
         </Select>
-        {errors.country && <Text color="$red11" fontSize="$3">{errors.country}</Text>}
+        {errors.country ? <Text color="$red11" fontSize="$3">{errors.country}</Text> : null}
       </YStack>
 
       {/* Province Field */}
@@ -264,13 +335,13 @@ export function AddEcclesiaForm({
         <Label fontSize="$4" fontWeight="600">
           {formData.country === 'CA' ? 'Province' : 'State'} <Text color="$red10">*</Text>
         </Label>
-        <Select 
-          value={formData.province} 
+        <Select
+          value={formData.province}
           onValueChange={(value) => updateField('province', value)}
           disabled={isLoading || loadingProvinces || !formData.country}
         >
-          <Select.Trigger 
-            width="100%" 
+          <Select.Trigger
+            width="100%"
             iconAfter={loadingProvinces ? <Spinner size="small" /> : <ChevronDown size="$1" />}
             borderWidth={2}
             borderColor={errors.province ? '$error' : '$textTertiary'}
@@ -312,44 +383,17 @@ export function AddEcclesiaForm({
             <Select.ScrollDownButton />
           </Select.Content>
         </Select>
-        {errors.province && <Text color="$red11" fontSize="$3">{errors.province}</Text>}
+        {errors.province ? <Text color="$red11" fontSize="$3">{errors.province}</Text> : null}
       </YStack>
 
-      {/* City Field */}
+      {/* Postal Code / Zip Code Field (Optional) */}
       <YStack gap="$2">
         <Label fontSize="$4" fontWeight="600">
-          City <Text color="$red10">*</Text>
+          {formData.country === 'US' ? 'Zip Code' : 'Postal Code'} (Optional)
         </Label>
         <Input
-          value={formData.city}
-          onChangeText={(text) => updateField('city', text)}
-          placeholder="Enter city name"
-          borderWidth={2}
-          borderColor={errors.city ? '$error' : '$textTertiary'}
-          backgroundColor="$background"
-          focusStyle={{
-            borderColor: errors.city ? '$error' : '$primary',
-            borderWidth: 2
-          }}
-          hoverStyle={{
-            borderColor: errors.city ? '$error' : '$textSecondary'
-          }}
-          paddingHorizontal="$3"
-          paddingVertical="$2.5"
-          disabled={isLoading}
-        />
-        {errors.city && <Text color="$red11" fontSize="$3">{errors.city}</Text>}
-      </YStack>
-
-      {/* Address Field (Optional) */}
-      <YStack gap="$2">
-        <Label fontSize="$4" fontWeight="600">
-          Address (Optional)
-        </Label>
-        <Input
-          value={formData.address}
-          onChangeText={(text) => updateField('address', text)}
-          placeholder="e.g., 975 Cosburn Avenue"
+          value={formData.postalCode}
+          onChangeText={(text) => updateField('postalCode', text)}
           borderWidth={2}
           borderColor="$textTertiary"
           backgroundColor="$background"
@@ -386,7 +430,9 @@ export function AddEcclesiaForm({
           disabled={!isValid || isLoading}
           opacity={!isValid || isLoading ? 0.5 : 1}
         >
-          {isLoading ? 'Adding...' : 'Add Ecclesia'}
+          {isLoading
+            ? (mode === 'edit' ? 'Saving...' : 'Adding...')
+            : (mode === 'edit' ? 'Save Changes' : 'Add Ecclesia')}
         </Button>
       </XStack>
     </YStack>

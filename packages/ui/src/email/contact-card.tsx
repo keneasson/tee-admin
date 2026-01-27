@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
-import { YStack, XStack, Card, Text, Button, Separator, styled } from 'tamagui'
+import { YStack, XStack, Card, Text, Button, Separator, styled, useThemeName } from 'tamagui'
 import { AlertTriangle, Mail, GripVertical, User, MapPin, Phone, Users, Save, X, Archive, ArchiveRestore } from '@tamagui/lucide-icons'
+import { brandColors } from '../branding/brand-colors'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // Email list types
 type EmailListTypeKeys = 'sundaySchool' | 'newsletter' | 'memorial' | 'bibleClass' | 'members' | 'testList'
@@ -13,6 +15,8 @@ type EmailResult = {
   inDirectory: boolean
   isPrimary: boolean
   status: EmailStatus  // 'active' = can receive SES emails, 'archived' = historical record only
+  isBounced?: boolean
+  bounceReason?: string
   sesLists?: {
     sundaySchool?: boolean
     newsletter?: boolean
@@ -88,6 +92,11 @@ export function ContactCard({
 }: ContactCardProps) {
   const [draggedEmailIndex, setDraggedEmailIndex] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Get brand colors based on theme
+  const themeName = useThemeName()
+  const mode = String(themeName).includes('dark') ? 'dark' : 'light'
+  const colors = brandColors[mode]
 
   // Track pending subscription changes: { email -> { list -> pendingValue } }
   const [pendingChanges, setPendingChanges] = useState<Record<string, Record<EmailListTypeKeys, boolean>>>({})
@@ -211,22 +220,18 @@ export function ContactCard({
           </XStack>
 
           <XStack gap="$2">
-            {person.isPotentialDuplicate && (
-              <XStack gap="$2" alignItems="center" paddingHorizontal="$3" paddingVertical="$2" backgroundColor="$yellow3" borderRadius="$3">
+            {person.isPotentialDuplicate ? <XStack gap="$2" alignItems="center" paddingHorizontal="$3" paddingVertical="$2" backgroundColor="$yellow3" borderRadius="$3">
                 <AlertTriangle size={16} color="$yellow11" />
                 <Text fontSize="$2" color="$yellow11">
                   Potential Duplicate
                 </Text>
-              </XStack>
-            )}
-            {person.hasStaleLink && (
-              <XStack gap="$2" alignItems="center" paddingHorizontal="$3" paddingVertical="$2" backgroundColor="$red3" borderRadius="$3">
+              </XStack> : null}
+            {person.hasStaleLink ? <XStack gap="$2" alignItems="center" paddingHorizontal="$3" paddingVertical="$2" backgroundColor="$red3" borderRadius="$3">
                 <AlertTriangle size={16} color="$red11" />
                 <Text fontSize="$2" color="$red11">
                   Stale Link (was: {person.staleLinkSK})
                 </Text>
-              </XStack>
-            )}
+              </XStack> : null}
           </XStack>
         </XStack>
 
@@ -255,7 +260,7 @@ export function ContactCard({
               <XStack gap="$2" alignItems="center">
                 <Users size={16} color="$gray11" />
                 <Text fontSize="$3" color="$gray11">
-                  {person.directoryData.ecclesia}
+                  {HOME_ECCLESIA.normalize(person.directoryData.ecclesia)}
                 </Text>
               </XStack>
             ) : null}
@@ -286,80 +291,78 @@ export function ContactCard({
               >
                 <XStack justifyContent="space-between" alignItems="center">
                   <XStack gap="$2" alignItems="center" flex={1}>
-                    {person.emails.length > 1 && (
-                      <DragHandle>
+                    {person.emails.length > 1 ? <DragHandle>
                         <GripVertical size={16} color="$gray11" />
-                      </DragHandle>
-                    )}
+                      </DragHandle> : null}
                     <Mail size={16} color={emailData.isPrimary ? '$blue11' : isArchived ? '$gray9' : '$gray11'} />
                     <YStack flex={1}>
                       <XStack gap="$2" alignItems="center">
                         <Text fontSize="$4" fontWeight={emailData.isPrimary ? 'bold' : 'normal'} color={isArchived ? '$gray10' : undefined}>
                           {emailData.email}
                         </Text>
-                        {emailData.isPrimary && (
-                          <Text fontSize="$2" color="$blue11">
-                            PRIMARY
-                          </Text>
-                        )}
-                        {isArchived && (
-                          <Text fontSize="$2" color="$gray10" backgroundColor="$gray4" paddingHorizontal="$2" paddingVertical="$1" borderRadius="$2">
+                        {emailData.isPrimary ? <Button
+                            backgroundColor={colors.info}
+                            color={colors.infoForeground}
+                            size="$1"
+                            disabled
+                            borderRadius="$2"
+                            paddingHorizontal="$2"
+                            paddingVertical="$1"
+                            fontSize={12}
+                          >
+                            Primary
+                          </Button> : null}
+                        {emailData.isBounced ? <Button
+                            backgroundColor={colors.error}
+                            color={colors.errorForeground}
+                            size="$1"
+                            disabled
+                            borderRadius="$2"
+                            paddingHorizontal="$2"
+                            paddingVertical="$1"
+                            fontSize={12}
+                          >
+                            Bounced
+                          </Button> : null}
+                        {isArchived ? <Text fontSize="$2" color="$gray10" backgroundColor="$gray4" paddingHorizontal="$2" paddingVertical="$1" borderRadius="$2">
                             ARCHIVED
-                          </Text>
-                        )}
-                        {!isArchived && isUnsubscribed && (
-                          <Text fontSize="$2" color="$gray11">
+                          </Text> : null}
+                        {!isArchived && !emailData.isBounced && isUnsubscribed ? <Text fontSize="$2" color="$gray11">
                             Unsubscribed
-                          </Text>
-                        )}
+                          </Text> : null}
                       </XStack>
                       <XStack gap="$2">
-                        {emailData.inDirectory && (
-                          <Text fontSize="$2" color="$green11">
+                        {emailData.inDirectory ? <Text fontSize="$2" color="$green11">
                             In Directory
-                          </Text>
-                        )}
-                        {emailData.inSES && (
-                          <Text fontSize="$2" color="$blue11">
+                          </Text> : null}
+                        {emailData.inSES ? <Text fontSize="$2" color="$blue11">
                             In SES
-                          </Text>
-                        )}
-                        {!emailData.inDirectory && !emailData.inSES && (
-                          <Text fontSize="$2" color="$red11">
+                          </Text> : null}
+                        {!emailData.inDirectory && !emailData.inSES ? <Text fontSize="$2" color="$red11">
                             Not synced
-                          </Text>
-                        )}
+                          </Text> : null}
                       </XStack>
                     </YStack>
                   </XStack>
 
                   <XStack gap="$2">
-                    {!emailData.isPrimary && onMigrate && !isArchived && (
-                      <Button size="$2" chromeless onPress={() => onMigrate(emailData.email, person)}>
+                    {!emailData.isPrimary && onMigrate && !isArchived ? <Button size="$2" chromeless onPress={() => onMigrate(emailData.email, person)}>
                         Migrate
-                      </Button>
-                    )}
-                    {onUnsubscribeAll && emailData.inSES && !isUnsubscribed && !isArchived && (
-                      <Button size="$2" chromeless theme="red" onPress={() => onUnsubscribeAll(emailData.email)}>
+                      </Button> : null}
+                    {onUnsubscribeAll && emailData.inSES && !isUnsubscribed && !isArchived ? <Button size="$2" chromeless theme="red" onPress={() => onUnsubscribeAll(emailData.email)}>
                         Unsubscribe All
-                      </Button>
-                    )}
-                    {!isArchived && onArchive && activeEmailCount > 1 && (
-                      <Button size="$2" chromeless icon={Archive} onPress={() => onArchive(person, emailData.email)}>
+                      </Button> : null}
+                    {!isArchived && onArchive && activeEmailCount > 1 ? <Button size="$2" chromeless icon={Archive} onPress={() => onArchive(person, emailData.email)}>
                         Archive
-                      </Button>
-                    )}
-                    {isArchived && onUnarchive && activeEmailCount < 2 && (
-                      <Button size="$2" chromeless icon={ArchiveRestore} theme="blue" onPress={() => onUnarchive(person, emailData.email)}>
+                      </Button> : null}
+                    {isArchived && onUnarchive && activeEmailCount < 2 ? <Button size="$2" chromeless icon={ArchiveRestore} theme="blue" onPress={() => onUnarchive(person, emailData.email)}>
                         Unarchive
-                      </Button>
-                    )}
+                      </Button> : null}
                   </XStack>
                 </XStack>
 
                 {/* Email Lists - Only show for active emails (archived emails can't receive SES) */}
-                {!isArchived && (
-                  <XStack gap="$2" flexWrap="wrap" marginTop="$2">
+                {!isArchived ? <XStack gap="$2" flexWrap="wrap" marginTop="$2">
                     {emailLists
                       .filter((list) => !list.adminOnly || isAdminOrHigher)
                       .map((list) => {
@@ -391,8 +394,7 @@ export function ContactCard({
                         </EmailListBadge>
                       )
                     })}
-                  </XStack>
-                )}
+                  </XStack> : null}
               </YStack>
             )
           })}

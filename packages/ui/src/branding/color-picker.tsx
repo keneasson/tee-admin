@@ -152,11 +152,9 @@ export function ColorPicker({ initialColor, colorName, onColorChange, colorCateg
             Apply
           </Button>
         </XStack>
-        {!isValidInput && (
-          <Text color="$error" fontSize="$2">
+        {!isValidInput ? <Text color="$error" fontSize="$2">
             Please enter a valid hex color (e.g., #FF0000 or #F00)
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
       
       {/* Color Suggestions */}

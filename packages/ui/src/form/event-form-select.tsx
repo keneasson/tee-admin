@@ -50,7 +50,7 @@ export function EventFormSelect<T extends FieldValues>({
     <YStack space="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
       
       <Select
@@ -137,11 +137,9 @@ export function EventFormSelect<T extends FieldValues>({
         </Select.Content>
       </Select>
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

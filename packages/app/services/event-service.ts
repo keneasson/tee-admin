@@ -2,6 +2,7 @@ import { scheduleRepo } from '@my/app/provider/dynamodb'
 import { Event, EventFilters, EventListResponse, UpdateEventRequest, EventType } from '@my/app/types/events'
 import type { ScheduleRecord } from '@my/app/provider/dynamodb/types'
 import { EventValidator } from '@my/app/utils/event-validation'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { v4 as uuidv4 } from 'uuid'
 
 /**
@@ -61,6 +62,9 @@ const extractEventDate = (event: Event): string => {
         date = new Date()
       }
       break
+    case 'election-cycle':
+      date = event.electionStartDate ? new Date(event.electionStartDate) : new Date()
+      break
     default:
       date = new Date()
   }
@@ -85,6 +89,10 @@ const extractEventEndDate = (event: Event): string | null => {
     case 'general':
       // May have end date for multi-day events
       date = event.endDate ? new Date(event.endDate) : null
+      break
+    case 'election-cycle':
+      // Election cycle has explicit end date
+      date = event.electionEndDate ? new Date(event.electionEndDate) : null
       break
     case 'funeral':
     case 'wedding':
@@ -126,6 +134,8 @@ const extractEventTime = (event: Event): string => {
       break
     case 'recurring':
       return event.recurringConfig.startTime
+    case 'election-cycle':
+      return '00:00' // All-day event, no specific time
     default:
       date = new Date()
   }
@@ -174,6 +184,10 @@ const deserializeEventData = (eventDataJson: string): Event => {
         parsed.recurringConfig.dateRange.end = new Date(parsed.recurringConfig.dateRange.end)
       }
     }
+
+    // Convert election cycle dates
+    if (parsed.electionStartDate) parsed.electionStartDate = new Date(parsed.electionStartDate)
+    if (parsed.electionEndDate) parsed.electionEndDate = new Date(parsed.electionEndDate)
 
     // Convert registration deadline
     if (parsed.registration && parsed.registration.deadline) {
@@ -732,21 +746,136 @@ export const validateSaveTheDate = (event: Partial<Event>) => {
 }
 
 /**
+ * Post-event display duration rules (in days)
+ * Some events should continue to display for a period AFTER the event date
+ * - baptism: 1 week after (celebration/announcement)
+ * - funeral: handled by EventDurationCalculator (2 newsletters from publishDate, then Thursday before service)
+ * - wedding: shown until ceremony date only
+ * - others: shown until event date only
+ */
+const POST_EVENT_DISPLAY_DAYS: Record<string, number> = {
+  baptism: 7,   // 1 week after event
+  // funeral duration is handled by EventDurationCalculator in news-events.tsx
+}
+
+/**
  * Check if an event is currently active or upcoming
  * For multi-day events, they remain active until the END date has passed
+ * For events with post-event display rules (baptism), they remain
+ * active for a period AFTER the event date
+ * For funerals, we use publishDate + 14 days (handled by EventDurationCalculator for final decision)
  */
 const isEventActiveOrUpcoming = (event: Event): boolean => {
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   const endDate = extractEventEndDate(event)
 
   if (endDate) {
     // Multi-day event: show until end date has passed
-    return endDate >= today
-  } else {
-    // Single day event: show until event date has passed
-    const startDate = extractEventDate(event)
-    return startDate >= today
+    return endDate >= todayStr
   }
+
+  // Funeral special handling: use publishDate + 14 days as the window
+  // The EventDurationCalculator in news-events.tsx will do the final filtering
+  if (event.type === 'funeral') {
+    const publishDate = event.publishDate ? new Date(event.publishDate) : null
+    if (publishDate) {
+      const funeralWindowEnd = new Date(publishDate)
+      funeralWindowEnd.setDate(funeralWindowEnd.getDate() + 14)
+      // Also check Thursday before service for services scheduled far out
+      const serviceDate = event.serviceDate ? new Date(event.serviceDate) : null
+      if (serviceDate && today > funeralWindowEnd) {
+        // Outside 14-day window - only show if service is still upcoming
+        // (EventDurationCalculator will handle Thursday-before-service logic)
+        return today <= serviceDate
+      }
+      return today <= funeralWindowEnd
+    }
+    // No publishDate - let it through, EventDurationCalculator will handle
+    return true
+  }
+
+  // Get the event's primary date
+  const eventDateStr = extractEventDate(event)
+  const eventDate = new Date(eventDateStr)
+
+  // Check for post-event display rules
+  const postEventDays = POST_EVENT_DISPLAY_DAYS[event.type] || 0
+
+  if (postEventDays > 0) {
+    // Event type has post-event display period
+    const displayUntilDate = new Date(eventDate)
+    displayUntilDate.setDate(displayUntilDate.getDate() + postEventDays)
+    return today <= displayUntilDate
+  }
+
+  // Default: show until event date has passed
+  return eventDateStr >= todayStr
+}
+
+/**
+ * Get events eligible for inter-ecclesia sharing
+ * Filters for funeral, baptism, wedding, engagement events
+ * Default: Toronto East hosted events from the last 30 days and upcoming 60 days
+ */
+export const getInterEcclesiaEvents = async (options?: {
+  hostingEcclesia?: string
+  eventTypes?: EventType[]
+  daysBack?: number
+  daysAhead?: number
+}): Promise<Event[]> => {
+  const {
+    hostingEcclesia = HOME_ECCLESIA.canonicalName,
+    eventTypes = ['study-weekend', 'funeral', 'baptism', 'wedding', 'engagement', 'general'] as EventType[],
+    daysBack = 30,
+    daysAhead = 90, // Extended for study weekends which are often planned further ahead
+  } = options || {}
+
+  // Calculate date range
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - daysBack)
+  const endDate = new Date()
+  endDate.setDate(endDate.getDate() + daysAhead)
+
+  // Get all events in the date range
+  const result = await getFilteredEvents({
+    dateFrom: startDate,
+    dateTo: endDate,
+    type: eventTypes,
+    limit: 1000,
+  })
+
+  // Filter for published/ready events from the specified ecclesia
+  const filteredEvents = result.events.filter(event => {
+    // Check status - must be published or ready
+    if (event.status !== 'published' && event.status !== 'ready') {
+      return false
+    }
+
+    // Check event type
+    if (!eventTypes.includes(event.type)) {
+      return false
+    }
+
+    // Check hosting ecclesia
+    // For funerals/baptisms without explicit hostingEcclesia, assume Toronto East if created by a Toronto East user
+    const eventEcclesia = typeof event.hostingEcclesia === 'string'
+      ? event.hostingEcclesia
+      : event.hostingEcclesia?.name || HOME_ECCLESIA.canonicalName
+
+    if (!eventEcclesia.toLowerCase().includes(hostingEcclesia.toLowerCase())) {
+      return false
+    }
+
+    return true
+  })
+
+  // Sort by event date (most recent first)
+  return filteredEvents.sort((a, b) => {
+    const aDate = extractEventDate(a)
+    const bDate = extractEventDate(b)
+    return new Date(bDate).getTime() - new Date(aDate).getTime()
+  })
 }
 
 /**

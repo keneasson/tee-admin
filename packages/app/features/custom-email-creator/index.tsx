@@ -285,8 +285,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                         <Text fontSize="$4" fontWeight="600" numberOfLines={1}>
                           {draft.subject}
                         </Text>
-                        {draft.status === 'tested' && (
-                          <Text
+                        {draft.status === 'tested' ? <Text
                             fontSize="$2"
                             fontWeight="600"
                             color="$orange10"
@@ -296,10 +295,8 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                             borderRadius="$2"
                           >
                             TESTED
-                          </Text>
-                        )}
-                        {draft.status === 'sent' && (
-                          <Text
+                          </Text> : null}
+                        {draft.status === 'sent' ? <Text
                             fontSize="$2"
                             fontWeight="600"
                             color="$green10"
@@ -309,8 +306,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                             borderRadius="$2"
                           >
                             SENT
-                          </Text>
-                        )}
+                          </Text> : null}
                       </XStack>
                       <Text fontSize="$2" color="$gray11">
                         To: {availableLists.find((l) => l.key === draft.selectedList)?.label} •
@@ -342,21 +338,17 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       </Card>
 
       {/* Current Draft Info */}
-      {currentDraft && (
-        <Card elevate bordered padding="$3" backgroundColor="$blue2">
+      {currentDraft ? <Card elevate bordered padding="$3" backgroundColor="$blue2">
           <XStack gap="$2" alignItems="center">
             <Mail size={16} color="$blue10" />
             <Text fontSize="$3" flex={1}>
               Editing: <strong>{currentDraft.subject}</strong>
             </Text>
-            {lastSaved && (
-              <Text fontSize="$2" color="$gray11">
+            {lastSaved ? <Text fontSize="$2" color="$gray11">
                 Last saved: {lastSaved}
-              </Text>
-            )}
+              </Text> : null}
           </XStack>
-        </Card>
-      )}
+        </Card> : null}
 
       {/* Email Subject */}
       <Card elevate bordered padding="$4" backgroundColor="$background">
@@ -499,8 +491,7 @@ Looking forward to seeing you!
             </Button>
           </XStack>
 
-          {showPreview && (
-            <Card padding="$4" backgroundColor="$gray2" borderWidth={1} borderColor="$gray6">
+          {showPreview ? <Card padding="$4" backgroundColor="$gray2" borderWidth={1} borderColor="$gray6">
               <Heading size={2} marginBottom="$2">
                 Preview
               </Heading>
@@ -511,8 +502,7 @@ Looking forward to seeing you!
                   lineHeight: '1.6',
                 }}
               />
-            </Card>
-          )}
+            </Card> : null}
         </YStack>
       </Card>
 
@@ -537,11 +527,9 @@ Looking forward to seeing you!
             <Text fontSize="$2" color={note.length >= MAX_NOTE_LENGTH ? '$red10' : '$gray11'}>
               {note.length} / {MAX_NOTE_LENGTH} characters
             </Text>
-            {note.length > 0 && (
-              <Button size="$2" variant="outlined" onPress={() => setNote('')}>
+            {note.length > 0 ? <Button size="$2" variant="outlined" onPress={() => setNote('')}>
                 Clear Note
-              </Button>
-            )}
+              </Button> : null}
           </XStack>
         </YStack>
       </Card>
@@ -613,11 +601,9 @@ Looking forward to seeing you!
               <Text fontSize="$3" color="$gray11">
                 Sending to: <strong>{availableLists.find((l) => l.key === selectedList)?.label}</strong>
               </Text>
-              {currentDraft?.status !== 'tested' && (
-                <Text fontSize="$2" color="$orange10" fontWeight="600">
+              {currentDraft?.status !== 'tested' ? <Text fontSize="$2" color="$orange10" fontWeight="600">
                   ⚠️ Not tested yet - consider sending a test first
-                </Text>
-              )}
+                </Text> : null}
             </YStack>
             <Button
               size="$4"

@@ -11,7 +11,7 @@ import {
   Section,
   Text,
 } from '@react-email/components'
-import { columnAlignTop, container, defaultText, globalCss, header, main, program } from '../styles'
+import { columnAlignTop, container, defaultText, globalCss, header, link, main, program } from '../styles'
 import React from 'react'
 import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
@@ -388,6 +388,82 @@ const getFirstParagraph = (text: string | undefined): string => {
   return paragraphs[0]?.trim() || ''
 }
 
+// Helper function to group schedule items by day (extracting date from datetime)
+const groupScheduleByDay = (schedule: any[] | undefined): { [key: string]: any[] } | null => {
+  if (!schedule || schedule.length === 0) return null
+
+  const dayGroups: { [key: string]: any[] } = {}
+
+  schedule.forEach((item) => {
+    let dayKey = item.day || 'Schedule'
+
+    // If no explicit day but we have a datetime, extract the day from it
+    const timeValue = item.time || item.startTime
+    if (timeValue && timeValue.includes('T') && !item.day) {
+      const date = new Date(timeValue)
+      // Format as "Saturday March 7" for grouping - use Toronto timezone
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Toronto' })
+      const monthName = date.toLocaleDateString('en-US', { month: 'long', timeZone: 'America/Toronto' })
+      const dayOfMonth = date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Toronto' })
+      dayKey = `${dayName} ${monthName} ${dayOfMonth}`
+    }
+
+    if (!dayGroups[dayKey]) {
+      dayGroups[dayKey] = []
+    }
+    dayGroups[dayKey].push(item)
+  })
+
+  // Sort the groups by date (earliest first)
+  const sortedEntries = Object.entries(dayGroups).sort((a, b) => {
+    const getFirstDate = (items: any[]) => {
+      const timeValue = items[0]?.time || items[0]?.startTime
+      if (timeValue && timeValue.includes('T')) {
+        return new Date(timeValue).getTime()
+      }
+      return 0
+    }
+    return getFirstDate(a[1]) - getFirstDate(b[1])
+  })
+
+  return Object.fromEntries(sortedEntries)
+}
+
+// Helper function to format schedule time from datetime
+const formatScheduleTime = (timeValue: string | undefined): string => {
+  if (!timeValue) return ''
+
+  if (timeValue.includes('T')) {
+    const date = new Date(timeValue)
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'America/Toronto',
+    }).toLowerCase().replace(' ', '')
+  } else if (timeValue.includes('-')) {
+    return timeValue.split('-')[0].trim()
+  }
+  return timeValue
+}
+
+// Helper function to convert newlines to <br/> tags for email-safe text wrapping
+// This is more reliable than whiteSpace: 'pre-wrap' which has Outlook compatibility issues
+const TextWithLineBreaks: React.FC<{ text: string }> = ({ text }) => {
+  if (!text) return null
+  const lines = text.split(/\n/)
+  return (
+    <>
+      {lines.map((line, index) => (
+        <React.Fragment key={index}>
+          {line}
+          {index < lines.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </>
+  )
+}
+
 // Helper function to format time from Date object
 // IMPORTANT: Times are stored as EST in the database, so we must format in Toronto timezone
 const formatServiceTime = (date: Date | string | undefined): string => {
@@ -547,7 +623,7 @@ const EventDateDisplay = (event: Event): string => {
       return `${startStr} to ${endStr} ${startDate.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Toronto' })}`
     }
   }
-  return 'Date TBD'
+  return '' // Return empty string for events without dates - don't show "Date TBD"
 }
 
 // Format date for readings display (similar to the bible-readings-layout)
@@ -915,7 +991,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           {businessMeetingEvent.description && (
                             <>
                               <br />
-                              {businessMeetingEvent.description}
+                              <TextWithLineBreaks text={businessMeetingEvent.description} />
                             </>
                           )}
                           <br />
@@ -1271,19 +1347,19 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               <Row>
                                 <Column
                                   style={{
-                                    width: '140px',
+                                    width: '160px',
                                     verticalAlign: 'top',
-                                    paddingRight: '16px',
+                                    paddingRight: '20px',
                                   }}
                                 >
                                   <img
                                     src={(event as any).deceasedPhoto.url}
                                     alt="Photo of the deceased"
                                     style={{
-                                      width: '120px',
-                                      height: '150px',
-                                      objectFit: 'cover',
-                                      borderRadius: '4px',
+                                      width: '150px',
+                                      maxWidth: '150px',
+                                      height: 'auto',
+                                      borderRadius: '8px',
                                     }}
                                   />
                                 </Column>
@@ -1311,7 +1387,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         (() => {
                           const funeralEvent = event as any
                           const serviceDate = funeralEvent.serviceDate
-                          const viewingDate = funeralEvent.viewingDate
+                          // Support both old (viewingDate) and new (visitationDate) field names
+                          const visitationDate = funeralEvent.visitationDate || funeralEvent.viewingDate
+                          const visitationEndDate = funeralEvent.visitationEndDate
                           const gravesideDate = funeralEvent.gravesideDate
                           const locations = funeralEvent.locations
                           const simpleLocation = funeralEvent.location
@@ -1324,7 +1402,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           }
 
                           const hasVisitation =
-                            viewingDate ||
+                            visitationDate ||
                             funeralEvent.viewingTime ||
                             funeralEvent.viewingLocation ||
                             locations?.visitation
@@ -1336,19 +1414,30 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
                           return (
                             <>
-                              {/* Visitation (Optional) */}
+                              {/* Visitation (Optional) - shown BEFORE service */}
                               {hasVisitation &&
                                 (() => {
                                   const visLoc =
                                     funeralEvent.viewingLocation || locations?.visitation
+                                  const visStartTime = visitationDate && formatServiceTime(visitationDate)
+                                  const visEndTime = visitationEndDate && formatServiceTime(visitationEndDate)
+                                  const visDate = visitationDate && formatServiceDate(visitationDate)
                                   return (
                                     <>
                                       <br />
                                       <br />
                                       <strong>Visitation</strong>
                                       <br />
+                                      {visDate && (
+                                        <>
+                                          {visDate}
+                                          <br />
+                                        </>
+                                      )}
                                       {funeralEvent.viewingTime ||
-                                        (viewingDate && formatServiceTime(viewingDate))}
+                                        (visStartTime && visEndTime
+                                          ? `${visStartTime} - ${visEndTime}`
+                                          : visStartTime)}
                                       {visLoc && ` at ${formatLocation(visLoc)}`}
                                     </>
                                   )
@@ -1466,7 +1555,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         <>
                           <br />
                           <br />
-                          {event.description}
+                          <TextWithLineBreaks text={event.description} />
                         </>
                       )}
                       <br />
@@ -1597,97 +1686,260 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                       />
                     )}
                     <Section style={program}>
-                      <Text style={defaultText}>
-                        <Link
-                          href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
-                          style={{
-                            color: '#0066cc',
-                            textDecoration: 'none',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {event.title}
-                        </Link>
-                        {(event as any).theme && ` - ${(event as any).theme}`}
-                        <br />
-                        {EventDateDisplay(event)}
-                        {/* Baptism-specific wording */}
-                        {event.type === 'baptism' && (event as any).candidate && (
-                          <>
-                            <br />
-                            <br />
-                            After a good confession of Faith,{' '}
-                            <strong>
-                              {`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}
-                            </strong>{' '}
-                            will be baptized into the saving name of our Lord.
-                          </>
-                        )}
-                        {/* Location for events that have it */}
-                        {(event as any).location && (
-                          <>
-                            <br />
-                            <br />
-                            {typeof (event as any).location === 'string' ? (
-                              (event as any).location
-                            ) : (
+                      {/* Special rendering for study-weekend events */}
+                      {event.type === 'study-weekend' ? (
+                        <Text style={defaultText}>
+                          {/* Title */}
+                          <Link
+                            href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {event.title}
+                          </Link>
+                          <br />
+                          {EventDateDisplay(event)}
+
+                          {/* Theme */}
+                          {(event as any).theme && (
+                            <>
+                              <br />
+                              <br />
+                              <strong>{(event as any).theme}</strong>
+                            </>
+                          )}
+
+                          {/* Speakers */}
+                          {event.speakers && event.speakers.length > 0 && (
+                            <>
+                              <br />
+                              Speaker{event.speakers.length > 1 ? 's' : ''}:{' '}
+                              {event.speakers
+                                .map((s) => {
+                                  const title = s.title || ''
+                                  const firstName = s.firstName || ''
+                                  const lastName = s.lastName || ''
+                                  return `${title} ${firstName} ${lastName}`.trim()
+                                })
+                                .filter((name) => name.length > 0)
+                                .join(', ') || 'TBA'}
+                            </>
+                          )}
+
+                          {/* Location - just the name, full details on event page */}
+                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.name && (
+                            <>
+                              <br />
+                              <br />
+                              <strong>Location:</strong> {(event as any).location.name}
+                            </>
+                          )}
+
+                          {/* Schedule grouped by day */}
+                          {(() => {
+                            const scheduleByDay = groupScheduleByDay((event as any).schedule)
+                            if (!scheduleByDay) return null
+
+                            return (
                               <>
-                                {(event as any).location.name && (
-                                  <strong>{(event as any).location.name}</strong>
-                                )}
-                                {(event as any).location.address && (
-                                  <>
-                                    <br />
-                                    {(event as any).location.address}
-                                  </>
-                                )}
-                                {((event as any).location.city ||
-                                  (event as any).location.province) && (
-                                  <>
-                                    <br />
-                                    {[
-                                      (event as any).location.city,
-                                      (event as any).location.province,
-                                      (event as any).location.postalCode,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(', ')}
-                                  </>
-                                )}
-                                {(event as any).location.directions && (
-                                  <>
-                                    <br />
-                                    <em>{(event as any).location.directions}</em>
-                                  </>
-                                )}
+                                <br />
+                                <br />
+                                <strong>Schedule:</strong>
+                                {Object.entries(scheduleByDay).map(([dayLabel, items]) => {
+                                  const showDayLabel = dayLabel !== 'Schedule'
+                                  return (
+                                    <React.Fragment key={dayLabel}>
+                                      {showDayLabel && (
+                                        <>
+                                          <br />
+                                          <span style={{ color: '#cc0000', fontWeight: 'bold' }}>{dayLabel}</span>
+                                        </>
+                                      )}
+                                      {items.map((item: any, idx: number) => {
+                                        const time = formatScheduleTime(item.time || item.startTime)
+                                        return (
+                                          <React.Fragment key={idx}>
+                                            <br />
+                                            &nbsp;&nbsp;&nbsp;&nbsp;{time && `${time}  `}
+                                            {item.activity || ''}
+                                            {item.title ? ` ${item.title}` : ''}
+                                          </React.Fragment>
+                                        )
+                                      })}
+                                    </React.Fragment>
+                                  )
+                                })}
                               </>
-                            )}
-                          </>
-                        )}
-                        {/* Description for non-baptism events (baptism uses the formal wording above) */}
-                        {event.type !== 'baptism' && event.description && (
-                          <>
-                            <br />
-                            {event.description}
-                          </>
-                        )}
-                        <br />
-                        <br />
-                        <Link
-                          href={
-                            event.membersOnly
-                              ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${event.id}`
-                              : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`
-                          }
-                          style={{
-                            color: '#0066cc',
-                            textDecoration: 'none',
-                            fontWeight: '600',
-                          }}
-                        >
-                          View Details →
-                        </Link>
-                      </Text>
+                            )
+                          })()}
+
+                          {/* Parking info */}
+                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.parkingInfo && (
+                            <>
+                              <br />
+                              <br />
+                              <em>Parking: {(event as any).location.parkingInfo}</em>
+                            </>
+                          )}
+
+                          {/* Online Info */}
+                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.onlineMeeting && (
+                            <>
+                              <br />
+                              <br />
+                              <strong>Online Info</strong>
+                              {(event as any).location.onlineMeeting.link && (
+                                <>
+                                  <br />
+                                  <Link
+                                    href={(event as any).location.onlineMeeting.link}
+                                    style={{ color: '#0066cc', textDecoration: 'underline' }}
+                                  >
+                                    Join Meeting
+                                  </Link>
+                                </>
+                              )}
+                              {(event as any).location.onlineMeeting.meetingId && (
+                                <>
+                                  <br />
+                                  Meeting ID: {(event as any).location.onlineMeeting.meetingId}
+                                </>
+                              )}
+                              {(event as any).location.onlineMeeting.password && (
+                                <>
+                                  <br />
+                                  Password: {(event as any).location.onlineMeeting.password}
+                                </>
+                              )}
+                              {(event as any).location.onlineMeeting.dialInNumber && (
+                                <>
+                                  <br />
+                                  Dial-in: {(event as any).location.onlineMeeting.dialInNumber}
+                                </>
+                              )}
+                            </>
+                          )}
+
+                          <br />
+                          <br />
+                          <Link
+                            href={
+                              event.membersOnly
+                                ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${event.id}`
+                                : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`
+                            }
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: '600',
+                            }}
+                          >
+                            View Details →
+                          </Link>
+                        </Text>
+                      ) : (
+                        /* Default rendering for other event types */
+                        <Text style={defaultText}>
+                          <Link
+                            href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {event.title}
+                          </Link>
+                          {(event as any).theme && ` - ${(event as any).theme}`}
+                          {/* Only show date line if there is a date */}
+                          {EventDateDisplay(event) && (
+                            <>
+                              <br />
+                              {EventDateDisplay(event)}
+                            </>
+                          )}
+                          {/* Baptism-specific wording */}
+                          {event.type === 'baptism' && (event as any).candidate && (
+                            <>
+                              <br />
+                              <br />
+                              After a good confession of Faith,{' '}
+                              <strong>
+                                {`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}
+                              </strong>{' '}
+                              will be baptized into the saving name of our Lord.
+                            </>
+                          )}
+                          {/* Location for events that have it */}
+                          {(event as any).location && (
+                            <>
+                              <br />
+                              <br />
+                              {typeof (event as any).location === 'string' ? (
+                                (event as any).location
+                              ) : (
+                                <>
+                                  {(event as any).location.name && (
+                                    <strong>{(event as any).location.name}</strong>
+                                  )}
+                                  {(event as any).location.address && (
+                                    <>
+                                      <br />
+                                      {(event as any).location.address}
+                                    </>
+                                  )}
+                                  {((event as any).location.city ||
+                                    (event as any).location.province) && (
+                                    <>
+                                      <br />
+                                      {[
+                                        (event as any).location.city,
+                                        (event as any).location.province,
+                                        (event as any).location.postalCode,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(', ')}
+                                    </>
+                                  )}
+                                  {(event as any).location.directions && (
+                                    <>
+                                      <br />
+                                      <em>{(event as any).location.directions}</em>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                          {/* Description for non-baptism events (baptism uses the formal wording above) */}
+                          {event.type !== 'baptism' && event.description && (
+                            <>
+                              <br />
+                              <br />
+                              <TextWithLineBreaks text={event.description} />
+                            </>
+                          )}
+                          <br />
+                          <br />
+                          <Link
+                            href={
+                              event.membersOnly
+                                ? `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/auth/signin?callbackUrl=/events/${event.id}`
+                                : `${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`
+                            }
+                            style={{
+                              color: '#0066cc',
+                              textDecoration: 'none',
+                              fontWeight: '600',
+                            }}
+                          >
+                            View Details →
+                          </Link>
+                        </Text>
+                      )}
                     </Section>
                   </React.Fragment>
                 ))}
@@ -1895,6 +2147,16 @@ const MemorialServiceProgram = (event: SundayEvents) => {
         <>No Second Collection.</>
       )}
       <Lunch lunch={event.Lunch} />
+      {event.YouTube ? (
+        <>
+          <br />
+          <br />
+          <strong>Watch on YouTube: </strong>
+          <Link href={event.YouTube} style={link}>
+            {event.YouTube}
+          </Link>
+        </>
+      ) : null}
     </Text>
   )
 }

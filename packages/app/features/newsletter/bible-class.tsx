@@ -33,7 +33,7 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
       <Paragraph>
         <Text fontWeight={600}>Leader:</Text> {event.Speaker}
       </Paragraph>
-      {event.Topic && <Paragraph fontWeight={600}>{event.Topic}</Paragraph>}
+      {event.Topic ? <Paragraph fontWeight={600}>{event.Topic}</Paragraph> : null}
       <Accordion overflow="hidden" type="multiple">
         <Accordion.Item value="a1">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">

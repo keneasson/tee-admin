@@ -188,15 +188,12 @@ export function MigrateEmailDialog({
                 <XStack gap="$2" alignItems="center">
                   <Mail size={14} color="$gray11" />
                   <Text fontSize="$3">{oldEmail}</Text>
-                  {oldEmailData.isPrimary && (
-                    <Text fontSize="$2" color="$blue11">
+                  {oldEmailData.isPrimary ? <Text fontSize="$2" color="$blue11">
                       PRIMARY
-                    </Text>
-                  )}
+                    </Text> : null}
                 </XStack>
 
-                {subscribedLists.length > 0 && (
-                  <YStack gap="$1" marginTop="$2">
+                {subscribedLists.length > 0 ? <YStack gap="$1" marginTop="$2">
                     <Text fontSize="$3" color="$gray11">
                       Current subscriptions:
                     </Text>
@@ -218,8 +215,7 @@ export function MigrateEmailDialog({
                         </XStack>
                       ))}
                     </XStack>
-                  </YStack>
-                )}
+                  </YStack> : null}
               </YStack>
             </YStack>
 
@@ -239,19 +235,16 @@ export function MigrateEmailDialog({
                 keyboardType="email-address"
                 disabled={isSubmitting}
               />
-              {validationError && (
-                <XStack gap="$2" alignItems="center">
+              {validationError ? <XStack gap="$2" alignItems="center">
                   <AlertTriangle size={14} color="$red11" />
                   <Text fontSize="$2" color="$red11">
                     {validationError}
                   </Text>
-                </XStack>
-              )}
+                </XStack> : null}
             </YStack>
 
             {/* Migration Preview */}
-            {newEmail && !validationError && (
-              <YStack gap="$3" padding="$3" backgroundColor="$blue2" borderRadius="$3">
+            {newEmail && !validationError ? <YStack gap="$3" padding="$3" backgroundColor="$blue2" borderRadius="$3">
                 <Text fontSize="$3" fontWeight="bold" color="$blue11">
                   What will happen:
                 </Text>
@@ -290,17 +283,14 @@ export function MigrateEmailDialog({
                     </Text>
                   </XStack>
 
-                  {subscribedLists.length > 0 && (
-                    <XStack gap="$2" alignItems="center" marginTop="$2">
+                  {subscribedLists.length > 0 ? <XStack gap="$2" alignItems="center" marginTop="$2">
                       <ArrowRight size={14} color="$blue11" />
                       <Text fontSize="$2" color="$blue11">
                         Lists to copy: {subscribedLists.join(', ')}
                       </Text>
-                    </XStack>
-                  )}
+                    </XStack> : null}
                 </YStack>
-              </YStack>
-            )}
+              </YStack> : null}
 
             {/* Warning */}
             <XStack gap="$2" alignItems="flex-start" padding="$3" backgroundColor="$yellow3" borderRadius="$3">
@@ -315,14 +305,12 @@ export function MigrateEmailDialog({
               </YStack>
             </XStack>
 
-            {error && (
-              <XStack gap="$2" alignItems="center" padding="$3" backgroundColor="$red3" borderRadius="$3">
+            {error ? <XStack gap="$2" alignItems="center" padding="$3" backgroundColor="$red3" borderRadius="$3">
                 <AlertTriangle size={16} color="$red11" />
                 <Text fontSize="$3" color="$red11" flex={1}>
                   {error}
                 </Text>
-              </XStack>
-            )}
+              </XStack> : null}
           </YStack>
 
           <XStack gap="$3" justifyContent="flex-end">

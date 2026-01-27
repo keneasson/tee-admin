@@ -85,7 +85,7 @@ export function TimeSelector<T extends FieldValues>({
     <YStack space="$2">
       <Text fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Text>
       
       <XStack space="$2" alignItems="center">
@@ -184,11 +184,9 @@ export function TimeSelector<T extends FieldValues>({
         </XStack>
       </XStack>
       
-      {error && (
-        <Text fontSize="$3" color="$red10">
+      {error ? <Text fontSize="$3" color="$red10">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

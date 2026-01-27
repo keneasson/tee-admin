@@ -1,5 +1,7 @@
 export { config } from '@my/config'
 export * from 'tamagui'
+// Override Tamagui's Spinner with our custom one (sensible size defaults)
+export { Spinner } from './Spinner'
 export * from '@tamagui/toast'
 export * from './CustomToast'
 export * from './ext-link'

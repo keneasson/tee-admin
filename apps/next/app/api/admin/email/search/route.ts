@@ -3,14 +3,17 @@ import { auth } from '@/utils/auth'
 import { getContacts } from '@/utils/email/contact'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { ListSuppressedDestinationsCommand } from '@aws-sdk/client-sesv2'
+import { getSesClient } from '@/utils/email/sesClient'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -34,6 +37,8 @@ type EmailResult = {
   inDirectory: boolean
   isPrimary: boolean
   status: EmailStatus
+  isBounced?: boolean
+  bounceReason?: string
   sesLists?: {
     sundaySchool?: boolean
     newsletter?: boolean
@@ -59,8 +64,8 @@ type PersonResult = {
     ecclesia?: string
   }
   isPotentialDuplicate?: boolean
-  hasStaleLink?: boolean  // SES contact has dynamodbSK but directory record not found
-  staleLinkSK?: string    // The stale dynamodbSK value
+  hasStaleLink?: boolean // SES contact has dynamodbSK but directory record not found
+  staleLinkSK?: string // The stale dynamodbSK value
 }
 
 /**
@@ -87,6 +92,34 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 Searching for: "${searchTerm}"`)
 
+    // Fetch SES suppression list (bounced/complained emails)
+    const suppressedEmails = new Map<string, string>() // email -> reason
+    try {
+      const sesClient = getSesClient()
+      let suppressionNextToken: string | undefined
+      do {
+        const suppressionCommand = new ListSuppressedDestinationsCommand({
+          PageSize: 100,
+          ...(suppressionNextToken && { NextToken: suppressionNextToken }),
+        })
+        const suppressionResponse = await sesClient.send(suppressionCommand)
+
+        if (suppressionResponse.SuppressedDestinationSummaries) {
+          for (const item of suppressionResponse.SuppressedDestinationSummaries) {
+            if (item.EmailAddress) {
+              suppressedEmails.set(item.EmailAddress.toLowerCase(), item.Reason || 'BOUNCE')
+            }
+          }
+        }
+        suppressionNextToken = suppressionResponse.NextToken
+      } while (suppressionNextToken)
+
+      console.log(`📧 Found ${suppressedEmails.size} suppressed emails`)
+    } catch (error) {
+      console.error('Failed to fetch suppression list:', error)
+      // Continue without bounce data
+    }
+
     // Person Results Map - keyed by baseSkey
     const personsMap = new Map<string, PersonResult>()
     // Email to Person mapping for SES-only contacts
@@ -98,8 +131,8 @@ export async function GET(request: NextRequest) {
       TableName: 'tee-schedules',
       KeyConditionExpression: 'PK = :pk',
       ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS'
-      }
+        ':pk': 'DIRECTORY#MEMBERS',
+      },
     })
 
     const directoryResponse = await docClient.send(queryCommand)
@@ -115,15 +148,16 @@ export async function GET(request: NextRequest) {
         // Split multiple emails (semicolon, comma, pipe, or space separated)
         const emails = emailField
           .split(/[;,|\s]/)
-          .map(e => e.trim().toLowerCase())
-          .filter(e => e.length > 0)
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => e.length > 0)
 
         // Check if search term matches name or any email
-        const matchesName = firstName.toLowerCase().includes(searchTerm) ||
-                           lastName.toLowerCase().includes(searchTerm) ||
-                           fullName.includes(searchTerm)
+        const matchesName =
+          firstName.toLowerCase().includes(searchTerm) ||
+          lastName.toLowerCase().includes(searchTerm) ||
+          fullName.includes(searchTerm)
 
-        const matchesEmail = emails.some(email => email.includes(searchTerm))
+        const matchesEmail = emails.some((email) => email.includes(searchTerm))
 
         if (matchesName || matchesEmail) {
           // Get base SK (without #EMAIL suffix)
@@ -138,14 +172,14 @@ export async function GET(request: NextRequest) {
               firstName,
               lastName,
               displayName: `${firstName} ${lastName}`.trim(),
-              isMember: item.ecclesia?.toLowerCase() === 'tee',
+              isMember: HOME_ECCLESIA.isHomeEcclesia(item.ecclesia),
               emails: [],
               directoryData: {
                 address: item.address,
                 phone: item.phone,
                 children: item.children,
-                ecclesia: item.ecclesia
-              }
+                ecclesia: item.ecclesia,
+              },
             }
             personsMap.set(baseSkey, person)
           }
@@ -153,18 +187,22 @@ export async function GET(request: NextRequest) {
           // Add emails from this record (unlimited, but only first 2 are active)
           emails.forEach((email, index) => {
             // Check if this email already exists for this person
-            if (!person!.emails.find(e => e.email === email)) {
+            if (!person!.emails.find((e) => e.email === email)) {
               // First email in the directory record is primary
               const isPrimary = index === 0
               // First 2 emails are active, rest are archived
               const status: EmailStatus = person!.emails.length < 2 ? 'active' : 'archived'
+              // Check if email is bounced
+              const bounceReason = suppressedEmails.get(email.toLowerCase())
               person!.emails.push({
                 email,
                 inSES: false, // Will update when we search SES
                 inDirectory: true,
                 isPrimary,
                 status,
-                sesLists: {}
+                isBounced: !!bounceReason,
+                bounceReason,
+                sesLists: {},
               })
             }
           })
@@ -176,8 +214,8 @@ export async function GET(request: NextRequest) {
 
     // Collect all emails from directory persons for SES lookup
     const directoryEmails = new Set<string>()
-    personsMap.forEach(person => {
-      person.emails.forEach(emailData => {
+    personsMap.forEach((person) => {
+      person.emails.forEach((emailData) => {
         directoryEmails.add(emailData.email.toLowerCase())
       })
     })
@@ -220,10 +258,11 @@ export async function GET(request: NextRequest) {
 
           // Check if search term matches email or name
           const matchesEmail = email.includes(searchTerm)
-          const matchesName = firstName.toLowerCase().includes(searchTerm) ||
-                             lastName.toLowerCase().includes(searchTerm) ||
-                             fullName.includes(searchTerm) ||
-                             displayName.toLowerCase().includes(searchTerm)
+          const matchesName =
+            firstName.toLowerCase().includes(searchTerm) ||
+            lastName.toLowerCase().includes(searchTerm) ||
+            fullName.includes(searchTerm) ||
+            displayName.toLowerCase().includes(searchTerm)
 
           // CRITICAL: Also include SES contacts whose emails are in directory records
           // This ensures we link SES data even if email doesn't match search term
@@ -269,7 +308,7 @@ export async function GET(request: NextRequest) {
 
               if (linkedPerson) {
                 // Find or create email entry for this person
-                let emailInPerson = linkedPerson.emails.find(e => e.email === email)
+                let emailInPerson = linkedPerson.emails.find((e) => e.email === email)
                 if (emailInPerson) {
                   // Update existing email with SES data
                   emailInPerson.inSES = true
@@ -277,25 +316,30 @@ export async function GET(request: NextRequest) {
                 } else {
                   // Add email from SES (first 2 active, rest archived)
                   const status: EmailStatus = linkedPerson.emails.length < 2 ? 'active' : 'archived'
+                  const bounceReason = suppressedEmails.get(email.toLowerCase())
                   linkedPerson.emails.push({
                     email,
                     inSES: true,
                     inDirectory: false, // Email exists in SES but not in DynamoDB
                     isPrimary: false,
                     status,
-                    sesLists
+                    isBounced: !!bounceReason,
+                    bounceReason,
+                    sesLists,
                   })
                 }
                 foundInDirectory = true
               } else {
-                console.warn(`⚠️ SES contact ${email} has dynamodbSK=${attributes.dynamodbSK} but directory record not found (stale link)`)
+                console.warn(
+                  `⚠️ SES contact ${email} has dynamodbSK=${attributes.dynamodbSK} but directory record not found (stale link)`
+                )
               }
             }
 
             // Method 2: Fall back to exact email match (case-insensitive)
             if (!foundInDirectory) {
               for (const person of personsMap.values()) {
-                const emailInPerson = person.emails.find(e => e.email === email)
+                const emailInPerson = person.emails.find((e) => e.email === email)
                 if (emailInPerson) {
                   // Update existing email with SES data
                   emailInPerson.inSES = true
@@ -309,10 +353,12 @@ export async function GET(request: NextRequest) {
             // If not in directory, create SES-only person entry
             if (!foundInDirectory) {
               // Check if email is unsubscribed from all lists
-              const isUnsubscribed = !sesLists ||
+              const isUnsubscribed =
+                !sesLists ||
                 Object.keys(sesLists).length === 0 ||
-                Object.values(sesLists).every(v => !v)
+                Object.values(sesLists).every((v) => !v)
 
+              const bounceReason = suppressedEmails.get(email.toLowerCase())
               sesOnlyEmails.set(email, {
                 pkey: `SES#${email}`,
                 baseSkey: `SES#${email}`,
@@ -320,17 +366,21 @@ export async function GET(request: NextRequest) {
                 lastName,
                 displayName: displayName || email,
                 isMember,
-                emails: [{
-                  email,
-                  inSES: true,
-                  inDirectory: false,
-                  isPrimary: true,
-                  status: isUnsubscribed ? 'archived' : 'active',
-                  sesLists
-                }],
+                emails: [
+                  {
+                    email,
+                    inSES: true,
+                    inDirectory: false,
+                    isPrimary: true,
+                    status: isUnsubscribed ? 'archived' : 'active',
+                    isBounced: !!bounceReason,
+                    bounceReason,
+                    sesLists,
+                  },
+                ],
                 // Flag if this SES contact has a stale link
                 hasStaleLink: attributes?.dynamodbSK ? true : false,
-                staleLinkSK: attributes?.dynamodbSK
+                staleLinkSK: attributes?.dynamodbSK,
               })
             }
           }
@@ -340,21 +390,23 @@ export async function GET(request: NextRequest) {
       nextToken = response.NextToken
     } while (nextToken)
 
-    console.log(`📧 Found ${sesSearchCount} SES search matches, linked ${sesLinkedCount} directory emails`)
+    console.log(
+      `📧 Found ${sesSearchCount} SES search matches, linked ${sesLinkedCount} directory emails`
+    )
 
     // 3. Combine directory persons and SES-only persons
     const allPersons = [...personsMap.values(), ...sesOnlyEmails.values()]
 
     // 4. Detect potential duplicates (same name)
     const nameCount = new Map<string, number>()
-    allPersons.forEach(person => {
+    allPersons.forEach((person) => {
       const fullName = `${person.firstName} ${person.lastName}`.toLowerCase().trim()
       if (fullName) {
         nameCount.set(fullName, (nameCount.get(fullName) || 0) + 1)
       }
     })
 
-    allPersons.forEach(person => {
+    allPersons.forEach((person) => {
       const fullName = `${person.firstName} ${person.lastName}`.toLowerCase().trim()
       if (nameCount.get(fullName)! > 1) {
         person.isPotentialDuplicate = true
@@ -373,14 +425,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       searchTerm,
       totalResults: allPersons.length,
-      results: allPersons
+      results: allPersons,
     })
-
   } catch (error) {
     console.error('❌ Error searching contacts:', error)
-    return NextResponse.json(
-      { error: 'Failed to search contacts' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to search contacts' }, { status: 500 })
   }
 }

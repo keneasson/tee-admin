@@ -38,14 +38,26 @@ const mockEvents: BibleClassType[] = [
   },
 ]
 
+// Helper to check if a Bible class event is "no class"
+const isNoClass = (event: BibleClassType): boolean => {
+  // No class if Speaker is empty OR Topic contains "no class" (case insensitive)
+  return !event.Speaker || event.Topic.toLowerCase().includes('no class')
+}
+
 const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   const bibleClassEvents = events || mockEvents
+  const currentEvent = bibleClassEvents[0]
+  const nextEvent = bibleClassEvents[1]
+  const hasNoClass = currentEvent && isNoClass(currentEvent)
+  // Find the next actual class (skipping any "no class" entries)
+  const nextActualClass = hasNoClass && nextEvent && !isNoClass(nextEvent) ? nextEvent : undefined
+
   return (
     <Html lang="en">
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>Bible Class Tonight</Preview>
+      <Preview>{hasNoClass ? 'No Bible Class Tonight' : 'Bible Class Tonight'}</Preview>
       <Body style={main}>
         <Section style={header}>
           <Heading>Toronto East Bible Class</Heading>
@@ -78,40 +90,71 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
         )}
 
         <Container style={container} className="container">
-          <Section style={program}>
-            <Heading style={defaultText}>
-              Please join us on Zoom for our Weekly Bible Class
+          {hasNoClass ? (
+            <>
+              <Section style={program}>
+                <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '18px' }}>
+                  There is no scheduled Bible class tonight.
+                </Text>
+              </Section>
+              {nextActualClass && (
+                <Section style={{ marginTop: '24px' }}>
+                  <Text style={defaultText}>
+                    <strong>The next scheduled Bible Class will be:</strong>
+                    <br />
+                    {nextActualClass.Date.toString()} at 7:30pm
+                    <br />
+                    Led by Brother {nextActualClass.Speaker}
+                    {nextActualClass.Topic && (
+                      <>
+                        <br />
+                        <em>{nextActualClass.Topic}</em>
+                      </>
+                    )}
+                  </Text>
+                </Section>
+              )}
+            </>
+          ) : (
+            <>
+              <Section style={program}>
+                <Heading style={defaultText}>
+                  Please join us on Zoom for our Weekly Bible Class
+                  <br />
+                  7:30pm EST.
+                </Heading>
+              </Section>
+              <Row>
+                <Column>
+                  {currentEvent && <BibleClassProgram event={currentEvent} />}
+                </Column>
+              </Row>
+            </>
+          )}
+        </Container>
+        {!hasNoClass && (
+          <Container style={container} className="container zoom-info">
+            <Text style={defaultText}>
+              <Link
+                href="https://us02web.zoom.us/j/932385033?pwd=R1VOR3NDOTk1cXN2ZzFOdW14SnhxZz09"
+                style={link}
+              >
+                Click to join Zoom
+              </Link>
               <br />
-              7:30pm EST.
-            </Heading>
-          </Section>
-          <Row>
-            <Column>
-              {bibleClassEvents[0] && <BibleClassProgram event={bibleClassEvents[0]} />}
-            </Column>
-          </Row>
-        </Container>
-        <Container style={container} className="container zoom-info">
-          <Text style={defaultText}>
-            <Link
-              href="https://us02web.zoom.us/j/932385033?pwd=R1VOR3NDOTk1cXN2ZzFOdW14SnhxZz09"
-              style={link}
-            >
-              Click to join Zoom
-            </Link>
-            <br />
-            Meeting ID: 932 385 033
-            <br />
-            Password: 456345
-          </Text>
-          <Text style={defaultText}>
-            Join by phone
-            <br />
-            +1 647 374 4685 Canada (Toronto)
-            <br />
-            +1 647 558 0588 Canada (Toronto)
-          </Text>
-        </Container>
+              Meeting ID: 932 385 033
+              <br />
+              Password: 456345
+            </Text>
+            <Text style={defaultText}>
+              Join by phone
+              <br />
+              +1 647 374 4685 Canada (Toronto)
+              <br />
+              +1 647 558 0588 Canada (Toronto)
+            </Text>
+          </Container>
+        )}
         <Footer />
       </Body>
     </Html>
@@ -140,13 +183,7 @@ type EventProps = {
   event: BibleClassType
 }
 const BibleClassProgram = ({ event }: EventProps) => {
-  if (event.Topic === '') {
-    return (
-      <Text style={defaultText}>
-        <strong>There is No Bible Class Tonight.</strong>
-      </Text>
-    )
-  }
+  // This component is only rendered when there IS a class (no-class is handled at parent level)
   return (
     <Text style={defaultText}>
       {'Presiding: '}

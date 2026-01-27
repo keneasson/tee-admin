@@ -10,6 +10,7 @@ interface EcclesiaSuggestion {
   province: string
   city: string
   address?: string
+  postalCode?: string
 }
 
 interface EcclesiaSearchInputProps<T extends FieldValues> {
@@ -154,9 +155,11 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     setSearchQuery(suggestion.name)
     onChange({
       name: suggestion.name,
+      address: suggestion.address,
       city: suggestion.city,
       province: suggestion.province,
       country: suggestion.country,
+      postalCode: suggestion.postalCode,
     })
     setShowDropdown(false)
   }
@@ -164,9 +167,11 @@ export function EcclesiaSearchInput<T extends FieldValues>({
   // Handle adding a new ecclesia
   const handleEcclesiaAdded = (ecclesiaData: {
     name: string
+    address?: string
     city: string
     province: string
     country: string
+    postalCode?: string
   }) => {
     setSearchQuery(ecclesiaData.name)
     onChange(ecclesiaData)
@@ -195,7 +200,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     <YStack gap="$2" position="relative" ref={containerRef}>
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10"> *</Text>}
+        {required ? <Text color="$red10"> *</Text> : null}
       </Label>
 
       <YStack position="relative">
@@ -227,16 +232,14 @@ export function EcclesiaSearchInput<T extends FieldValues>({
 
         {/* Icons */}
         <XStack position="absolute" right="$2" top="50%" transform="translateY(-50%)" gap="$1">
-          {searchQuery && (
-            <Button
+          {searchQuery ? <Button
               size="$2"
               circular
               icon={X}
               chromeless
               onPress={handleClear}
               hoverStyle={{ backgroundColor: '$gray3' }}
-            />
-          )}
+            /> : null}
           {isSearching ? (
             <Spinner size="small" color="$gray11" />
           ) : (
@@ -245,8 +248,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
         </XStack>
 
         {/* Dropdown */}
-        {showDropdown && (suggestions.length > 0 || showAddOption) && (
-          <YStack
+        {showDropdown && (suggestions.length > 0 || showAddOption) ? <YStack
             position="absolute"
             top="100%"
             left={0}
@@ -293,8 +295,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             ))}
 
             {/* Add new option */}
-            {showAddOption && (
-              <Button
+            {showAddOption ? <Button
                 chromeless
                 justifyContent="flex-start"
                 paddingHorizontal="$4"
@@ -313,18 +314,14 @@ export function EcclesiaSearchInput<T extends FieldValues>({
                 <Text fontSize="$4" color="$primary" fontWeight="600">
                   Add "{searchQuery}" as new ecclesia
                 </Text>
-              </Button>
-            )}
-          </YStack>
-        )}
+              </Button> : null}
+          </YStack> : null}
       </YStack>
 
       {/* Error message */}
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
 
       {/* Add Ecclesia Modal */}
       <AddEcclesiaModal

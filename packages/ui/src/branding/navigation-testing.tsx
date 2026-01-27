@@ -194,8 +194,7 @@ export function NavigationTesting() {
       </YStack>
       
       {/* Feature Flag Testing */}
-      {newNavDesign && (
-        <>
+      {newNavDesign ? <>
           <Separator />
           <YStack gap="$4">
             <H3>New Navigation Design ({theme} theme)</H3>
@@ -302,8 +301,7 @@ export function NavigationTesting() {
               </YStack>
             </View>
           </YStack>
-        </>
-      )}
+        </> : null}
       
       <Separator />
       

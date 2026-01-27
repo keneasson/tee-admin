@@ -88,10 +88,9 @@ function CalendarGrid({
               </React.Fragment>
             ))}
             {/* Fill empty slots at end of month */}
-            {weekIndex === Math.ceil(days.length / 7) - 1 && 
-             Array.from({ length: 7 - (days.length % 7 || 7) }, (_, emptyIndex) => (
+            {weekIndex === Math.ceil(days.length / 7) - 1 ? Array.from({ length: 7 - (days.length % 7 || 7) }, (_, emptyIndex) => (
                <YStack key={`end-empty-${emptyIndex}`} width="$2.5" height="$2.5" />
-             ))
+             )) : null
             }
           </XStack>
         ))}
@@ -273,12 +272,11 @@ export function EventDatePicker<T extends FieldValues>({
     <YStack space="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
       
       {/* Hide Times Checkbox */}
-      {allowHideTimes && includeTime && (
-        <XStack space="$2" alignItems="center">
+      {allowHideTimes && includeTime ? <XStack space="$2" alignItems="center">
           <Checkbox
             id={`${name}-hide-times`}
             size="$4"
@@ -301,8 +299,7 @@ export function EventDatePicker<T extends FieldValues>({
           <Label htmlFor={`${name}-hide-times`} fontSize="$3">
             Hide times (save-the-date)
           </Label>
-        </XStack>
-      )}
+        </XStack> : null}
       
       <Popover open={isOpen} onOpenChange={(open) => {
         if (!open) {
@@ -378,8 +375,7 @@ export function EventDatePicker<T extends FieldValues>({
               />
 
               {/* Time picker */}
-              {includeTime && !hidesTimes && (
-                <YStack space="$3">
+              {includeTime && !hidesTimes ? <YStack space="$3">
                   <Text fontSize="$4" fontWeight="600">Time</Text>
                   <XStack space="$2" alignItems="center">
                     {/* Hour Select */}
@@ -529,8 +525,7 @@ export function EventDatePicker<T extends FieldValues>({
                       </Select>
                     </YStack>
                   </XStack>
-                </YStack>
-              )}
+                </YStack> : null}
 
               {/* Action buttons */}
               <XStack space="$2" justifyContent="flex-end" paddingTop="$3" borderTopWidth={1} borderTopColor="$borderColor">
@@ -561,11 +556,9 @@ export function EventDatePicker<T extends FieldValues>({
         </Popover.Content>
       </Popover>
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

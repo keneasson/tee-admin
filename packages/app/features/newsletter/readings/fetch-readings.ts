@@ -14,11 +14,12 @@ const getApiPath = () => {
   }
 }
 
-export const fetchReadings = async () => {
+export const fetchReadings = async (bypassCache?: boolean) => {
   const API_PATH = getApiPath()
-  const url = `${API_PATH}api/json/range`
+  const cacheBuster = bypassCache ? `?_t=${Date.now()}` : ''
+  const url = `${API_PATH}api/json/range${cacheBuster}`
   try {
-    const rawSchedule = await fetch(url, { next: { revalidate: 3600 } })
+    const rawSchedule = await fetch(url, bypassCache ? { cache: 'no-store' } : { next: { revalidate: 3600 } })
     if (!rawSchedule.ok) {
       throw new Error(`HTTP error! status: ${rawSchedule.status}`)
     }

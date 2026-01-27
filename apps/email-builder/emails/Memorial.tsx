@@ -96,14 +96,41 @@ function formatDateToronto(date: Date): string {
   })
 }
 
+/**
+ * Parse a date string from the events data and format it consistently.
+ * The data comes as " Jan 4, 2026" (with leading space) or "Jan 4, 2026" format.
+ * We parse it and reformat to ensure consistent display.
+ */
+function formatEventDate(dateStr: string | Date | undefined): string {
+  if (!dateStr) return ''
+
+  // If it's already a formatted string like " Jan 4, 2026", clean it up and add weekday
+  if (typeof dateStr === 'string') {
+    const trimmed = dateStr.trim()
+    // Parse the date string and create a Date object at noon to avoid timezone issues
+    const parsed = new Date(trimmed + ' 12:00:00')
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    }
+    return trimmed // Return as-is if parsing fails
+  }
+
+  // If it's a Date object
+  return formatDateToronto(dateStr)
+}
+
 const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) => {
-  const firstSunday = getNextDayOfTheWeek('sun')
-  const sundaysDateString = formatDateToronto(firstSunday)
-  // Calculate second Sunday by adding 7 days (Memorial is ALWAYS Sunday)
-  const secondSunday = new Date(firstSunday)
-  secondSunday.setDate(secondSunday.getDate() + 7)
-  const secondSundayDateString = formatDateToronto(secondSunday)
   const sundayEvents = events || mockEvents
+
+  // Use the actual dates from the events data instead of calculating them
+  // This ensures we display the correct date regardless of server timezone
+  const sundaysDateString = formatEventDate(sundayEvents[0]?.Date)
+  const secondSundayDateString = formatEventDate(sundayEvents[1]?.Date)
 
   return (
     <Html lang="en">
@@ -224,16 +251,16 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
           <hr />
         </Container>
         <Container style={container} className="container youtube-info">
-          {sundayEvents[0]?.YouTube !== undefined && (
+          {sundayEvents[0]?.YouTube ? (
             <>
               <Heading style={defaultText}>Join us on YouTube</Heading>
               <Text style={defaultText}>
                 <Link href={sundayEvents[0].YouTube} style={link}>
-                  Click to join on YouTube
+                  {sundayEvents[0].YouTube}
                 </Link>
               </Text>
             </>
-          )}
+          ) : null}
           <Text style={defaultText}>Visit the Toronto East Christadelphians YouTube channel:</Text>
           <Text style={defaultText}>
             <Link href="https://www.youtube.com/channel/UCyJamaI5mQImCF8hWE7Yp-w" style={link}>

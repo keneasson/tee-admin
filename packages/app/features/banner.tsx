@@ -36,11 +36,9 @@ export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
         />
         Toronto East Ecclesia
       </H1>
-      {pageTitle && (
-        <H2 ta="center" fontFamily="$body" fontWeight="500" $md={{ fontSize: 18 }}>
+      {pageTitle ? <H2 ta="center" fontFamily="$body" fontWeight="500" $md={{ fontSize: 18 }}>
           {pageTitle}
-        </H2>
-      )}
+        </H2> : null}
     </>
   )
 }

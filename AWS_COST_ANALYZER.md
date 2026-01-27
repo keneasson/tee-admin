@@ -109,7 +109,7 @@ You need 55,000x more writes to justify provisioned capacity!
 // Add to your deployment scripts
 const { DynamoDBClient, UpdateTableCommand } = require('@aws-sdk/client-dynamodb');
 
-const client = new DynamoDBClient({ region: 'us-east-1' });
+const client = new DynamoDBClient({ region: 'ca-central-1' });
 
 async function optimizeForLowVolume() {
   const tables = ['tee-schedules', 'tee-admin', 'tee-sync-status'];
@@ -133,7 +133,7 @@ optimizeForLowVolume();
 const { CloudWatchClient, GetMetricStatisticsCommand } = require('@aws-sdk/client-cloudwatch');
 
 async function getMonthlyUsage(tableName) {
-  const cw = new CloudWatchClient({ region: 'us-east-1' });
+  const cw = new CloudWatchClient({ region: 'ca-central-1' });
   
   const endTime = new Date();
   const startTime = new Date();

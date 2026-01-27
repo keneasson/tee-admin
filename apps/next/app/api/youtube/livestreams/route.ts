@@ -66,12 +66,21 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('❌ Error in GET /api/youtube/livestreams:', error)
+
+    // Check if this is an auth/token error that requires re-authorization
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const isAuthError = errorMessage.includes('refresh') ||
+                        errorMessage.includes('token') ||
+                        errorMessage.includes('authorize') ||
+                        errorMessage.includes('OAuth')
+
     return NextResponse.json(
       {
         error: 'Failed to fetch livestreams',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: errorMessage,
+        requiresReauth: isAuthError,
       },
-      { status: 500 }
+      { status: isAuthError ? 401 : 500 }
     )
   }
 }
@@ -170,12 +179,21 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('❌ Error in POST /api/youtube/livestreams:', error)
+
+    // Check if this is an auth/token error that requires re-authorization
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const isAuthError = errorMessage.includes('refresh') ||
+                        errorMessage.includes('token') ||
+                        errorMessage.includes('authorize') ||
+                        errorMessage.includes('OAuth')
+
     return NextResponse.json(
       {
         error: 'Failed to create livestream',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: errorMessage,
+        requiresReauth: isAuthError,
       },
-      { status: 500 }
+      { status: isAuthError ? 401 : 500 }
     )
   }
 }

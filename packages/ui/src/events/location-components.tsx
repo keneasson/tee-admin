@@ -197,12 +197,10 @@ export const LocationFieldsContainer = <T extends FieldValues>({
 
   return (
     <YStack gap="$4">
-      {showAtTheHall && (
-        <AtTheHallCheckbox
+      {showAtTheHall ? <AtTheHallCheckbox
           checked={atTheHall}
           onCheckedChange={handleAtTheHallChange}
-        />
-      )}
+        /> : null}
       
       <LocationBasicFields
         control={control}

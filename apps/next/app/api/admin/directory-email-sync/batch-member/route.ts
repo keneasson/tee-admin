@@ -5,14 +5,15 @@ import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-
 import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
 import { getSesClient } from '../../../../../utils/email/sesClient'
 import { inputTemplate } from '../../../../../utils/email/contact-lists'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -38,10 +39,7 @@ export async function POST(request: NextRequest) {
     const { updates } = body as { updates: MemberUpdate[] }
 
     if (!Array.isArray(updates) || updates.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid updates array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid updates array' }, { status: 400 })
     }
 
     console.log(`📧 Batch updating member status for ${updates.length} directory members`)
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Process each update
     for (const update of updates) {
       try {
-        const ecclesiaValue = update.isMember ? 'TEE' : ''
+        const ecclesiaValue = update.isMember ? HOME_ECCLESIA.canonicalName : ''
 
         // 1. Update DynamoDB Directory
         const updateCommand = new UpdateCommand({
@@ -61,9 +59,9 @@ export async function POST(request: NextRequest) {
           UpdateExpression: 'SET ecclesia = :ecclesia, lastUpdated = :lastUpdated',
           ExpressionAttributeValues: {
             ':ecclesia': ecclesiaValue,
-            ':lastUpdated': new Date().toISOString()
+            ':lastUpdated': new Date().toISOString(),
           },
-          ReturnValues: 'ALL_NEW'
+          ReturnValues: 'ALL_NEW',
         })
 
         await docClient.send(updateCommand)
@@ -73,7 +71,7 @@ export async function POST(request: NextRequest) {
         try {
           const getDynamoCommand = new GetCommand({
             TableName: 'tee-schedules',
-            Key: { PK: update.pkey, SK: update.skey }
+            Key: { PK: update.pkey, SK: update.skey },
           })
           const dynamoResult = await docClient.send(getDynamoCommand)
           directoryData = dynamoResult.Item
@@ -89,39 +87,43 @@ export async function POST(request: NextRequest) {
             // Get current contact to preserve other list subscriptions
             const getCommand = new GetContactCommand({
               ...inputTemplate,
-              EmailAddress: update.email
+              EmailAddress: update.email,
             })
 
             const currentContact = await sesClient.send(getCommand)
 
             // Update only the members topic preference, keep others
-            const updatedTopicPreferences = currentContact.TopicPreferences?.map(pref => {
-              if (pref.TopicName === 'members') {
-                return {
-                  ...pref,
-                  SubscriptionStatus: update.isMember ? SubscriptionStatus.OPT_IN : SubscriptionStatus.OPT_OUT
+            const updatedTopicPreferences =
+              currentContact.TopicPreferences?.map((pref) => {
+                if (pref.TopicName === 'members') {
+                  return {
+                    ...pref,
+                    SubscriptionStatus: update.isMember
+                      ? SubscriptionStatus.OPT_IN
+                      : SubscriptionStatus.OPT_OUT,
+                  }
                 }
-              }
-              return pref
-            }) || []
+                return pref
+              }) || []
 
             // Build AttributesData with directory information
             const attributes = {
               firstName: directoryData?.firstName || '',
               lastName: directoryData?.lastName || '',
-              displayName: directoryData?.firstName && directoryData?.lastName
-                ? `${directoryData.firstName} ${directoryData.lastName}`.trim()
-                : '',
-              dynamodbSK: update.skey,  // Store the DynamoDB SK for linking
+              displayName:
+                directoryData?.firstName && directoryData?.lastName
+                  ? `${directoryData.firstName} ${directoryData.lastName}`.trim()
+                  : '',
+              dynamodbSK: update.skey, // Store the DynamoDB SK for linking
               ecclesia: ecclesiaValue,
-              isMember: update.isMember
+              isMember: update.isMember,
             }
 
             const updateSesCommand = new UpdateContactCommand({
               ...inputTemplate,
               EmailAddress: update.email,
               TopicPreferences: updatedTopicPreferences,
-              AttributesData: JSON.stringify(attributes)
+              AttributesData: JSON.stringify(attributes),
             })
 
             await sesClient.send(updateSesCommand)
@@ -137,17 +139,18 @@ export async function POST(request: NextRequest) {
           skey: update.skey,
           email: update.email,
           success: true,
-          ecclesia: ecclesiaValue
+          ecclesia: ecclesiaValue,
         })
 
-        console.log(`✅ Updated member status for ${update.skey} (${update.email}) to ${ecclesiaValue || 'non-member'}`)
-
+        console.log(
+          `✅ Updated member status for ${update.skey} (${update.email}) to ${ecclesiaValue || 'non-member'}`
+        )
       } catch (error) {
         console.error(`❌ Failed to update ${update.skey}:`, error)
         errors.push({
           skey: update.skey,
           email: update.email,
-          error: String(error)
+          error: String(error),
         })
       }
     }
@@ -157,14 +160,10 @@ export async function POST(request: NextRequest) {
       updated: results.length,
       failed: errors.length,
       results,
-      errors
+      errors,
     })
-
   } catch (error) {
     console.error('❌ Error batch updating member status:', error)
-    return NextResponse.json(
-      { error: 'Failed to batch update member status' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to batch update member status' }, { status: 500 })
   }
 }

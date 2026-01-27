@@ -121,8 +121,7 @@ export function EnhancedScheduleWithData({
   return (
     <YStack flex={1} gap="$4">
       {/* Header with status info */}
-      {(showAdminFeatures || error) && (
-        <XStack
+      {(showAdminFeatures || error) ? <XStack
           justifyContent="space-between"
           alignItems="center"
           paddingHorizontal="$4"
@@ -133,22 +132,17 @@ export function EnhancedScheduleWithData({
           borderColor={error ? colors.error : 'transparent'}
         >
           <YStack gap="$1">
-            {error && (
-              <Text fontSize="$2" color={colors.error} fontWeight="600">
+            {error ? <Text fontSize="$2" color={colors.error} fontWeight="600">
                 ⚠️ {error}
-              </Text>
-            )}
-            {showAdminFeatures && (
-              <Text fontSize="$2" color={colors.textSecondary}>
+              </Text> : null}
+            {showAdminFeatures ? <Text fontSize="$2" color={colors.textSecondary}>
                 {totalEvents} events • Updated{' '}
                 {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'never'}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
 
           <XStack gap="$2">
-            {showAdminFeatures && onClearCache && (
-              <Button
+            {showAdminFeatures && onClearCache ? <Button
                 size="$2"
                 variant="outlined"
                 onPress={async () => {
@@ -164,16 +158,12 @@ export function EnhancedScheduleWithData({
                 borderColor={colors.warning}
               >
                 {clearingCache ? 'Clearing...' : 'Clear Cache'}
-              </Button>
-            )}
-            {(showAdminFeatures || error) && (
-              <Button size="$2" variant="outlined" onPress={refetch} disabled={loading || clearingCache}>
+              </Button> : null}
+            {(showAdminFeatures || error) ? <Button size="$2" variant="outlined" onPress={refetch} disabled={loading || clearingCache}>
                 {loading ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            )}
+              </Button> : null}
           </XStack>
-        </XStack>
-      )}
+        </XStack> : null}
 
       {/* Enhanced Schedule Table */}
       <EnhancedScheduleResponsive

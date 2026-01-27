@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 
 const client = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
@@ -15,10 +15,7 @@ const docClient = DynamoDBDocumentClient.from(client)
 const TABLE_NAME = 'tee-admin'
 
 // PATCH - Update draft status (after testing or sending)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -52,7 +49,10 @@ export async function PATCH(
       attributeValues[':status'] = 'sent'
       attributeValues[':sentAt'] = now
     } else {
-      return NextResponse.json({ error: 'Invalid action. Must be "tested" or "sent"' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Invalid action. Must be "tested" or "sent"' },
+        { status: 400 }
+      )
     }
 
     const command = new UpdateCommand({

@@ -308,15 +308,20 @@ export class SheetTransformer {
 
   private parseDate(value: any): string | null {
     if (!value) return null
-    
+
     try {
       const date = new Date(value)
       if (isNaN(date.getTime())) {
         return null
       }
-      
-      // Return ISO date string (YYYY-MM-DD)
-      return date.toISOString().split('T')[0]
+
+      // Return date string in local timezone (YYYY-MM-DD)
+      // Using local timezone to avoid shifting dates when converting from Google Sheets
+      // which stores dates in the user's local timezone
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
     } catch {
       return null
     }
@@ -355,7 +360,7 @@ export class SheetTransformer {
   private getValueByHeader(row: any[], headerMap: Record<string, number>, field: string): string {
     const index = headerMap[field]
     if (index !== undefined && row[index] !== undefined) {
-      return String(row[index]).trim()
+      return String(row[index]).trim().replace(/[\r\n]+/g, '')
     }
     return ''
   }

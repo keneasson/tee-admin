@@ -36,29 +36,23 @@ function TypographyExample({ label, style, exampleText, showSpecs = false }: Typ
         <Text fontSize="$2" color="$textSecondary" fontWeight="500">
           {label}
         </Text>
-        {copied && (
-          <Text fontSize="$2" color="$success">
+        {copied ? <Text fontSize="$2" color="$success">
             Copied!
-          </Text>
-        )}
+          </Text> : null}
       </XStack>
       
       <Text {...style}>
         {exampleText}
       </Text>
       
-      {showSpecs && (
-        <YStack gap="$1" marginTop="$2">
+      {showSpecs ? <YStack gap="$1" marginTop="$2">
           <Text fontSize="$2" color="$textTertiary" fontFamily="$mono">
             Size: {style.fontSize} | Weight: {style.fontWeight}
           </Text>
-          {style.letterSpacing && (
-            <Text fontSize="$2" color="$textTertiary" fontFamily="$mono">
+          {style.letterSpacing ? <Text fontSize="$2" color="$textTertiary" fontFamily="$mono">
               Letter Spacing: {style.letterSpacing}
-            </Text>
-          )}
-        </YStack>
-      )}
+            </Text> : null}
+        </YStack> : null}
     </YStack>
   )
 }

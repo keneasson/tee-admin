@@ -358,8 +358,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
           </View>
 
           {/* Queue Summary */}
-          {queueSummary && (
-            <Card backgroundColor={colors.backgroundSecondary} padding="$4">
+          {queueSummary ? <Card backgroundColor={colors.backgroundSecondary} padding="$4">
               <H3 color={colors.textPrimary} marginBottom="$3">
                 Email Queue Status
               </H3>
@@ -372,16 +371,14 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                     Ready to Send
                   </Text>
                 </View>
-                {queueSummary.processing > 0 && (
-                  <View alignItems="center">
+                {queueSummary.processing > 0 ? <View alignItems="center">
                     <Text fontSize="$5" fontWeight="700" color={colors.info}>
                       {queueSummary.processing}
                     </Text>
                     <Text fontSize="$2" color={colors.textSecondary}>
                       Processing
                     </Text>
-                  </View>
-                )}
+                  </View> : null}
                 <View alignItems="center">
                   <Text fontSize="$5" fontWeight="700" color={colors.success}>
                     {queueSummary.complete}
@@ -399,8 +396,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                   </Text>
                 </View>
               </XStack>
-            </Card>
-          )}
+            </Card> : null}
 
           {/* Schedule Cards */}
           <YStack gap="$3">
@@ -442,8 +438,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                         <Text fontSize="$5" fontWeight="600" color={colors.textPrimary}>
                           {emailTypeLabels[schedule.emailType]}
                         </Text>
-                        {schedule.testMode && (
-                          <View
+                        {schedule.testMode ? <View
                             backgroundColor={colors.warning}
                             paddingHorizontal="$2"
                             paddingVertical="$1"
@@ -452,8 +447,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                             <Text fontSize="$2" color={colors.background} fontWeight="600">
                               TEST MODE
                             </Text>
-                          </View>
-                        )}
+                          </View> : null}
                       </XStack>
 
                       <XStack gap="$4" flexWrap="wrap">
@@ -469,21 +463,17 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                             {formatTime(schedule.time)}
                           </Text>
                         </XStack>
-                        {typeStats && (
-                          <XStack alignItems="center" gap="$1">
+                        {typeStats ? <XStack alignItems="center" gap="$1">
                             <Users size={16} color={statusColor} />
                             <Text color={statusColor}>
                               {typeStats.ready} ready{typeStats.processing > 0 ? `, ${typeStats.processing} processing` : ''}, {typeStats.complete} sent
                             </Text>
-                          </XStack>
-                        )}
+                          </XStack> : null}
                       </XStack>
 
-                      {schedule.description && (
-                        <Text color={colors.textSecondary} fontSize="$3">
+                      {schedule.description ? <Text color={colors.textSecondary} fontSize="$3">
                           {schedule.description}
-                        </Text>
-                      )}
+                        </Text> : null}
                     </YStack>
 
                     <XStack gap="$3" alignItems="center">
@@ -573,8 +563,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
               {creating ? 'Create New Schedule' : `Edit ${editing ? emailTypeLabels[editing] : ''} Schedule`}
             </H3>
 
-            {error && (
-              <View
+            {error ? <View
                 backgroundColor={colors.error}
                 padding="$3"
                 borderRadius="$2"
@@ -582,14 +571,13 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                 <Text color={colors.primaryForeground} fontSize="$3">
                   {error}
                 </Text>
-              </View>
-            )}
+              </View> : null}
 
             <YStack gap="$3">
               {/* Email Type Display/Selector */}
               <View>
                 <Text color={colors.textPrimary} marginBottom="$2">
-                  Email Type {!creating && <Text color={colors.textSecondary}>(cannot be changed)</Text>}
+                  Email Type {!creating ? <Text color={colors.textSecondary}>(cannot be changed)</Text> : null}
                 </Text>
                 {creating ? (
                   <XStack gap="$2" flexWrap="wrap">
@@ -625,16 +613,14 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                           >
                             {type.name}
                           </Text>
-                          {editForm.emailType === type.type && type.description && (
-                            <Text
+                          {editForm.emailType === type.type && type.description ? <Text
                               fontSize="$2"
                               color={colors.primaryForeground}
                               opacity={0.8}
                               textAlign="center"
                             >
                               {type.description}
-                            </Text>
-                          )}
+                            </Text> : null}
                         </YStack>
                       </Button>
                     ))}
@@ -652,22 +638,18 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                       <Mail size={20} color={colors.primary} />
                       <YStack>
                         <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
-                          {editing && getEmailTypeDisplay(editing).name}
+                          {editing ? getEmailTypeDisplay(editing).name : null}
                         </Text>
-                        {editing && getEmailTypeDisplay(editing).description && (
-                          <Text fontSize="$2" color={colors.textSecondary}>
+                        {editing && getEmailTypeDisplay(editing).description ? <Text fontSize="$2" color={colors.textSecondary}>
                             {getEmailTypeDisplay(editing).description}
-                          </Text>
-                        )}
+                          </Text> : null}
                       </YStack>
                     </XStack>
                   </View>
                 )}
-                {creating && !editForm.emailType && (
-                  <Text fontSize="$2" color={colors.error} marginTop="$2">
+                {creating && !editForm.emailType ? <Text fontSize="$2" color={colors.error} marginTop="$2">
                     Please select an email type
-                  </Text>
-                )}
+                  </Text> : null}
               </View>
 
               <View>

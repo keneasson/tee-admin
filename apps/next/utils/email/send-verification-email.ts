@@ -5,7 +5,7 @@ export async function sendVerificationEmail(
   token: string,
   userName: string
 ): Promise<void> {
-  const verificationUrl = `${process.env.NEXTAUTH_URL}/auth/verify-email?token=${token}`
+  const verificationUrl = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/auth/verify-email?token=${token}`
 
   const subject = 'Verify your TEE Admin account'
 
@@ -82,7 +82,7 @@ export async function sendPasswordResetEmail(
   userName: string
 ): Promise<void> {
   console.log('Sending password reset email to:', email, 'for user:', userName)
-  const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${token}`
+  const resetUrl = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/auth/reset-password?token=${token}`
 
   const subject = 'Reset your TEE Admin password'
 

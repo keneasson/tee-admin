@@ -73,8 +73,7 @@ export const CheckboxWithCheck = <T extends FieldValues>({
                       <CheckIcon color="$primaryForeground" />
                     </Checkbox.Indicator>
                   </Checkbox>
-                  {label && (
-                    <Label 
+                  {label ? <Label 
                       size={size || "$4"} 
                       htmlFor={id}
                       fontSize="$4"
@@ -84,10 +83,9 @@ export const CheckboxWithCheck = <T extends FieldValues>({
                       cursor="pointer"
                     >
                       {label}
-                    </Label>
-                  )}
+                    </Label> : null}
                 </XStack>
-                {error && <Text color="$error">{error.message}</Text>}
+                {error ? <Text color="$error">{error.message}</Text> : null}
               </YStack>
             </FormFieldset>
           )

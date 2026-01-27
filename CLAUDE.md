@@ -147,6 +147,24 @@ export function SharedComponent({ userRole, isMemberOrHigher }) {
 - Any component importing ESM-only modules (like `next-auth/react`) will cause build failures
 - Keep platform-specific dependencies out of shared packages to avoid `require()` errors
 
+#### JSX Conditional Rendering (CRITICAL for React Native)
+
+**NEVER** use `&&` for conditional JSX rendering. In React Native, falsy values (0, "", false) can leak into render output and cause crashes: "Text strings must be rendered within a <Text> component".
+
+```typescript
+// ❌ WRONG - Can crash React Native
+{condition && <Component />}
+{items.length && <List items={items} />}
+{error && <ErrorMessage error={error} />}
+
+// ✅ CORRECT - Safe for all platforms
+{condition ? <Component /> : null}
+{items.length > 0 ? <List items={items} /> : null}
+{error ? <ErrorMessage error={error} /> : null}
+```
+
+This rule is enforced by ESLint via `react/jsx-no-leaked-render`. Run `yarn lint` to check and `yarn lint:fix` to auto-fix violations.
+
 #### Reference Implementation
 - `apps/next/hooks/use-user-role.tsx` - Next.js-specific auth hook
 - `apps/next/hooks/use-admin-access.tsx` - Next.js-specific admin access hook

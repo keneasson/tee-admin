@@ -17,6 +17,7 @@ export default function SchedulePage() {
     const response = await fetch('/api/cache/invalidate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ type: 'all' }),
     })
     if (!response.ok) {

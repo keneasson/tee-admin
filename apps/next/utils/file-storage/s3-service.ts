@@ -20,7 +20,7 @@ export class S3FileStorageService implements FileStorageService {
   constructor(config: FileStorageConfig) {
     this.config = config
     this.s3Client = new S3Client({
-      region: config.region || process.env.AWS_REGION || 'us-east-1',
+      region: config.region || process.env.AWS_REGION || 'ca-central-1',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -33,7 +33,7 @@ export class S3FileStorageService implements FileStorageService {
       // Validate file size
       const fileSize = file instanceof Buffer ? file.length : file.size
       const maxSize = options?.maxSizeBytes || this.config.maxFileSizeBytes || 10 * 1024 * 1024 // 10MB default
-      
+
       if (fileSize > maxSize) {
         throw new FileStorageError(
           `File size ${fileSize} exceeds maximum allowed size ${maxSize}`,
@@ -42,7 +42,8 @@ export class S3FileStorageService implements FileStorageService {
       }
 
       // Validate content type
-      const contentType = options?.contentType || (file instanceof File ? file.type : 'application/octet-stream')
+      const contentType =
+        options?.contentType || (file instanceof File ? file.type : 'application/octet-stream')
       if (this.config.allowedMimeTypes && !this.config.allowedMimeTypes.includes(contentType)) {
         throw new FileStorageError(
           `Content type ${contentType} not allowed`,
@@ -101,7 +102,7 @@ export class S3FileStorageService implements FileStorageService {
     if (this.config.publicBaseUrl) {
       return `${this.config.publicBaseUrl}/${key}`
     }
-    return `https://${this.config.bucket}.s3.${this.config.region || 'us-east-1'}.amazonaws.com/${key}`
+    return `https://${this.config.bucket}.s3.${this.config.region || 'ca-central-1'}.amazonaws.com/${key}`
   }
 
   async exists(key: string): Promise<boolean> {
@@ -133,12 +134,12 @@ export class S3FileStorageService implements FileStorageService {
       })
 
       const bucketResponse = await this.s3Client.send(getBucketCommand)
-      const bucketRegion = bucketResponse.LocationConstraint || 'us-east-1'
+      const bucketRegion = bucketResponse.LocationConstraint || 'ca-central-1'
 
       // Test 2: Try to list objects (to verify permissions)
       // This is a lightweight way to test read permissions
       const testKey = `__connection_test_${Date.now()}`
-      
+
       // Test 3: Try a small upload to test write permissions
       const testUpload = new PutObjectCommand({
         Bucket: this.config.bucket,

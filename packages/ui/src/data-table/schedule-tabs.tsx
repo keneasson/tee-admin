@@ -59,8 +59,7 @@ export function ScheduleTabs({
           width="100%"
         >
           {/* Mobile Header with Older Events Button */}
-          {onLoadOlder && (
-            <XStack
+          {onLoadOlder ? <XStack
               backgroundColor={colors.backgroundSecondary}
               borderRadius="$4"
               padding="$2"
@@ -100,8 +99,7 @@ export function ScheduleTabs({
                   {loading ? 'Loading...' : (hasOlder ? 'Older' : 'No More')}
                 </Text>
               </Button>
-            </XStack>
-          )}
+            </XStack> : null}
 
           {/* Mobile Tabs - Grid Layout */}
           <Tabs.List
@@ -238,8 +236,7 @@ export function ScheduleTabs({
           </Tabs.List>
 
           {/* Show Older Events Button - Desktop */}
-          {onLoadOlder && (
-            <Button
+          {onLoadOlder ? <Button
               size="$3"
               onPress={hasOlder ? onLoadOlder : undefined}
               disabled={loading || !hasOlder}
@@ -265,8 +262,7 @@ export function ScheduleTabs({
               >
                 {loading ? 'Loading...' : (hasOlder ? 'Show Older Events' : 'No Older Events')}
               </Text>
-            </Button>
-          )}
+            </Button> : null}
         </XStack>
 
         {/* Tab Content Area */}

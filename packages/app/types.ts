@@ -32,6 +32,7 @@ export enum EmailListTypes {
   bibleClass = 'bibleClass',
   members = 'members',
   testList = 'testList',
+  interEcclesia = 'interEcclesia',
 }
 
 export type ProgramTypeKeys = keyof typeof ProgramsTypes

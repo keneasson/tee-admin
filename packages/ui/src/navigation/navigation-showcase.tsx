@@ -258,7 +258,7 @@ export function NavigationShowcase() {
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
               Current User: {userRole.role || 'Not authenticated'} 
-              {userRole.isAdminOrOwner && <Text color={colors.success}> (Admin Access)</Text>}
+              {userRole.isAdminOrOwner ? <Text color={colors.success}> (Admin Access)</Text> : null}
             </Text>
             
             <YStack gap="$2">

@@ -263,11 +263,9 @@ export function PersonSelectorDialog({
                                 <Text fontSize="$3" color={isSelected ? '$blue11' : '$gray11'}>
                                   {email.email}
                                 </Text>
-                                {index === 0 && (
-                                  <Text fontSize="$2" color={isSelected ? '$blue10' : '$gray10'}>
+                                {index === 0 ? <Text fontSize="$2" color={isSelected ? '$blue10' : '$gray10'}>
                                     PRIMARY
-                                  </Text>
-                                )}
+                                  </Text> : null}
                               </XStack>
                             ))}
                           </YStack>

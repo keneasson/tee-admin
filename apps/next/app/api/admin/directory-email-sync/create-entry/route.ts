@@ -2,17 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../../utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
-import { GetContactCommand, UpdateContactCommand, CreateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
+import {
+  GetContactCommand,
+  UpdateContactCommand,
+  CreateContactCommand,
+  SubscriptionStatus,
+} from '@aws-sdk/client-sesv2'
 import { getSesClient } from '../../../../../utils/email/sesClient'
 import { inputTemplate } from '../../../../../utils/email/contact-lists'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // DynamoDB client
 const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'ca-central-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
 })
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 
@@ -38,16 +44,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`📧 Creating directory entry for: ${firstName} ${lastName} (${email}) - Member: ${isMember ? 'Yes' : 'No'}`)
+    console.log(
+      `📧 Creating directory entry for: ${firstName} ${lastName} (${email}) - Member: ${isMember ? 'Yes' : 'No'}`
+    )
 
     // Generate a unique SK by finding the next available index
     const queryCommand = new QueryCommand({
       TableName: 'tee-schedules',
       KeyConditionExpression: 'PK = :pk',
       ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS'
+        ':pk': 'DIRECTORY#MEMBERS',
       },
-      ProjectionExpression: 'SK'
+      ProjectionExpression: 'SK',
     })
 
     const existingMembers = await docClient.send(queryCommand)
@@ -78,13 +86,13 @@ export async function POST(request: NextRequest) {
         firstName,
         lastName,
         email,
-        ecclesia: isMember ? 'TEE' : '', // Set based on member checkbox
+        ecclesia: isMember ? HOME_ECCLESIA.canonicalName : '', // Set based on member checkbox
         address: '',
         phone: '',
         children: '',
         lastUpdated: new Date().toISOString(),
-        version: '1'
-      }
+        version: '1',
+      },
     })
 
     await docClient.send(putCommand)
@@ -93,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     // Sync to SES with AttributesData
     const sesClient = getSesClient()
-    const ecclesiaValue = isMember ? 'TEE' : ''
+    const ecclesiaValue = isMember ? HOME_ECCLESIA.canonicalName : ''
 
     const attributes = {
       firstName,
@@ -101,7 +109,7 @@ export async function POST(request: NextRequest) {
       displayName: `${firstName} ${lastName}`.trim(),
       dynamodbSK: newSK,
       ecclesia: ecclesiaValue,
-      isMember: !!isMember
+      isMember: !!isMember,
     }
 
     let sesResult = null
@@ -109,7 +117,7 @@ export async function POST(request: NextRequest) {
       // Try to get existing contact first
       const getCommand = new GetContactCommand({
         ...inputTemplate,
-        EmailAddress: email
+        EmailAddress: email,
       })
       const currentContact = await sesClient.send(getCommand)
 
@@ -118,7 +126,7 @@ export async function POST(request: NextRequest) {
         ...inputTemplate,
         EmailAddress: email,
         TopicPreferences: currentContact.TopicPreferences,
-        AttributesData: JSON.stringify(attributes)
+        AttributesData: JSON.stringify(attributes),
       })
       await sesClient.send(updateCommand)
       sesResult = { action: 'updated', email }
@@ -141,16 +149,12 @@ export async function POST(request: NextRequest) {
         skey: newSK,
         firstName,
         lastName,
-        email
+        email,
       },
-      sesSync: sesResult
+      sesSync: sesResult,
     })
-
   } catch (error) {
     console.error('❌ Error creating directory entry:', error)
-    return NextResponse.json(
-      { error: 'Failed to create directory entry' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create directory entry' }, { status: 500 })
   }
 }

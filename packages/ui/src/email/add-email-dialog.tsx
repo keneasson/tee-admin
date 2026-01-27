@@ -157,7 +157,7 @@ export function AddEmailDialog({ open, onOpenChange, person, onAddEmail }: AddEm
                   <XStack key={email.email} gap="$2" alignItems="center">
                     <Mail size={14} color="$gray11" />
                     <Text fontSize="$3">
-                      {email.email} {index === 0 && '(PRIMARY)'}
+                      {email.email} {index === 0 ? '(PRIMARY)' : null}
                     </Text>
                   </XStack>
                 ))}
@@ -181,14 +181,12 @@ export function AddEmailDialog({ open, onOpenChange, person, onAddEmail }: AddEm
                   keyboardType="email-address"
                   disabled={isSubmitting}
                 />
-                {validationError && (
-                  <XStack gap="$2" alignItems="center">
+                {validationError ? <XStack gap="$2" alignItems="center">
                     <AlertTriangle size={14} color="$red11" />
                     <Text fontSize="$2" color="$red11">
                       {validationError}
                     </Text>
-                  </XStack>
-                )}
+                  </XStack> : null}
               </YStack>
             ) : (
               <XStack gap="$2" alignItems="flex-start" padding="$3" backgroundColor="$yellow3" borderRadius="$3">
@@ -212,14 +210,12 @@ export function AddEmailDialog({ open, onOpenChange, person, onAddEmail }: AddEm
               </Text>
             </XStack>
 
-            {error && (
-              <XStack gap="$2" alignItems="center" padding="$3" backgroundColor="$red3" borderRadius="$3">
+            {error ? <XStack gap="$2" alignItems="center" padding="$3" backgroundColor="$red3" borderRadius="$3">
                 <AlertTriangle size={16} color="$red11" />
                 <Text fontSize="$3" color="$red11" flex={1}>
                   {error}
                 </Text>
-              </XStack>
-            )}
+              </XStack> : null}
           </YStack>
 
           <XStack gap="$3" justifyContent="flex-end">

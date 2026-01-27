@@ -176,7 +176,7 @@ export function LocationSelect<T extends FieldValues>({
     <YStack gap="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10"> *</Text>}
+        {required ? <Text color="$red10"> *</Text> : null}
       </Label>
       
       <Select
@@ -229,16 +229,14 @@ export function LocationSelect<T extends FieldValues>({
           <Select.Viewport>
             {options.length > 0 ? (
               <>
-                {!required && (
-                  <Select.Item value="" index={-1}>
+                {!required ? <Select.Item value="" index={-1}>
                     <Select.ItemText>
                       <Text color="$placeholderColor">No selection</Text>
                     </Select.ItemText>
                     <Select.ItemIndicator marginLeft="auto">
                       <Text>✓</Text>
                     </Select.ItemIndicator>
-                  </Select.Item>
-                )}
+                  </Select.Item> : null}
                 
                 {options.map((option, index) => (
                   <Select.Item key={option.code} value={option.code} index={index}>
@@ -271,11 +269,9 @@ export function LocationSelect<T extends FieldValues>({
         </Select.Content>
       </Select>
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

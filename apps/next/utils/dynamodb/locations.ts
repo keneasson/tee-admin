@@ -26,6 +26,7 @@ export interface EcclesiaData {
   province: string
   city: string
   address?: string
+  postalCode?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -121,6 +122,7 @@ export async function createEcclesia(data: {
   province: string
   city: string
   address?: string
+  postalCode?: string
 }): Promise<EcclesiaData> {
   const now = new Date()
   const ecclesia: EcclesiaData = {
@@ -183,6 +185,7 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
       province: item.province,
       city: item.city,
       address: item.address,
+      postalCode: item.postalCode,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }
@@ -217,6 +220,7 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
         province: item.province,
         city: item.city,
         address: item.address,
+        postalCode: item.postalCode,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }))
@@ -269,6 +273,7 @@ export async function getEcclesiaByCountry(country: string): Promise<EcclesiaDat
       province: item.province,
       city: item.city,
       address: item.address,
+      postalCode: item.postalCode,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -296,6 +301,7 @@ export async function getEcclesiaByProvince(country: string, province: string): 
       province: item.province,
       city: item.city,
       address: item.address,
+      postalCode: item.postalCode,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -324,6 +330,7 @@ export async function getEcclesiaByCity(country: string, province: string, city:
       province: item.province,
       city: item.city,
       address: item.address,
+      postalCode: item.postalCode,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -354,12 +361,104 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
       province: item.province,
       city: item.city,
       address: item.address,
+      postalCode: item.postalCode,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
   } catch (error) {
     console.error('Error getting all ecclesia:', error)
     return []
+  }
+}
+
+export async function deleteEcclesia(name: string): Promise<boolean> {
+  try {
+    // First, get the ecclesia to find its key
+    const ecclesia = await getEcclesiaByName(name)
+    if (!ecclesia) {
+      throw new Error(`Ecclesia "${name}" not found`)
+    }
+
+    // Delete the record
+    await client.delete({
+      TableName: TABLE_NAME,
+      Key: {
+        pkey: `ECCLESIA#${ecclesia.country}|${ecclesia.province}`,
+        skey: `${ecclesia.city}#${ecclesia.name}`,
+      },
+    })
+
+    return true
+  } catch (error) {
+    console.error('Error deleting ecclesia:', error)
+    throw error
+  }
+}
+
+export async function updateEcclesia(
+  originalName: string,
+  data: {
+    name: string
+    country: string
+    province: string
+    city: string
+    address?: string
+    postalCode?: string
+  }
+): Promise<EcclesiaData | null> {
+  try {
+    // First, get the original ecclesia to find its key
+    const original = await getEcclesiaByName(originalName)
+    if (!original) {
+      throw new Error(`Ecclesia "${originalName}" not found`)
+    }
+
+    // If the key fields changed, we need to delete and recreate
+    const keyChanged =
+      original.country !== data.country ||
+      original.province !== data.province ||
+      original.city !== data.city ||
+      original.name !== data.name
+
+    if (keyChanged) {
+      // Delete old record
+      await client.delete({
+        TableName: TABLE_NAME,
+        Key: {
+          pkey: `ECCLESIA#${original.country}|${original.province}`,
+          skey: `${original.city}#${original.name}`,
+        },
+      })
+
+      // Create new record with updated data
+      return await createEcclesia(data)
+    } else {
+      // Only address/postalCode changed - can update in place
+      const now = new Date()
+      await client.update({
+        TableName: TABLE_NAME,
+        Key: {
+          pkey: `ECCLESIA#${original.country}|${original.province}`,
+          skey: `${original.city}#${original.name}`,
+        },
+        UpdateExpression: 'SET address = :address, postalCode = :postalCode, updatedAt = :updatedAt',
+        ExpressionAttributeValues: {
+          ':address': data.address || '',
+          ':postalCode': data.postalCode || '',
+          ':updatedAt': now.toISOString(),
+        },
+      })
+
+      return {
+        ...original,
+        address: data.address,
+        postalCode: data.postalCode,
+        updatedAt: now,
+      }
+    }
+  } catch (error) {
+    console.error('Error updating ecclesia:', error)
+    throw error
   }
 }
 

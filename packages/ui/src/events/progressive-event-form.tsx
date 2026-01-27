@@ -1,5 +1,7 @@
 import { Event, EventType, EventStatus } from '@my/app/types/events'
 import { EventValidator } from '@my/app/utils/event-validation'
+import { TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import {
   Calendar,
   Check,
@@ -23,6 +25,7 @@ import { EventDatePicker } from '../form/event-date-picker'
 import { EventDateRangePicker } from '../form/event-date-range-picker'
 import { EventFormInput } from '../form/event-form-input'
 import { EventFormSelect } from '../form/event-form-select'
+import { ImageUpload } from '../form/image-upload'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { TimeSelector } from '../form/time-selector'
 import { MultiDateSelector } from '../form/multi-date-selector'
@@ -123,7 +126,7 @@ function CollapsibleComponent({
             padding="$2"
             borderRadius="$2"
           />
-          {Icon && <Icon size="$1" color={iconColor} />}
+          {Icon ? <Icon size="$1" color={iconColor} /> : null}
           <Text fontSize="$4" fontWeight="600" flex={1}>
             {title}
           </Text>
@@ -131,11 +134,9 @@ function CollapsibleComponent({
 
         {/* Right side: Add button + Remove button */}
         <XStack gap="$2" alignItems="center">
-          {onAdd && isExpanded && (
-            <Button size="$3" theme="blue" icon={Plus} onPress={onAdd}>
+          {onAdd && isExpanded ? <Button size="$3" theme="blue" icon={Plus} onPress={onAdd}>
               {addButtonText}
-            </Button>
-          )}
+            </Button> : null}
           <Button size="$3" theme="red" onPress={handleRemoveClick} opacity={isExpanded ? 1 : 0.7}>
             Remove
           </Button>
@@ -143,11 +144,9 @@ function CollapsibleComponent({
       </XStack>
 
       {/* Content area */}
-      {isExpanded && (
-        <YStack padding="$3" backgroundColor="$borderContrast">
+      {isExpanded ? <YStack padding="$3" backgroundColor="$borderContrast">
           {children}
-        </YStack>
-      )}
+        </YStack> : null}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
@@ -312,61 +311,49 @@ function StepBreadcrumb({
             </XStack>
 
             {/* Connector line */}
-            {index < steps.length - 1 && (
-              <XStack
+            {index < steps.length - 1 ? <XStack
                 width="$3"
                 height={1}
                 backgroundColor={index < currentIndex ? '$green10' : '$gray8'}
                 marginHorizontal="$2"
-              />
-            )}
+              /> : null}
           </XStack>
         ))}
       </XStack>
 
-      {currentSelectedType && (
-        <Text fontSize="$2" color="$gray11" textAlign="center" marginTop="$2">
+      {currentSelectedType ? <Text fontSize="$2" color="$gray11" textAlign="center" marginTop="$2">
           {`Creating ${currentSelectedType.replace('-', ' ')} event`}
-        </Text>
-      )}
+        </Text> : null}
 
       {/* Unsaved changes and save status indicator */}
       <XStack justifyContent="center" alignItems="center" space="$2" marginTop="$2" minHeight="$2">
         {/* Show unsaved changes indicator when dirty and not saving */}
-        {isDirty && autoSaveStatus === 'idle' && (
-          <>
+        {isDirty && autoSaveStatus === 'idle' ? <>
             <Circle size="$0.5" backgroundColor="$orange10" />
             <Text fontSize="$2" color="$orange11" fontWeight="500">
               Unsaved changes
             </Text>
-          </>
-        )}
-        {autoSaveStatus === 'saving' && (
-          <>
+          </> : null}
+        {autoSaveStatus === 'saving' ? <>
             <Circle size="$0.5" backgroundColor="$blue10" animation="spin" />
             <Text fontSize="$2" color="$blue11">
               Saving...
             </Text>
-          </>
-        )}
-        {autoSaveStatus === 'saved' && (
-          <>
+          </> : null}
+        {autoSaveStatus === 'saved' ? <>
             <CheckCircle size="$1" color="$green10" />
             <Text fontSize="$2" color="$green11">
               Saved {lastSaved ? `at ${lastSaved.toLocaleTimeString()}` : ''}
             </Text>
-          </>
-        )}
-        {autoSaveStatus === 'error' && (
-          <>
+          </> : null}
+        {autoSaveStatus === 'error' ? <>
             <Circle size="$0.5" backgroundColor="$red10" />
             <Text fontSize="$2" color="$red11">
               {autoSaveRetryCount && maxAutoSaveRetries && autoSaveRetryCount >= maxAutoSaveRetries
                 ? 'Auto-save failed (max retries)'
                 : `Auto-save failed${autoSaveRetryCount && maxAutoSaveRetries ? ` (retry ${autoSaveRetryCount}/${maxAutoSaveRetries})` : ''}`}
             </Text>
-          </>
-        )}
+          </> : null}
       </XStack>
     </Card>
   )
@@ -454,6 +441,16 @@ function StepSummary({
                     if (!groomName) return brideName
                     return `${brideName} & ${groomName}`
                   })()}
+                </Text>
+              </XStack>
+            ) : null}
+            {currentSelectedType === 'engagement' && (formData.engagementProposed || formData.engagementTo) ? (
+              <XStack space="$2" alignItems="center">
+                <Text fontSize="$3" fontWeight="600" color="$blue11">
+                  Engaged:
+                </Text>
+                <Text fontSize="$3" color="$blue11">
+                  {formData.engagementProposed || '?'} & {formData.engagementTo || '?'}
                 </Text>
               </XStack>
             ) : null}
@@ -558,9 +555,11 @@ export function ProgressiveEventForm({
     }
 
     if (currentSelectedType === 'funeral') {
-      if (initialData.locations?.service) active.push('service-location')
-      if (initialData.locations?.burial) active.push('burial-location')
-      if (initialData.eulogies && initialData.eulogies.length > 0) active.push('eulogies')
+      // Check for any location data - component ID is 'locations', not 'service-location'
+      if (initialData.locations?.service || initialData.locations?.viewing || initialData.locations?.visitation || initialData.locations?.burial || initialData.locations?.graveside) {
+        active.push('locations')
+      }
+      if (initialData.speakers && initialData.speakers.length > 0) active.push('speakers')
     }
 
     if (currentSelectedType === 'general') {
@@ -605,7 +604,8 @@ export function ProgressiveEventForm({
           end: new Date(new Date().getTime() + 2 * 60 * 60 * 1000), // 2 hours later
           hidesTimes: false,
         },
-        hostingEcclesia: initialData?.hostingEcclesia || 'Toronto East Christadelphian Ecclesia',
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
+        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
         location: initialData?.location || {
           mode: 'in-person', // Default to in-person
           name: '',
@@ -633,11 +633,22 @@ export function ProgressiveEventForm({
       }),
       ...(currentSelectedType === 'funeral' && {
         serviceDate: initialData?.serviceDate || new Date(),
-        viewingDate: initialData?.viewingDate,
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
+        // Visitation (formerly viewing) - support both old and new field names
+        visitationDate: initialData?.visitationDate || initialData?.viewingDate,
+        visitationEndDate: initialData?.visitationEndDate,
+        visitationSameLocation: initialData?.visitationSameLocation ?? true,
+        // Graveside service
+        hasGravesideService: initialData?.hasGravesideService ?? false,
+        gravesideDate: initialData?.gravesideDate,
         deceased: initialData?.deceased || {
+          title: '',
           firstName: '',
           lastName: '',
         },
+        aboutDeceased: initialData?.aboutDeceased || '',
+        deceasedPhoto: initialData?.deceasedPhoto || undefined,
+        obituaryUrl: initialData?.obituaryUrl || '',
         locations: initialData?.locations || {
           service: {
             name: '',
@@ -650,7 +661,8 @@ export function ProgressiveEventForm({
       }),
       ...(currentSelectedType === 'wedding' && {
         ceremonyDate: initialData?.ceremonyDate || new Date(),
-        hostingEcclesia: initialData?.hostingEcclesia || 'Toronto East Christadelphian Ecclesia',
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
+        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
         ceremonyLocation: initialData?.ceremonyLocation || {
           name: '',
           address: '',
@@ -663,15 +675,26 @@ export function ProgressiveEventForm({
         },
         documents: initialData?.documents || [],
       }),
+      ...(currentSelectedType === 'engagement' && {
+        engagementDate: initialData?.engagementDate || new Date(),
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
+        engagementProposed: initialData?.engagementProposed || '',
+        engagementTo: initialData?.engagementTo || '',
+        engagementAnnouncement: initialData?.engagementAnnouncement || '',
+        documents: initialData?.documents || [],
+      }),
       ...(currentSelectedType === 'baptism' && {
         baptismDate: initialData?.baptismDate || new Date(),
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
         candidate: initialData?.candidate || {
           firstName: '',
           lastName: '',
           testimony: '',
           baptismStatement: '',
         },
-        hostingEcclesia: initialData?.hostingEcclesia || 'Toronto East Christadelphian Ecclesia',
+        aboutCandidate: initialData?.aboutCandidate || '',
+        candidatePhoto: initialData?.candidatePhoto || undefined,
+        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
         location: initialData?.location || {
           name: '',
           address: '',
@@ -684,6 +707,7 @@ export function ProgressiveEventForm({
       ...(currentSelectedType === 'general' && {
         startDate: initialData?.startDate,
         endDate: initialData?.endDate,
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
         location: initialData?.location,
         speakers: initialData?.speakers || [],
         schedule: initialData?.schedule || [],
@@ -707,6 +731,7 @@ export function ProgressiveEventForm({
           description: '',
           contactPerson: '',
         },
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
         location: initialData?.location || {
           name: '',
           address: '',
@@ -717,6 +742,12 @@ export function ProgressiveEventForm({
           directions: '',
           parkingInfo: '',
         },
+        documents: initialData?.documents || [],
+      }),
+      ...(currentSelectedType === 'election-cycle' && {
+        electionStartDate: initialData?.electionStartDate || new Date(),
+        electionEndDate: initialData?.electionEndDate || new Date(new Date().getTime() + 14 * 24 * 60 * 60 * 1000), // 14 days later
+        eventTimezone: initialData?.eventTimezone || 'America/Toronto',
         documents: initialData?.documents || [],
       }),
     },
@@ -788,7 +819,7 @@ export function ProgressiveEventForm({
           id: 'locations',
           label: 'Service Locations',
           icon: MapPin,
-          description: 'Viewing, service, and burial locations',
+          description: 'Service, visitation, and graveside locations',
           required: true,
           component: (
             <YStack space="$4">
@@ -799,18 +830,24 @@ export function ProgressiveEventForm({
                 title="Service Location"
                 required
               />
-              <LocationSection
-                control={control}
-                setValue={setValue}
-                namePrefix="locations.viewing"
-                title="Viewing Location"
-              />
-              <LocationSection
-                control={control}
-                setValue={setValue}
-                namePrefix="locations.burial"
-                title="Burial Location"
-              />
+              {/* Only show visitation location if NOT same as service */}
+              {!watch('visitationSameLocation') ? (
+                <LocationSection
+                  control={control}
+                  setValue={setValue}
+                  namePrefix="locations.visitation"
+                  title="Visitation Location"
+                />
+              ) : null}
+              {/* Only show graveside location if graveside service is enabled */}
+              {watch('hasGravesideService') ? (
+                <LocationSection
+                  control={control}
+                  setValue={setValue}
+                  namePrefix="locations.graveside"
+                  title="Graveside Location"
+                />
+              ) : null}
             </YStack>
           ),
         },
@@ -1064,6 +1101,16 @@ export function ProgressiveEventForm({
         },
         ...baseComponents,
       ]
+    }
+
+    if (currentSelectedType === 'election-cycle') {
+      // Election cycle only needs description and documents
+      return baseComponents
+    }
+
+    if (currentSelectedType === 'engagement') {
+      // Engagement only needs description and documents
+      return baseComponents
     }
 
     return baseComponents
@@ -1336,8 +1383,7 @@ export function ProgressiveEventForm({
               required
             />
 
-            {currentSelectedType === 'study-weekend' && (
-              <>
+            {currentSelectedType === 'study-weekend' ? <>
                 <EventFormInput
                   control={control}
                   name="theme"
@@ -1345,15 +1391,27 @@ export function ProgressiveEventForm({
                   placeholder="Event theme or topic"
                 />
 
-                <EventDateRangePicker
-                  control={control}
-                  name="dateRange"
-                  label="Event Dates"
-                  required
-                  allowSingleDay={false}
-                  allowHideTimes={true}
-                  onDateChange={handleFieldChange}
-                />
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={2} minWidth={200}>
+                    <EventDateRangePicker
+                      control={control}
+                      name="dateRange"
+                      label="Event Dates"
+                      required
+                      allowSingleDay={false}
+                      allowHideTimes={true}
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
+                </XStack>
 
                 <EcclesiaSearchInput
                   control={control}
@@ -1371,17 +1429,30 @@ export function ProgressiveEventForm({
                   showAtTheHallOption={true}
                   hostingEcclesiaFieldName="hostingEcclesia"
                 />
-              </>
-            )}
+              </> : null}
 
-            {currentSelectedType === 'funeral' && (
-              <>
+            {currentSelectedType === 'funeral' ? <>
                 <YStack space="$3">
                   <Text fontSize="$5" fontWeight="600">
                     Deceased Information
                   </Text>
-                  <XStack space="$3">
-                    <YStack flex={1}>
+                  <XStack space="$3" flexWrap="wrap">
+                    <YStack width={120}>
+                      <EventFormSelect
+                        control={control}
+                        name="deceased.title"
+                        label="Title"
+                        options={[
+                          { label: '(None)', value: '' },
+                          { label: 'Brother', value: 'Brother' },
+                          { label: 'Sister', value: 'Sister' },
+                          { label: 'Mr.', value: 'Mr.' },
+                          { label: 'Mrs.', value: 'Mrs.' },
+                          { label: 'Ms.', value: 'Ms.' },
+                        ]}
+                      />
+                    </YStack>
+                    <YStack flex={1} minWidth={150}>
                       <EventFormInput
                         control={control}
                         name="deceased.firstName"
@@ -1389,7 +1460,7 @@ export function ProgressiveEventForm({
                         required
                       />
                     </YStack>
-                    <YStack flex={1}>
+                    <YStack flex={1} minWidth={150}>
                       <EventFormInput
                         control={control}
                         name="deceased.lastName"
@@ -1398,34 +1469,159 @@ export function ProgressiveEventForm({
                       />
                     </YStack>
                   </XStack>
+
+                  {/* Date of Passing - internal tracking only */}
+                  <YStack width={200} marginTop="$2">
+                    <EventDatePicker
+                      control={control}
+                      name="dateOfPassing"
+                      label="Date of Passing"
+                    />
+                  </YStack>
                 </YStack>
 
-                <XStack space="$3">
-                  <YStack flex={1}>
+                {/* Service Date + Timezone */}
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={2} minWidth={200}>
                     <EventDatePicker
                       control={control}
                       name="serviceDate"
-                      label="Service Date"
+                      label="Service Date/Time"
                       includeTime
                       required
                       onDateChange={handleFieldChange}
                     />
                   </YStack>
-                  <YStack flex={1}>
-                    <EventDatePicker
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
                       control={control}
-                      name="viewingDate"
-                      label="Viewing Date"
-                      includeTime
-                      onDateChange={handleFieldChange}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
                     />
                   </YStack>
                 </XStack>
-              </>
-            )}
 
-            {currentSelectedType === 'wedding' && (
-              <>
+                {/* Visitation Section */}
+                <YStack space="$3">
+                  <Text fontSize="$5" fontWeight="600">Visitation</Text>
+                  <XStack space="$3" flexWrap="wrap">
+                    <YStack flex={1} minWidth={200}>
+                      <EventDatePicker
+                        control={control}
+                        name="visitationDate"
+                        label="Start Date/Time"
+                        includeTime
+                        onDateChange={(date) => {
+                          if (date) {
+                            const startDate = new Date(date)
+
+                            // Auto-set end date to 1 hour after start if not already set or if before start
+                            const currentEndDate = getValues('visitationEndDate')
+                            const endDate = currentEndDate ? new Date(currentEndDate) : null
+                            if (!endDate || endDate <= startDate) {
+                              const newEndDate = new Date(startDate)
+                              newEndDate.setHours(newEndDate.getHours() + 1)
+                              setValue('visitationEndDate', newEndDate, { shouldDirty: true })
+                            }
+
+                            // Auto-set service date to day after visitation if not already set
+                            const currentServiceDate = getValues('serviceDate')
+                            if (!currentServiceDate) {
+                              const newServiceDate = new Date(startDate)
+                              newServiceDate.setDate(newServiceDate.getDate() + 1)
+                              // Default service time to 11:00 AM (common funeral time)
+                              newServiceDate.setHours(11, 0, 0, 0)
+                              setValue('serviceDate', newServiceDate, { shouldDirty: true })
+                            }
+                          }
+                          handleFieldChange()
+                        }}
+                      />
+                    </YStack>
+                    <YStack flex={1} minWidth={200}>
+                      <EventDatePicker
+                        control={control}
+                        name="visitationEndDate"
+                        label="End Date/Time"
+                        includeTime
+                        onDateChange={handleFieldChange}
+                      />
+                    </YStack>
+                  </XStack>
+                  <CheckboxWithCheck
+                    control={control}
+                    name="visitationSameLocation"
+                    label="Same location as funeral service"
+                  />
+                </YStack>
+
+                {/* Graveside Service Section */}
+                <YStack space="$3">
+                  <CheckboxWithCheck
+                    control={control}
+                    name="hasGravesideService"
+                    label="Graveside service"
+                  />
+                  {watch('hasGravesideService') ? (
+                    <YStack paddingLeft="$4">
+                      <EventDatePicker
+                        control={control}
+                        name="gravesideDate"
+                        label="Graveside Date/Time"
+                        includeTime
+                        onDateChange={handleFieldChange}
+                      />
+                    </YStack>
+                  ) : null}
+                </YStack>
+
+                {/* Deceased Photo Upload */}
+                <YStack marginTop="$4">
+                  <ImageUpload
+                    value={watch('deceasedPhoto')}
+                    onChange={(photo) => setValue('deceasedPhoto', photo, { shouldDirty: true })}
+                    label="Photo of the Deceased (Optional)"
+                    placeholder="If you have an image of the deceased, upload here"
+                  />
+                </YStack>
+
+                {/* About the Deceased */}
+                <YStack space="$3" marginTop="$5">
+                  <Text fontSize="$5" fontWeight="600">
+                    About the Deceased
+                  </Text>
+                  <Text fontSize="$3" color="$gray11">
+                    Share a brief biography or tribute. You can include links by typing the full URL.
+                  </Text>
+                  <OptimizedTextarea
+                    control={control}
+                    name="aboutDeceased"
+                    label=""
+                    placeholder="Share memories, tributes, or a biography of the deceased..."
+                    rows={6}
+                    maxLength={5000}
+                  />
+                </YStack>
+
+                {/* Online Obituary Link */}
+                <YStack space="$3" marginTop="$5">
+                  <Text fontSize="$5" fontWeight="600">
+                    Online Obituary (Optional)
+                  </Text>
+                  <Text fontSize="$3" color="$gray11">
+                    Link to the official online obituary.
+                  </Text>
+                  <EventFormInput
+                    control={control}
+                    name="obituaryUrl"
+                    label=""
+                    placeholder="https://..."
+                  />
+                </YStack>
+              </> : null}
+
+            {currentSelectedType === 'wedding' ? <>
                 <YStack space="$3">
                   <Text fontSize="$5" fontWeight="600">
                     Couple Information
@@ -1468,20 +1664,105 @@ export function ProgressiveEventForm({
                   </XStack>
                 </YStack>
 
-                <EventDatePicker
-                  control={control}
-                  name="ceremonyDate"
-                  label="Ceremony Date"
-                  includeTime
-                  allowHideTimes
-                  required
-                  onDateChange={handleFieldChange}
-                />
-              </>
-            )}
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={2} minWidth={200}>
+                    <EventDatePicker
+                      control={control}
+                      name="ceremonyDate"
+                      label="Ceremony Date"
+                      includeTime
+                      allowHideTimes
+                      required
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
+                </XStack>
+              </> : null}
 
-            {currentSelectedType === 'baptism' && (
-              <>
+            {currentSelectedType === 'engagement' ? <>
+                <YStack space="$3">
+                  <Text fontSize="$5" fontWeight="600">
+                    Engagement Information
+                  </Text>
+
+                  <XStack space="$3" flexWrap="wrap">
+                    <YStack flex={2} minWidth={200}>
+                      <EventDatePicker
+                        control={control}
+                        name="engagementDate"
+                        label="Date of Engagement"
+                        required
+                        onDateChange={handleFieldChange}
+                      />
+                    </YStack>
+                    <YStack flex={1} minWidth={180}>
+                      <EventFormSelect
+                        control={control}
+                        name="eventTimezone"
+                        label="Timezone"
+                        options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                      />
+                    </YStack>
+                  </XStack>
+
+                  <XStack space="$3">
+                    <YStack flex={1}>
+                      <EventFormInput
+                        control={control}
+                        name="engagementProposed"
+                        label="Proposed"
+                        placeholder="e.g., Brother Gord Easson"
+                        required
+                      />
+                    </YStack>
+                    <YStack flex={1}>
+                      <EventFormInput
+                        control={control}
+                        name="engagementTo"
+                        label="To"
+                        placeholder="e.g., Sister Jane Smith"
+                        required
+                      />
+                    </YStack>
+                  </XStack>
+
+                  {/* Live Preview */}
+                  {(watch('engagementProposed') || watch('engagementTo')) ? (
+                    <Card padding="$3" backgroundColor="$yellow2" borderWidth={1} borderColor="$yellow6">
+                      <YStack space="$1">
+                        <Text fontSize="$3" fontWeight="600" color="$yellow11">
+                          Preview:
+                        </Text>
+                        <Text fontSize="$4" color="$yellow11">
+                          {watch('engagementProposed') || '[Proposed]'} is engaged to {watch('engagementTo') || '[To]'},{' '}
+                          {watch('engagementDate')
+                            ? new Date(watch('engagementDate')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : '[Date]'}.
+                        </Text>
+                      </YStack>
+                    </Card>
+                  ) : null}
+
+                  <OptimizedTextarea
+                    control={control}
+                    name="engagementAnnouncement"
+                    label="Announcement"
+                    placeholder="Write the announcement for this engagement..."
+                    rows={4}
+                    maxLength={2000}
+                  />
+                </YStack>
+              </> : null}
+
+            {currentSelectedType === 'baptism' ? <>
                 <YStack space="$3">
                   <Text fontSize="$5" fontWeight="600">
                     Candidate Information
@@ -1506,15 +1787,27 @@ export function ProgressiveEventForm({
                   </XStack>
                 </YStack>
 
-                <EventDatePicker
-                  control={control}
-                  name="baptismDate"
-                  label="Baptism Date"
-                  includeTime
-                  allowHideTimes
-                  required
-                  onDateChange={handleFieldChange}
-                />
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={2} minWidth={200}>
+                    <EventDatePicker
+                      control={control}
+                      name="baptismDate"
+                      label="Baptism Date"
+                      includeTime
+                      allowHideTimes
+                      required
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
+                </XStack>
 
                 <EcclesiaSearchInput
                   control={control}
@@ -1530,34 +1823,66 @@ export function ProgressiveEventForm({
                   placeholder="https://zoom.us/j/..."
                   type="url"
                 />
-              </>
-            )}
 
-            {currentSelectedType === 'general' && (
-              <XStack space="$3">
-                <YStack flex={1}>
-                  <EventDatePicker
+                {/* Candidate Photo Upload */}
+                <ImageUpload
+                  value={watch('candidatePhoto')}
+                  onChange={(photo) => setValue('candidatePhoto', photo, { shouldDirty: true })}
+                  label="Photo of the Candidate (Optional)"
+                  placeholder="If you have a photo of the candidate, upload here"
+                />
+
+                {/* About the Candidate */}
+                <YStack space="$2">
+                  <Text fontSize="$5" fontWeight="600">
+                    About the Candidate
+                  </Text>
+                  <Text fontSize="$3" color="$gray11">
+                    Share a brief biography or testimony. You can include links by typing the full URL.
+                  </Text>
+                  <OptimizedTextarea
                     control={control}
-                    name="startDate"
-                    label="Start Date"
-                    includeTime
-                    onDateChange={handleFieldChange}
+                    name="aboutCandidate"
+                    label=""
+                    placeholder="Share the candidate's journey to baptism, their background, or a brief testimony..."
+                    rows={6}
+                    maxLength={5000}
                   />
                 </YStack>
-                <YStack flex={1}>
-                  <EventDatePicker
-                    control={control}
-                    name="endDate"
-                    label="End Date"
-                    includeTime
-                    onDateChange={handleFieldChange}
-                  />
-                </YStack>
-              </XStack>
-            )}
+              </> : null}
 
-            {currentSelectedType === 'recurring' && (
-              <>
+            {currentSelectedType === 'general' ? <YStack space="$3">
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={1} minWidth={150}>
+                    <EventDatePicker
+                      control={control}
+                      name="startDate"
+                      label="Start Date"
+                      includeTime
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={150}>
+                    <EventDatePicker
+                      control={control}
+                      name="endDate"
+                      label="End Date"
+                      includeTime
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
+                </XStack>
+              </YStack> : null}
+
+            {currentSelectedType === 'recurring' ? <>
                 <YStack space="$3">
                   <Text fontSize="$5" fontWeight="600">
                     Recurring Schedule
@@ -1586,8 +1911,7 @@ export function ProgressiveEventForm({
 
                 {/* Days of Week - Show only for weekly/biweekly */}
                 {(watch('recurringConfig.frequency') === 'weekly' || 
-                  watch('recurringConfig.frequency') === 'biweekly') && (
-                  <YStack space="$2">
+                  watch('recurringConfig.frequency') === 'biweekly') ? <YStack space="$2">
                     <Text fontSize="$4" fontWeight="600">
                       Repeat on these days:
                       <Text fontSize="$3" color="$red10">*</Text>
@@ -1629,22 +1953,18 @@ export function ProgressiveEventForm({
                         )
                       })}
                     </XStack>
-                  </YStack>
-                )}
+                  </YStack> : null}
 
                 {/* Monthly Pattern Detection */}
-                {watch('recurringConfig.frequency') === 'monthly' && (
-                  <YStack space="$2" padding="$3" backgroundColor="$backgroundSecondary" borderRadius="$4">
+                {watch('recurringConfig.frequency') === 'monthly' ? <YStack space="$2" padding="$3" backgroundColor="$backgroundSecondary" borderRadius="$4">
                     <Text fontSize="$4" fontWeight="600">Monthly Recurrence</Text>
                     <Text fontSize="$3" color="$gray11">
                       Event will occur on the same day each month as selected in the date range below.
                     </Text>
-                  </YStack>
-                )}
+                  </YStack> : null}
 
                 {/* Custom Date Selection */}
-                {watch('recurringConfig.frequency') === 'custom' && (
-                  <YStack space="$2">
+                {watch('recurringConfig.frequency') === 'custom' ? <YStack space="$2">
                     <MultiDateSelector
                       control={control}
                       name="recurringConfig.customDates"
@@ -1652,12 +1972,11 @@ export function ProgressiveEventForm({
                       required
                       onDateChange={handleFieldChange}
                     />
-                  </YStack>
-                )}
+                  </YStack> : null}
 
-                {/* Time Selection */}
-                <XStack space="$3">
-                  <YStack flex={1}>
+                {/* Time Selection + Timezone */}
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={1} minWidth={120}>
                     <TimeSelector
                       control={control}
                       name="recurringConfig.startTime"
@@ -1665,7 +1984,7 @@ export function ProgressiveEventForm({
                       required
                     />
                   </YStack>
-                  <YStack flex={1}>
+                  <YStack flex={1} minWidth={120}>
                     <TimeSelector
                       control={control}
                       name="recurringConfig.endTime"
@@ -1673,11 +1992,18 @@ export function ProgressiveEventForm({
                       required
                     />
                   </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
                 </XStack>
 
                 {/* Date Range - only for non-custom recurring events */}
-                {watch('recurringConfig.frequency') !== 'custom' && (
-                  <EventDateRangePicker
+                {watch('recurringConfig.frequency') !== 'custom' ? <EventDateRangePicker
                     control={control}
                     name="recurringConfig.dateRange"
                     label="Date Range"
@@ -1685,8 +2011,7 @@ export function ProgressiveEventForm({
                     required
                     allowSingleDay={true}
                     hidesTimes={true}
-                  />
-                )}
+                  /> : null}
 
                 <EventFormInput
                   control={control}
@@ -1787,14 +2112,55 @@ export function ProgressiveEventForm({
                     </YStack>
                   ) : null
                 })()}
-              </>
-            )}
+              </> : null}
 
-            <CheckboxWithCheck
-              control={control}
-              name="membersOnly"
-              label="Members Only - Restrict viewing to Toronto East Ecclesia members"
-            />
+            {currentSelectedType === 'election-cycle' ? <>
+                <YStack space="$3">
+                  <Text fontSize="$5" fontWeight="600">
+                    Election Voting Period
+                  </Text>
+                  <Text fontSize="$3" color="$gray11">
+                    Set the start and end dates for the election voting window.
+                  </Text>
+                </YStack>
+
+                <XStack space="$3" flexWrap="wrap">
+                  <YStack flex={1} minWidth={150}>
+                    <EventDatePicker
+                      control={control}
+                      name="electionStartDate"
+                      label="Voting Opens"
+                      required
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={150}>
+                    <EventDatePicker
+                      control={control}
+                      name="electionEndDate"
+                      label="Voting Closes"
+                      required
+                      onDateChange={handleFieldChange}
+                    />
+                  </YStack>
+                  <YStack flex={1} minWidth={180}>
+                    <EventFormSelect
+                      control={control}
+                      name="eventTimezone"
+                      label="Timezone"
+                      options={TIMEZONE_OPTIONS.map(tz => ({ label: tz.label, value: tz.value }))}
+                    />
+                  </YStack>
+                </XStack>
+              </> : null}
+
+            <YStack marginTop="$5">
+              <CheckboxWithCheck
+                control={control}
+                name="membersOnly"
+                label="Members Only - Restrict viewing to Toronto East Ecclesia members"
+              />
+            </YStack>
 
             <EventDatePicker
               control={control}
@@ -1817,11 +2183,9 @@ export function ProgressiveEventForm({
           </Button>
 
           <XStack space="$3">
-            {!skipTypeSelection && (
-              <Button variant="outlined" onPress={() => setStep('type')} disabled={isLoading}>
+            {!skipTypeSelection ? <Button variant="outlined" onPress={() => setStep('type')} disabled={isLoading}>
                 Back
-              </Button>
-            )}
+              </Button> : null}
             <Button onPress={() => handleSaveAndContinue('components')} disabled={isLoading}>
               Continue
             </Button>
@@ -1980,16 +2344,14 @@ export function ProgressiveEventForm({
             Back
           </Button>
 
-          {onPreview && (
-            <Button
+          {onPreview ? <Button
               variant="outlined"
               icon={Eye}
-              onPress={() => onPreview(watch())}
+              onPress={() => onPreview({ ...watch(), type: currentSelectedType })}
               disabled={isLoading}
             >
               Preview
-            </Button>
-          )}
+            </Button> : null}
 
           <Button onPress={() => handleSaveAndContinue('review')} disabled={isLoading} theme="blue">
             Continue to Review
@@ -2043,16 +2405,13 @@ export function ProgressiveEventForm({
                   <Text fontWeight="600">Title:</Text>
                   <Text>{currentFormData.title || 'Untitled Event'}</Text>
                 </XStack>
-                {currentFormData.description && (
-                  <XStack space="$2" alignItems="flex-start">
+                {currentFormData.description ? <XStack space="$2" alignItems="flex-start">
                     <Text fontWeight="600">Description:</Text>
                     <Text flex={1}>{currentFormData.description}</Text>
-                  </XStack>
-                )}
+                  </XStack> : null}
 
                 {/* Type-specific details */}
-                {currentSelectedType === 'baptism' && currentFormData.candidate && (
-                  <>
+                {currentSelectedType === 'baptism' && currentFormData.candidate ? <>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Candidate:</Text>
                       <Text>
@@ -2072,11 +2431,9 @@ export function ProgressiveEventForm({
                           : 'Not set'}
                       </Text>
                     </XStack>
-                  </>
-                )}
+                  </> : null}
 
-                {currentSelectedType === 'study-weekend' && (
-                  <>
+                {currentSelectedType === 'study-weekend' ? <>
                     {currentFormData.theme ? (
                       <XStack space="$2" alignItems="center">
                         <Text fontWeight="600">Theme:</Text>
@@ -2089,11 +2446,9 @@ export function ProgressiveEventForm({
                         <Text>{`${new Date(currentFormData.dateRange.start).toLocaleDateString()} - ${new Date(currentFormData.dateRange.end).toLocaleDateString()}`}</Text>
                       </XStack>
                     ) : null}
-                  </>
-                )}
+                  </> : null}
 
-                {currentSelectedType === 'wedding' && currentFormData.couple && (
-                  <>
+                {currentSelectedType === 'wedding' && currentFormData.couple ? <>
                     <XStack space="$2" alignItems="center">
                       <Text fontWeight="600">Couple:</Text>
                       <Text>
@@ -2102,10 +2457,10 @@ export function ProgressiveEventForm({
                           const brideLast = currentFormData.couple.bride?.lastName || ''
                           const groomFirst = currentFormData.couple.groom?.firstName || ''
                           const groomLast = currentFormData.couple.groom?.lastName || ''
-                          
+
                           const brideName = `${brideFirst} ${brideLast}`.trim()
                           const groomName = `${groomFirst} ${groomLast}`.trim()
-                          
+
                           if (!brideName && !groomName) return 'Wedding Couple'
                           if (!brideName) return groomName
                           if (!groomName) return brideName
@@ -2121,8 +2476,30 @@ export function ProgressiveEventForm({
                           : 'Not set'}
                       </Text>
                     </XStack>
-                  </>
-                )}
+                  </> : null}
+
+                {currentSelectedType === 'engagement' ? <>
+                    <XStack space="$2" alignItems="center">
+                      <Text fontWeight="600">Engaged:</Text>
+                      <Text>
+                        {currentFormData.engagementProposed || '?'} & {currentFormData.engagementTo || '?'}
+                      </Text>
+                    </XStack>
+                    <XStack space="$2" alignItems="center">
+                      <Text fontWeight="600">Date:</Text>
+                      <Text>
+                        {currentFormData.engagementDate
+                          ? new Date(currentFormData.engagementDate).toLocaleDateString()
+                          : 'Not set'}
+                      </Text>
+                    </XStack>
+                    {currentFormData.engagementAnnouncement ? (
+                      <XStack space="$2" alignItems="flex-start">
+                        <Text fontWeight="600">Announcement:</Text>
+                        <Text flex={1}>{currentFormData.engagementAnnouncement}</Text>
+                      </XStack>
+                    ) : null}
+                  </> : null}
               </YStack>
             </Card>
 
@@ -2138,28 +2515,23 @@ export function ProgressiveEventForm({
               </Card>
             ) : null}
 
-            {currentFormData.location?.name && (
-              <Card padding="$3" backgroundColor="$gray1">
+            {currentFormData.location?.name ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Location
                   </Text>
                   <Text>{currentFormData.location.name}</Text>
-                  {currentFormData.location.address && (
-                    <Text fontSize="$3" color="$gray11">
+                  {currentFormData.location.address ? <Text fontSize="$3" color="$gray11">
                       {currentFormData.location.address}
                       {currentFormData.location.city ? `, ${currentFormData.location.city}` : ''}
                       {currentFormData.location.province
                         ? `, ${currentFormData.location.province}`
                         : ''}
-                    </Text>
-                  )}
+                    </Text> : null}
                 </YStack>
-              </Card>
-            )}
+              </Card> : null}
 
-            {currentFormData.speakers?.length > 0 && (
-              <Card padding="$3" backgroundColor="$gray1">
+            {currentFormData.speakers?.length > 0 ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Speakers
@@ -2175,11 +2547,9 @@ export function ProgressiveEventForm({
                     </XStack>
                   ))}
                 </YStack>
-              </Card>
-            )}
+              </Card> : null}
 
-            {currentFormData.zoomLink && (
-              <Card padding="$3" backgroundColor="$gray1">
+            {currentFormData.zoomLink ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Zoom Link
@@ -2188,30 +2558,25 @@ export function ProgressiveEventForm({
                     {currentFormData.zoomLink}
                   </Text>
                 </YStack>
-              </Card>
-            )}
+              </Card> : null}
 
-            {currentFormData.candidate?.testimony && (
-              <Card padding="$3" backgroundColor="$gray1">
+            {currentFormData.candidate?.testimony ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Candidate Testimony
                   </Text>
                   <Text fontSize="$3">{currentFormData.candidate.testimony}</Text>
                 </YStack>
-              </Card>
-            )}
+              </Card> : null}
 
-            {currentFormData.candidate?.baptismStatement && (
-              <Card padding="$3" backgroundColor="$gray1">
+            {currentFormData.candidate?.baptismStatement ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Baptism Statement
                   </Text>
                   <Text fontSize="$3">{currentFormData.candidate.baptismStatement}</Text>
                 </YStack>
-              </Card>
-            )}
+              </Card> : null}
           </YStack>
         </YStack>
       </Card>
@@ -2221,16 +2586,14 @@ export function ProgressiveEventForm({
           Back to Optional Fields
         </Button>
 
-        {onPreview && (
-          <Button
+        {onPreview ? <Button
             variant="outlined"
             icon={Eye}
-            onPress={() => onPreview(currentFormData)}
+            onPress={() => onPreview({ ...currentFormData, type: currentSelectedType })}
             disabled={isLoading}
           >
             Preview
-          </Button>
-        )}
+          </Button> : null}
 
         <Button icon={Save} onPress={handleSubmit(onSubmit)} disabled={isLoading} theme="blue">
           {isLoading ? 'Saving...' : 'Save Event'}

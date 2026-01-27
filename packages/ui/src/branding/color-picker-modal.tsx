@@ -280,11 +280,9 @@ export function ColorPickerModal({ initialColor, colorName, onColorChange, onClo
             flex={1}
           />
         </XStack>
-        {!isValidInput && (
-          <Text color="$error" fontSize="$2">
+        {!isValidInput ? <Text color="$error" fontSize="$2">
             Please enter a valid hex color (e.g., #FF0000 or #F00)
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
       
       {/* Smart Color Suggestions */}

@@ -13,13 +13,22 @@ import {
 } from '@my/ui'
 import { usePathname, useRouter } from 'solito/navigation'
 import { Menu, X } from '@tamagui/lucide-icons'
-import { useSession } from 'next-auth/react'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 
+type UserSession = {
+  name?: string | null
+  email?: string | null
+  role?: string
+}
+
 type WithNavigationProps = {
   children: React.ReactNode
+  /** User session data passed from platform-specific auth */
+  user?: UserSession | null
+  /** Sign out function passed from platform-specific auth */
+  onSignOut?: () => void
 }
 
 type MainPageType = {
@@ -34,9 +43,8 @@ const pages: MainPageType[] = [
   { path: '/events', label: 'Events' },
 ]
 
-export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
+export const WithNavigation: React.FC<WithNavigationProps> = ({ children, user, onSignOut }) => {
   const media = useMedia()
-  const { data: session } = useSession()
 
   return (
     <XStack flex={1}>
@@ -54,7 +62,7 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
           flex: 1,
         }}
       >
-        {!media.lg ? <MainNavigation session={session} /> : <SmallScreenNav session={session} />}
+        {!media.lg ? <MainNavigation user={user} onSignOut={onSignOut} /> : <SmallScreenNav user={user} onSignOut={onSignOut} />}
       </XStack>
       <XStack
         display={'block'}
@@ -73,9 +81,10 @@ export const WithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
 }
 
 type SmallScreenNavProps = {
-  session: any | null
+  user?: UserSession | null
+  onSignOut?: () => void
 }
-const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
+const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ user, onSignOut }) => {
   const [open, setOpen] = useState(false)
 
   const handleOpenChange = () => {
@@ -97,7 +106,7 @@ const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
       <Dialog.Portal>
         <Dialog.Overlay key="overlay" opacity={10} />
         <Dialog.Content width={'100%'} height={'100%'} borderWidth={1} borderColor={'red'}>
-          <MainNavigation handleOpenChange={handleOpenChange} session={session} />
+          <MainNavigation handleOpenChange={handleOpenChange} user={user} onSignOut={onSignOut} />
           <Dialog.Close>
             <Button position="absolute" top="$3" right="$3" size="$2" circular icon={X} />
           </Dialog.Close>
@@ -109,9 +118,10 @@ const SmallScreenNav: React.FC<SmallScreenNavProps> = ({ session }) => {
 
 type MainNavigationProps = {
   handleOpenChange?: () => void
-  session?: any | null
+  user?: UserSession | null
+  onSignOut?: () => void
 }
-const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, session }) => {
+const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, user, onSignOut }) => {
   const router = useRouter()
   const path = usePathname()
   const linkTo = (route: string) => {
@@ -124,19 +134,13 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
   return (
     <>
       <YStack width={'100%'} paddingTop={24} paddingLeft={10} paddingRight={0} gap={25}>
-        {session && session.user && (
-          <>
+        {user ? <>
             <NavHeading>
-              <Text>Welcome {session.user.name}</Text>
+              <Text>Welcome {user.name}</Text>
             </NavHeading>
-            {(session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
-              <AdminOwnerMenu linkTo={linkTo} path={path} />
-            )}
-            {(session.user.role === ROLES.MEMBER || session.user.role === ROLES.ADMIN || session.user.role === ROLES.OWNER) && (
-              <MemberMenu linkTo={linkTo} path={path} />
-            )}
-          </>
-        )}
+            {(user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <AdminOwnerMenu linkTo={linkTo} path={path} /> : null}
+            {(user.role === ROLES.MEMBER || user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <MemberMenu linkTo={linkTo} path={path} /> : null}
+          </> : null}
         {pages.map((page, i) => (
           <NavigationButtonItem
             key={i}
@@ -145,8 +149,8 @@ const MainNavigation: React.FC<MainNavigationProps> = ({ handleOpenChange, sessi
             active={path === page.path}
           />
         ))}
-        {session && session.user ? (
-          <NavitemLogout handleOpenChange={handleOpenChange} />
+        {user ? (
+          <NavitemLogout handleOpenChange={handleOpenChange} onSignOut={onSignOut} />
         ) : (
           <LogInUser handleOpenChange={handleOpenChange} />
         )}

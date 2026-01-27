@@ -20,7 +20,10 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Check, Save, Users, UserPlus } from '@tamagui/lucide-icons'
+import { Check, Save, Users, UserPlus, Trash2, GripVertical } from '@tamagui/lucide-icons'
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable } from '@dnd-kit/core'
+import { DragMergeDialog } from '@my/ui/src/email/drag-merge-dialog'
+import type { PersonEntry as PersonEntryType } from '@my/ui/src/email/draggable-contact-card'
 
 type DirectoryMember = {
   pkey: string
@@ -62,12 +65,74 @@ type EmailSyncData = {
   sesOnlyEmails: SESContact[]
   sesAllEmails: string[]
   sesMembersEmails: string[]
-  combinedContacts: CombinedContact[]
   totalDirectory: number
   totalSES: number
   totalSESMembers: number
   matched: number
   unmatched: number
+}
+
+// Draggable and Droppable Card Component
+function DraggableDroppableCard({
+  id,
+  children,
+  bgColor,
+  borderColor
+}: {
+  id: string
+  children: React.ReactNode
+  bgColor: string
+  borderColor: string
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id })
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id })
+
+  // Combine refs
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDragRef(node)
+    setDropRef(node)
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        cursor: 'grab',
+        transition: 'border-color 0.2s, background-color 0.2s',
+        position: 'relative'
+      }}
+      {...listeners}
+      {...attributes}
+    >
+      <Card
+        padding="$3"
+        backgroundColor={isOver ? '$blue3' : bgColor}
+        borderWidth={isOver ? 3 : 1}
+        borderColor={isOver ? '$blue10' : borderColor}
+        opacity={isDragging ? 0.5 : 1}
+      >
+        {children}
+        {isOver ? (
+          <XStack
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            backgroundColor="$blue5"
+            opacity={0.3}
+            borderRadius="$3"
+            pointerEvents="none"
+            justifyContent="center"
+            alignItems="center"
+          >
+            <Text color="$blue11" fontWeight="bold" fontSize="$5">Drop to Merge</Text>
+          </XStack>
+        ) : null}
+      </Card>
+    </div>
+  )
 }
 
 export const DirectoryEmailSync: React.FC = () => {
@@ -85,6 +150,13 @@ export const DirectoryEmailSync: React.FC = () => {
   const [newSecondEmail, setNewSecondEmail] = useState('')
   const [syncingMembers, setSyncingMembers] = useState(false)
   const [syncingFromSES, setSyncingFromSES] = useState(false)
+  // Drag and drop state
+  const [draggedPerson, setDraggedPerson] = useState<PersonEntry | null>(null)
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+  const [mergeSource, setMergeSource] = useState<PersonEntry | null>(null)
+  const [mergeTarget, setMergeTarget] = useState<PersonEntry | null>(null)
+  const [isMerging, setIsMerging] = useState(false)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
 
   const syncMembersToSES = async () => {
     if (!confirm('This will subscribe ALL TEE members from the Directory to the SES Members list. Continue?')) {
@@ -370,6 +442,118 @@ export const DirectoryEmailSync: React.FC = () => {
     }
   }
 
+  // Drag and drop handlers
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event
+    const person = combinedSortedList.find(p => {
+      const id = p.baseSkey || `ses-${p.sesOnlyEmail}`
+      return id === active.id
+    })
+    setDraggedPerson(person || null)
+  }, [combinedSortedList])
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    setDraggedPerson(null)
+
+    if (!over || active.id === over.id) return
+
+    // Find source and target persons
+    const source = combinedSortedList.find(p => {
+      const id = p.baseSkey || `ses-${p.sesOnlyEmail}`
+      return id === active.id
+    })
+    const target = combinedSortedList.find(p => {
+      const id = p.baseSkey || `ses-${p.sesOnlyEmail}`
+      return id === over.id
+    })
+
+    if (source && target) {
+      // Cannot merge into SES-only contact
+      if (target.type === 'ses-only') {
+        alert('Cannot merge into an SES-only contact. The target must be a directory entry.')
+        return
+      }
+      setMergeSource(source)
+      setMergeTarget(target)
+      setMergeDialogOpen(true)
+    }
+  }, [combinedSortedList])
+
+  const handleMergeConfirm = async () => {
+    if (!mergeSource || !mergeTarget) return
+
+    setIsMerging(true)
+    try {
+      const response = await fetch('/api/admin/email/consolidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'merge-persons',
+          source: mergeSource,
+          target: mergeTarget
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(`Success! Merged ${result.addedEmails?.length || 0} emails into ${result.targetName}`)
+        setMergeDialogOpen(false)
+        setMergeSource(null)
+        setMergeTarget(null)
+        await loadSyncData()
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error merging contacts:', error)
+      alert('Failed to merge contacts')
+    } finally {
+      setIsMerging(false)
+    }
+  }
+
+  const handleDeleteContact = async (person: PersonEntry) => {
+    const name = person.firstName
+      ? `${person.firstName} ${person.lastName}`
+      : person.sesOnlyEmail || 'Unknown'
+
+    if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis will remove all their directory records.`)) {
+      return
+    }
+
+    const personId = person.baseSkey || `ses-${person.sesOnlyEmail}`
+    setIsDeleting(personId)
+
+    try {
+      const response = await fetch('/api/admin/directory-email-sync/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pkey: 'DIRECTORY#MEMBERS',
+          skey: person.baseSkey || person.sesOnlyEmail,
+          emails: person.emails.map(e => e.email),
+          unsubscribeFromSES: false // Don't auto-unsubscribe, let admin decide
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(`Deleted ${result.deletedRecords} record(s)`)
+        await loadSyncData()
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error deleting contact:', error)
+      alert('Failed to delete contact')
+    } finally {
+      setIsDeleting(null)
+    }
+  }
+
   const createDirectoryEntry = async (email: string) => {
     const names = editingNames[email]
     if (!names?.firstName || !names?.lastName) {
@@ -482,8 +666,7 @@ export const DirectoryEmailSync: React.FC = () => {
                   {loading ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
 
-                {pendingChangesCount > 0 && (
-                  <Button
+                {pendingChangesCount > 0 ? <Button
                     size="$4"
                     icon={batchSaving ? Spinner : Users}
                     onPress={batchUpdateMemberStatus}
@@ -491,8 +674,7 @@ export const DirectoryEmailSync: React.FC = () => {
                     theme="green"
                   >
                     {batchSaving ? 'Saving...' : `Save ${pendingChangesCount} Member Status Change${pendingChangesCount > 1 ? 's' : ''}`}
-                  </Button>
-                )}
+                  </Button> : null}
 
                 <Button
                   size="$4"
@@ -515,8 +697,7 @@ export const DirectoryEmailSync: React.FC = () => {
                 </Button>
               </XStack>
 
-              {syncData && (
-                <>
+              {syncData ? <>
                   <Separator marginVertical="$2" />
                   <XStack gap="$6" flexWrap="wrap">
                     <YStack>
@@ -536,14 +717,12 @@ export const DirectoryEmailSync: React.FC = () => {
                       <Text fontSize="$6" fontWeight="bold" color="$orange10">{syncData.unmatched}</Text>
                     </YStack>
                   </XStack>
-                </>
-              )}
+                </> : null}
             </YStack>
           </Card>
 
           {/* Combined Directory + SES List (Alphabetically Sorted) */}
-          {syncData && (
-            <Card elevate bordered padding="$4" backgroundColor="$background">
+          {syncData ? <Card elevate bordered padding="$4" backgroundColor="$background">
               <YStack gap="$3">
                 <XStack justifyContent="space-between" alignItems="center">
                   <Heading size={5}>All Contacts (Alphabetically Sorted by Email)</Heading>
@@ -552,7 +731,11 @@ export const DirectoryEmailSync: React.FC = () => {
                 <Paragraph fontSize="$3" color="$gray11">
                   Green = In both Directory & SES | Yellow = Directory only (not in SES) | Blue = SES only (not in Directory)
                 </Paragraph>
+                <Paragraph fontSize="$2" color="$blue10" fontStyle="italic">
+                  Drag one contact onto another to merge them. Use the trash icon to delete.
+                </Paragraph>
 
+                <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <ScrollView maxHeight={800}>
                   <YStack gap="$2">
                     {combinedSortedList.map((person, index) => {
@@ -560,6 +743,8 @@ export const DirectoryEmailSync: React.FC = () => {
                       const baseSkey = person.baseSkey || ''
                       const isMemberChecked = isDirectory && memberStatus[baseSkey]
                       const anyInSES = person.emails.some(e => e.inSES)
+                      const personId = isDirectory ? baseSkey : `ses-${person.sesOnlyEmail}`
+                      const isDeletingThis = isDeleting === personId
 
                       // Color coding
                       let bgColor = '$background'
@@ -576,14 +761,17 @@ export const DirectoryEmailSync: React.FC = () => {
                       }
 
                       return (
-                        <Card
-                          key={isDirectory ? baseSkey : `ses-${person.sesOnlyEmail}`}
-                          padding="$3"
-                          backgroundColor={bgColor}
-                          borderWidth={1}
+                        <DraggableDroppableCard
+                          key={personId}
+                          id={personId}
+                          bgColor={bgColor}
                           borderColor={borderColor}
                         >
                           <XStack alignItems="flex-start" gap="$3">
+                            {/* Drag Handle */}
+                            <YStack justifyContent="center" minHeight={40} cursor="grab">
+                              <GripVertical size={16} color="$gray8" />
+                            </YStack>
                             {/* Column 1: Member Checkbox */}
                             <XStack minWidth={100} alignItems="center" gap="$2">
                               {isDirectory ? (
@@ -695,8 +883,7 @@ export const DirectoryEmailSync: React.FC = () => {
                                           size="$3"
                                           disabled={isSaving}
                                         />
-                                        {isEditing && (
-                                          <Button
+                                        {isEditing ? <Button
                                             size="$3"
                                             icon={isSaving ? Spinner : Save}
                                             onPress={() => updateEmail({
@@ -711,16 +898,14 @@ export const DirectoryEmailSync: React.FC = () => {
                                             theme="active"
                                           >
                                             {isSaving ? 'Saving...' : 'Save'}
-                                          </Button>
-                                        )}
+                                          </Button> : null}
                                       </>
                                     ) : (
                                       <>
                                         <Text flex={1} fontSize="$3">
                                           {emailRow.email}
                                         </Text>
-                                        {editingNames[person.sesOnlyEmail!]?.firstName && editingNames[person.sesOnlyEmail!]?.lastName && emailIndex === 0 && (
-                                          <Button
+                                        {editingNames[person.sesOnlyEmail!]?.firstName && editingNames[person.sesOnlyEmail!]?.lastName && emailIndex === 0 ? <Button
                                             size="$3"
                                             icon={saving === `create-${person.sesOnlyEmail}` ? Spinner : UserPlus}
                                             onPress={() => createDirectoryEntry(person.sesOnlyEmail!)}
@@ -728,8 +913,7 @@ export const DirectoryEmailSync: React.FC = () => {
                                             theme="blue"
                                           >
                                             Create Entry
-                                          </Button>
-                                        )}
+                                          </Button> : null}
                                       </>
                                     )}
                                   </XStack>
@@ -737,8 +921,7 @@ export const DirectoryEmailSync: React.FC = () => {
                               })}
 
                               {/* Add Second Email Button (Directory Only) */}
-                              {isDirectory && person.emails.length === 1 && (
-                                <>
+                              {isDirectory && person.emails.length === 1 ? <>
                                   {addingSecondEmail === baseSkey ? (
                                     <XStack gap="$2" alignItems="center">
                                       <Input
@@ -777,20 +960,15 @@ export const DirectoryEmailSync: React.FC = () => {
                                       + Add Second Email
                                     </Button>
                                   )}
-                                </>
-                              )}
+                                </> : null}
                             </YStack>
 
                             {/* Column 4: Status (per email) */}
                             <YStack minWidth={160} gap="$3">
                               {person.emails.map((emailRow, emailIndex) => (
                                 <YStack key={emailRow.skey || emailIndex} gap="$1" alignItems="flex-end" minHeight={40}>
-                                  {isDirectory && (
-                                    <Text fontSize="$1" color="$green10">✓ In Directory</Text>
-                                  )}
-                                  {!isDirectory && (
-                                    <Text fontSize="$1" color="$red10">✗ Not in Directory</Text>
-                                  )}
+                                  {isDirectory ? <Text fontSize="$1" color="$green10">✓ In Directory</Text> : null}
+                                  {!isDirectory ? <Text fontSize="$1" color="$red10">✗ Not in Directory</Text> : null}
                                   {emailRow.inSES ? (
                                     <Text fontSize="$1" color="$green10">✓ In SES</Text>
                                   ) : (
@@ -804,15 +982,42 @@ export const DirectoryEmailSync: React.FC = () => {
                                 </YStack>
                               ))}
                             </YStack>
+
+                            {/* Column 5: Delete Button */}
+                            {isDirectory ? (
+                              <YStack justifyContent="center" minHeight={40}>
+                                <Button
+                                  size="$2"
+                                  icon={isDeletingThis ? Spinner : Trash2}
+                                  backgroundColor="$red9"
+                                  color="white"
+                                  hoverStyle={{ backgroundColor: '$red10' }}
+                                  onPress={() => handleDeleteContact(person)}
+                                  disabled={isDeletingThis}
+                                >
+                                  {isDeletingThis ? '' : 'Delete'}
+                                </Button>
+                              </YStack>
+                            ) : null}
                           </XStack>
-                        </Card>
+                        </DraggableDroppableCard>
                       )
                     })}
                   </YStack>
                 </ScrollView>
+                </DndContext>
               </YStack>
-            </Card>
-          )}
+            </Card> : null}
+
+          {/* Merge Dialog */}
+          <DragMergeDialog
+            open={mergeDialogOpen}
+            onOpenChange={setMergeDialogOpen}
+            source={mergeSource as PersonEntryType | null}
+            target={mergeTarget as PersonEntryType | null}
+            onConfirm={handleMergeConfirm}
+            isLoading={isMerging}
+          />
         </YStack>
       </Section>
     </Wrapper>

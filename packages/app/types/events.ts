@@ -127,6 +127,7 @@ export interface Event extends BaseEvent {
 
   // Funeral fields
   serviceDate?: Date
+  dateOfPassing?: Date | string // Date the person passed away (internal tracking, not displayed in newsletters)
   deceased?: {
     title?: 'Brother' | 'Sister' | 'Mr.' | 'Mrs.' | 'Ms.' | ''
     firstName: string
@@ -139,6 +140,18 @@ export interface Event extends BaseEvent {
     originalName: string
     uploadedAt: Date
   }
+  // Visitation (formerly "viewing")
+  visitationDate?: Date | string // Start date/time for visitation (ISO-8601 or YYYY-MM-DD)
+  visitationEndDate?: Date | string // End date/time for visitation
+  visitationSameLocation?: boolean // Default true - visitation at same location as service
+  viewingDate?: Date | string // @deprecated - use visitationDate (kept for backward compatibility)
+  // Graveside service
+  hasGravesideService?: boolean // Toggle for graveside service
+  gravesideDate?: Date | string // Date/time for graveside service
+  // Timezone for all funeral times
+  eventTimezone?: string // IANA timezone (e.g., 'America/Toronto')
+  // Online obituary link (optional, often provided later by executor)
+  obituaryUrl?: string // URL to official online obituary
 
   // General event fields
   startDate?: Date

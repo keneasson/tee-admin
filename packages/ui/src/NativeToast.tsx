@@ -22,7 +22,7 @@ export const NativeToast = () => {
     >
       <YStack>
         <Toast.Title>{currentToast.title}</Toast.Title>
-        {!!currentToast.message && <Toast.Description>{currentToast.message}</Toast.Description>}
+        {currentToast.message ? <Toast.Description>{currentToast.message}</Toast.Description> : null}
       </YStack>
     </Toast>
   )

@@ -11,7 +11,7 @@ import {
   Mic,
   Trash,
 } from '@tamagui/lucide-icons'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet, AnimatePresence } from 'tamagui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 
@@ -200,11 +200,9 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             </Text>
 
             {/* Secondary info (names, theme, etc) */}
-            {secondaryInfo && (
-              <Text fontSize="$4" color="$color" marginTop="$1">
+            {secondaryInfo ? <Text fontSize="$4" color="$color" marginTop="$1">
                 {secondaryInfo}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
 
           {/* Status badge and Action buttons aligned */}
@@ -223,8 +221,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             </XStack>
             
             {/* Action buttons */}
-            {onPreview && (
-              <Button
+            {onPreview ? <Button
                 size="$3"
                 chromeless
                 icon={Eye}
@@ -233,8 +230,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
                 onPress={() => onPreview(event)}
               >
                 Preview
-              </Button>
-            )}
+              </Button> : null}
             <Button 
               size="$3" 
               variant="outlined" 
@@ -245,8 +241,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             >
               Edit
             </Button>
-            {onDelete && (
-              <Button 
+            {onDelete ? <Button 
                 size="$3" 
                 icon={Trash}
                 borderWidth={2}
@@ -260,8 +255,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
                 onPress={() => setShowDeleteConfirm(true)}
               >
                 Delete
-              </Button>
-            )}
+              </Button> : null}
           </XStack>
         </XStack>
 
@@ -278,35 +272,27 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             event.type === 'wedding' ||
             event.type === 'baptism' ||
             event.type === 'general') &&
-            event.hostingEcclesia && (
-              <XStack space="$1" alignItems="center">
+            event.hostingEcclesia ? <XStack space="$1" alignItems="center">
                 <Church size="$1" color="$gray11" />
                 <Text fontSize="$3" color="$gray11">
                   {event.hostingEcclesia.name}
-                  {event.hostingEcclesia.province && (
-                    <Text color="$gray11"> {event.hostingEcclesia.province}</Text>
-                  )}
+                  {event.hostingEcclesia.province ? `, ${event.hostingEcclesia.province}` : ''}
                 </Text>
-              </XStack>
-            )}
+              </XStack> : null}
 
-          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 && (
-            <XStack space="$1" alignItems="center">
+          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 ? <XStack space="$1" alignItems="center">
               <Mic size="$1" color="$gray11" />
               <Text fontSize="$3" color="$gray11">
                 {event.speakers.length} Speaker{event.speakers.length > 1 ? 's' : ''}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
 
-          {(event as any).location?.name && (
-            <XStack space="$1" alignItems="center">
+          {(event as any).location?.name ? <XStack space="$1" alignItems="center">
               <MapPin size="$1" color="$gray11" />
               <Text fontSize="$3" color="$gray11">
                 {(event as any).location.name}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
           </XStack>
         </XStack>
 
@@ -315,14 +301,12 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             Updated: {new Date(event.updatedAt).toLocaleDateString()}
           </Text>
 
-          {event.status === 'published' && (
-            <XStack space="$1" alignItems="center">
+          {event.status === 'published' ? <XStack space="$1" alignItems="center">
               <Circle size="$0.5" backgroundColor="$green10" />
               <Text fontSize="$2" color="$green11" fontWeight="500">
                 Published
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
         </XStack>
       </YStack>
       
@@ -405,6 +389,19 @@ export function EventListSelector({
   )
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
 
+  // Pagination - show 10 events at a time per section
+  const EVENTS_PER_PAGE = 10
+  const [draftVisible, setDraftVisible] = useState(EVENTS_PER_PAGE)
+  const [publishedVisible, setPublishedVisible] = useState(EVENTS_PER_PAGE)
+  const [otherVisible, setOtherVisible] = useState(EVENTS_PER_PAGE)
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setDraftVisible(EVENTS_PER_PAGE)
+    setPublishedVisible(EVENTS_PER_PAGE)
+    setOtherVisible(EVENTS_PER_PAGE)
+  }, [searchTerm, filterType, filterStatus])
+
   // Handle delete with animation
   const handleDelete = (event: Event) => {
     // Start the collapse animation
@@ -470,10 +467,27 @@ export function EventListSelector({
     return true
   })
 
-  // Group events by status for better organization
-  const draftEvents = filteredEvents.filter((e) => e.status === 'draft')
-  const publishedEvents = filteredEvents.filter((e) => e.status === 'published')
-  const otherEvents = filteredEvents.filter((e) => e.status !== 'draft' && e.status !== 'published')
+  // Sort events by updatedAt descending (newest first)
+  const sortByDate = (a: Event, b: Event) => {
+    const dateA = new Date(a.updatedAt).getTime()
+    const dateB = new Date(b.updatedAt).getTime()
+    return dateB - dateA // Descending order
+  }
+
+  // Group events by status for better organization, sorted by date descending (newest first)
+  const draftEvents = filteredEvents.filter((e) => e.status === 'draft').sort(sortByDate)
+  const publishedEvents = filteredEvents.filter((e) => e.status === 'published').sort(sortByDate)
+  const otherEvents = filteredEvents.filter((e) => e.status !== 'draft' && e.status !== 'published').sort(sortByDate)
+
+  // Paginated views - show only up to the visible count
+  const visibleDraftEvents = draftEvents.slice(0, draftVisible)
+  const visiblePublishedEvents = publishedEvents.slice(0, publishedVisible)
+  const visibleOtherEvents = otherEvents.slice(0, otherVisible)
+
+  // Check if there are more events to load
+  const hasMoreDrafts = draftEvents.length > draftVisible
+  const hasMorePublished = publishedEvents.length > publishedVisible
+  const hasMoreOther = otherEvents.length > otherVisible
 
   return (
     <YStack space="$4">
@@ -573,79 +587,94 @@ export function EventListSelector({
       ) : (
         <YStack space="$4">
           {/* Draft Events Section */}
-          {draftEvents.length > 0 && (
-            <YStack space="$3">
+          {draftEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
                 <Circle size="$1" backgroundColor="$gray8" />
                 <Text fontSize="$5" fontWeight="600" color="$gray11">
                   Draft Events ({draftEvents.length})
                 </Text>
               </XStack>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {draftEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onSelect={onSelect}
-                      onPreview={onPreview}
-                      onDelete={handleDelete}
-                      isDeleting={deletingEventId === event.id}
-                    />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+              <YStack space="$3">
+                {visibleDraftEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreDrafts ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({draftEvents.length - draftVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
 
           {/* Published Events Section */}
-          {publishedEvents.length > 0 && (
-            <YStack space="$3">
+          {publishedEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
                 <Circle size="$1" backgroundColor="$green8" />
                 <Text fontSize="$5" fontWeight="600" color="$green11">
                   Published Events ({publishedEvents.length})
                 </Text>
               </XStack>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {publishedEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onSelect={onSelect}
-                      onPreview={onPreview}
-                      onDelete={handleDelete}
-                      isDeleting={deletingEventId === event.id}
-                    />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+              <YStack space="$3">
+                {visiblePublishedEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMorePublished ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setPublishedVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({publishedEvents.length - publishedVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
 
           {/* Other Events Section */}
-          {otherEvents.length > 0 && (
-            <YStack space="$3">
+          {otherEvents.length > 0 ? <YStack space="$3">
               <Text fontSize="$5" fontWeight="600">
                 Other Events ({otherEvents.length})
               </Text>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {otherEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onSelect={onSelect}
-                      onPreview={onPreview}
-                      onDelete={handleDelete}
-                      isDeleting={deletingEventId === event.id}
-                    />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+              <YStack space="$3">
+                {visibleOtherEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreOther ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setOtherVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({otherEvents.length - otherVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
         </YStack>
       )}
     </YStack>

@@ -114,16 +114,14 @@ export function ColorPreviewSystem({ mode, colorChanges, onResetChanges, onApply
             <Text fontSize="$3" color="$textSecondary">
               {changeCount} {changeCount === 1 ? 'change' : 'changes'} pending
             </Text>
-            {hasChanges && (
-              <>
+            {hasChanges ? <>
                 <Button size="$3" variant="outlined" onPress={onResetChanges}>
                   Reset
                 </Button>
                 <Button size="$3" backgroundColor="$success" color="$successForeground" onPress={onApplyChanges}>
                   Apply Changes
                 </Button>
-              </>
-            )}
+              </> : null}
           </XStack>
         </XStack>
         
@@ -161,8 +159,7 @@ export function ColorPreviewSystem({ mode, colorChanges, onResetChanges, onApply
       </YStack>
       
       {/* Changed Colors Summary */}
-      {hasChanges && (
-        <YStack gap="$2" backgroundColor="$backgroundSecondary" padding="$3" borderRadius="$3">
+      {hasChanges ? <YStack gap="$2" backgroundColor="$backgroundSecondary" padding="$3" borderRadius="$3">
           <H4>Pending Changes</H4>
           <YStack gap="$2">
             {Object.entries(colorChanges).map(([token, newColor]) => (
@@ -193,13 +190,11 @@ export function ColorPreviewSystem({ mode, colorChanges, onResetChanges, onApply
               </XStack>
             ))}
           </YStack>
-        </YStack>
-      )}
+        </YStack> : null}
       
       {/* Preview Content */}
       <ScrollView maxHeight={600}>
-        {previewMode === 'split' && (
-          <XStack gap="$4">
+        {previewMode === 'split' ? <XStack gap="$4">
             <YStack flex={1} gap="$3">
               <SiteExamples colors={originalColors} title="Current Colors" />
             </YStack>
@@ -207,21 +202,15 @@ export function ColorPreviewSystem({ mode, colorChanges, onResetChanges, onApply
             <YStack flex={1} gap="$3">
               <SiteExamples colors={modifiedColors} title="With Your Changes" />
             </YStack>
-          </XStack>
-        )}
+          </XStack> : null}
         
-        {previewMode === 'before' && (
-          <SiteExamples colors={originalColors} title="Current Colors" />
-        )}
+        {previewMode === 'before' ? <SiteExamples colors={originalColors} title="Current Colors" /> : null}
         
-        {previewMode === 'after' && (
-          <SiteExamples colors={modifiedColors} title="Preview with Changes" />
-        )}
+        {previewMode === 'after' ? <SiteExamples colors={modifiedColors} title="Preview with Changes" /> : null}
       </ScrollView>
       
       {/* Usage Examples */}
-      {hasChanges && (
-        <YStack gap="$2" backgroundColor="$backgroundTertiary" padding="$3" borderRadius="$3">
+      {hasChanges ? <YStack gap="$2" backgroundColor="$backgroundTertiary" padding="$3" borderRadius="$3">
           <H4>Implementation Notes</H4>
           <Text fontSize="$3" color="$textSecondary">
             When you apply these changes, they will be saved to your brand configuration. 
@@ -234,17 +223,14 @@ export function ColorPreviewSystem({ mode, colorChanges, onResetChanges, onApply
               </Text>
             ))}
           </YStack>
-        </YStack>
-      )}
+        </YStack> : null}
       
-      {!hasChanges && (
-        <YStack gap="$2" backgroundColor="$backgroundSecondary" padding="$4" borderRadius="$3" alignItems="center">
+      {!hasChanges ? <YStack gap="$2" backgroundColor="$backgroundSecondary" padding="$4" borderRadius="$3" alignItems="center">
           <Text fontSize="$4" color="$textSecondary">No changes yet</Text>
           <Text fontSize="$3" color="$textTertiary" textAlign="center">
             Use the color picker above to modify colors and see live preview here.
           </Text>
-        </YStack>
-      )}
+        </YStack> : null}
     </YStack>
   )
 }

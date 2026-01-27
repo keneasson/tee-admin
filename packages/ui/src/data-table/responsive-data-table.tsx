@@ -215,8 +215,7 @@ export function ResponsiveDataTable<TData>({
                   >
                     <XStack gap="$2" alignItems="center">
                       {/* Expand/Collapse button only on first cell if row can expand */}
-                      {cellIndex === 0 && row.getCanExpand() && (
-                        <Button
+                      {cellIndex === 0 && row.getCanExpand() ? <Button
                           size="$1"
                           variant="outlined"
                           onPress={row.getToggleExpandedHandler()}
@@ -228,8 +227,7 @@ export function ResponsiveDataTable<TData>({
                           <Text fontSize="$2" color={colors.textSecondary}>
                             {row.getIsExpanded() ? '▼' : '▶'}
                           </Text>
-                        </Button>
-                      )}
+                        </Button> : null}
                       
                       <View maxWidth="100%" overflow="hidden" flex={1}>
                         <Text 
@@ -246,8 +244,7 @@ export function ResponsiveDataTable<TData>({
               </XStack>
               
               {/* Expanded Secondary Row */}
-              {row.getIsExpanded() && renderSubComponent && (
-                <XStack
+              {row.getIsExpanded() && renderSubComponent ? <XStack
                   backgroundColor={colors.backgroundSecondary}
                   borderTopWidth={1}
                   borderTopColor={colors.border + '40'}
@@ -256,8 +253,7 @@ export function ResponsiveDataTable<TData>({
                   <View width="100%">
                     {renderSubComponent({ row })}
                   </View>
-                </XStack>
-              )}
+                </XStack> : null}
             </React.Fragment>
           ))}
         </View>

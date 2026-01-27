@@ -1,13 +1,36 @@
 'use client'
 
 import React from 'react'
-import { SessionProvider } from 'next-auth/react'
+import { SessionProvider, useSession, signOut } from 'next-auth/react'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { config } from '@my/ui'
 import { ThemeProvider, ThemeAwareProvider } from '@my/ui'
 
 if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
+}
+
+// Inner component that can use useSession (inside SessionProvider)
+function NavigationWithAuth({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession()
+
+  const user = session?.user
+    ? {
+        name: session.user.name,
+        email: session.user.email,
+        role: (session.user as any)?.role,
+      }
+    : null
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/' })
+  }
+
+  return (
+    <FeatureGatedNavigation user={user} onSignOut={handleSignOut}>
+      {children}
+    </FeatureGatedNavigation>
+  )
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -37,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider defaultTheme="light">
           <ThemeAwareProvider config={config}>
             <SessionProvider>
-              <FeatureGatedNavigation>{children}</FeatureGatedNavigation>
+              <NavigationWithAuth>{children}</NavigationWithAuth>
             </SessionProvider>
           </ThemeAwareProvider>
         </ThemeProvider>

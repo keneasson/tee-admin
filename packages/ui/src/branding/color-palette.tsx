@@ -79,8 +79,7 @@ function ColorCard({ name, value, contrast, isAccessible, onEditClick, isEditing
           </Text>
         </YStack>
         
-        {isAccessible !== undefined && (
-          <XStack alignItems="center" gap="$2">
+        {isAccessible !== undefined ? <XStack alignItems="center" gap="$2">
             <View 
               width={8} 
               height={8} 
@@ -93,11 +92,9 @@ function ColorCard({ name, value, contrast, isAccessible, onEditClick, isEditing
             >
               {isAccessible ? 'AA' : 'Fail'}
             </Text>
-          </XStack>
-        )}
+          </XStack> : null}
         
-        {onEditClick && (
-          <View 
+        {onEditClick ? <View 
             backgroundColor={isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}
             paddingHorizontal="$2"
             paddingVertical="$1"
@@ -110,18 +107,15 @@ function ColorCard({ name, value, contrast, isAccessible, onEditClick, isEditing
             >
               {isEditing ? 'EDITING' : 'CLICK TO EDIT'}
             </Text>
-          </View>
-        )}
+          </View> : null}
         
-        {copied && (
-          <Text 
+        {copied ? <Text 
             fontSize="$2" 
             color={isLight ? '#00AA00' : '#00FF00'}
             fontWeight="600"
           >
             Copied!
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
     </YStack>
   )
@@ -287,13 +281,11 @@ export function ColorPalette() {
             >
               Light Colors
             </Button>
-            {Object.keys(colorChanges.light).length > 0 && (
-              <View backgroundColor="$warning" padding="$1" borderRadius="$2">
+            {Object.keys(colorChanges.light).length > 0 ? <View backgroundColor="$warning" padding="$1" borderRadius="$2">
                 <Text fontSize="$2" color="$warningForeground" fontWeight="600">
                   {Object.keys(colorChanges.light).length}
                 </Text>
-              </View>
-            )}
+              </View> : null}
           </XStack>
           
           <XStack alignItems="center" gap="$2">
@@ -306,13 +298,11 @@ export function ColorPalette() {
             >
               Dark Colors
             </Button>
-            {Object.keys(colorChanges.dark).length > 0 && (
-              <View backgroundColor="$warning" padding="$1" borderRadius="$2">
+            {Object.keys(colorChanges.dark).length > 0 ? <View backgroundColor="$warning" padding="$1" borderRadius="$2">
                 <Text fontSize="$2" color="$warningForeground" fontWeight="600">
                   {Object.keys(colorChanges.dark).length}
                 </Text>
-              </View>
-            )}
+              </View> : null}
           </XStack>
           
           <View width={20} />
@@ -331,36 +321,30 @@ export function ColorPalette() {
             {isEditorMode ? 'Exit Editor' : 'Color Editor'}
           </Button>
           
-          {Object.keys(colorChanges[mode]).length > 0 && (
-            <Text fontSize="$3" color="$accent" fontWeight="600">
+          {Object.keys(colorChanges[mode]).length > 0 ? <Text fontSize="$3" color="$accent" fontWeight="600">
               {Object.keys(colorChanges[mode]).length} changes pending
-            </Text>
-          )}
+            </Text> : null}
         </XStack>
       </YStack>
       
       <Separator />
       
       {/* Color Picker Modal */}
-      {editingColor && (
-        <ColorPickerModal
+      {editingColor ? <ColorPickerModal
           isOpen={!!editingColor}
           initialColor={getDisplayColor(editingColor, (currentColors as any)[editingColor])}
           colorName={editingColor}
           onColorChange={handleColorChange}
           onClose={() => setEditingColor(null)}
-        />
-      )}
+        /> : null}
       
       {/* Color Preview System */}
-      {isEditorMode && Object.keys(colorChanges[mode]).length > 0 && (
-        <ColorPreviewSystem
+      {isEditorMode && Object.keys(colorChanges[mode]).length > 0 ? <ColorPreviewSystem
           mode={mode}
           colorChanges={colorChanges[mode]}
           onResetChanges={handleResetChanges}
           onApplyChanges={handleApplyChanges}
-        />
-      )}
+        /> : null}
       
       {/* Theme Preview Container */}
       <YStack gap="$4">

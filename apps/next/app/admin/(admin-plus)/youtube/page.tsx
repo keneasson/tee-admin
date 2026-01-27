@@ -41,6 +41,11 @@ export default function AdminYouTubePage() {
     templateBroadcastId: '',
   })
 
+  // Quick Create state
+  const [quickCreateCount, setQuickCreateCount] = useState(4)
+  const [quickCreating, setQuickCreating] = useState(false)
+  const [quickCreateProgress, setQuickCreateProgress] = useState<{ current: number; total: number; results: Array<{ date: string; success: boolean; error?: string }> } | null>(null)
+
   // Check OAuth authorization status
   useEffect(() => {
     if (hasAccess) {
@@ -178,6 +183,17 @@ export default function AdminYouTubePage() {
     try {
       setLoadingStreams(true)
       const response = await fetch(`/api/youtube/livestreams?status=${streamFilter}&maxResults=50`)
+
+      // Handle auth errors - token may have expired and refresh failed
+      if (response.status === 401) {
+        const data = await response.json()
+        console.error('YouTube auth error:', data.message)
+        setIsAuthorized(false)
+        setSelectedChannel(null)
+        alert('YouTube authorization expired. Please re-authorize to continue.')
+        return
+      }
+
       if (!response.ok) {
         throw new Error('Failed to fetch livestreams')
       }
@@ -323,6 +339,177 @@ export default function AdminYouTubePage() {
     nextSunday.setDate(today.getDate() + ((7 - today.getDay()) % 7 || 7))
     nextSunday.setHours(11, 0, 0, 0) // 11:00 AM for Memorial service
     return nextSunday.toISOString().slice(0, 16) // Format for datetime-local input
+  }
+
+  // Get upcoming Sundays for Quick Create
+  const getUpcomingSundays = (count: number): Date[] => {
+    const sundays: Date[] = []
+    const today = new Date()
+
+    // Find next Sunday
+    let nextSunday = new Date(today)
+    const daysUntilSunday = (7 - today.getDay()) % 7
+    nextSunday.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday))
+
+    // Set to 9:30 AM Toronto time
+    // Create date in Toronto timezone
+    nextSunday.setHours(9, 30, 0, 0)
+
+    for (let i = 0; i < count; i++) {
+      const sunday = new Date(nextSunday)
+      sunday.setDate(nextSunday.getDate() + (i * 7))
+      sundays.push(sunday)
+    }
+
+    return sundays
+  }
+
+  // Format date for stream title: "Sunday Memorial Service - December 8, 2024"
+  const formatStreamTitle = (date: Date): string => {
+    const options: Intl.DateTimeFormatOptions = {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'America/Toronto',
+    }
+    const dateStr = date.toLocaleDateString('en-US', options)
+    return `Sunday Memorial Service - ${dateStr}`
+  }
+
+  // Format date for display in preview
+  const formatPreviewDate = (date: Date): string => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'America/Toronto',
+    })
+  }
+
+  // Convert local date to ISO string for YouTube API (in Toronto timezone)
+  const toTorontoISO = (date: Date): string => {
+    // Create a date string that represents 9:30 AM in Toronto
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    // YouTube expects ISO 8601 format
+    // For Toronto (EST/EDT), we'll use the offset
+    // During EST: -05:00, during EDT: -04:00
+    // Let's use a simple approach - just send the local time and let YouTube handle it
+    return `${year}-${month}-${day}T09:30:00-05:00`
+  }
+
+  // Get most recent completed stream for template
+  const getMostRecentCompletedStreamId = (): string | undefined => {
+    // Find a completed stream to use as template
+    const completedStreams = livestreams.filter(s => s.status === 'complete')
+    if (completedStreams.length > 0) {
+      // Sort by date descending and get the most recent
+      const sorted = completedStreams.sort((a, b) =>
+        new Date(b.scheduledStartTime).getTime() - new Date(a.scheduledStartTime).getTime()
+      )
+      return sorted[0]?.id
+    }
+    // If no completed streams in current view, check upcoming for any existing stream
+    const anyStream = livestreams[0]
+    return anyStream?.boundStreamId ? anyStream.id : undefined
+  }
+
+  // Quick Create handler - creates multiple streams
+  const handleQuickCreate = async () => {
+    const sundays = getUpcomingSundays(quickCreateCount)
+
+    // Check for existing streams on these dates
+    const existingDates = livestreams.map(s => {
+      const d = new Date(s.scheduledStartTime)
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    })
+
+    const sundaysToCreate = sundays.filter(sunday => {
+      const key = `${sunday.getFullYear()}-${sunday.getMonth()}-${sunday.getDate()}`
+      return !existingDates.includes(key)
+    })
+
+    if (sundaysToCreate.length === 0) {
+      alert('All selected Sundays already have streams scheduled!')
+      return
+    }
+
+    if (sundaysToCreate.length < sundays.length) {
+      const skipped = sundays.length - sundaysToCreate.length
+      if (!confirm(`${skipped} Sunday(s) already have streams. Create ${sundaysToCreate.length} new stream(s)?`)) {
+        return
+      }
+    }
+
+    setQuickCreating(true)
+    setQuickCreateProgress({ current: 0, total: sundaysToCreate.length, results: [] })
+
+    // Get template from most recent stream
+    const templateId = getMostRecentCompletedStreamId()
+
+    const results: Array<{ date: string; success: boolean; error?: string }> = []
+
+    for (let i = 0; i < sundaysToCreate.length; i++) {
+      const sunday = sundaysToCreate[i]
+      const title = formatStreamTitle(sunday)
+      const scheduledTime = toTorontoISO(sunday)
+      const dateStr = formatPreviewDate(sunday)
+
+      setQuickCreateProgress(prev => prev ? { ...prev, current: i + 1 } : null)
+
+      try {
+        const response = await fetch('/api/youtube/livestreams', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description: 'Join us for our weekly Memorial service. Live from Toronto East Christadelphians.',
+            scheduledStartTime: scheduledTime,
+            privacyStatus: 'public',
+            templateBroadcastId: templateId,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.message || 'Failed to create stream')
+        }
+
+        results.push({ date: dateStr, success: true })
+      } catch (error) {
+        results.push({
+          date: dateStr,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+
+      setQuickCreateProgress(prev => prev ? { ...prev, results: [...results] } : null)
+
+      // Small delay between requests to avoid rate limiting
+      if (i < sundaysToCreate.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+    }
+
+    setQuickCreating(false)
+
+    // Show summary
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.filter(r => !r.success).length
+
+    alert(
+      `Quick Create Complete!\n\n` +
+      `✅ Created: ${successCount}\n` +
+      `❌ Failed: ${failCount}\n\n` +
+      (failCount > 0 ? `Errors:\n${results.filter(r => !r.success).map(r => `${r.date}: ${r.error}`).join('\n')}` : '')
+    )
+
+    // Reload livestreams
+    await loadLivestreams()
+    setActiveTab('list')
   }
 
   // Show loading state during hydration, auth check, or when redirecting
@@ -496,7 +683,7 @@ export default function AdminYouTubePage() {
           <Tabs.Tab value="create" flex={1} disabled={!isAuthorized || !selectedChannel}>
             <XStack space="$2" alignItems="center">
               <Plus size="$1" />
-              <Text>Create New Stream</Text>
+              <Text>Quick Create</Text>
             </XStack>
           </Tabs.Tab>
         </Tabs.List>
@@ -696,110 +883,111 @@ export default function AdminYouTubePage() {
           ) : (
             <Card padding="$4" borderWidth={1} borderColor="$borderColor">
               <YStack space="$4">
-                <H3>Create New YouTube Livestream</H3>
+                <H3>Quick Create Upcoming Streams</H3>
 
                 <Text color="$textSecondary">
-                  This will create a new livestream on YouTube and automatically update the Memorial schedule in Google Sheets.
+                  Automatically create Sunday Memorial Service streams. Each stream starts at 9:30 AM Toronto time.
                 </Text>
 
-              <YStack space="$2">
-                <Text fontWeight="600">Title *</Text>
-                <Input
-                  value={formData.title}
-                  onChangeText={(text) => setFormData({ ...formData, title: text })}
-                  placeholder="Sunday Memorial Service - October 20, 2024"
-                />
-              </YStack>
+                {/* Number of Sundays selector */}
+                <YStack space="$2">
+                  <Text fontWeight="600">Number of Sundays to create:</Text>
+                  <XStack space="$2">
+                    {[2, 4, 6, 8].map((num) => (
+                      <Button
+                        key={num}
+                        size="$3"
+                        backgroundColor={quickCreateCount === num ? '$blue9' : '$gray5'}
+                        hoverStyle={{ backgroundColor: quickCreateCount === num ? '$blue10' : '$gray6' }}
+                        onPress={() => setQuickCreateCount(num)}
+                      >
+                        {num} weeks
+                      </Button>
+                    ))}
+                  </XStack>
+                </YStack>
 
-              <YStack space="$2">
-                <Text fontWeight="600">Description</Text>
-                <Input
-                  value={formData.description}
-                  onChangeText={(text) => setFormData({ ...formData, description: text })}
-                  placeholder="Join us for our Sunday Memorial service..."
-                  multiline
-                  numberOfLines={3}
-                />
-              </YStack>
+                {/* Preview of streams to be created */}
+                <YStack space="$2">
+                  <Text fontWeight="600">Preview:</Text>
+                  <Card backgroundColor="$gray2" padding="$3" borderRadius="$3">
+                    <YStack space="$2">
+                      {getUpcomingSundays(quickCreateCount).map((sunday, index) => {
+                        const dateKey = `${sunday.getFullYear()}-${sunday.getMonth()}-${sunday.getDate()}`
+                        const existingStream = livestreams.find(s => {
+                          const d = new Date(s.scheduledStartTime)
+                          return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === dateKey
+                        })
 
-              <YStack space="$2">
-                <Text fontWeight="600">Scheduled Start Time *</Text>
-                <XStack space="$2" alignItems="center">
-                  <Input
-                    flex={1}
-                    value={formData.scheduledStartTime}
-                    onChangeText={(text) => setFormData({ ...formData, scheduledStartTime: text })}
-                    placeholder={getNextSunday()}
-                  />
-                  <Button
-                    size="$3"
-                    variant="outlined"
-                    onPress={() => setFormData({ ...formData, scheduledStartTime: getNextSunday() })}
-                  >
-                    Next Sunday
-                  </Button>
-                </XStack>
-                <Text fontSize="$2" color="$textSecondary">
-                  Format: YYYY-MM-DDTHH:mm (e.g., {getNextSunday()})
-                </Text>
-              </YStack>
+                        return (
+                          <XStack key={index} space="$3" alignItems="center">
+                            {existingStream ? (
+                              <CheckCircle size="$1" color="$green10" />
+                            ) : (
+                              <Calendar size="$1" color="$blue10" />
+                            )}
+                            <YStack flex={1}>
+                              <Text fontWeight="500">
+                                {formatStreamTitle(sunday)}
+                              </Text>
+                              <Text fontSize="$2" color="$textSecondary">
+                                {formatPreviewDate(sunday)} at 9:30 AM EST
+                              </Text>
+                            </YStack>
+                            {existingStream && (
+                              <Text fontSize="$2" color="$green10" fontWeight="600">
+                                Already exists
+                              </Text>
+                            )}
+                          </XStack>
+                        )
+                      })}
+                    </YStack>
+                  </Card>
+                </YStack>
 
-              <YStack space="$2">
-                <Text fontWeight="600">Privacy Status</Text>
-                <XStack space="$2">
-                  {(['public', 'unlisted', 'private'] as const).map((status) => (
-                    <Button
-                      key={status}
-                      size="$3"
-                      variant={formData.privacyStatus === status ? 'outlined' : 'outlined'}
-                      backgroundColor={formData.privacyStatus === status ? '$blue5' : undefined}
-                      onPress={() => setFormData({ ...formData, privacyStatus: status })}
-                    >
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </Button>
-                  ))}
-                </XStack>
-              </YStack>
+                {/* Progress indicator */}
+                {quickCreateProgress && (
+                  <Card backgroundColor="$blue2" padding="$3" borderRadius="$3" borderWidth={1} borderColor="$blue8">
+                    <YStack space="$2">
+                      <Text fontWeight="600" color="$blue11">
+                        Creating streams... {quickCreateProgress.current} / {quickCreateProgress.total}
+                      </Text>
+                      {quickCreateProgress.results.map((result, index) => (
+                        <XStack key={index} space="$2" alignItems="center">
+                          {result.success ? (
+                            <CheckCircle size="$1" color="$green10" />
+                          ) : (
+                            <AlertCircle size="$1" color="$red10" />
+                          )}
+                          <Text color={result.success ? '$green11' : '$red11'}>
+                            {result.date}: {result.success ? 'Created' : result.error}
+                          </Text>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  </Card>
+                )}
 
-              <YStack space="$2">
-                <Text fontWeight="600">Template Broadcast ID (Optional)</Text>
-                <Input
-                  value={formData.templateBroadcastId}
-                  onChangeText={(text) => setFormData({ ...formData, templateBroadcastId: text })}
-                  placeholder="Copy encoder settings from previous stream"
-                />
-                <Text fontSize="$2" color="$textSecondary">
-                  Enter the broadcast ID from a previous stream to reuse the same encoder settings
-                </Text>
-              </YStack>
-
-              <XStack space="$2" marginTop="$4">
+                {/* Create button */}
                 <Button
-                  flex={1}
-                  onPress={handleCreateLivestream as any}
-                  disabled={creating || !formData.title || !formData.scheduledStartTime}
-                  icon={creating ? undefined : Plus}
+                  size="$5"
+                  backgroundColor="$blue9"
+                  hoverStyle={{ backgroundColor: '$blue10' }}
+                  pressStyle={{ backgroundColor: '$blue8' }}
+                  onPress={handleQuickCreate}
+                  disabled={quickCreating}
+                  icon={quickCreating ? undefined : Plus}
                 >
-                  {creating ? 'Creating...' : 'Create Livestream'}
+                  {quickCreating ? `Creating... ${quickCreateProgress?.current || 0}/${quickCreateProgress?.total || 0}` : `Create ${quickCreateCount} Streams`}
                 </Button>
-                <Button
-                  variant="outlined"
-                  onPress={() => {
-                    setFormData({
-                      title: '',
-                      description: '',
-                      scheduledStartTime: '',
-                      privacyStatus: 'public',
-                      templateBroadcastId: '',
-                    })
-                  }}
-                  disabled={creating}
-                >
-                  Reset
-                </Button>
-              </XStack>
-            </YStack>
-          </Card>
+
+                <Text fontSize="$2" color="$textSecondary" textAlign="center">
+                  Streams will be created with title format: "Sunday Memorial Service - [Date]"
+                  {'\n'}and will automatically sync to Google Sheets.
+                </Text>
+              </YStack>
+            </Card>
           )}
         </Tabs.Content>
       </Tabs>

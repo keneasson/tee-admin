@@ -48,7 +48,7 @@ export const PasswordInput = <T extends FieldValues>({
         return (
           <FormFieldset>
             <YStack gap="$2">
-              {label && <Label htmlFor={id}>{label}</Label>}
+              {label ? <Label htmlFor={id}>{label}</Label> : null}
               <XStack position="relative" alignItems="center">
                 <Input
                   ref={ref}
@@ -74,11 +74,9 @@ export const PasswordInput = <T extends FieldValues>({
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 />
               </XStack>
-              {error && (
-                <Text fontSize="$3" color="$red10">
+              {error ? <Text fontSize="$3" color="$red10">
                   {error.message}
-                </Text>
-              )}
+                </Text> : null}
             </YStack>
           </FormFieldset>
         )

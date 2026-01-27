@@ -118,8 +118,7 @@ export function FeaturePlayground() {
                     <Text fontWeight="600" fontSize="$3">
                       {key.replace(/_/g, ' ')}
                     </Text>
-                    {hasLocalOverride && (
-                      <View
+                    {hasLocalOverride ? <View
                         backgroundColor="$warning"
                         paddingHorizontal="$1"
                         paddingVertical="$0.5"
@@ -128,8 +127,7 @@ export function FeaturePlayground() {
                         <Text color="$warningForeground" fontSize="$1">
                           OVERRIDE
                         </Text>
-                      </View>
-                    )}
+                      </View> : null}
                   </XStack>
                   <Text color="$textSecondary" fontSize="$2">
                     {config.description}

@@ -567,15 +567,13 @@ export const EmailLists: React.FC = () => {
                     )}
                   </Button>
 
-                  {searchResults && (
-                    <Button
+                  {searchResults ? <Button
                       size="$4"
                       onPress={handleClearSearch}
                       theme="gray"
                     >
                       Clear Results
-                    </Button>
-                  )}
+                    </Button> : null}
                 </XStack>
 
                 <XStack gap="$4" alignItems="center" flexWrap="wrap">
@@ -609,8 +607,7 @@ export const EmailLists: React.FC = () => {
 
                 {/* Status Display */}
                 <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                  {!searchResults && (
-                    <Button
+                  {!searchResults ? <Button
                       size="$4"
                       icon={totalContacts === 0 ? Download : RefreshCw}
                       onPress={() => loadContacts(true)}
@@ -627,8 +624,7 @@ export const EmailLists: React.FC = () => {
                       ) : (
                         <Text>Refresh All Contacts</Text>
                       )}
-                    </Button>
-                  )}
+                    </Button> : null}
 
                   <XStack flex={1} />
 

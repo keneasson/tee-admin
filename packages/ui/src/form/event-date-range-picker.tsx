@@ -119,10 +119,9 @@ function CalendarGrid({
               </React.Fragment>
             ))}
             {/* Fill empty slots at end of month */}
-            {weekIndex === Math.ceil(days.length / 7) - 1 && 
-             Array.from({ length: 7 - (days.length % 7 || 7) }, (_, emptyIndex) => (
+            {weekIndex === Math.ceil(days.length / 7) - 1 ? Array.from({ length: 7 - (days.length % 7 || 7) }, (_, emptyIndex) => (
                <YStack key={`end-empty-${emptyIndex}`} width="$2.5" height="$2.5" />
-             ))
+             )) : null
             }
           </XStack>
         ))}
@@ -467,7 +466,7 @@ export function EventDateRangePicker<T extends FieldValues>({
     <YStack gap="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
       
       {/* Hide Times Checkbox */}
@@ -540,23 +539,19 @@ export function EventDateRangePicker<T extends FieldValues>({
               />
 
               {/* Time pickers */}
-              {!hidesTimes && (
-                <YStack gap="$3">
+              {!hidesTimes ? <YStack gap="$3">
                   <TimePicker
                     label="Start Time"
                     value={startTime}
                     onChange={setStartTime}
                   />
                   
-                  {(!allowSingleDay || (tempEndDate && tempStartDate.toDateString() !== tempEndDate.toDateString())) && (
-                    <TimePicker
+                  {(!allowSingleDay || (tempEndDate && tempStartDate.toDateString() !== tempEndDate.toDateString())) ? <TimePicker
                       label="End Time"
                       value={endTime}
                       onChange={setEndTime}
-                    />
-                  )}
-                </YStack>
-              )}
+                    /> : null}
+                </YStack> : null}
 
               {/* Action buttons */}
               <XStack gap="$2" justifyContent="flex-end">
@@ -578,11 +573,9 @@ export function EventDateRangePicker<T extends FieldValues>({
         </Popover.Content>
       </Popover>
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

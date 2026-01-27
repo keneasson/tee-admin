@@ -112,11 +112,9 @@ export function EventStatusIndicator({
           {archiveConfig.text}
         </Text>
         
-        {showDetails && (
-          <Text fontSize="$2" color="$gray11">
+        {showDetails ? <Text fontSize="$2" color="$gray11">
             ({archiveConfig.description})
-          </Text>
-        )}
+          </Text> : null}
       </XStack>
     )
   }
@@ -137,11 +135,9 @@ export function EventStatusIndicator({
         {statusConfig.text}
       </Text>
       
-      {showDetails && (
-        <Text fontSize="$2" color="$gray11">
+      {showDetails ? <Text fontSize="$2" color="$gray11">
           ({statusConfig.description})
-        </Text>
-      )}
+        </Text> : null}
     </XStack>
   )
 }

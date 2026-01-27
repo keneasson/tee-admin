@@ -39,6 +39,8 @@ export const sendEmail = async (
     htmlContent?: string
     subject?: string
     selectedList?: string
+    eventId?: string
+    eventType?: string
   }
 ): Promise<string> => {
   const params = new URLSearchParams()
@@ -51,8 +53,8 @@ export const sendEmail = async (
   const queryString = params.toString()
   const url = `${API_PATH}api/email/${key}${queryString ? `?${queryString}` : ''}`
 
-  // For custom emails, use POST with body data
-  if (key === 'custom' && customData) {
+  // For custom emails, event announcements, and inter-ecclesia, use POST with body data
+  if ((key === 'custom' || key === 'event-announcement' || key === 'inter-ecclesia') && customData) {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -61,6 +63,11 @@ export const sendEmail = async (
       body: JSON.stringify(customData),
       cache: 'no-store',
     })
+    // Handle non-OK responses
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+      return { error: errorData.failed || errorData.error || `Request failed with status ${response.status}`, details: errorData }
+    }
     return await response.json()
   }
 

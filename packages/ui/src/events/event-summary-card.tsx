@@ -4,6 +4,13 @@ import { Card, YStack, XStack, Text, H3, Square } from 'tamagui'
 import { Calendar, MapPin, Users } from '@tamagui/lucide-icons'
 import { Event } from '@my/app/types/events'
 import { formatDate, formatLocation } from './event-utils'
+import {
+  formatDateInTimezone,
+  formatTimeInTimezone,
+  formatTimeRange as formatTimezoneTimeRange,
+  isDateOnly,
+  DEFAULT_TIMEZONE,
+} from '@my/app/utils/timezone'
 
 interface EventSummaryCardProps {
   event: Partial<Event>
@@ -406,32 +413,67 @@ export function EventSummaryCard({
             return null
           })() : null}
 
-          {/* Funeral Service Time - shown after location */}
-          {event.type === 'funeral' && event.serviceDate ? (() => {
-            const date = new Date(event.serviceDate)
-            const dateStr = date.toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric'
-            })
-            const hours = date.getHours()
-            const minutes = date.getMinutes()
-            const hasTime = hours !== 0 || minutes !== 0
+          {/* Funeral Visitation - shown before service time */}
+          {event.type === 'funeral' ? (() => {
+            // Get visitation data (support both new and old field names)
+            const visitationDate = (event as any).visitationDate || (event as any).viewingDate
+            if (!visitationDate) return null
 
-            if (hasTime) {
-              const ampm = hours >= 12 ? 'pm' : 'am'
-              const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-              const timeStr = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+            const visitationEndDate = (event as any).visitationEndDate
+            const eventTimezone = (event as any).eventTimezone || DEFAULT_TIMEZONE
+            const dateStr = typeof visitationDate === 'string' ? visitationDate : visitationDate.toISOString()
+
+            // Check if date-only
+            if (isDateOnly(dateStr)) {
+              const formattedDate = formatDateInTimezone(dateStr, eventTimezone, { weekday: 'long' })
               return (
                 <Text fontSize="$4" color="$gray11">
-                  Service time: {dateStr} {timeStr}
+                  Visitation: {formattedDate}
                 </Text>
               )
             }
+
+            // Has time component
+            const formattedDate = formatDateInTimezone(dateStr, eventTimezone, { weekday: 'long' })
+
+            // Format time or time range
+            let timeDisplay: string
+            if (visitationEndDate) {
+              const endStr = typeof visitationEndDate === 'string' ? visitationEndDate : visitationEndDate.toISOString()
+              timeDisplay = formatTimezoneTimeRange(dateStr, endStr, eventTimezone)
+            } else {
+              timeDisplay = formatTimeInTimezone(dateStr, eventTimezone)
+            }
+
             return (
               <Text fontSize="$4" color="$gray11">
-                Service time: {dateStr}
+                Visitation: {formattedDate}, {timeDisplay}
+              </Text>
+            )
+          })() : null}
+
+          {/* Funeral Service Time - shown after visitation */}
+          {event.type === 'funeral' && event.serviceDate ? (() => {
+            const eventTimezone = (event as any).eventTimezone || DEFAULT_TIMEZONE
+            const dateStr = typeof event.serviceDate === 'string' ? event.serviceDate : event.serviceDate.toISOString()
+
+            // Check if date-only
+            if (isDateOnly(dateStr)) {
+              const formattedDate = formatDateInTimezone(dateStr, eventTimezone, { weekday: 'long' })
+              return (
+                <Text fontSize="$4" color="$gray11">
+                  Service: {formattedDate}
+                </Text>
+              )
+            }
+
+            // Has time component
+            const formattedDate = formatDateInTimezone(dateStr, eventTimezone, { weekday: 'long' })
+            const timeStr = formatTimeInTimezone(dateStr, eventTimezone)
+
+            return (
+              <Text fontSize="$4" color="$gray11">
+                Service: {formattedDate} at {timeStr}
               </Text>
             )
           })() : null}
