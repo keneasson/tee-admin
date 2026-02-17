@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
-import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { AddressType } from '@my/app/provider/dynamodb/types'
 
-// Generate a simple unique ID
-function generateAddressId(): string {
-  return `addr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+/**
+ * Resolve the logged-in user's personId from their session email.
+ * Returns null if no person record found.
+ */
+async function resolvePersonId(email: string): Promise<string | null> {
+  const person = await personRepository.getByEmail(email)
+  return person?.personId ?? null
 }
 
 /**
@@ -22,11 +26,19 @@ export async function GET() {
       )
     }
 
-    const result = await userRepository.getAddresses(session.user.email)
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
+    const addresses = await personRepository.getAddresses(personId)
 
     return NextResponse.json({
       success: true,
-      addresses: result.items,
+      addresses,
     })
   } catch (error) {
     console.error('Get addresses error:', error)
@@ -51,6 +63,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
     const { type, label, street1, street2, city, province, postalCode, country, isPrimary, isHousehold, householdId } = body
 
@@ -71,20 +91,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const addressId = generateAddressId()
-
     // If this is set as primary, unset other primary addresses
     if (isPrimary) {
-      const existing = await userRepository.getAddresses(session.user.email)
-      for (const addr of existing.items) {
+      const existing = await personRepository.getAddresses(personId)
+      for (const addr of existing) {
         if (addr.isPrimary) {
-          await userRepository.updateAddress(session.user.email, addr.addressId, { isPrimary: false })
+          await personRepository.updateAddress(personId, addr.addressId, { isPrimary: false })
         }
       }
     }
 
-    await userRepository.addAddress(session.user.email, {
-      addressId,
+    const added = await personRepository.addAddress(personId, {
       type,
       label,
       street1,
@@ -100,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      addressId,
+      addressId: added.addressId,
       message: 'Address added successfully',
     })
   } catch (error) {
@@ -126,6 +143,14 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
     const { addressId, ...updates } = body
 
@@ -137,7 +162,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Verify the address exists
-    const existing = await userRepository.getAddress(session.user.email, addressId)
+    const existing = await personRepository.getAddress(personId, addressId)
     if (!existing) {
       return NextResponse.json(
         { error: 'Address not found' },
@@ -147,15 +172,15 @@ export async function PATCH(request: NextRequest) {
 
     // If setting as primary, unset other primary addresses
     if (updates.isPrimary) {
-      const allAddresses = await userRepository.getAddresses(session.user.email)
-      for (const addr of allAddresses.items) {
+      const allAddresses = await personRepository.getAddresses(personId)
+      for (const addr of allAddresses) {
         if (addr.isPrimary && addr.addressId !== addressId) {
-          await userRepository.updateAddress(session.user.email, addr.addressId, { isPrimary: false })
+          await personRepository.updateAddress(personId, addr.addressId, { isPrimary: false })
         }
       }
     }
 
-    const updated = await userRepository.updateAddress(session.user.email, addressId, updates)
+    const updated = await personRepository.updateAddress(personId, addressId, updates)
 
     return NextResponse.json({
       success: true,
@@ -185,6 +210,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const addressId = searchParams.get('addressId')
 
@@ -196,7 +229,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the address exists
-    const existing = await userRepository.getAddress(session.user.email, addressId)
+    const existing = await personRepository.getAddress(personId, addressId)
     if (!existing) {
       return NextResponse.json(
         { error: 'Address not found' },
@@ -204,7 +237,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    await userRepository.deleteAddress(session.user.email, addressId)
+    await personRepository.deleteAddress(personId, addressId)
 
     return NextResponse.json({
       success: true,

@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
-import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { PhoneType } from '@my/app/provider/dynamodb/types'
-
-// Generate a simple unique ID
-function generatePhoneId(): string {
-  return `phone-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-}
 
 // Valid phone types
 const validPhoneTypes: PhoneType[] = ['mobile', 'home', 'work', 'other']
+
+/**
+ * Resolve the logged-in user's personId from their session email.
+ * Returns null if no person record found.
+ */
+async function resolvePersonId(email: string): Promise<string | null> {
+  const person = await personRepository.getByEmail(email)
+  return person?.personId ?? null
+}
 
 /**
  * GET /api/user/phones - Get all phones for current user
@@ -26,21 +30,27 @@ export async function GET() {
       )
     }
 
-    const result = await userRepository.getPhones(session.user.email)
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
 
-    // Sort by order and transform to client format
-    const phones = result.items
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map(phone => ({
-        id: phone.phoneId,
-        type: phone.type,
-        number: phone.number, // 10 digits
-        verified: false, // Phones don't have verification
-      }))
+    const phones = await personRepository.getPhones(personId)
+
+    // Transform to client format (already sorted by order from repository)
+    const result = phones.map(phone => ({
+      id: phone.phoneId,
+      type: phone.type,
+      number: phone.number,
+      verified: false, // Phones don't have verification
+    }))
 
     return NextResponse.json({
       success: true,
-      phones,
+      phones: result,
     })
   } catch (error) {
     console.error('Get phones error:', error)
@@ -64,6 +74,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      )
+    }
+
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
       )
     }
 
@@ -98,13 +116,12 @@ export async function PUT(request: NextRequest) {
     const validPhones = phones
       .filter(p => p.number && p.number.length === 10)
       .map((phone, index) => ({
-        phoneId: phone.id || generatePhoneId(),
         type: phone.type,
         number: phone.number,
         order: index,
       }))
 
-    await userRepository.replaceAllPhones(session.user.email, validPhones)
+    await personRepository.replaceAllPhones(personId, validPhones)
 
     return NextResponse.json({
       success: true,
@@ -131,6 +148,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      )
+    }
+
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
       )
     }
 
@@ -161,23 +186,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const phoneId = generatePhoneId()
-
     // Get existing phones to determine order
-    const existing = await userRepository.getPhones(session.user.email)
-    const order = existing.items.length
+    const existing = await personRepository.getPhones(personId)
+    const order = existing.length
 
     // If this is set as primary, unset other primary phones
     if (isPrimary) {
-      for (const phone of existing.items) {
+      for (const phone of existing) {
         if (phone.isPrimary) {
-          await userRepository.updatePhone(session.user.email, phone.phoneId, { isPrimary: false })
+          await personRepository.updatePhone(personId, phone.phoneId, { isPrimary: false })
         }
       }
     }
 
-    await userRepository.addPhone(session.user.email, {
-      phoneId,
+    const added = await personRepository.addPhone(personId, {
       type,
       number,
       isPrimary: isPrimary || order === 0, // First phone is primary by default
@@ -187,7 +209,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      phoneId,
+      phoneId: added.phoneId,
       message: 'Phone added successfully',
     })
   } catch (error) {
@@ -213,6 +235,14 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
     const { phoneId, ...updates } = body
 
@@ -224,7 +254,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Verify the phone exists
-    const existing = await userRepository.getPhone(session.user.email, phoneId)
+    const existing = await personRepository.getPhone(personId, phoneId)
     if (!existing) {
       return NextResponse.json(
         { error: 'Phone not found' },
@@ -234,15 +264,15 @@ export async function PATCH(request: NextRequest) {
 
     // If setting as primary, unset other primary phones
     if (updates.isPrimary) {
-      const allPhones = await userRepository.getPhones(session.user.email)
-      for (const phone of allPhones.items) {
+      const allPhones = await personRepository.getPhones(personId)
+      for (const phone of allPhones) {
         if (phone.isPrimary && phone.phoneId !== phoneId) {
-          await userRepository.updatePhone(session.user.email, phone.phoneId, { isPrimary: false })
+          await personRepository.updatePhone(personId, phone.phoneId, { isPrimary: false })
         }
       }
     }
 
-    const updated = await userRepository.updatePhone(session.user.email, phoneId, updates)
+    const updated = await personRepository.updatePhone(personId, phoneId, updates)
 
     return NextResponse.json({
       success: true,
@@ -272,6 +302,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    const personId = await resolvePersonId(session.user.email)
+    if (!personId) {
+      return NextResponse.json(
+        { error: 'Person not found' },
+        { status: 404 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const phoneId = searchParams.get('phoneId')
 
@@ -283,7 +321,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the phone exists
-    const existing = await userRepository.getPhone(session.user.email, phoneId)
+    const existing = await personRepository.getPhone(personId, phoneId)
     if (!existing) {
       return NextResponse.json(
         { error: 'Phone not found' },
@@ -291,7 +329,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    await userRepository.deletePhone(session.user.email, phoneId)
+    await personRepository.deletePhone(personId, phoneId)
 
     return NextResponse.json({
       success: true,
