@@ -210,7 +210,7 @@ export function ImageUpload({
         </YStack>
       ) : (
         <YStack
-          {...getRootProps()}
+          {...(getRootProps() as any)}
           borderWidth={2}
           borderStyle="dashed"
           borderColor={isDragActive ? '$blue8' : '$gray6'}

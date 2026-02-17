@@ -113,6 +113,7 @@ export const LocationRegionFields = <T extends FieldValues>({
         <ProvinceSelect
           control={control}
           name={`${namePrefix}.province` as FieldPath<T>}
+          countryFieldName={`${namePrefix}.country` as FieldPath<T>}
           label="Province/State"
         />
       </YStack>
@@ -154,14 +155,14 @@ export const LocationAccessFields = <T extends FieldValues>({
       name={`${namePrefix}.parking` as FieldPath<T>}
       label="Parking Information"
       placeholder="Describe parking availability and any special instructions"
-      numberOfLines={2}
+      rows={2}
     />
     <OptimizedTextarea
       control={control}
       name={`${namePrefix}.directions` as FieldPath<T>}
       label="Directions"
       placeholder="Provide directions or landmarks to help attendees find the venue"
-      numberOfLines={2}
+      rows={2}
     />
   </YStack>
 )

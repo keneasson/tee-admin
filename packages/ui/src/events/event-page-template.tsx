@@ -15,12 +15,13 @@ import {
   Paragraph,
   useThemeName
 } from 'tamagui'
-import { 
-  Event, 
-  StudyWeekendEvent, 
-  FuneralEvent, 
-  WeddingEvent, 
-  BaptismEvent, 
+import {
+  Event,
+  ScheduleItem,
+  StudyWeekendEvent,
+  FuneralEvent,
+  WeddingEvent,
+  BaptismEvent,
   GeneralEvent,
   isStudyWeekendEvent,
   isFuneralEvent,
@@ -169,7 +170,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
     </Card>
   )
 
-  const renderSchedule = (schedule: any[]) => (
+  const renderSchedule = (schedule: ScheduleItem[]) => (
     <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
       <YStack gap="$3">
         <XStack alignItems="center" gap="$2">
@@ -182,7 +183,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
           {schedule.map((item, index) => (
             <XStack key={index} gap="$4" alignItems="flex-start">
               <Text fontSize="$3" fontWeight="600" color={colors.primary} minWidth={80}>
-                {formatTime(item.startTime)}
+                {item.startTime ? formatTime(item.startTime) : ''}
               </Text>
               <YStack flex={1} gap="$1">
                 <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>

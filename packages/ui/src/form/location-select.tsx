@@ -97,8 +97,7 @@ export function LocationSelect<T extends FieldValues>({
   const selectedCountry = useWatch({
     control,
     name: countryFieldName as any,
-    defaultValue: ''
-  })
+  }) as string
 
   const {
     field: { value, onChange },
@@ -123,7 +122,7 @@ export function LocationSelect<T extends FieldValues>({
         data = await fetchCountries()
       } else if (type === 'province') {
         // For provinces, use the selected country or default to CA
-        const countryToUse = selectedCountry || 'CA'
+        const countryToUse = String(selectedCountry || 'CA')
         data = await fetchProvinces(countryToUse)
       }
       
@@ -182,7 +181,7 @@ export function LocationSelect<T extends FieldValues>({
       <Select
         value={value || ''}
         onValueChange={onChange}
-        disabled={isDisabled}
+        {...({ disabled: isDisabled } as any)}
         onOpenChange={(open) => {
           if (open && !hasLoaded) {
             loadOptions()

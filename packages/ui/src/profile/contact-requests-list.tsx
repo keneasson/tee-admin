@@ -107,7 +107,7 @@ export const ContactRequestsList: React.FC<ContactRequestsListProps> = ({
             <XStack justifyContent="space-between" alignItems="flex-start">
               <YStack gap="$1" flex={1}>
                 <XStack gap="$2" alignItems="center">
-                  {request.requestType === 'callback' ? (
+                  {request.requestType === 'phone' ? (
                     <Phone size={16} />
                   ) : (
                     <Mail size={16} />
@@ -120,7 +120,7 @@ export const ContactRequestsList: React.FC<ContactRequestsListProps> = ({
                   <Text fontSize="$2" theme="alt2">{request.requesterEmail}</Text>
                 ) : null}
                 <Text fontSize="$2" theme="alt2">
-                  Wants you to {request.requestType === 'callback' ? 'call them back' : 'email them'}
+                  Wants you to {request.requestType === 'phone' ? 'call them' : request.requestType === 'text' ? 'text them' : 'email them'}
                 </Text>
               </YStack>
               <YStack alignItems="flex-end" gap="$1">

@@ -5,7 +5,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show feature flag controls
@@ -29,7 +29,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show rollout percentages
@@ -50,7 +50,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Find an override button and test it
@@ -79,7 +79,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show live feature testing section
@@ -105,7 +105,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show integration testing section
@@ -126,7 +126,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show testing guidelines
@@ -149,7 +149,7 @@ test.describe('Feature Flag System', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Test variant buttons in live feature testing
@@ -172,7 +172,7 @@ test.describe('Feature Flag Integration with Navigation', () => {
     await page.goto('/brand/navigation')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show feature flag status
@@ -200,7 +200,7 @@ test.describe('Feature Flag Integration with Navigation', () => {
     await page.goto('/brand/navigation')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show navigation states testing
@@ -220,7 +220,7 @@ test.describe('Feature Flag Integration with Navigation', () => {
     await page.goto('/brand/navigation')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Test theme switching
@@ -240,7 +240,7 @@ test.describe('Feature Flag Persistence and State', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Set an override
@@ -266,7 +266,7 @@ test.describe('Feature Flag Persistence and State', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Check that rollout percentages are displayed correctly

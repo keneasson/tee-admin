@@ -1,4 +1,4 @@
-export type EmailListTypeKeys = 'sundaySchool' | 'newsletter' | 'memorial' | 'bibleClass' | 'members' | 'testList'
+export type EmailListTypeKeys = 'sundaySchool' | 'newsletter' | 'memorial' | 'bibleClass' | 'members' | 'interEcclesia' | 'testList'
 
 export interface EmailDraft {
   id: string // UUID for the draft

@@ -1,17 +1,20 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
 import { featureFlagConfigs, type FeatureFlag } from './feature-flags'
+import { AuthSession } from '@my/app/types'
 
-export function useFeatureFlag(flag: FeatureFlag): boolean {
-  const { data: session } = useSession()
-  
+/**
+ * Check if a feature flag is enabled for a given session
+ * This is a pure function that can be used in any context
+ * Session data must be provided by the caller
+ */
+export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null): boolean {
   const config = featureFlagConfigs[flag]
-  
+
   if (!config.enabled) {
     return false
   }
-  
+
   // Check environment
   if (config.environment && config.environment !== 'all') {
     const currentEnv = process.env.NODE_ENV as 'development' | 'staging' | 'production'
@@ -19,29 +22,31 @@ export function useFeatureFlag(flag: FeatureFlag): boolean {
       return false
     }
   }
-  
+
   // Check user role
   if (config.userRoles && config.userRoles.length > 0 && session?.user?.role) {
     if (!config.userRoles.includes(session.user.role)) {
       return false
     }
   }
-  
+
   // Check rollout percentage
   if (config.rolloutPercentage && config.rolloutPercentage < 100) {
-    if (!session?.user?.id) {
+    // Use email as user identifier if id is not available
+    const userId = (session?.user as any)?.id || session?.user?.email
+    if (!userId) {
       return false
     }
-    
+
     // Create a deterministic hash based on user ID and flag name
-    const hash = simpleHash(`${session.user.id}-${flag}`)
+    const hash = simpleHash(`${userId}-${flag}`)
     const userPercentile = hash % 100
-    
+
     if (userPercentile >= config.rolloutPercentage) {
       return false
     }
   }
-  
+
   // Check user-specific overrides
   if (config.userOverrides && session?.user?.email) {
     const override = config.userOverrides[session.user.email]
@@ -49,8 +54,17 @@ export function useFeatureFlag(flag: FeatureFlag): boolean {
       return override
     }
   }
-  
+
   return true
+}
+
+/**
+ * @deprecated Use checkFeatureFlag instead with session passed as parameter
+ * This hook is preserved for backward compatibility but should not be used
+ * in shared packages as it creates platform dependencies
+ */
+export function useFeatureFlag(flag: FeatureFlag, session: AuthSession | null): boolean {
+  return checkFeatureFlag(flag, session)
 }
 
 // Simple hash function for rollout percentage calculation

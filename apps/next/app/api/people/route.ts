@@ -1,20 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { auth } from '../../../utils/auth'
-import { getAwsDbConfig } from '../../../utils/email/sesClient'
-
-const dbClientConfig = getAwsDbConfig()
-const SCHEDULES_TABLE = 'tee-schedules'
-
-// In-memory cache for member list
-interface CachedMembers {
-  members: MemberListItem[]
-  ecclesias: string[]
-  timestamp: number
-}
-let membersCache: CachedMembers | null = null
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { getCachedMembers, setCachedMembers, CACHE_TTL_MS } from './cache'
 
 interface MemberListItem {
   email: string
@@ -25,9 +13,9 @@ interface MemberListItem {
 
 /**
  * GET /api/people - List all ecclesia members
- * Returns basic info (name, ecclesia) for all members in the directory
- * Queries DIRECTORY#MEMBERS from tee-schedules table (synced from Google Sheets)
- * Results are cached for 5 minutes for performance
+ * Sources from PersonRecords (tee-admin PERSON# items via scan with skey=PROFILE)
+ * Each person appears exactly once regardless of how many emails they have.
+ * Results are cached for 5 minutes for performance.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -47,78 +35,57 @@ export async function GET(request: NextRequest) {
 
     const viewerEmail = session.user.email
 
+    // Look up viewer's ecclesia for default filter
+    const viewerPerson = await personRepository.getByEmail(viewerEmail)
+    const viewerEcclesia = viewerPerson?.ecclesia || undefined
+
     // Check cache first (unless noCache is requested)
     const now = Date.now()
-    if (!noCache && membersCache && (now - membersCache.timestamp) < CACHE_TTL_MS) {
-      // Use cached data, apply filters
-      const filtered = applyFilters(membersCache.members, viewerEmail, searchQuery, ecclesiaFilter)
+    const cached = getCachedMembers()
+    if (!noCache && cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+      const filtered = applyFilters(cached.members, viewerEmail, searchQuery, ecclesiaFilter)
       return NextResponse.json({
         success: true,
-        members: filtered.map(({ lastName, ...rest }) => rest), // Remove lastName from response
-        ecclesias: membersCache.ecclesias,
+        members: filtered.map(({ lastName, ...rest }) => rest),
+        ecclesias: cached.ecclesias,
+        viewerEcclesia,
         total: filtered.length,
         cached: true,
       })
     }
 
-    // Query directory members from tee-schedules table
-    const dbClient = new DynamoDBClient(dbClientConfig)
-    const docClient = DynamoDBDocumentClient.from(dbClient)
+    // Fetch all PersonRecords (PROFILE items only)
+    const allPersons: PersonRecord[] = []
+    let lastKey: Record<string, any> | undefined
 
-    // Query all members with PK = DIRECTORY#MEMBERS
-    const params = {
-      TableName: SCHEDULES_TABLE,
-      KeyConditionExpression: 'PK = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS',
-      },
-    }
+    do {
+      const result = await personRepository.listAll({ lastEvaluatedKey: lastKey })
+      allPersons.push(...result.items)
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
 
-    const queryCommand = new QueryCommand(params)
-    const result = await docClient.send(queryCommand)
-
-    if (!result.Items) {
-      return NextResponse.json({
-        success: true,
-        members: [],
-        ecclesias: [],
-        total: 0,
-      })
-    }
-
-    // Process and deduplicate members
+    // Build member list - each person appears exactly once
     const members: MemberListItem[] = []
-    const seenEmails = new Map<string, MemberListItem>() // Track best record per email
+    const ecclesiaSet = new Set<string>()
 
-    for (const item of result.Items) {
-      // Skip records without email
-      if (!item.email) continue
+    for (const person of allPersons) {
+      // Skip placeholder/unknown records
+      if (person.primaryEmail?.startsWith('unknown-')) continue
 
-      const firstName = item.firstName || ''
-      const lastName = item.lastName || ''
-      const name = [firstName, lastName].filter(Boolean).join(' ') || item.email
-      const memberEcclesia = item.ecclesia || undefined
+      const firstName = person.firstName || ''
+      const lastName = person.lastName || ''
+      const name = person.displayName || [firstName, lastName].filter(Boolean).join(' ') || person.primaryEmail
 
-      const member: MemberListItem = {
-        email: item.email,
+      if (person.ecclesia) {
+        ecclesiaSet.add(person.ecclesia)
+      }
+
+      members.push({
+        email: person.primaryEmail,
         name,
-        lastName: lastName.toLowerCase(), // For sorting
-        ecclesia: memberEcclesia,
-      }
-
-      // Deduplicate: keep the record with more data (prefer ones with ecclesia)
-      const existing = seenEmails.get(item.email)
-      if (!existing) {
-        seenEmails.set(item.email, member)
-      } else if (memberEcclesia && !existing.ecclesia) {
-        // Prefer record with ecclesia
-        seenEmails.set(item.email, member)
-      }
-    }
-
-    // Convert map to array
-    for (const member of seenEmails.values()) {
-      members.push(member)
+        lastName: lastName.toLowerCase(),
+        ecclesia: person.ecclesia || undefined,
+      })
     }
 
     // Sort by last name, then first name
@@ -128,26 +95,19 @@ export async function GET(request: NextRequest) {
       return a.name.localeCompare(b.name)
     })
 
-    // Get unique ecclesias for filter dropdown
-    const ecclesias = [...new Set(result.Items
-      .filter(item => item.ecclesia && item.ecclesia !== '')
-      .map(item => item.ecclesia as string)
-    )].sort()
+    const ecclesias = [...ecclesiaSet].sort()
 
     // Update cache
-    membersCache = {
-      members,
-      ecclesias,
-      timestamp: now,
-    }
+    setCachedMembers({ members, ecclesias, timestamp: now })
 
     // Apply filters for response
     const filtered = applyFilters(members, viewerEmail, searchQuery, ecclesiaFilter)
 
     return NextResponse.json({
       success: true,
-      members: filtered.map(({ lastName, ...rest }) => rest), // Remove lastName from response
+      members: filtered.map(({ lastName, ...rest }) => rest),
       ecclesias,
+      viewerEcclesia,
       total: filtered.length,
       cached: false,
     })

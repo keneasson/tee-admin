@@ -1,13 +1,13 @@
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
 import { getEventValidationStatus } from '@my/app/services/event-service'
 import { EventValidator } from '@my/app/utils/event-validation'
-import { 
-  CheckCircle, 
-  Clock, 
-  AlertCircle, 
-  XCircle, 
-  Eye, 
-  EyeOff 
+import {
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  XCircle,
+  Eye,
+  EyeOff
 } from '@tamagui/lucide-icons'
 import { XStack, YStack, Text, Circle } from 'tamagui'
 
@@ -25,16 +25,15 @@ export function EventStatusIndicator({
   const validationStatus = getEventValidationStatus(event)
   
   const getStatusConfig = () => {
-    // Check if event is effectively published (ready status + past publish date)
-    const now = new Date()
-    const isPublished = event.status === 'ready' && event.publishDate && new Date(event.publishDate) <= now
-    
-    if (isPublished) {
+    // Check if event is active (uses new active field with legacy fallback)
+    const active = isEventActive(event)
+
+    if (active) {
       return {
         icon: Eye,
         color: '$green10',
         bgColor: '$green2',
-        text: 'Published',
+        text: 'Active',
         description: 'Event is live and visible to users'
       }
     }
@@ -76,6 +75,7 @@ export function EventStatusIndicator({
   }
 
   const getArchiveConfig = () => {
+    // Show archived state if status is 'archived' OR if inactive with past event
     if (event.status === 'archived') {
       return {
         icon: EyeOff,
@@ -83,6 +83,16 @@ export function EventStatusIndicator({
         bgColor: '$red2',
         text: 'Archived',
         description: 'Event is archived and hidden'
+      }
+    }
+    // For inactive events (new model), show "Inactive" instead
+    if (event.active === false && !isEventActive(event)) {
+      return {
+        icon: EyeOff,
+        color: '$gray10',
+        bgColor: '$gray2',
+        text: 'Inactive',
+        description: 'Event is not visible to users'
       }
     }
     return null
@@ -156,20 +166,19 @@ export function EventValidationSummary({
   // Get detailed validation errors for publishing
   const publishValidation = EventValidator.canPublish(event)
   
-  // Check if event is effectively published
-  const now = new Date()
-  const isPublished = event.status === 'ready' && event.publishDate && new Date(event.publishDate) <= now
+  // Check if event is active
+  const active = isEventActive(event)
 
-  if (validationStatus.status === 'publish-ready' && isPublished) {
-    return null // No need to show summary for published, complete events
+  if (validationStatus.status === 'publish-ready' && active) {
+    return null // No need to show summary for active, complete events
   }
 
-  if (validationStatus.canPublish && !isPublished) {
+  if (validationStatus.canPublish && !active) {
     return (
       <XStack space="$3" alignItems="center" padding="$3" backgroundColor="$green1" borderRadius="$3" borderWidth={1} borderColor="$green6">
         <CheckCircle size="$1" color="$green10" />
         <Text flex={1} fontSize="$3" color="$green11" fontWeight="600">
-          ✅ Ready to publish! Click "Save Event" to make it live.
+          ✅ Ready to activate! Click "Activate" to make it live.
         </Text>
       </XStack>
     )

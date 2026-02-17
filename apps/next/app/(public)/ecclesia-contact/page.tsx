@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { signIn, useSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Loading } from '@my/app/provider/loading'
 import { YStack, XStack, Text, Button, Input, Card, H2, H3, Paragraph, Checkbox, Separator, View } from 'tamagui'
@@ -27,6 +28,7 @@ interface ContactInfo {
 export default function EcclesiaContactPage() {
   const isHydrated = useHydrated()
   const searchParams = useSearchParams()
+  const { data: session, status: sessionStatus } = useSession()
   const token = searchParams?.get('token') ?? null
 
   const [loading, setLoading] = useState(true)
@@ -34,6 +36,8 @@ export default function EcclesiaContactPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null)
+  const [signingIn, setSigningIn] = useState(false)
+  const signInAttempted = useRef(false)
 
   // Form state
   const [firstName, setFirstName] = useState('')
@@ -47,6 +51,47 @@ export default function EcclesiaContactPage() {
   const [newMemberLastName, setNewMemberLastName] = useState('')
   const [newMemberIsRecordingBrother, setNewMemberIsRecordingBrother] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
+
+  // Auto-sign-in: When token is present and user has no session, create a session
+  useEffect(() => {
+    if (!isHydrated || !token || sessionStatus === 'loading' || signInAttempted.current) return
+
+    // Only attempt sign-in if no active session
+    if (sessionStatus === 'unauthenticated') {
+      signInAttempted.current = true
+      setSigningIn(true)
+
+      // First fetch contact info to get the email, then sign in
+      const autoSignIn = async () => {
+        try {
+          const res = await fetch(`/api/ecclesia-contact?token=${encodeURIComponent(token)}`)
+          const data = await res.json()
+
+          if (data.error || !data.email) {
+            setSigningIn(false)
+            return
+          }
+
+          // Sign in via OTP provider with ecclesia token
+          const result = await signIn('otp', {
+            email: data.email,
+            ecclesiaToken: token,
+            redirect: false,
+          })
+
+          if (result?.error) {
+            console.error('Ecclesia auto-sign-in failed:', result.error)
+          }
+        } catch (err) {
+          console.error('Ecclesia auto-sign-in error:', err)
+        } finally {
+          setSigningIn(false)
+        }
+      }
+
+      autoSignIn()
+    }
+  }, [isHydrated, token, sessionStatus])
 
   const fetchContactInfo = async () => {
     if (!token) {
@@ -162,6 +207,15 @@ export default function EcclesiaContactPage() {
 
   if (!isHydrated) {
     return <Loading />
+  }
+
+  if (signingIn) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
+        <Loading />
+        <Text marginTop="$4">Setting up your session...</Text>
+      </YStack>
+    )
   }
 
   if (loading) {
@@ -280,12 +334,11 @@ export default function EcclesiaContactPage() {
               onPress={handleSubmit as any}
               disabled={saving}
               backgroundColor="#1B365D"
-              color="#FFFFFF"
-              pressStyle={{ backgroundColor: '#153056', color: '#FFFFFF' }}
-              hoverStyle={{ backgroundColor: '#2A4A73', color: '#FFFFFF' }}
-              disabledStyle={{ backgroundColor: '#A8A8A8', color: '#FFFFFF' }}
+              pressStyle={{ backgroundColor: '#153056' }}
+              hoverStyle={{ backgroundColor: '#2A4A73' }}
+              disabledStyle={{ backgroundColor: '#A8A8A8' }}
             >
-              {saving ? 'Saving...' : 'Save My Information'}
+              <Text color="#FFFFFF">{saving ? 'Saving...' : 'Save My Information'}</Text>
             </Button>
           </YStack>
         </form>
@@ -305,11 +358,10 @@ export default function EcclesiaContactPage() {
                 icon={Plus}
                 onPress={() => setShowAddMember(!showAddMember)}
                 backgroundColor={showAddMember ? '#6B6B6B' : '#1B365D'}
-                color="#FFFFFF"
-                pressStyle={{ backgroundColor: showAddMember ? '#4A4A4A' : '#153056', color: '#FFFFFF' }}
-                hoverStyle={{ backgroundColor: showAddMember ? '#5A5A5A' : '#2A4A73', color: '#FFFFFF' }}
+                pressStyle={{ backgroundColor: showAddMember ? '#4A4A4A' : '#153056' }}
+                hoverStyle={{ backgroundColor: showAddMember ? '#5A5A5A' : '#2A4A73' }}
               >
-                {showAddMember ? 'Cancel' : 'Add Member'}
+                <Text color="#FFFFFF">{showAddMember ? 'Cancel' : 'Add Member'}</Text>
               </Button>
             </XStack>
 
@@ -385,12 +437,11 @@ export default function EcclesiaContactPage() {
                       onPress={handleAddMember as any}
                       disabled={addingMember || !newMemberEmail}
                       backgroundColor="#2D7D32"
-                      color="#FFFFFF"
-                      pressStyle={{ backgroundColor: '#1B5E20', color: '#FFFFFF' }}
-                      hoverStyle={{ backgroundColor: '#388E3C', color: '#FFFFFF' }}
-                      disabledStyle={{ backgroundColor: '#A8A8A8', color: '#FFFFFF' }}
+                      pressStyle={{ backgroundColor: '#1B5E20' }}
+                      hoverStyle={{ backgroundColor: '#388E3C' }}
+                      disabledStyle={{ backgroundColor: '#A8A8A8' }}
                     >
-                      {addingMember ? 'Adding...' : 'Add Member'}
+                      <Text color="#FFFFFF">{addingMember ? 'Adding...' : 'Add Member'}</Text>
                     </Button>
                   </YStack>
                 </form>

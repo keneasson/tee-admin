@@ -8,7 +8,7 @@ import { XStack, YStack, Card, Text } from 'tamagui'
 import { Section } from '@my/app/features/newsletter/Section'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { EventDetailView } from '@my/ui/src/events/event-detail-view'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
 
 type EventProps = {
   eventId?: string | string[]
@@ -54,10 +54,8 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
           throw new Error('Failed to fetch events')
         }
         const data = await response.json()
-        // Only show published/ready events on public page
-        const publishedEvents = data.filter((event: Event) => 
-          event.status === 'published' || event.status === 'ready'
-        )
+        // Only show active events on public page
+        const publishedEvents = data.filter((event: Event) => isEventActive(event))
         setEvents(publishedEvents)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')
@@ -74,7 +72,7 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
   }
 
   return (
-    <Wrapper subHheader={'Events hosted by Toronto East'}>
+    <Wrapper subHeader={'Events hosted by Toronto East'}>
       {isNotFound ? (
         <Section>
           <Paragraph color={'red'}>The event you were looking for was not found. </Paragraph>
@@ -163,7 +161,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
 
   if (loading) {
     return (
-      <Wrapper subHheader={'Event Details'}>
+      <Wrapper subHeader={'Event Details'}>
         <Section>
           <Paragraph>Loading event...</Paragraph>
         </Section>
@@ -173,7 +171,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
 
   if (error || !event) {
     return (
-      <Wrapper subHheader={'Event Not Found'}>
+      <Wrapper subHeader={'Event Not Found'}>
         <Section>
           <Paragraph color={'red'}>{error || 'Event not found'}</Paragraph>
           <EventsFooter />
@@ -183,7 +181,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
   }
 
   return (
-    <Wrapper subHheader={event.title || 'Event Details'}>
+    <Wrapper subHeader={event.title || 'Event Details'}>
       <Section>
         <EventDetailView
           event={event}

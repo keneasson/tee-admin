@@ -64,10 +64,11 @@ export const AddUpdateList: React.FC<AddUpdateListParams> = ({ list }) => {
         />
         <CheckboxWithCheck control={control} name={'defaultOptIn'} label="Auto Opt In" />
         {errors ? Object.keys(errors).map((key, index) => {
-            console.log(`errors[${key}]`, errors[key])
+            const fieldError = errors[key as keyof typeof errors]
+            console.log(`errors[${key}]`, fieldError)
             return (
               <XStack key={`errors-${index}`}>
-                <Text>{errors[key].displayName}</Text>
+                <Text>{fieldError?.message}</Text>
               </XStack>
             )
           }) : null}

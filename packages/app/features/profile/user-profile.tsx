@@ -6,7 +6,7 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
 import { PhoneManager, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
 import { EmailManager, type EmailEntry } from '@my/ui/src/profile/email-manager'
-import { FamilyMembers } from '@my/ui/src/profile/family-members'
+import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/family-members'
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
 import { ContactRequestsList } from '@my/ui/src/profile/contact-requests-list'
@@ -38,6 +38,8 @@ interface FamilyMember {
   email: string
   name?: string
   relationshipType: RelationshipType
+  status?: string
+  createdAt?: string
 }
 
 interface Connection {
@@ -59,7 +61,8 @@ interface PrivacySettingsData {
 interface ContactRequest {
   requestId: string
   requesterEmail: string
-  requestType: 'callback' | 'email_me'
+  requestType: 'phone' | 'email' | 'text'
+  reason?: 'personal' | 'ecclesial'
   message?: string
   status: 'pending' | 'viewed' | 'responded' | 'declined'
   createdAt: string
@@ -241,14 +244,27 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   }
 
   // Family handlers
-  const handleAddFamilyMember = async (targetEmail: string, relationshipType: RelationshipType) => {
+  const handleAddFamilyMember = async (data: AddFamilyMemberData) => {
     const res = await fetch('/api/user/relationships', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetEmail, relationshipType }),
+      body: JSON.stringify(data),
     })
     if (res.ok) {
       await fetchData()
+    }
+  }
+
+  const handleLookupEmail = async (email: string): Promise<{ found: boolean; firstName?: string; lastName?: string } | null> => {
+    try {
+      const res = await fetch(`/api/user/lookup?email=${encodeURIComponent(email)}`)
+      if (res.ok) {
+        const data = await res.json()
+        return data
+      }
+      return { found: false }
+    } catch {
+      return { found: false }
     }
   }
 
@@ -420,7 +436,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.List>
 
             <Tabs.Content value="contact">
-              <YStack gap="$6" paddingTop="$4">
+              <YStack gap="$6" paddingTop="$4" paddingBottom="$8">
                 <EmailManager
                   emails={emails}
                   onChange={setEmails}
@@ -447,18 +463,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.Content>
 
             <Tabs.Content value="family">
-              <YStack paddingTop="$4">
+              <YStack paddingTop="$4" paddingBottom="$8">
                 <FamilyMembers
                   members={familyMembers}
                   editable
                   onAdd={handleAddFamilyMember}
                   onRemove={handleRemoveFamilyMember}
+                  onLookupEmail={handleLookupEmail}
                 />
               </YStack>
             </Tabs.Content>
 
             <Tabs.Content value="connections">
-              <YStack paddingTop="$4">
+              <YStack paddingTop="$4" paddingBottom="$8">
                 <ConnectionsList
                   connections={connections}
                   blockedUsers={blockedUsers}
@@ -472,7 +489,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.Content>
 
             <Tabs.Content value="privacy">
-              <YStack paddingTop="$4">
+              <YStack paddingTop="$4" paddingBottom="$8">
                 {privacySettings ? (
                   <PrivacySettings
                     settings={privacySettings}
@@ -484,7 +501,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.Content>
 
             <Tabs.Content value="requests">
-              <YStack paddingTop="$4">
+              <YStack paddingTop="$4" paddingBottom="$8">
                 <ContactRequestsList
                   requests={contactRequests}
                   onMarkViewed={handleMarkViewed}

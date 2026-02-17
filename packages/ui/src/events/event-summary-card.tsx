@@ -352,7 +352,7 @@ export function EventSummaryCard({
 
             // Handle object location with mode
             const mode = location.mode || 'in-person'
-            const locationName = location.name
+            const locationName = location.name || location.placeName
             const platform = location.onlineMeeting?.platform
 
             if (mode === 'in-person' && locationName) {
@@ -401,7 +401,7 @@ export function EventSummaryCard({
               )
             }
 
-            const locationName = location.name
+            const locationName = location.name || location.placeName
             if (locationName) {
               return (
                 <Text fontSize="$4" color="$gray11" marginTop="$2">
@@ -477,6 +477,16 @@ export function EventSummaryCard({
               </Text>
             )
           })() : null}
+
+          {/* Multi-section badge - shown when event has sections */}
+          {(event as any).sections && (event as any).sections.length > 0 ? (
+            <XStack gap="$2" alignItems="center">
+              <MapPin size={14} color="$blue10" />
+              <Text fontSize="$3" color="$blue10" fontWeight="500">
+                Multiple locations
+              </Text>
+            </XStack>
+          ) : null}
 
           {/* Hosting Ecclesia */}
           {(event as any).hostingEcclesia ? (() => {

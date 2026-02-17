@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { YouTubeService } from '@my/app/provider/youtube/youtube-service'
 import { YouTubeSheetsSync } from '@my/app/provider/youtube/youtube-sheets-sync'
+import { YouTubeSyncService } from '@my/app/provider/youtube/youtube-sync-service'
 import type { CreateLivestreamRequest } from '@my/app/types/youtube'
 
 /**
@@ -141,22 +142,46 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Livestream created successfully: ${result.watchUrl}`)
 
-    // Sync the YouTube URL to Google Sheets (for Memorial schedule)
-    let sheetsSyncSuccess = false
-    let sheetsSyncError = null
+    // PRIMARY: Sync YouTube URL directly to DynamoDB
+    // This is the main data source for newsletter and emails
+    let dynamoSyncSuccess = false
+    let dynamoSyncError = null
+    let dynamoSyncUpdated = 0
 
+    try {
+      console.log('🔄 Syncing YouTube URL to DynamoDB...')
+      const syncService = await YouTubeSyncService.createWithOAuth(session.user.email)
+      // Sync with a narrow window (14 days) to find the matching schedule
+      const syncResult = await syncService.syncLivestreamsWithSchedules(14, true) // force=true to update even if exists
+
+      dynamoSyncUpdated = syncResult.updated
+      dynamoSyncSuccess = syncResult.updated > 0
+
+      if (dynamoSyncSuccess) {
+        console.log(`✅ Successfully synced YouTube URL to DynamoDB (${syncResult.updated} updated)`)
+      } else if (syncResult.skipped > 0) {
+        console.log(`ℹ️ YouTube URL already synced to DynamoDB (${syncResult.skipped} skipped)`)
+        dynamoSyncSuccess = true // Already synced is still success
+      } else {
+        console.log(`⚠️ No matching Memorial schedule found for ${scheduledDate.toISOString()}`)
+        dynamoSyncError = 'No matching Memorial schedule found in DynamoDB'
+      }
+    } catch (error) {
+      console.error('❌ Failed to sync YouTube URL to DynamoDB:', error)
+      dynamoSyncError = error instanceof Error ? error.message : 'Unknown error'
+    }
+
+    // OPTIONAL: Try to sync to Google Sheets (backup, may not work)
+    let sheetsSyncSuccess = false
     try {
       const sheetsSync = new YouTubeSheetsSync()
       sheetsSyncSuccess = await sheetsSync.updateYouTubeUrl(scheduledDate, result.watchUrl)
-
       if (sheetsSyncSuccess) {
-        console.log('✅ Successfully synced YouTube URL to Google Sheets')
-        console.log('📊 Existing webhook will trigger DynamoDB sync automatically')
+        console.log('✅ Also synced YouTube URL to Google Sheets')
       }
     } catch (error) {
-      console.error('⚠️ Warning: Failed to sync YouTube URL to Google Sheets:', error)
-      sheetsSyncError = error instanceof Error ? error.message : 'Unknown error'
-      // Don't fail the entire request if sheets sync fails
+      // Google Sheets sync is optional - don't log as error
+      console.log('ℹ️ Google Sheets sync skipped (not configured or failed)')
     }
 
     return NextResponse.json(
@@ -169,10 +194,16 @@ export async function POST(request: NextRequest) {
           streamKey: result.streamKey,
         },
         watchUrl: result.watchUrl,
-        message: 'Livestream created successfully',
+        message: dynamoSyncSuccess
+          ? 'Livestream created and synced to DynamoDB'
+          : 'Livestream created (DynamoDB sync pending)',
+        dynamoSync: {
+          success: dynamoSyncSuccess,
+          updated: dynamoSyncUpdated,
+          error: dynamoSyncError,
+        },
         sheetsSync: {
           success: sheetsSyncSuccess,
-          error: sheetsSyncError,
         },
       },
       { status: 201 }

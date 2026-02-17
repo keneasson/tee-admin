@@ -16,7 +16,7 @@
  *   npx ts-node scripts/migrate-to-unified-people.ts --execute
  */
 
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -51,6 +51,15 @@ interface UserRecord {
   role?: string
   provider?: string
   id?: string
+  // Auth fields
+  hashedPassword?: string
+  emailVerified?: Date | string | number
+  firstName?: string
+  lastName?: string
+  name?: string
+  ecclesia?: string
+  image?: string
+  googleId?: string
 }
 
 interface MigrationPerson {
@@ -65,6 +74,11 @@ interface MigrationPerson {
   userId?: string
   phones: Array<{ number: string; type: string }>
   addresses: Array<{ street: string; city?: string }>
+  // Auth fields
+  hashedPassword?: string
+  emailVerified?: string
+  googleId?: string
+  image?: string
 }
 
 // Stats
@@ -195,11 +209,36 @@ function cleanName(name: string): string {
     .trim()
 }
 
-async function createPersonRecord(person: MigrationPerson): Promise<void> {
+async function checkExistingPerson(email: string): Promise<boolean> {
+  // Check if a PersonRecord already exists for this email via GSI1
+  try {
+    const result = await docClient.send(new QueryCommand({
+      TableName: TEE_ADMIN_TABLE,
+      IndexName: 'gsi1',
+      KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk = :sk',
+      ExpressionAttributeValues: {
+        ':pk': `EMAIL#${email}`,
+        ':sk': 'PERSON',
+      },
+    }))
+    return (result.Items && result.Items.length > 0)
+  } catch {
+    return false
+  }
+}
+
+async function createPersonRecord(person: MigrationPerson): Promise<boolean> {
+  // Pre-check if person already exists (optimization to avoid unnecessary writes)
+  const exists = await checkExistingPerson(person.email)
+  if (exists) {
+    console.log(`   ⏭️  Skipping ${person.email} - PersonRecord already exists`)
+    return false
+  }
+
   const now = new Date().toISOString()
   const displayName = `${person.firstName} ${person.lastName}`.trim()
 
-  const record = {
+  const record: Record<string, any> = {
     pkey: `PERSON#${person.personId}`,
     skey: 'PROFILE',
     gsi1pk: `EMAIL#${person.email}`,
@@ -223,16 +262,46 @@ async function createPersonRecord(person: MigrationPerson): Promise<void> {
     version: 1,
   }
 
+  // Add auth fields if present
+  if (person.hashedPassword) {
+    record.hashedPassword = person.hashedPassword
+  }
+  if (person.emailVerified) {
+    record.emailVerified = person.emailVerified
+  }
+  if (person.googleId) {
+    record.googleId = person.googleId
+  }
+  if (person.image) {
+    record.image = person.image
+  }
+
   if (DRY_RUN) {
     console.log(`   [DRY-RUN] Would create PERSON: ${displayName} (${person.email})`)
-  } else {
+    stats.personsCreated++
+    return true
+  }
+
+  try {
+    // Use conditional write to prevent duplicate entries if two migration runs overlap
+    // This is an atomic operation that fails if the record already exists
     await docClient.send(new PutCommand({
       TableName: TEE_ADMIN_TABLE,
       Item: record,
+      // Prevent overwriting existing records (race condition protection)
+      ConditionExpression: 'attribute_not_exists(pkey)',
     }))
     console.log(`   ✅ Created PERSON: ${displayName} (${person.email})`)
+    stats.personsCreated++
+    return true
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      // Another process created this record - this is fine, not an error
+      console.log(`   ⏭️  Skipping ${person.email} - PersonRecord was created by concurrent process`)
+      return false
+    }
+    throw error
   }
-  stats.personsCreated++
 }
 
 async function createPersonEmailRecord(personId: string, email: string, emailType: 'primary' | 'secondary', order: number, verified: boolean): Promise<void> {
@@ -386,25 +455,57 @@ async function migrate(): Promise<void> {
     const email = user.email?.toLowerCase() || user.pkey?.replace('USER#', '').toLowerCase()
     if (!email) continue
 
+    // Parse name from user record
+    const nameFromUser = user.name || ''
+    const nameParts = nameFromUser.split(' ')
+    const userFirstName = user.firstName || nameParts[0] || ''
+    const userLastName = user.lastName || nameParts.slice(1).join(' ') || ''
+
+    // Convert emailVerified to ISO string
+    let emailVerifiedStr: string | undefined
+    if (user.emailVerified) {
+      if (user.emailVerified instanceof Date) {
+        emailVerifiedStr = user.emailVerified.toISOString()
+      } else if (typeof user.emailVerified === 'string') {
+        emailVerifiedStr = user.emailVerified
+      } else if (typeof user.emailVerified === 'number') {
+        emailVerifiedStr = new Date(user.emailVerified).toISOString()
+      }
+    }
+
     const existing = personMap.get(email)
     if (existing) {
       existing.userId = user.id || user.pkey?.replace('USER#', '')
       existing.role = user.role as any
       existing.provider = user.provider as any
+      // Add auth fields
+      if (user.hashedPassword) existing.hashedPassword = user.hashedPassword
+      if (emailVerifiedStr) existing.emailVerified = emailVerifiedStr
+      if (user.googleId) existing.googleId = user.googleId
+      if (user.image) existing.image = user.image
+      // Fill in name if directory didn't have it
+      if (!existing.firstName && userFirstName) existing.firstName = cleanName(userFirstName)
+      if (!existing.lastName && userLastName) existing.lastName = cleanName(userLastName)
+      if (!existing.ecclesia && user.ecclesia) existing.ecclesia = user.ecclesia
     } else {
       // User not in directory - create person from user record
       personMap.set(email, {
         personId: uuidv4(),
         email,
-        firstName: '',
-        lastName: '',
-        ecclesia: '',
+        firstName: cleanName(userFirstName),
+        lastName: cleanName(userLastName),
+        ecclesia: user.ecclesia || '',
         memberStatus: 'visitor',
         userId: user.id || user.pkey?.replace('USER#', ''),
         role: user.role as any,
         provider: user.provider as any,
         phones: [],
         addresses: [],
+        // Auth fields
+        hashedPassword: user.hashedPassword,
+        emailVerified: emailVerifiedStr,
+        googleId: user.googleId,
+        image: user.image,
       })
     }
   }
@@ -416,8 +517,13 @@ async function migrate(): Promise<void> {
 
   for (const [email, person] of personMap) {
     try {
-      // Create the person record
-      await createPersonRecord(person)
+      // Create the person record (returns false if already exists)
+      const created = await createPersonRecord(person)
+
+      // Only create related records if we created the person record
+      if (!created) {
+        continue
+      }
 
       // Create primary email record
       await createPersonEmailRecord(person.personId, email, 'primary', 0, true)

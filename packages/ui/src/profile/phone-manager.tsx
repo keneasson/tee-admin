@@ -129,10 +129,12 @@ export const PhoneManager: React.FC<PhoneManagerProps> = ({
               backgroundColor={index === 0 ? '$blue2' : '$backgroundHover'}
               borderWidth={index === 0 ? 1 : 0}
               borderColor="$blue6"
-              draggable={!readOnly}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e: React.DragEvent) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
+              {...({
+                draggable: !readOnly,
+                onDragStart: () => handleDragStart(index),
+                onDragOver: (e: React.DragEvent) => handleDragOver(e, index),
+                onDragEnd: handleDragEnd,
+              } as any)}
               opacity={draggedIndex === index ? 0.5 : 1}
             >
               <XStack gap="$3" alignItems="center">

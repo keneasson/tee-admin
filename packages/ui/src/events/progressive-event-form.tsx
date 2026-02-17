@@ -1,4 +1,4 @@
-import { Event, EventType, EventStatus } from '@my/app/types/events'
+import { Event, EventType, EventStatus, isEventActive } from '@my/app/types/events'
 import { EventValidator } from '@my/app/utils/event-validation'
 import { TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
@@ -15,10 +15,11 @@ import {
   Settings,
   User,
   CheckCircle,
+  Layers,
 } from '@tamagui/lucide-icons'
 import { useState, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Button, Card, Circle, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
+import { Button, Card, Circle, Separator, Switch, Text, XStack, YStack, AlertDialog } from 'tamagui'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
 import { EventDatePicker } from '../form/event-date-picker'
@@ -37,13 +38,14 @@ import {
   SpeakerSection,
 } from './event-form-sections'
 import { DocumentsSection } from './form-sections/documents-section'
+import { SectionsEditor } from './sections-editor'
 import { EventTypeSelector } from './event-type-selector'
 import { EventValidationSummary } from './event-status-indicator'
 
 interface ProgressiveEventFormProps {
   initialData?: Partial<Event>
   onSave: (data: any) => Promise<void>
-  onAutoSave?: (data: any) => Promise<void> // Auto-save callback for drafts
+  onAutoSave?: (data: any) => Promise<any> // Auto-save callback for drafts
   onPreview?: (data: any) => void
   isLoading?: boolean
   skipTypeSelection?: boolean // Allow skipping type selection for edit mode
@@ -162,14 +164,7 @@ function CollapsibleComponent({
             bordered
             elevate
             key="content"
-            animation={[
-              'quick',
-              {
-                opacity: {
-                  overshootClamping: true,
-                },
-              },
-            ]}
+            animation="quick"
             enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
             exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
             x={0}
@@ -207,9 +202,13 @@ function CollapsibleComponent({
 function EventStatusSection({
   formData,
   currentSelectedType,
+  isActive,
+  onActiveChange,
 }: {
   formData: any
   currentSelectedType?: EventType
+  isActive: boolean
+  onActiveChange: (active: boolean) => void
 }) {
   if (!currentSelectedType) return null
 
@@ -218,7 +217,29 @@ function EventStatusSection({
     type: currentSelectedType,
   }
 
-  return <EventValidationSummary event={eventData} showWarnings />
+  return (
+    <YStack gap="$3">
+      <XStack alignItems="center" justifyContent="space-between" paddingHorizontal="$2">
+        <XStack alignItems="center" gap="$3">
+          <Switch
+            size="$3"
+            checked={isActive}
+            onCheckedChange={onActiveChange}
+          >
+            <Switch.Thumb animation="quick" />
+          </Switch>
+          <Text
+            fontSize="$4"
+            fontWeight="600"
+            color={isActive ? '$green10' : '$gray10'}
+          >
+            {isActive ? 'Active (visible to public)' : 'Inactive (hidden)'}
+          </Text>
+        </XStack>
+      </XStack>
+      <EventValidationSummary event={eventData} showWarnings />
+    </YStack>
+  )
 }
 
 // Breadcrumb component
@@ -335,7 +356,7 @@ function StepBreadcrumb({
             </Text>
           </> : null}
         {autoSaveStatus === 'saving' ? <>
-            <Circle size="$0.5" backgroundColor="$blue10" animation="spin" />
+            <Circle size="$0.5" backgroundColor="$blue10" animation="quick" />
             <Text fontSize="$2" color="$blue11">
               Saving...
             </Text>
@@ -517,6 +538,12 @@ export function ProgressiveEventForm({
   // Use prop selectedType if provided, otherwise use state
   const currentSelectedType = selectedType || selectedTypeState
 
+  // Check if a location object has meaningful content (not just empty defaults)
+  const hasLocationContent = (loc: any): boolean => {
+    if (!loc) return false
+    return !!(loc.name || loc.address || loc.city || loc.directions || loc.onlineMeeting?.link)
+  }
+
   // Function to detect which components should be active based on existing data
   const getInitialActiveComponents = (): string[] => {
     if (!initialData) return []
@@ -536,9 +563,10 @@ export function ProgressiveEventForm({
     // Type-specific components
     if (currentSelectedType === 'study-weekend') {
       if (initialData.hostingEcclesia) active.push('hosting')
-      if (initialData.location) active.push('location')
+      if (hasLocationContent(initialData.location)) active.push('location')
       if (initialData.speakers && initialData.speakers.length > 0) active.push('speakers')
       if (initialData.schedule && initialData.schedule.length > 0) active.push('schedule')
+      if (initialData.sections && initialData.sections.length > 0) active.push('sections')
       if (initialData.registration) active.push('registration')
     }
 
@@ -556,28 +584,34 @@ export function ProgressiveEventForm({
 
     if (currentSelectedType === 'funeral') {
       // Check for any location data - component ID is 'locations', not 'service-location'
-      if (initialData.locations?.service || initialData.locations?.viewing || initialData.locations?.visitation || initialData.locations?.burial || initialData.locations?.graveside) {
+      const funeralLocations = initialData.locations as any
+      if (funeralLocations?.service || funeralLocations?.viewing || funeralLocations?.visitation || funeralLocations?.burial || funeralLocations?.graveside) {
         active.push('locations')
       }
       if (initialData.speakers && initialData.speakers.length > 0) active.push('speakers')
     }
 
     if (currentSelectedType === 'general') {
-      if (initialData.location) active.push('location')
-      if (initialData.locations && initialData.locations.length > 0) active.push('locations')
+      if (hasLocationContent(initialData.location)) active.push('location')
+      if (initialData.locations && Array.isArray(initialData.locations) && initialData.locations.length > 0) active.push('locations')
       if (initialData.speakers && initialData.speakers.length > 0) active.push('speakers')
       if (initialData.schedule && initialData.schedule.length > 0) active.push('schedule')
+      if (initialData.sections && initialData.sections.length > 0) active.push('sections')
       if (initialData.registration) active.push('registration')
     }
 
     if (currentSelectedType === 'recurring') {
-      if (initialData.location) active.push('location')
+      if (hasLocationContent(initialData.location)) active.push('location')
     }
 
     return active
   }
 
   const [activeComponents, setActiveComponents] = useState<string[]>(getInitialActiveComponents())
+  // Active toggle state — initialized from saved data
+  const [eventActiveToggle, setEventActiveToggle] = useState<boolean>(
+    initialData ? isEventActive(initialData) : false
+  )
   // Start at 'basic' step if we're skipping type selection (edit mode) and have a type
   const [step, setStep] = useState<'type' | 'basic' | 'components' | 'review'>(
     skipTypeSelection && initialData?.type ? 'basic' : 'type'
@@ -595,7 +629,7 @@ export function ProgressiveEventForm({
     defaultValues: {
       title: initialData?.title || '',
       description: initialData?.description || '',
-      publishDate: initialData?.publishDate,
+      publishDate: initialData?.publishDate || undefined, // Only set explicitly — never auto-reset
       membersOnly: initialData?.membersOnly || false,
       // Type-specific defaults
       ...(currentSelectedType === 'study-weekend' && {
@@ -628,6 +662,7 @@ export function ProgressiveEventForm({
         theme: initialData?.theme || '',
         speakers: initialData?.speakers || [],
         schedule: initialData?.schedule || [],
+        sections: initialData?.sections || [],
         registration: initialData?.registration || null,
         documents: initialData?.documents || [],
       }),
@@ -711,6 +746,7 @@ export function ProgressiveEventForm({
         location: initialData?.location,
         speakers: initialData?.speakers || [],
         schedule: initialData?.schedule || [],
+        sections: initialData?.sections || [],
         registration: initialData?.registration,
         documents: initialData?.documents || [],
       }),
@@ -789,6 +825,38 @@ export function ProgressiveEventForm({
     if (currentSelectedType === 'study-weekend') {
       return [
         {
+          id: 'hosting',
+          label: 'Hosting Ecclesia',
+          icon: User,
+          description: 'Which ecclesia is hosting the event',
+          component: (
+            <YStack padding="$3" gap="$3">
+              <EcclesiaSearchInput
+                control={control}
+                name="hostingEcclesia"
+                label="Hosting Ecclesia"
+                placeholder="Search for hosting ecclesia..."
+              />
+            </YStack>
+          ),
+        },
+        {
+          id: 'location',
+          label: 'Location Details',
+          icon: MapPin,
+          description: 'Event venue information',
+          component: (
+            <LocationSection
+              control={control}
+              setValue={setValue}
+              namePrefix="location"
+              title="Event Location"
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
+            />
+          ),
+        },
+        {
           id: 'speakers',
           label: 'Speakers',
           icon: User,
@@ -801,6 +869,13 @@ export function ProgressiveEventForm({
           icon: Calendar,
           description: 'Detailed event schedule',
           component: <ScheduleSection control={control} namePrefix="schedule" />,
+        },
+        {
+          id: 'sections',
+          label: 'Sections (Multi-Location)',
+          icon: Layers,
+          description: 'Organize event into sections with different locations and days',
+          component: <SectionsEditor control={control} namePrefix="sections" setValue={setValue as any} />,
         },
         {
           id: 'registration',
@@ -925,14 +1000,14 @@ export function ProgressiveEventForm({
               />
               <EventDatePicker
                 control={control}
-                name="reception.date"
+                name={"reception.date" as any}
                 label="Reception Date"
                 includeTime
                 onDateChange={handleFieldChange}
               />
               <EventFormInput
                 control={control}
-                name="reception.details"
+                name={"reception.details" as any}
                 label="Reception Details"
                 placeholder="Additional reception information"
                 multiline
@@ -1072,6 +1147,13 @@ export function ProgressiveEventForm({
           component: <ScheduleSection control={control} namePrefix="schedule" />,
         },
         {
+          id: 'sections',
+          label: 'Sections (Multi-Location)',
+          icon: Layers,
+          description: 'Organize event into sections with different locations and days',
+          component: <SectionsEditor control={control} namePrefix="sections" setValue={setValue as any} />,
+        },
+        {
           id: 'registration',
           label: 'Registration',
           icon: Settings,
@@ -1132,21 +1214,58 @@ export function ProgressiveEventForm({
 
   const removeComponent = (componentId: string) => {
     setActiveComponents(activeComponents.filter((id) => id !== componentId))
+
+    // Clear form data for removed component so it doesn't persist on save/reload
+    const fieldsToClear: Record<string, any> = {
+      location: { location: undefined },
+      locations: { locations: undefined },
+      sections: { sections: undefined },
+      hosting: { hostingEcclesia: undefined },
+      speakers: { speakers: [] },
+      schedule: { schedule: [] },
+      registration: { registration: undefined },
+    }
+    const fields = fieldsToClear[componentId]
+    if (fields) {
+      for (const [field, value] of Object.entries(fields)) {
+        setValue(field as any, value)
+      }
+    }
+  }
+
+  // Strip fields for optional components that aren't active
+  // This prevents form defaults from being saved when the user hasn't added the component
+  const stripInactiveComponentFields = (data: any) => {
+    const optionalFieldMap: Record<string, string[]> = {
+      hosting: ['hostingEcclesia'],
+      location: ['location'],
+      locations: ['locations'],
+      sections: ['sections'],
+    }
+    const cleaned = { ...data }
+    for (const [componentId, fields] of Object.entries(optionalFieldMap)) {
+      if (!activeComponents.includes(componentId)) {
+        for (const field of fields) {
+          delete cleaned[field]
+        }
+      }
+    }
+    return cleaned
   }
 
   const onSubmit = async (data: any) => {
-    // Check if event passes validation
-    const validation = EventValidator.canPublish({ ...data, type: currentSelectedType })
+    const cleanedData = stripInactiveComponentFields(data)
 
-    // Set status based on validation
+    // Check if event passes validation for legacy status field
+    const validation = EventValidator.canPublish({ ...cleanedData, type: currentSelectedType } as Partial<Event>)
     const status: EventStatus = validation.isValid ? 'ready' : 'draft'
 
     const eventData = {
-      ...data,
+      ...cleanedData,
       type: currentSelectedType,
-      id: persistentEventId, // Use persistent ID for final save too
-      status,
-      // Note: No 'published' field needed - it's computed from status + publishDate
+      id: persistentEventId,
+      active: eventActiveToggle,
+      status, // Legacy: kept for backward compatibility
     }
     await onSave(eventData)
   }
@@ -1159,21 +1278,21 @@ export function ProgressiveEventForm({
       const currentConfig = getValues('recurringConfig')
       if (!currentConfig || !currentConfig.frequency) {
         setValue('recurringConfig', {
-          daysOfWeek: [],
+          daysOfWeek: [] as number[],
           startTime: '19:00',
-          endTime: '20:30', 
-          frequency: 'weekly',
+          endTime: '20:30',
+          frequency: 'weekly' as const,
           dateRange: {
             start: new Date(),
             end: new Date(new Date().getTime() + 365 * 24 * 60 * 60 * 1000), // 1 year later
             hidesTimes: false,
-          },
+          } as { start: Date; end: Date; hidesTimes: boolean },
           exceptions: [],
           location: '',
           description: '',
           contactPerson: '',
           ...currentConfig // Preserve any existing values
-        })
+        } as any)
       }
     }
   }, [currentSelectedType, setValue, getValues])
@@ -1185,9 +1304,10 @@ export function ProgressiveEventForm({
     try {
       setAutoSaveStatus('saving')
       const eventData = {
-        ...currentFormData,
+        ...stripInactiveComponentFields(currentFormData),
         type: currentSelectedType,
         id: persistentEventId,
+        active: eventActiveToggle,
       }
       const savedEvent = await onAutoSave(eventData)
 
@@ -1237,7 +1357,7 @@ export function ProgressiveEventForm({
   // Debounced auto-save functionality with retry limits (currently disabled)
   const debouncedAutoSave = useCallback(
     (() => {
-      let timeoutId: NodeJS.Timeout
+      let timeoutId: ReturnType<typeof setTimeout>
       return (data: any) => {
         if (!onAutoSave) return
 
@@ -1258,9 +1378,10 @@ export function ProgressiveEventForm({
           try {
             setAutoSaveStatus('saving')
             const eventData = {
-              ...data,
+              ...stripInactiveComponentFields(data),
               type: currentSelectedType,
               id: persistentEventId, // Use persistent ID for all saves
+              active: eventActiveToggle,
             }
             const savedEvent = await onAutoSave(eventData)
 
@@ -1362,7 +1483,7 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
+        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
         <StepSummary
           step="basic"
           currentSelectedType={currentSelectedType}
@@ -1412,23 +1533,6 @@ export function ProgressiveEventForm({
                     />
                   </YStack>
                 </XStack>
-
-                <EcclesiaSearchInput
-                  control={control}
-                  name="hostingEcclesia"
-                  label="Hosting Ecclesia (Optional)"
-                  placeholder="Search for hosting ecclesia..."
-                />
-
-                <LocationSection
-                  control={control}
-                  setValue={setValue}
-                  namePrefix="location"
-                  title="Event Location"
-                  required
-                  showAtTheHallOption={true}
-                  hostingEcclesiaFieldName="hostingEcclesia"
-                />
               </> : null}
 
             {currentSelectedType === 'funeral' ? <>
@@ -1474,7 +1578,7 @@ export function ProgressiveEventForm({
                   <YStack width={200} marginTop="$2">
                     <EventDatePicker
                       control={control}
-                      name="dateOfPassing"
+                      name={"dateOfPassing" as any}
                       label="Date of Passing"
                     />
                   </YStack>
@@ -1744,7 +1848,7 @@ export function ProgressiveEventForm({
                         <Text fontSize="$4" color="$yellow11">
                           {watch('engagementProposed') || '[Proposed]'} is engaged to {watch('engagementTo') || '[To]'},{' '}
                           {watch('engagementDate')
-                            ? new Date(watch('engagementDate')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            ? new Date(watch('engagementDate') as string | Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                             : '[Date]'}.
                         </Text>
                       </YStack>
@@ -2179,7 +2283,7 @@ export function ProgressiveEventForm({
             disabled={isLoading || autoSaveStatus === 'saving'}
             theme="green"
           >
-            {autoSaveStatus === 'saving' ? 'Saving...' : 'Save Draft'}
+            {autoSaveStatus === 'saving' ? 'Saving...' : 'Save'}
           </Button>
 
           <XStack space="$3">
@@ -2209,7 +2313,7 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
+        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
         <StepSummary
           step="components"
           currentSelectedType={currentSelectedType}
@@ -2293,7 +2397,7 @@ export function ProgressiveEventForm({
                   return {
                     onAdd: () => {
                       // Trigger the MultipleLocationsSection's add function
-                      const locationsField = getValues('locations') || []
+                      const locationsField = (getValues('locations') || []) as any[]
                       setValue('locations', [
                         ...locationsField,
                         {
@@ -2374,7 +2478,7 @@ export function ProgressiveEventForm({
         maxAutoSaveRetries={maxAutoSaveRetries}
         isDirty={isDirty}
       />
-      <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} />
+      <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
       <StepSummary
         step="review"
         currentSelectedType={currentSelectedType}
@@ -2509,7 +2613,7 @@ export function ProgressiveEventForm({
                 <YStack space="$2">
                   <XStack space="$2" alignItems="center">
                     <Text fontWeight="600">Hosted by:</Text>
-                    <Text>{currentFormData.hostingEcclesia.name}</Text>
+                    <Text>{typeof currentFormData.hostingEcclesia === 'string' ? currentFormData.hostingEcclesia : currentFormData.hostingEcclesia.name}</Text>
                   </XStack>
                 </YStack>
               </Card>
@@ -2531,12 +2635,12 @@ export function ProgressiveEventForm({
                 </YStack>
               </Card> : null}
 
-            {currentFormData.speakers?.length > 0 ? <Card padding="$3" backgroundColor="$gray1">
+            {(currentFormData.speakers?.length ?? 0) > 0 ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
                     Speakers
                   </Text>
-                  {currentFormData.speakers.map((speaker: any, index: number) => (
+                  {currentFormData.speakers?.map((speaker: any, index: number) => (
                     <XStack key={index} space="$1" alignItems="center">
                       <Text>
                         {speaker.firstName} {speaker.lastName}
@@ -2595,8 +2699,8 @@ export function ProgressiveEventForm({
             Preview
           </Button> : null}
 
-        <Button icon={Save} onPress={handleSubmit(onSubmit)} disabled={isLoading} theme="blue">
-          {isLoading ? 'Saving...' : 'Save Event'}
+        <Button icon={Save} onPress={handleSubmit(onSubmit)} disabled={isLoading} theme="green">
+          {isLoading ? 'Saving...' : 'Save'}
         </Button>
       </XStack>
     </YStack>

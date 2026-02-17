@@ -11,6 +11,7 @@ describe('Role Assignment', () => {
   describe('getRoleFromLegacyUser', () => {
     it('should assign OWNER role to ken.easson@gmail.com', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Ken',
         LastName: 'Easson',
         Email: 'ken.easson@gmail.com',
@@ -26,6 +27,7 @@ describe('Role Assignment', () => {
 
     it('should assign OWNER role to keneasson@gmail.com (legacy format)', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Ken',
         LastName: 'Easson',
         Email: 'keneasson@gmail.com',
@@ -41,6 +43,7 @@ describe('Role Assignment', () => {
 
     it('should assign MEMBER role to TEE ecclesia users', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'John',
         LastName: 'Doe',
         Email: 'john.doe@example.com',
@@ -56,6 +59,7 @@ describe('Role Assignment', () => {
 
     it('should assign MEMBER role to Peterborough ecclesia users', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Jane',
         LastName: 'Smith',
         Email: 'jane.smith@example.com',
@@ -71,6 +75,7 @@ describe('Role Assignment', () => {
 
     it('should assign GUEST role to other ecclesia users', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Bob',
         LastName: 'Wilson',
         Email: 'bob.wilson@example.com',
@@ -86,6 +91,7 @@ describe('Role Assignment', () => {
 
     it('should handle multiple emails in Email field and match owner', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Ken',
         LastName: 'Easson',
         Email: 'work@company.com\nken.easson@gmail.com\npersonal@other.com',
@@ -101,6 +107,7 @@ describe('Role Assignment', () => {
 
     it('should handle case insensitive email matching', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Ken',
         LastName: 'Easson',
         Email: 'KEN.EASSON@GMAIL.COM',
@@ -116,6 +123,7 @@ describe('Role Assignment', () => {
 
     it('should prioritize owner role over ecclesia-based role', async () => {
       const mockUser: DirectoryType = {
+        Key: 'directory',
         FirstName: 'Ken',
         LastName: 'Easson',
         Email: 'ken.easson@gmail.com',

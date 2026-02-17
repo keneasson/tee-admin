@@ -1,7 +1,74 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Select, Switch, Spinner, Separator } from 'tamagui'
+import { YStack, XStack, Text, Button, Card, Select, Spinner, Separator } from 'tamagui'
 import { Shield, Eye, EyeOff, Phone, Mail, MapPin, Users, Save } from '@tamagui/lucide-icons'
 import type { VisibilityLevel } from '@my/app/provider/dynamodb/types'
+
+// Custom Toggle with text labels for WCAG compliance and clear state indication
+interface LabeledToggleProps {
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}
+
+const LabeledToggle: React.FC<LabeledToggleProps> = ({ checked, onCheckedChange }) => {
+  return (
+    <XStack
+      alignItems="center"
+      justifyContent="center"
+      backgroundColor={checked ? '$primary' : '$backgroundTertiary'}
+      borderRadius={20}
+      borderWidth={2}
+      borderColor={checked ? '$primary' : '$borderColor'}
+      width={72}
+      height={36}
+      pressStyle={{ opacity: 0.8 }}
+      cursor="pointer"
+      onPress={() => onCheckedChange(!checked)}
+      aria-checked={checked}
+      role="switch"
+    >
+      {/* OFF label - visible when unchecked */}
+      <Text
+        fontSize={11}
+        fontWeight="600"
+        color={checked ? 'transparent' : '$color'}
+        position="absolute"
+        right={10}
+        opacity={checked ? 0 : 0.7}
+      >
+        OFF
+      </Text>
+
+      {/* ON label - visible when checked */}
+      <Text
+        fontSize={11}
+        fontWeight="600"
+        color={checked ? 'white' : 'transparent'}
+        position="absolute"
+        left={10}
+        opacity={checked ? 1 : 0}
+      >
+        ON
+      </Text>
+
+      {/* Thumb */}
+      <XStack
+        position="absolute"
+        left={checked ? 40 : 4}
+        width={28}
+        height={28}
+        borderRadius={14}
+        backgroundColor="white"
+        shadowColor="#000"
+        shadowOffset={{ width: 0, height: 2 }}
+        shadowOpacity={0.25}
+        shadowRadius={3}
+        animation="quick"
+        alignItems="center"
+        justifyContent="center"
+      />
+    </XStack>
+  )
+}
 
 interface PrivacySettingsData {
   showName: VisibilityLevel
@@ -165,12 +232,10 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
               </Text>
             </YStack>
             {editable ? (
-              <Switch
+              <LabeledToggle
                 checked={localSettings.allowContactRequests}
                 onCheckedChange={(val) => updateSetting('allowContactRequests', val)}
-              >
-                <Switch.Thumb />
-              </Switch>
+              />
             ) : (
               <Text fontSize="$3" theme="alt2">
                 {localSettings.allowContactRequests ? 'Enabled' : 'Disabled'}

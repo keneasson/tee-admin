@@ -102,10 +102,11 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - **Invitation system**: 8-character codes with 7-day expiry and single-use enforcement
 - **Password requirements**: Minimum 12 characters, spaces encouraged for passphrases
 - **CRITICAL**: Single production DynamoDB - all environments use the SAME tables (`tee-admin`, `tee-schedules`, `tee-sync-status`)
-- User data stored in DynamoDB with email-based account linking
-- Role-based access control (owner, admin, member, guest)
-- Google Sheets integration for schedules, contacts, and newsletters
-- Email campaigns scheduled via AWS EventBridge (migrated from Vercel cron)
+- **People/contacts**: Stored in DynamoDB PersonRecords (`PERSON#` prefix in `tee-admin` table) using adjacency list + overloaded GSI pattern. Each person has one PROFILE item + N EMAIL# items. Lookup by any email via GSI1 in O(1). **NEVER source people data from DIRECTORY#MEMBERS or Google Sheets.**
+- Role-based access control (owner, admin, member, guest) stored on PersonRecord
+- Privacy system: per-field visibility with role-based overrides (Owner sees all, Admin sees same-ecclesia)
+- Google Sheets integration for **schedules/programs only** (NOT members or contacts)
+- Email campaigns scheduled via Vercel cron (AWS EventBridge migration planned for future)
 
 ### Cross-Platform Development & Package Architecture Rules
 
@@ -374,23 +375,13 @@ TEE Admin includes a comprehensive brand system accessible at `/brand/*` routes 
 3. **Phase 3**: Expo SDK 53 + React Native 0.77 ✅
 4. **Phase 4**: Complete App Router migration ✅
 
-### Migration Tracking
-- **Progress Tracker**: `MIGRATION_TRACKER.md`
-- **Risk Evaluation**: `GITHUB_ISSUES/00-comprehensive-risk-evaluation.md`
-- **Upgrade Issues**: `GITHUB_ISSUES/01-05-*.md`
+### Documentation
+- **Architecture Reference**: `docs/ARCHITECTURE.md` - System boundaries, data contracts, integration patterns
+- **Development Guide**: `docs/DEVELOPMENT.md` - Patterns, workflows, learnings
+- **Infrastructure Guide**: `docs/INFRASTRUCTURE.md` - Deployment, email scheduling, AWS services
+- **Migration Archive**: `docs/MIGRATION_ARCHIVE.md` - Historical migration records
 
-### Important Notes for Development
-- **NO PRODUCTION CHANGES** until Phase 0 validation complete
-- **Feature Freeze**: No new features during migration period
-- **Backup Strategy**: Current working state preserved as rollback option
-- **Testing Required**: All changes require comprehensive testing
-- **Documentation**: All migration steps documented for continuity
-
-### Migration Phases (Pending Validation)
-1. **Phase 1**: Foundation (Node.js 22 + Tamagui upgrade)
-2. **Phase 2**: Framework (Next.js 15 + React 19) - **HIGH RISK**
-3. **Phase 3**: Mobile (Expo SDK 53 + React Native 0.77) - **HIGH RISK**
-4. **Phase 4**: Architecture (Pages → App Router migration)
-5. **Phase 5**: Data Layer (TanStack Query implementation)
-
-**⚠️ CRITICAL**: Migration may be halted if Phase 0 validation reveals blocking incompatibilities. Always check `MIGRATION_TRACKER.md` for current status before making any changes.
+### DynamoDB Key Naming Conventions
+- **Legacy pattern**: Tables use `pkey/skey` attribute names (e.g., `tee-admin`, `tee-schedules`)
+- **New standard**: New tables should use `PK/SK` following AWS best practices
+- **Note**: Do not change existing tables; maintain backward compatibility with `pkey/skey`

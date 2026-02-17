@@ -30,6 +30,7 @@ interface LocationInfo {
   city?: string
   province?: string
   postalCode?: string
+  mapsUrl?: string
   onlineMeeting?: {
     platform?: string
     link?: string
@@ -390,6 +391,13 @@ const FuneralEmail: React.FC<FuneralEmailProps> = (props) => {
                           .join(', ')}
                       </Text>
                     )}
+                    {visitationLocation.mapsUrl && (
+                      <Text style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                        <Link href={visitationLocation.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+                          Get Directions
+                        </Link>
+                      </Text>
+                    )}
                   </>
                 )}
                 {/* If same location, just note it */}
@@ -426,6 +434,13 @@ const FuneralEmail: React.FC<FuneralEmailProps> = (props) => {
                         {[location.city, location.province, location.postalCode]
                           .filter(Boolean)
                           .join(', ')}
+                      </Text>
+                    )}
+                    {location.mapsUrl && (
+                      <Text style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                        <Link href={location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+                          Get Directions
+                        </Link>
                       </Text>
                     )}
                   </>
@@ -480,6 +495,13 @@ const FuneralEmail: React.FC<FuneralEmailProps> = (props) => {
                         {[gravesideLocation.city, gravesideLocation.province]
                           .filter(Boolean)
                           .join(', ')}
+                      </Text>
+                    )}
+                    {gravesideLocation.mapsUrl && (
+                      <Text style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                        <Link href={gravesideLocation.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+                          Get Directions
+                        </Link>
                       </Text>
                     )}
                   </>

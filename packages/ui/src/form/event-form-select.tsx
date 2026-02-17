@@ -57,7 +57,7 @@ export function EventFormSelect<T extends FieldValues>({
         id={name}
         value={value || ''}
         onValueChange={handleChange}
-        disabled={disabled}
+        {...({ disabled } as any)}
       >
         <Select.Trigger
           borderColor={error ? '$red8' : '$borderColor'}

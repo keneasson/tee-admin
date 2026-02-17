@@ -1,5 +1,6 @@
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { convertHumanReadableDate } from './date'
+import { formatScheduleDateForEmail } from '@my/app/utils/timezone'
 
 import { ProgramsTypes } from '@my/app/types'
 import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
@@ -9,7 +10,7 @@ import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
  * Returns the next 2 events for each schedule type, sorted by date
  *
  * Data flow: Google Sheets → DynamoDB sync → This function
- * YouTube URLs are stored in DynamoDB after being synced from Google Sheets
+ * YouTube URLs are added to memorial services via YouTube API sync (separate process)
  */
 export async function get_upcoming_program(
   orderOfKeys: ProgramTypeKeys[]
@@ -17,7 +18,13 @@ export async function get_upcoming_program(
   try {
     console.log('📅 Fetching upcoming program from DynamoDB')
     const scheduleService = new ScheduleService()
+
+    // CRITICAL FIX: Compare dates at midnight, not including time
+    // This ensures events scheduled for TODAY are included even if the email
+    // is sent after midnight (e.g., Bible class email sent Wednesday morning
+    // should include Wednesday's Bible class, not skip to next week)
     const NOW = new Date()
+    const TODAY_MIDNIGHT = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate())
 
     const upcoming: ProgramTypes[] = []
 
@@ -31,11 +38,13 @@ export async function get_upcoming_program(
           continue
         }
 
-        // Filter to upcoming events and take the next 2
+        // Filter to upcoming events (including today) and take the next 2
         const upcomingEvents = scheduleData.content
           .filter((event: any) => {
             const eventDate = new Date(event.Date || event.date)
-            return !isNaN(eventDate.getTime()) && eventDate.getTime() >= NOW.getTime()
+            // Compare at midnight to include events scheduled for today
+            const eventDateMidnight = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate())
+            return !isNaN(eventDate.getTime()) && eventDateMidnight.getTime() >= TODAY_MIDNIGHT.getTime()
           })
           .slice(0, 2) // Take next 2 events
 
@@ -44,10 +53,26 @@ export async function get_upcoming_program(
           const eventDate = new Date(event.Date || event.date)
           const programType = sheetKeyToProgramType(sheetKey)
 
+          // Use timezone-aware formatting if DateTime is available
+          // Otherwise fall back to UTC-based date formatting
+          const formattedDate = event.DateTime
+            ? formatScheduleDateForEmail(event.DateTime, undefined, event.ServiceTimezone)
+            : convertHumanReadableDate(eventDate)
+
+          // Log YouTube URL for memorial services (debug)
+          if (sheetKey === 'memorial' && event.YouTube) {
+            console.log(`📺 Memorial ${formattedDate} has YouTube URL: ${event.YouTube}`)
+          } else if (sheetKey === 'memorial') {
+            console.log(`📺 Memorial ${formattedDate} - NO YouTube URL`)
+          }
+
           upcoming.push({
             ...event,
-            Date: convertHumanReadableDate(eventDate),
+            Date: formattedDate,
             Key: programType,
+            // Preserve timezone fields for downstream consumers
+            DateTime: event.DateTime,
+            ServiceTimezone: event.ServiceTimezone,
           } as ProgramTypes)
         }
 

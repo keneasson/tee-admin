@@ -45,8 +45,8 @@ export function DraggableContactCard({ id, children, disabled = false }: Draggab
     <View
       ref={setNodeRef as any}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(listeners as any)}
+      {...(attributes as any)}
       borderWidth={isOver ? 3 : 0}
       borderColor={isOver ? '$blue10' : 'transparent'}
       borderRadius="$3"

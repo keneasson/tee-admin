@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { YStack, XStack, Text, Spinner, Heading, Card, Input, Button, ScrollView } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { useAdminAccess } from '@/hooks/use-admin-access'
+import { useSession } from 'next-auth/react'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Church, MapPin, Phone, Mail, Globe, Pencil, Plus, Trash } from '@tamagui/lucide-icons'
 import { AddEcclesiaModal } from '@my/ui/src/form/add-ecclesia-modal'
 import { Dialog } from 'tamagui'
@@ -17,6 +18,7 @@ interface Ecclesia {
   country?: string
   address?: string
   postalCode?: string
+  venue?: string
   hall?: {
     name?: string
     address?: string
@@ -32,8 +34,10 @@ interface Ecclesia {
 }
 
 export default function EcclesialDirectoryPage() {
-  const { hasAccess, isLoading: authLoading } = useAdminAccess()
+  const { data: session, status } = useSession()
   const isHydrated = useHydrated()
+  const isAdmin = session?.user?.role === ROLES.ADMIN || session?.user?.role === ROLES.OWNER
+  const isAuthenticated = !!session?.user
   const [ecclesias, setEcclesias] = useState<Ecclesia[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -60,10 +64,10 @@ export default function EcclesialDirectoryPage() {
   }, [])
 
   useEffect(() => {
-    if (hasAccess) {
+    if (isAuthenticated) {
       fetchEcclesias()
     }
-  }, [hasAccess, fetchEcclesias])
+  }, [isAuthenticated, fetchEcclesias])
 
   const filteredEcclesias = ecclesias.filter((ecclesia) => {
     if (!searchQuery) return true
@@ -123,11 +127,19 @@ export default function EcclesialDirectoryPage() {
     }
   }
 
-  if (!isHydrated || authLoading || !hasAccess) {
+  if (!isHydrated || status === 'loading') {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
         <Spinner size="small" />
         <Text marginTop="$4">Loading...</Text>
+      </YStack>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
+        <Text>Please sign in to view the Ecclesial Directory.</Text>
       </YStack>
     )
   }
@@ -141,14 +153,16 @@ export default function EcclesialDirectoryPage() {
             View and manage ecclesia information including hall locations and contact details
           </Text>
         </YStack>
-        <Button
-          size="$4"
-          theme="blue"
-          icon={Plus}
-          onPress={handleAddNew}
-        >
-          Add Ecclesia
-        </Button>
+        {isAdmin ? (
+          <Button
+            size="$4"
+            theme="blue"
+            icon={Plus}
+            onPress={handleAddNew}
+          >
+            Add Ecclesia
+          </Button>
+        ) : null}
       </XStack>
 
       {/* Search */}
@@ -205,35 +219,37 @@ export default function EcclesialDirectoryPage() {
                         </Text>
                       ) : null}
                     </YStack>
-                    <XStack gap="$2">
-                      <Button
-                        size="$3"
-                        icon={Pencil}
-                        variant="outlined"
-                        onPress={() => handleEdit(ecclesia)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="$3"
-                        icon={Trash}
-                        backgroundColor={brandColors.light.error}
-                        color="white"
-                        borderWidth={2}
-                        borderColor={brandColors.light.error}
-                        hoverStyle={{
-                          backgroundColor: brandColors.light.error,
-                          opacity: 0.9
-                        }}
-                        onPress={() => handleDeleteClick(ecclesia)}
-                      >
-                        Delete
-                      </Button>
-                    </XStack>
+                    {isAdmin ? (
+                      <XStack gap="$2">
+                        <Button
+                          size="$3"
+                          icon={Pencil}
+                          variant="outlined"
+                          onPress={() => handleEdit(ecclesia)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="$3"
+                          icon={Trash}
+                          backgroundColor={brandColors.light.error}
+                          color="white"
+                          borderWidth={2}
+                          borderColor={brandColors.light.error}
+                          hoverStyle={{
+                            backgroundColor: brandColors.light.error,
+                            opacity: 0.9
+                          }}
+                          onPress={() => handleDeleteClick(ecclesia)}
+                        >
+                          Delete
+                        </Button>
+                      </XStack>
+                    ) : null}
                   </XStack>
 
-                  {/* Hall Information */}
-                  {ecclesia.hall?.name ? (
+                  {/* Venue & Address */}
+                  {(ecclesia.venue || ecclesia.hall?.name || ecclesia.address) ? (
                     <YStack
                       gap="$2"
                       padding="$3"
@@ -243,23 +259,16 @@ export default function EcclesialDirectoryPage() {
                       <XStack gap="$2" alignItems="center">
                         <MapPin size="$0.75" color="$green10" />
                         <Text fontSize="$3" fontWeight="600" color="$green11">
-                          Hall Location
+                          Meeting Location
                         </Text>
                       </XStack>
-                      <Text fontSize="$3">{ecclesia.hall.name}</Text>
-                      {ecclesia.hall.address ? (
-                        <Text fontSize="$3" color="$gray11">{ecclesia.hall.address}</Text>
+                      {(ecclesia.venue || ecclesia.hall?.name) ? (
+                        <Text fontSize="$3" fontWeight="600">{ecclesia.venue || ecclesia.hall?.name}</Text>
                       ) : null}
-                      {(ecclesia.hall.city || ecclesia.hall.province) ? (
-                        <Text fontSize="$3" color="$gray11">
-                          {[
-                            ecclesia.hall.city,
-                            ecclesia.hall.province,
-                            ecclesia.hall.postalCode
-                          ].filter(Boolean).join(', ')}
-                        </Text>
+                      {(ecclesia.address || ecclesia.hall?.address) ? (
+                        <Text fontSize="$3" color="$gray11">{ecclesia.address || ecclesia.hall?.address}</Text>
                       ) : null}
-                      {ecclesia.hall.parkingInfo ? (
+                      {ecclesia.hall?.parkingInfo ? (
                         <Text fontSize="$2" color="$gray10">
                           Parking: {ecclesia.hall.parkingInfo}
                         </Text>
@@ -307,6 +316,7 @@ export default function EcclesialDirectoryPage() {
           city: selectedEcclesia.city,
           address: selectedEcclesia.address || selectedEcclesia.hall?.address,
           postalCode: selectedEcclesia.postalCode || selectedEcclesia.hall?.postalCode,
+          venue: selectedEcclesia.venue || selectedEcclesia.hall?.name,
         } : undefined}
         onEcclesiaAdded={handleEcclesiaAdded}
       />
@@ -325,14 +335,7 @@ export default function EcclesialDirectoryPage() {
             key="content"
             bordered
             elevate
-            animation={[
-              'quick',
-              {
-                opacity: {
-                  overshootClamping: true,
-                },
-              },
-            ]}
+            animation="quick"
             enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
             exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
             gap="$4"

@@ -3,6 +3,7 @@ import type {
   AddressRecord,
   PhoneRecord,
   EmailRecord,
+  UserPreferencesRecord,
   AddressQueryResult,
   PhoneQueryResult,
 } from '../types'
@@ -13,10 +14,10 @@ export interface EmailQueryResult {
 }
 
 /**
- * Repository for user-related records: addresses and phones
+ * Repository for user-related records: addresses, phones, emails, and preferences
  * Uses 'tee-admin' table with lowercase keys (pkey, skey)
  */
-export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord> {
+export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord | EmailRecord | UserPreferencesRecord> {
   constructor() {
     super('admin', false) // false = lowercase keys (pkey, skey)
   }
@@ -56,10 +57,10 @@ export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord> 
    * Add a new address
    */
   async addAddress(email: string, address: Omit<AddressRecord, 'PK' | 'SK' | 'lastUpdated' | 'version'>): Promise<void> {
-    const record: AddressRecord = {
+    const record = {
       ...address,
-      PK: `USER#${email}`,
-      SK: `ADDRESS#${address.addressId}`,
+      pkey: `USER#${email}`,
+      skey: `ADDRESS#${address.addressId}`,
       lastUpdated: new Date().toISOString(),
       version: 0,
     }
@@ -126,10 +127,10 @@ export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord> 
    * Add a new phone
    */
   async addPhone(email: string, phone: Omit<PhoneRecord, 'PK' | 'SK' | 'lastUpdated' | 'version'>): Promise<void> {
-    const record: PhoneRecord = {
+    const record = {
       ...phone,
-      PK: `USER#${email}`,
-      SK: `PHONE#${phone.phoneId}`,
+      pkey: `USER#${email}`,
+      skey: `PHONE#${phone.phoneId}`,
       lastUpdated: new Date().toISOString(),
       version: 0,
     }
@@ -239,10 +240,10 @@ export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord> 
     primaryEmail: string,
     email: Omit<EmailRecord, 'PK' | 'SK' | 'lastUpdated' | 'version'>
   ): Promise<void> {
-    const record: EmailRecord = {
+    const record = {
       ...email,
-      PK: `USER#${primaryEmail}`,
-      SK: `EMAIL#${email.emailId}`,
+      pkey: `USER#${primaryEmail}`,
+      skey: `EMAIL#${email.emailId}`,
       lastUpdated: new Date().toISOString(),
       version: 0,
     }
@@ -304,6 +305,59 @@ export class UserRepository extends BaseRepository<AddressRecord | PhoneRecord> 
         subscribed: email.subscribed,
       })
     }
+  }
+
+  // ===== USER PREFERENCES OPERATIONS =====
+
+  /**
+   * Get user preferences (timezone, date format, etc.)
+   */
+  async getUserPreferences(email: string): Promise<UserPreferencesRecord | null> {
+    const pk = `USER#${email}`
+    const sk = 'PREFERENCES'
+    return this.get(pk, sk) as Promise<UserPreferencesRecord | null>
+  }
+
+  /**
+   * Update user preferences
+   */
+  async updateUserPreferences(
+    email: string,
+    updates: Partial<
+      Pick<UserPreferencesRecord, 'timezone' | 'useAutoTimezone' | 'dateFormat' | 'timeFormat'>
+    >
+  ): Promise<UserPreferencesRecord> {
+    const pk = `USER#${email}`
+    const sk = 'PREFERENCES'
+
+    // Check if record exists
+    const existing = await this.getUserPreferences(email)
+
+    if (existing) {
+      // Update existing record
+      return this.update(pk, sk, updates) as Promise<UserPreferencesRecord>
+    } else {
+      // Create new record
+      const record = {
+        pkey: pk,
+        skey: sk,
+        email,
+        lastUpdated: new Date().toISOString(),
+        version: 0,
+        ...updates,
+      }
+      await this.put(record as any)
+      return record as unknown as UserPreferencesRecord
+    }
+  }
+
+  /**
+   * Get user timezone with fallback to auto-detection default
+   */
+  async getUserTimezone(email: string): Promise<string> {
+    const prefs = await this.getUserPreferences(email)
+    // Default to Toronto if no preference set
+    return prefs?.timezone || 'America/Toronto'
   }
 }
 

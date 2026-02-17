@@ -161,13 +161,13 @@ export const createMockSessionResponse = (user: MockUser | null) => {
  * Check if a role has member-level access or higher
  */
 export const isMemberOrHigher = (role: UserRole): boolean =>
-  [ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER].includes(role)
+  ([ROLES.MEMBER, ROLES.ADMIN, ROLES.OWNER] as readonly string[]).includes(role)
 
 /**
  * Check if a role has admin-level access or higher
  */
 export const isAdminOrOwner = (role: UserRole): boolean =>
-  [ROLES.ADMIN, ROLES.OWNER].includes(role)
+  ([ROLES.ADMIN, ROLES.OWNER] as readonly string[]).includes(role)
 
 /**
  * Get all roles that should have access to a given minimum level

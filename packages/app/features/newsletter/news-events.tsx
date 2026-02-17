@@ -1,18 +1,18 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { YStack, Heading, Text } from '@my/ui'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { Loading } from '@my/app/provider/loading'
-import { useRouter } from 'next/navigation'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
+import type { DisplayDuration } from '@my/app/types/newsletter-rules'
 
 type EventTypeOrder = {
   [key: string]: number
 }
 
 type EventTypeRule = {
-  displayDuration: string
+  displayDuration: DisplayDuration
   priority: number
   includeInSummary: boolean
   requiresCTA: boolean
@@ -55,7 +55,7 @@ const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
     requiresCTA: false,
   },
   'engagement': {
-    displayDuration: '3_weeks_or_until_event_date',
+    displayDuration: '3_weeks_from_publish',
     priority: 3,
     includeInSummary: true,
     requiresCTA: false,
@@ -103,13 +103,18 @@ interface NewsletterEventsProps {
   }
   // Optional prop to exclude certain event types (e.g., baptism, wedding, funeral shown elsewhere)
   excludeTypes?: string[]
+  /**
+   * Optional callback when an event is pressed
+   * Platform-specific navigation should be handled by the caller
+   * If not provided, events are not clickable
+   */
+  onEventPress?: (eventId: string) => void
 }
 
-export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, excludeTypes = [] }) => {
+export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, excludeTypes = [], onEventPress }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -131,10 +136,8 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, exclude
         const data = await response.json()
         console.log(`📦 Received ${data.length} events from API:`, data.map((e: Event) => e.title))
 
-        // Only show published/ready events
-        const publishedEvents = data.filter((event: Event) =>
-          event.status === 'published' || event.status === 'ready'
-        )
+        // Only show active events (uses new active field with legacy fallback)
+        const publishedEvents = data.filter((event: Event) => isEventActive(event))
 
         // Filter by event duration rules
         const currentDate = new Date()
@@ -278,45 +281,19 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, exclude
 
   const { fresh, older } = groupEventsByFreshness(events)
 
-  return (
-    <YStack gap="$4">
-      {/* Fresh events (< 7 days old) - New Announcements */}
-      {fresh.length > 0 && (
-        <YStack gap="$3">
-          <Heading size={3} fontFamily="$body" fontWeight="500" color="$blue10">
-            New Announcements
-          </Heading>
-          <YStack gap="$3">
-            {fresh.map((event) => (
-              <EventSummaryCard
-                key={event.id}
-                event={event}
-                variant="newsletter"
-                onPress={() => router.push(`/events/${event.id}`)}
-              />
-            ))}
-          </YStack>
-        </YStack>
-      )}
+  // Combine fresh and older events into a single sorted list
+  const allSorted = [...fresh, ...older]
 
-      {/* Older events (>= 7 days old) - Ongoing */}
-      {older.length > 0 && (
-        <YStack gap="$3">
-          <Heading size={3} fontFamily="$body" fontWeight="500" color="$textSecondary">
-            {fresh.length > 0 ? 'Ongoing' : 'Announcements'}
-          </Heading>
-          <YStack gap="$3">
-            {older.map((event) => (
-              <EventSummaryCard
-                key={event.id}
-                event={event}
-                variant="newsletter"
-                onPress={() => router.push(`/events/${event.id}`)}
-              />
-            ))}
-          </YStack>
-        </YStack>
-      )}
+  return (
+    <YStack gap="$3">
+      {allSorted.map((event) => (
+        <EventSummaryCard
+          key={event.id}
+          event={event}
+          variant="newsletter"
+          onPress={onEventPress ? () => onEventPress(event.id) : undefined}
+        />
+      ))}
     </YStack>
   )
 }

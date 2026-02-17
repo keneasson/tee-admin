@@ -181,13 +181,16 @@ export async function getDynamoDataForSync(): Promise<Array<{
       }
     })
 
-    return (result.Items || []).map((item: DynamoSyncRecord) => ({
-      skey: item.skey,
-      date: item.date,
-      name: item.name,
-      topic: item.topic,
-      rowChecksum: item.rowChecksum
-    }))
+    return (result.Items || []).map((item) => {
+      const record = item as DynamoSyncRecord
+      return {
+        skey: record.skey,
+        date: record.date,
+        name: record.name,
+        topic: record.topic,
+        rowChecksum: record.rowChecksum,
+      }
+    })
   } catch (error) {
     console.error('Failed to get DynamoDB data for sync:', error)
     return []
@@ -211,14 +214,17 @@ export async function getDynamoData(): Promise<TestSyncRecord[]> {
       }
     })
 
-    return (result.Items || []).map((item: DynamoSyncRecord) => ({
-      Date: item.date,
-      Name: item.name,
-      Topic: item.topic,
-      rowNumber: item.rowNumber,
-      sheetId: item.sheetId,
-      lastModified: item.syncedAt
-    }))
+    return (result.Items || []).map((item) => {
+      const record = item as DynamoSyncRecord
+      return {
+        Date: record.date,
+        Name: record.name,
+        Topic: record.topic,
+        rowNumber: record.rowNumber,
+        sheetId: record.sheetId,
+        lastModified: record.syncedAt,
+      }
+    })
   } catch (error) {
     console.error('Failed to get DynamoDB data:', error)
     return []

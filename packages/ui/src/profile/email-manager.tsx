@@ -126,10 +126,12 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
               backgroundColor={index === 0 ? '$blue2' : '$backgroundHover'}
               borderWidth={index === 0 ? 1 : 0}
               borderColor="$blue6"
-              draggable={!readOnly && !emailEntry.isPrimary}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e: React.DragEvent) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
+              {...({
+                draggable: !readOnly && !emailEntry.isPrimary,
+                onDragStart: () => handleDragStart(index),
+                onDragOver: (e: React.DragEvent) => handleDragOver(e, index),
+                onDragEnd: handleDragEnd,
+              } as any)}
               opacity={draggedIndex === index ? 0.5 : 1}
             >
               <YStack gap="$2">

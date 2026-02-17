@@ -85,14 +85,14 @@ export function OptimizedTextarea<T extends FieldValues>({
         }}
         disabled={disabled}
         rows={rows}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete as any}
         maxLength={maxLength}
         paddingHorizontal="$3"
         paddingVertical="$2.5"
         // Performance optimizations
         textAlignVertical="top"
         multiline
-        // Prevent text node issues in React Native
+        // @ts-expect-error - suppressHydrationWarning is a web-only prop
         suppressHydrationWarning
       />
       

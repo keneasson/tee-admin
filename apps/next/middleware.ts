@@ -1,7 +1,8 @@
 import { auth } from './utils/auth'
 import { NextResponse } from 'next/server'
+import type { NextAuthRequest } from 'next-auth/lib'
 
-export default auth((req) => {
+export default auth((req: NextAuthRequest) => {
   // Check if user is trying to access profile page
   if (req.nextUrl.pathname.startsWith('/profile')) {
     // If no session, redirect to sign-in

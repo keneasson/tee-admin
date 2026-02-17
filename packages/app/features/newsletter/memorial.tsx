@@ -10,19 +10,26 @@ type NextMemorialProps = {
   isSameDay: boolean
 }
 export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) => {
-  if (!event.Exhort && event.Activities) {
+  // No service at hall: Both Exhort AND Preside are blank
+  const noServiceAtHall = !event.Exhort && !event.Preside
+
+  if (noServiceAtHall) {
+    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    const explanation = event.Activities
     return (
       <Section>
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
-        <Paragraph>{event.Activities}</Paragraph>
+        <Paragraph fontWeight={600}>There will be no service at our hall.</Paragraph>
+        {explanation ? <Paragraph>{explanation}</Paragraph> : null}
       </Section>
     )
   }
-  if (!event.Exhort as boolean) {
-    return null
-  }
+
+  // If Exhort is blank but Preside has a value, exhorter is TBD (show "--")
+  const exhorterDisplay = event.Exhort || '--'
+
   return (
     <Section>
       {!isSameDay ? (
@@ -41,7 +48,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
           </Paragraph>
           <Paragraph>
             <Text fontWeight={600}>Exhorting: </Text>
-            <Text>{event.Exhort}</Text>
+            <Text>{exhorterDisplay}</Text>
           </Paragraph>
           <Paragraph>
             <Text fontWeight={600}>Organist: </Text>
@@ -73,7 +80,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
       <Accordion overflow="hidden" type="multiple">
         <Accordion.Item value="a1">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">
-            {({ open }) => (
+            {({ open }: { open: boolean }) => (
               <>
                 <Text>Zoom Info - Click to open</Text>
                 <Square animation="quick" rotate={open ? '180deg' : '0deg'}>
@@ -115,7 +122,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
 
         <Accordion.Item value="a2">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">
-            {({ open }) => (
+            {({ open }: { open: boolean }) => (
               <>
                 <Text>YouTube Info - click to open</Text>
                 <Square animation="quick" rotate={open ? '180deg' : '0deg'}>
@@ -128,7 +135,11 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
             <Paragraph fontWeight={600}>Watch on YouTube</Paragraph>
             <Paragraph>
               <Text>YouTube: </Text>
-              <ExtLink href={event.YouTube}>{event.YouTube}</ExtLink>
+              {event.YouTube ? (
+                <ExtLink href={event.YouTube}>{event.YouTube}</ExtLink>
+              ) : (
+                <Text color="$gray10">(Link not yet available)</Text>
+              )}
             </Paragraph>
             <Paragraph>
               <Text>Previous recordings are available on the Toronto East Christadelphians YouTube channel here: </Text>

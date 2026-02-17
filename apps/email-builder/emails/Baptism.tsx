@@ -41,6 +41,7 @@ export interface BaptismEmailProps {
     city?: string
     province?: string
     postalCode?: string
+    mapsUrl?: string
   }
   hostingEcclesia?: string | { name: string }
   note?: string
@@ -279,6 +280,13 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
                         {[location.city, location.province, location.postalCode]
                           .filter(Boolean)
                           .join(', ')}
+                      </Text>
+                    )}
+                    {location.mapsUrl && (
+                      <Text style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                        <Link href={location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+                          Get Directions
+                        </Link>
                       </Text>
                     )}
                   </>

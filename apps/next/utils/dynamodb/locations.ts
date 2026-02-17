@@ -27,6 +27,7 @@ export interface EcclesiaData {
   city: string
   address?: string
   postalCode?: string
+  venue?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -123,6 +124,7 @@ export async function createEcclesia(data: {
   city: string
   address?: string
   postalCode?: string
+  venue?: string
 }): Promise<EcclesiaData> {
   const now = new Date()
   const ecclesia: EcclesiaData = {
@@ -186,6 +188,7 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
       city: item.city,
       address: item.address,
       postalCode: item.postalCode,
+      venue: item.venue,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }
@@ -221,6 +224,7 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
         city: item.city,
         address: item.address,
         postalCode: item.postalCode,
+        venue: item.venue,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }))
@@ -274,6 +278,7 @@ export async function getEcclesiaByCountry(country: string): Promise<EcclesiaDat
       city: item.city,
       address: item.address,
       postalCode: item.postalCode,
+      venue: item.venue,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -302,6 +307,7 @@ export async function getEcclesiaByProvince(country: string, province: string): 
       city: item.city,
       address: item.address,
       postalCode: item.postalCode,
+      venue: item.venue,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -331,6 +337,7 @@ export async function getEcclesiaByCity(country: string, province: string, city:
       city: item.city,
       address: item.address,
       postalCode: item.postalCode,
+      venue: item.venue,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -362,6 +369,7 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
       city: item.city,
       address: item.address,
       postalCode: item.postalCode,
+      venue: item.venue,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -404,6 +412,7 @@ export async function updateEcclesia(
     city: string
     address?: string
     postalCode?: string
+    venue?: string
   }
 ): Promise<EcclesiaData | null> {
   try {
@@ -441,10 +450,11 @@ export async function updateEcclesia(
           pkey: `ECCLESIA#${original.country}|${original.province}`,
           skey: `${original.city}#${original.name}`,
         },
-        UpdateExpression: 'SET address = :address, postalCode = :postalCode, updatedAt = :updatedAt',
+        UpdateExpression: 'SET address = :address, postalCode = :postalCode, venue = :venue, updatedAt = :updatedAt',
         ExpressionAttributeValues: {
           ':address': data.address || '',
           ':postalCode': data.postalCode || '',
+          ':venue': data.venue || '',
           ':updatedAt': now.toISOString(),
         },
       })
@@ -453,6 +463,7 @@ export async function updateEcclesia(
         ...original,
         address: data.address,
         postalCode: data.postalCode,
+        venue: data.venue,
         updatedAt: now,
       }
     }

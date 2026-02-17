@@ -140,32 +140,38 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
       <Preview>Sunday Recap and Connection Info.</Preview>
       <Body style={main}>
         <Section style={header}>
-          <Heading>Toronto East Christiadelphians</Heading>
+          <Heading>Toronto East Christadelphians</Heading>
           <Text style={defaultText}>{sundaysDateString}</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
         </Section>
 
         {/* Optional Note Section */}
         {note && note.trim() && (
-          <Section style={{
-            backgroundColor: '#fff3cd',
-            padding: '16px',
-            marginTop: '20px',
-            marginBottom: '20px',
-            borderRadius: '4px'
-          }}>
-            <Text style={{
-              ...defaultText,
-              margin: '0 0 8px 0',
-              fontWeight: 'bold'
-            }}>
+          <Section
+            style={{
+              backgroundColor: '#fff3cd',
+              padding: '16px',
+              marginTop: '20px',
+              marginBottom: '20px',
+              borderRadius: '4px',
+            }}
+          >
+            <Text
+              style={{
+                ...defaultText,
+                margin: '0 0 8px 0',
+                fontWeight: 'bold',
+              }}
+            >
               Note:
             </Text>
-            <Text style={{
-              ...defaultText,
-              margin: '0',
-              whiteSpace: 'pre-wrap'
-            }}>
+            <Text
+              style={{
+                ...defaultText,
+                margin: '0',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
               <AutoLinkText text={note} />
             </Text>
           </Section>
@@ -271,9 +277,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
         <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
         {(sundayEvents[1]?.Exhort || sundayEvents[1]?.['Holidays and Special Events']) && (
           <Container style={container} className="container youtube-info">
-            <Heading style={defaultText}>
-              Arrangements for {secondSundayDateString}
-            </Heading>
+            <Heading style={defaultText}>Arrangements for {secondSundayDateString}</Heading>
             <Row>
               <Column style={columnAlignTop}>{MemorialServiceProgram(sundayEvents[1])}</Column>
             </Row>
@@ -321,26 +325,36 @@ const Parking = () => {
 }
 
 const MemorialServiceProgram = (event: SundayEvents) => {
-  if (event.Exhort === '') {
+  // No service at hall: Both Exhort AND Preside are blank
+  const noServiceAtHall = !event.Exhort && !event.Preside
+
+  if (noServiceAtHall) {
+    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    const explanation = event.Activities || event['Holidays and Special Events']
     return (
-      /**
-       * When there's no Memorial Service at TEE's Hall, we need to provide clear alternatives.
-       */
       <Text style={defaultText}>
-        <strong>There will be no Memorial service at the Toronto East Hall.</strong>
-        {event['Holidays and Special Events'] && (
-          <Text>{event['Holidays and Special Events']}</Text>
-        )}
+        <strong>There will be no service at our hall.</strong>
+        {explanation ? (
+          <>
+            <br />
+            <br />
+            <Text>{explanation}</Text>
+          </>
+        ) : null}
       </Text>
-    );
+    )
   }
+
+  // If Exhort is blank but Preside has a value, exhorter is TBD
+  const exhorterDisplay = event.Exhort || '--'
+
   return (
     <Text style={defaultText}>
       {'Presiding: '}
       <strong>{event.Preside}</strong>
       <br />
       {'Exhorting: '}
-      <strong>{event.Exhort}</strong>
+      <strong>{exhorterDisplay}</strong>
       <br />
       {'Keyboardist: '}
       <strong>{event.Organist}</strong>

@@ -1,11 +1,22 @@
 'use client'
 
-import { Section, Text, XStack, YStack, Heading, Button, FormInput, Separator } from '@my/ui'
+import {
+  Section,
+  Text,
+  XStack,
+  YStack,
+  Heading,
+  Button,
+  FormInput,
+  Separator,
+  Select,
+  Input,
+} from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { useEffect, useState } from 'react'
 import { useForm, SubmitHandler } from 'react-hook-form'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { AuthSession, AuthStatus } from '@my/app/types'
+import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 // User profile type from DynamoDB
 type UserProfile = {
   id?: string
@@ -31,10 +42,24 @@ interface InvitationFormData {
   role: string
 }
 
-type ProfileType = {}
-export const Profile: React.FC<ProfileType> = ({}) => {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+/**
+ * Props for Profile component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface ProfileProps {
+  session: AuthSession | null
+  status: AuthStatus
+}
+
+// User preferences type
+type UserPreferences = {
+  timezone?: string
+  useAutoTimezone?: boolean
+  dateFormat?: 'long' | 'short'
+  timeFormat?: '12h' | '24h'
+}
+
+export const Profile: React.FC<ProfileProps> = ({ session, status }) => {
   const isHydrated = useHydrated()
 
   const [user, setUser] = useState<UserProfile | null>(null)
@@ -42,6 +67,20 @@ export const Profile: React.FC<ProfileType> = ({}) => {
   const [invitationMessage, setInvitationMessage] = useState('')
   const [invitationError, setInvitationError] = useState('')
   const [generatedCode, setGeneratedCode] = useState('')
+
+  // Timezone preferences state
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    timezone: DEFAULT_TIMEZONE,
+    useAutoTimezone: false,
+  })
+  const [preferencesLoading, setPreferencesLoading] = useState(false)
+  const [preferencesSaved, setPreferencesSaved] = useState(false)
+
+  // Ecclesia selection state
+  const [ecclesiaInput, setEcclesiaInput] = useState('')
+  const [ecclesiaSaving, setEcclesiaSaving] = useState(false)
+  const [ecclesiaSaved, setEcclesiaSaved] = useState(false)
+  const [ecclesiaError, setEcclesiaError] = useState('')
 
   const {
     control,
@@ -69,6 +108,78 @@ export const Profile: React.FC<ProfileType> = ({}) => {
     }
     getUser()
   }, [session])
+
+  // Load user preferences
+  useEffect(() => {
+    async function loadPreferences() {
+      if (session?.user?.email) {
+        try {
+          const response = await fetch('/api/user/preferences')
+          if (response.ok) {
+            const data = await response.json()
+            setPreferences(data.preferences || { timezone: DEFAULT_TIMEZONE })
+          }
+        } catch (error) {
+          console.error('Failed to fetch user preferences:', error)
+        }
+      }
+    }
+    loadPreferences()
+  }, [session])
+
+  // Save timezone preference
+  const saveTimezonePreference = async (newTimezone: string) => {
+    setPreferencesLoading(true)
+    setPreferencesSaved(false)
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: newTimezone }),
+      })
+      if (response.ok) {
+        setPreferences((prev) => ({ ...prev, timezone: newTimezone }))
+        setPreferencesSaved(true)
+        setTimeout(() => setPreferencesSaved(false), 3000)
+      }
+    } catch (error) {
+      console.error('Failed to save timezone preference:', error)
+    } finally {
+      setPreferencesLoading(false)
+    }
+  }
+
+  // Save ecclesia selection
+  const saveEcclesia = async () => {
+    const trimmed = ecclesiaInput.trim()
+    if (!trimmed) {
+      setEcclesiaError('Please enter an ecclesia name.')
+      return
+    }
+    setEcclesiaSaving(true)
+    setEcclesiaError('')
+    setEcclesiaSaved(false)
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ecclesia: trimmed }),
+      })
+      if (response.ok) {
+        setUser((prev) => prev ? { ...prev, ecclesia: trimmed } : prev)
+        setEcclesiaSaved(true)
+        setTimeout(() => setEcclesiaSaved(false), 3000)
+      } else {
+        const data = await response.json()
+        setEcclesiaError(data.error || 'Failed to save ecclesia.')
+      }
+    } catch (error) {
+      console.error('Failed to save ecclesia:', error)
+      setEcclesiaError('An unexpected error occurred.')
+    } finally {
+      setEcclesiaSaving(false)
+    }
+  }
 
   // Check if user can create invitation codes
   const canCreateInvitations =
@@ -172,6 +283,94 @@ export const Profile: React.FC<ProfileType> = ({}) => {
               </YStack> : null}
           </YStack>
 
+          {/* Ecclesia Selection Prompt */}
+          {user && (!user.ecclesia || user.ecclesia === 'Unknown') ? (
+            <>
+              <Separator />
+              <YStack
+                gap="$3"
+                padding="$4"
+                backgroundColor="$blue2"
+                borderRadius="$4"
+                borderWidth={1}
+                borderColor="$blue6"
+              >
+                <Heading size={4} color="$blue11">
+                  Please select your ecclesia
+                </Heading>
+                <Text fontSize="$3" color="$blue11">
+                  To complete your profile, please enter the name of your ecclesia below.
+                </Text>
+                <XStack gap="$3" alignItems="flex-end">
+                  <YStack flex={1} gap="$1">
+                    <Text fontWeight="600" fontSize="$2">Ecclesia Name</Text>
+                    <Input
+                      value={ecclesiaInput}
+                      onChangeText={(val: string) => { setEcclesiaInput(val); setEcclesiaError('') }}
+                      placeholder="e.g., Toronto East, Peterborough"
+                      size="$4"
+                    />
+                  </YStack>
+                  <Button
+                    onPress={saveEcclesia}
+                    disabled={ecclesiaSaving}
+                    theme="blue"
+                    size="$4"
+                  >
+                    {ecclesiaSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                </XStack>
+                {ecclesiaError ? (
+                  <Text fontSize="$2" color="$red10">{ecclesiaError}</Text>
+                ) : null}
+                {ecclesiaSaved ? (
+                  <Text fontSize="$2" color="$green10">Ecclesia saved!</Text>
+                ) : null}
+              </YStack>
+            </>
+          ) : null}
+
+          {/* Timezone Preferences Section */}
+          <Separator />
+          <YStack gap="$4">
+            <Heading size={4}>Display Preferences</Heading>
+            <Text fontSize="$3" theme="alt2">
+              Choose your timezone for event times in newsletters and schedules.
+            </Text>
+
+            <YStack gap="$2">
+              <Text fontWeight="bold">Timezone</Text>
+              <Select
+                value={preferences.timezone || DEFAULT_TIMEZONE}
+                onValueChange={(value) => saveTimezonePreference(value)}
+                disablePreventBodyScroll
+              >
+                <Select.Trigger width="100%" maxWidth={350}>
+                  <Select.Value placeholder="Select timezone" />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Viewport>
+                    {TIMEZONE_OPTIONS.map((tz, index) => (
+                      <Select.Item key={tz.value} index={index} value={tz.value}>
+                        <Select.ItemText>{tz.label}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select>
+              {preferencesLoading ? (
+                <Text fontSize="$2" theme="alt2">
+                  Saving...
+                </Text>
+              ) : null}
+              {preferencesSaved ? (
+                <Text fontSize="$2" color="$green10">
+                  Timezone saved!
+                </Text>
+              ) : null}
+            </YStack>
+          </YStack>
+
           {/* Invitation Code Creation Section */}
           {canCreateInvitations ? <>
               <Separator />
@@ -251,7 +450,7 @@ export const Profile: React.FC<ProfileType> = ({}) => {
                       </Text>
                     </YStack> : null}
 
-                  <Button type="submit" size="$4" disabled={invitationLoading} theme="blue">
+                  <Button {...({ type: 'submit' } as any)} size="$4" disabled={invitationLoading} theme="blue">
                     {invitationLoading ? 'Creating...' : 'Create Invitation Code'}
                   </Button>
                 </YStack>

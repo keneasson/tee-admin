@@ -292,8 +292,19 @@ export function EventDateRangePicker<T extends FieldValues>({
     value?.start ? new Date(value.start) : new Date()
   )
   const [tempEndDate, setTempEndDate] = useState<Date | null>(
-    value?.end ? new Date(value.end) : null
+    value?.end ? new Date(value.end) : (value?.start ? new Date(value.start) : new Date())
   )
+  // Track whether user is picking the end date (second click)
+  const [selectingEnd, setSelectingEnd] = useState(false)
+  // Separate display month/year for calendar navigation (doesn't change selected dates)
+  const [displayMonth, setDisplayMonth] = useState(() => {
+    const d = value?.start ? new Date(value.start) : new Date()
+    return d.getMonth()
+  })
+  const [displayYear, setDisplayYear] = useState(() => {
+    const d = value?.start ? new Date(value.start) : new Date()
+    return d.getFullYear()
+  })
   const [hidesTimes, setHidesTimes] = useState(value?.hidesTimes || forceHidesTimes || false)
   const [shouldOpenUpward, setShouldOpenUpward] = useState(false)
   const buttonRef = useRef<any>(null)
@@ -382,19 +393,21 @@ export function EventDateRangePicker<T extends FieldValues>({
   }
 
   const handleDateSelect = (date: Date) => {
-    if (!tempStartDate || (tempStartDate && tempEndDate)) {
-      // Starting new selection
+    if (!selectingEnd) {
+      // First click: set start date, default end to same day
       setTempStartDate(date)
-      setTempEndDate(null)
+      setTempEndDate(date)
+      setSelectingEnd(true)
     } else {
-      // Selecting end date
+      // Second click: set end date
       if (date < tempStartDate) {
-        // If end date is before start, swap them
+        // If clicked date is before start, swap
         setTempEndDate(tempStartDate)
         setTempStartDate(date)
       } else {
         setTempEndDate(date)
       }
+      setSelectingEnd(false)
     }
   }
 
@@ -439,26 +452,37 @@ export function EventDateRangePicker<T extends FieldValues>({
   }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setTempStartDate(prev => {
-      const newDate = new Date(prev)
-      if (direction === 'prev') {
-        newDate.setMonth(newDate.getMonth() - 1)
+    if (direction === 'prev') {
+      if (displayMonth === 0) {
+        setDisplayMonth(11)
+        setDisplayYear(displayYear - 1)
       } else {
-        newDate.setMonth(newDate.getMonth() + 1)
+        setDisplayMonth(displayMonth - 1)
       }
-      return newDate
-    })
+    } else {
+      if (displayMonth === 11) {
+        setDisplayMonth(0)
+        setDisplayYear(displayYear + 1)
+      } else {
+        setDisplayMonth(displayMonth + 1)
+      }
+    }
   }
 
-  // Calculate popover position
+  // Reset selection state and navigate to correct month when popover opens
   useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const buttonElement = buttonRef.current
-      const rect = buttonElement.getBoundingClientRect()
-      const viewportHeight = window.innerHeight
-      
-      const shouldOpenUp = rect.bottom > viewportHeight * 0.6
-      setShouldOpenUpward(shouldOpenUp)
+    if (isOpen) {
+      setSelectingEnd(false)
+      // Show the month of the current start date
+      const d = tempStartDate || new Date()
+      setDisplayMonth(d.getMonth())
+      setDisplayYear(d.getFullYear())
+
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect()
+        const viewportHeight = window.innerHeight
+        setShouldOpenUpward(rect.bottom > viewportHeight * 0.6)
+      }
     }
   }, [isOpen])
 
@@ -517,7 +541,7 @@ export function EventDateRangePicker<T extends FieldValues>({
                   ←
                 </Button>
                 <Text fontSize="$5" fontWeight="600">
-                  {tempStartDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                  {new Date(displayYear, displayMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })}
                 </Text>
                 <Button
                   size="$3"
@@ -528,13 +552,18 @@ export function EventDateRangePicker<T extends FieldValues>({
                 </Button>
               </XStack>
 
+              {/* Selection hint */}
+              <Text fontSize="$2" color="$gray11" textAlign="center">
+                {selectingEnd ? 'Select end date' : 'Select start date'}
+              </Text>
+
               {/* Calendar */}
               <CalendarGrid
                 selectedStartDate={tempStartDate}
                 selectedEndDate={tempEndDate}
                 onDateSelect={handleDateSelect}
-                currentMonth={tempStartDate.getMonth()}
-                currentYear={tempStartDate.getFullYear()}
+                currentMonth={displayMonth}
+                currentYear={displayYear}
                 allowSingleDay={allowSingleDay}
               />
 

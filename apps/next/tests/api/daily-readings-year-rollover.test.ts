@@ -57,7 +57,7 @@ function filterReadingsWithYearRollover(
 }
 
 // Mock readings data (simplified version of the actual data)
-const mockReadings = [
+const mockReadings: Array<{ [key: string]: string[] }> = [
   { 'Jan 1': ['Genesis 1-2', 'Psalms 1-2', 'Matthew 1-2'] },
   { 'Jan 2': ['Genesis 3-4', 'Psalms 3-5', 'Matthew 3-4'] },
   { 'Jan 3': ['Genesis 5-6', 'Psalms 6-8', 'Matthew 5'] },
@@ -120,7 +120,7 @@ describe('Daily Readings Year Rollover', () => {
 
   test('returns correct readings in mid-year', () => {
     // A week in June (no year boundary issues)
-    const juneReadings = [
+    const juneReadings: Array<{ [key: string]: string[] }> = [
       { 'Jun 1': ['Reading 1'] },
       { 'Jun 2': ['Reading 2'] },
       { 'Jun 3': ['Reading 3'] },

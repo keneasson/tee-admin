@@ -291,7 +291,7 @@ export function DocumentUpload({
 
       {/* Upload Area */}
       {documents.length < maxFiles ? <YStack
-          {...getRootProps()}
+          {...(getRootProps() as any)}
           borderWidth={2}
           borderStyle="dashed"
           borderColor={isDragActive ? '$blue8' : '$gray6'}
@@ -349,12 +349,14 @@ export function DocumentUpload({
                 borderWidth={isDragOver ? 2 : isGoogleDoc ? 1 : 0}
                 borderColor={isDragOver ? '$blue8' : isGoogleDoc ? '$blue5' : 'transparent'}
                 opacity={isDragging ? 0.5 : 1}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, index)}
-                onDragEnd={handleDragEnd}
+                {...({
+                  draggable: true,
+                  onDragStart: (e: any) => handleDragStart(e, index),
+                  onDragOver: (e: any) => handleDragOver(e, index),
+                  onDragLeave: handleDragLeave,
+                  onDrop: (e: any) => handleDrop(e, index),
+                  onDragEnd: handleDragEnd,
+                } as any)}
                 cursor={isDragging ? 'grabbing' : 'grab'}
               >
                 {/* Drag Handle */}

@@ -52,7 +52,13 @@ const systemAdminPages: MainPageType[] = [
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
 ]
 
-// Community Tools
+// Community pages visible to all authenticated users (member+)
+const communityPages: MainPageType[] = [
+  { path: '/admin/community/ecclesias', label: 'Ecclesial Directory' },
+  { path: '/admin/community/contacts', label: 'Contact List' },
+]
+
+// Community Tools (admin-only extras)
 const communityAdminPages: MainPageType[] = [
   { path: '/admin/community/ecclesias', label: 'Ecclesial Directory' },
   { path: '/admin/community/contacts', label: 'Contact List' },
@@ -204,7 +210,45 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             ))}
           </YStack> : null}
 
-      {/* Community Tools */}
+      {/* Community - for members (non-admin/owner authenticated users) */}
+      {user && user.role === ROLES.MEMBER ? <YStack gap="$1">
+            <Text
+              fontSize="$2"
+              fontWeight="600"
+              color={colors.textSecondary}
+              textTransform="uppercase"
+            >
+              Community
+            </Text>
+            {communityPages.map((page) => (
+              <Button
+                key={page.path}
+                onPress={navigateTo(page.path)}
+                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                borderRadius="$2"
+                justifyContent="flex-start"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
+              >
+                <Text
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
+                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                  }}
+                >
+                  {page.label}
+                </Text>
+              </Button>
+            ))}
+          </YStack> : null}
+
+      {/* Community Tools - admin/owner get full list */}
       {user &&
         (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
             <Text
@@ -324,8 +368,12 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       </ScrollView>
 
       {/* Auth - stays fixed at bottom */}
-      <YStack gap="$2" paddingTop="$2">
-        {user ? <NavitemLogout onSignOut={onSignOut} /> : <LogInUser />}
+      <YStack gap="$2" paddingTop="$2" borderTopWidth={1} borderTopColor={colors.border}>
+        {user ? (
+          <NavitemLogout onSignOut={onSignOut} />
+        ) : (
+          <LogInUser onNavigate={(path) => router.push(path)} />
+        )}
       </YStack>
     </YStack>
   )

@@ -9,7 +9,10 @@ const adminMailDomain = '@tee-admin.com'
 
 const SES_RATE_LIMIT = 14
 
-export type emailReasons = 'sunday-school' | 'newsletter' | 'bible-class' | 'recap' | 'business-meeting' | 'custom' | 'event-announcement' | 'inter-ecclesia'
+// Re-export EmailReasonType from shared types for backward compatibility
+export { type EmailReasonType as emailReasons } from '@my/app/types'
+import { type EmailReasonType } from '@my/app/types'
+type emailReasons = EmailReasonType // Local alias for use in this file
 
 const senders = {
   'sunday-school': {

@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     
     // Direct DynamoDB scan for all EVENT records with the specific title
     const scanParams = {
-      FilterExpression: 'begins_with(pkey, :eventPrefix) AND contains(title, :title)',
-      ExpressionAttributeValues: {
+      filterExpression: 'begins_with(pkey, :eventPrefix) AND contains(title, :title)',
+      expressionAttributeValues: {
         ':eventPrefix': 'EVENT',
         ':title': title
       }
@@ -32,14 +32,14 @@ export async function GET(request: NextRequest) {
     do {
       const scanResult = await scheduleRepo.scan({
         ...scanParams,
-        ...(lastEvaluatedKey && { ExclusiveStartKey: lastEvaluatedKey })
+        ...(lastEvaluatedKey ? { lastEvaluatedKey } : {})
       })
       
-      if (scanResult.Items) {
-        allRecords.push(...scanResult.Items)
+      if (scanResult.items) {
+        allRecords.push(...scanResult.items)
       }
-      
-      lastEvaluatedKey = scanResult.LastEvaluatedKey
+
+      lastEvaluatedKey = scanResult.lastEvaluatedKey
     } while (lastEvaluatedKey)
     
     console.log(`[DirectCleanup] Found ${allRecords.length} records`)
@@ -62,10 +62,7 @@ export async function GET(request: NextRequest) {
       // Delete the duplicate records
       const deletePromises = toDelete.map(record => {
         console.log(`[DirectCleanup] Deleting: ${record.pkey}/${record.skey}`)
-        return scheduleRepo.delete({
-          pkey: record.pkey,
-          skey: record.skey
-        })
+        return scheduleRepo.delete(record.pkey, record.skey)
       })
       
       const deleteResults = await Promise.allSettled(deletePromises)

@@ -11,6 +11,7 @@ interface EcclesiaSuggestion {
   city: string
   address?: string
   postalCode?: string
+  venue?: string
 }
 
 interface EcclesiaSearchInputProps<T extends FieldValues> {
@@ -59,7 +60,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
   const [showModal, setShowModal] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const searchTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
   // Update searchQuery when value changes externally
   useEffect(() => {
@@ -160,6 +161,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
       province: suggestion.province,
       country: suggestion.country,
       postalCode: suggestion.postalCode,
+      venue: suggestion.venue,
     })
     setShowDropdown(false)
   }

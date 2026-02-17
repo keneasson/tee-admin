@@ -1,8 +1,8 @@
 'use client'
 
 import { YStack, XStack, Text, H2, H4, Separator, Card, Button, Image } from 'tamagui'
-import { Download, ExternalLink, Lock } from '@tamagui/lucide-icons'
-import { Event } from '@my/app/types/events'
+import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
+import { Event, EventSection } from '@my/app/types/events'
 import {
   formatDateInTimezone,
   formatTimeInTimezone,
@@ -80,29 +80,24 @@ export function EventDetailView({
   const getFormattedDateRange = () => {
     // Check event-type specific date fields first
     if (event.type === 'study-weekend' && event.dateRange) {
-      const startStr = typeof event.dateRange.start === 'string' ? event.dateRange.start : event.dateRange.start.toISOString()
-      const endStr = typeof event.dateRange.end === 'string' ? event.dateRange.end : event.dateRange.end.toISOString()
       const start = new Date(event.dateRange.start)
       const end = new Date(event.dateRange.end)
 
-      // Same month: Oct 10-12, 2025
-      if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
-        return (
-          formatDateInTimezone(startStr, eventTimezone, { weekday: undefined, day: undefined }).split(' ')[0] +
-          ' ' +
-          start.getDate() +
-          '-' +
-          end.getDate() +
-          ', ' +
-          start.getFullYear()
-        )
+      const isSameDay = start.getDate() === end.getDate() &&
+        start.getMonth() === end.getMonth() &&
+        start.getFullYear() === end.getFullYear()
+
+      const fmt = (d: Date, opts?: Intl.DateTimeFormatOptions) =>
+        d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', ...opts })
+
+      if (isSameDay) {
+        // "Friday April 3, 2026"
+        return fmt(start)
       }
-      // Different months: Oct 30 - Nov 2, 2025
-      return (
-        formatDateInTimezone(startStr, eventTimezone, { weekday: undefined, year: undefined }) +
-        ' - ' +
-        formatDateInTimezone(endStr, eventTimezone, { weekday: undefined })
-      )
+      // "Friday April 3 to Sunday April 5, 2026"
+      const startFmt = start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      const endFmt = fmt(end)
+      return `${startFmt} to ${endFmt}`
     } else if (event.type === 'wedding' && event.ceremonyDate) {
       const dateStr = typeof event.ceremonyDate === 'string' ? event.ceremonyDate : event.ceremonyDate.toISOString()
       return formatDateWithTimezone(dateStr, !isDateOnly(dateStr))
@@ -136,7 +131,7 @@ export function EventDetailView({
           frequencyText = `Bi-weekly on ${selectedDays}`
         } else if (frequency === 'monthly') {
           frequencyText = 'Monthly Recurring Event'
-        } else if ((frequency as any) === 'custom') {
+        } else if (frequency === 'custom') {
           frequencyText = 'Custom Recurring Event'
         }
 
@@ -197,24 +192,9 @@ export function EventDetailView({
             : result
         } else {
           // Show date range only (schedule will show times, or no times specified)
-          // Same month: Oct 10-12, 2025
-          if (start.getMonth() === end!.getMonth() && start.getFullYear() === end!.getFullYear()) {
-            return (
-              formatDateInTimezone(startStr, eventTimezone, { weekday: undefined, day: undefined }).split(' ')[0] +
-              ' ' +
-              start.getDate() +
-              '-' +
-              end!.getDate() +
-              ', ' +
-              start.getFullYear()
-            )
-          }
-          // Different months: Oct 30 - Nov 2, 2025
-          return (
-            formatDateInTimezone(startStr, eventTimezone, { weekday: undefined, year: undefined }) +
-            ' - ' +
-            formatDateInTimezone(endStr!, eventTimezone, { weekday: undefined })
-          )
+          const startFmt = start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+          const endFmt = end!.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+          return `${startFmt} to ${endFmt}`
         }
       }
     }
@@ -225,14 +205,14 @@ export function EventDetailView({
   const getScheduleByDay = () => {
     if (!event.schedule || event.schedule.length === 0) return null
 
-    const dayGroups: { [key: string]: typeof event.schedule } = {}
+    const dayGroups: { [key: string]: NonNullable<typeof event.schedule> } = {}
 
     event.schedule.forEach((item) => {
       let dayKey = item.day || 'Schedule'
 
       // If no explicit day but we have a datetime, extract the day from it
-      const timeValue = item.time || item.startTime
-      if (timeValue && timeValue.includes('T') && !item.day) {
+      const timeValue = item.time || (item.startTime ? String(item.startTime) : undefined)
+      if (timeValue && typeof timeValue === 'string' && timeValue.includes('T') && !item.day) {
         const date = new Date(timeValue)
         // Format as "Saturday March 7" for grouping
         const dayName = date.toLocaleDateString('en-US', { weekday: 'long' })
@@ -250,9 +230,9 @@ export function EventDetailView({
     // Sort the groups by date (earliest first)
     const sortedEntries = Object.entries(dayGroups).sort((a, b) => {
       // Try to extract a date from the first item in each group
-      const getFirstDate = (items: typeof event.schedule) => {
-        const timeValue = items[0]?.time || items[0]?.startTime
-        if (timeValue && timeValue.includes('T')) {
+      const getFirstDate = (items: NonNullable<typeof event.schedule>) => {
+        const timeValue = items[0]?.time || (items[0]?.startTime ? String(items[0]?.startTime) : undefined)
+        if (timeValue && typeof timeValue === 'string' && timeValue.includes('T')) {
           return new Date(timeValue).getTime()
         }
         return 0
@@ -463,32 +443,35 @@ export function EventDetailView({
             return (
               <>
                 {/* In-Person Location */}
-                {showInPerson && location.name ? (
+                {showInPerson && (location.name || location.placeName || location.address) ? (
                   <YStack gap="$2">
                     <Text fontSize="$5" fontWeight="600" color="$color">
                       Location
                     </Text>
-                    <Text fontSize="$4" fontWeight="500" color="$gray12">
-                      {location.name}
-                    </Text>
+                    {(location.name || location.placeName) ? (
+                      <Text fontSize="$4" fontWeight="500" color="$gray12">
+                        {location.name || location.placeName}
+                      </Text>
+                    ) : null}
                     {location.address ? (
-                      <YStack gap="$1">
+                      <XStack gap="$2" alignItems="center">
+                        {location.mapsUrl ? (
+                          <Text
+                            cursor="pointer"
+                            hoverStyle={{ opacity: 0.7 }}
+                            onPress={() => {
+                              if (typeof window !== 'undefined') {
+                                window.open(location.mapsUrl, '_blank')
+                              }
+                            }}
+                          >
+                            <MapPin size={16} color="$blue10" />
+                          </Text>
+                        ) : null}
                         <Text fontSize="$4" color="$gray11">
                           {location.address}
                         </Text>
-                        {(location.city || location.province || location.postalCode) ? (
-                          <Text fontSize="$4" color="$gray11">
-                            {[location.city, location.province, location.postalCode]
-                              .filter(Boolean)
-                              .join(', ')}
-                          </Text>
-                        ) : null}
-                        {location.country && location.country !== 'Canada' ? (
-                          <Text fontSize="$4" color="$gray11">
-                            {location.country}
-                          </Text>
-                        ) : null}
-                      </YStack>
+                      </XStack>
                     ) : null}
                     {(event as any).hostingEcclesia ? (
                       <Text fontSize="$4" color="$gray11">
@@ -889,15 +872,132 @@ export function EventDetailView({
         </YStack>
       ) : null}
 
-      {/* Schedule - Clean format by day */}
-      {scheduleByDay ? (
+      {/* Sections - Multi-location, multi-day event display */}
+      {event.sections && event.sections.length > 0 ? (
+        <YStack gap="$4">
+          {event.sections.map((section: EventSection, sectionIndex: number) => {
+            // Format section date
+            let sectionDateStr = ''
+            if (section.date) {
+              const d = new Date(section.date)
+              sectionDateStr = d.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })
+            }
+
+            // Build time range string
+            const timeRange = [section.startTime, section.endTime]
+              .filter(Boolean)
+              .join(' - ')
+
+            return (
+              <YStack key={section.id || sectionIndex} gap="$2">
+                {/* Section header */}
+                <Text fontSize="$5" fontWeight="700" color="$red10">
+                  {section.title}
+                </Text>
+                {sectionDateStr ? (
+                  <Text fontSize="$4" color="$gray11">
+                    {sectionDateStr}{timeRange ? `, ${timeRange}` : ''}
+                  </Text>
+                ) : null}
+                {section.description ? (
+                  <Text fontSize="$4" color="$gray11" fontStyle="italic">
+                    {section.description}
+                  </Text>
+                ) : null}
+
+                {/* Section location (if set) */}
+                {(section.location?.name || section.location?.placeName || section.location?.address) ? (
+                  <YStack gap="$1">
+                    {(section.location.name || section.location.placeName) ? (
+                      <Text fontSize="$4" fontWeight="500" color="$gray12">
+                        {section.location.name || section.location.placeName}
+                      </Text>
+                    ) : null}
+                    {section.location.address ? (
+                      <XStack gap="$2" alignItems="center">
+                        {section.location.mapsUrl ? (
+                          <Text
+                            cursor="pointer"
+                            hoverStyle={{ opacity: 0.7 }}
+                            onPress={() => {
+                              if (typeof window !== 'undefined') {
+                                window.open(section.location!.mapsUrl, '_blank')
+                              }
+                            }}
+                          >
+                            <MapPin size={16} color="$blue10" />
+                          </Text>
+                        ) : null}
+                        <Text fontSize="$3" color="$gray11">
+                          {section.location.address}
+                        </Text>
+                      </XStack>
+                    ) : null}
+                  </YStack>
+                ) : null}
+
+                {/* Section schedule items */}
+                {section.items && section.items.length > 0 ? (
+                  <YStack gap="$1" paddingLeft="$4">
+                    {section.items.map((item, itemIndex) => {
+                      let displayTime = ''
+                      const timeValue = item.time || (item.startTime ? String(item.startTime) : undefined)
+                      if (timeValue && typeof timeValue === 'string') {
+                        if (timeValue.includes('T')) {
+                          const date = new Date(timeValue)
+                          const hours = date.getHours()
+                          const minutes = date.getMinutes()
+                          const ampm = hours >= 12 ? 'pm' : 'am'
+                          const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+                          displayTime = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
+                        } else if (timeValue.includes('-')) {
+                          displayTime = timeValue.split('-')[0].trim()
+                        } else {
+                          displayTime = timeValue
+                        }
+                      }
+
+                      return (
+                        <YStack key={itemIndex} gap="$1">
+                          <Text fontSize="$4" color="$gray12">
+                            {displayTime ? `${displayTime}  ` : ''}
+                            {item.activity || ''}
+                            {item.title ? ` ${item.title}` : ''}
+                          </Text>
+                          {item.location ? (
+                            <YStack paddingLeft="$4">
+                              <Text fontSize="$3" color="$gray11">
+                                {typeof item.location === 'string' ? item.location : item.location.name}
+                              </Text>
+                            </YStack>
+                          ) : null}
+                        </YStack>
+                      )
+                    })}
+                  </YStack>
+                ) : null}
+
+                {/* Separator between sections */}
+                {sectionIndex < event.sections!.length - 1 ? (
+                  <Separator marginVertical="$2" />
+                ) : null}
+              </YStack>
+            )
+          })}
+        </YStack>
+      ) : null}
+
+      {/* Schedule - Clean format by day (flat schedule, used when no sections) */}
+      {!(event.sections && event.sections.length > 0) && scheduleByDay ? (
         <YStack gap="$3">
           <Text fontSize="$5" fontWeight="600" color="$color">
             Schedule:
           </Text>
           {Object.entries(scheduleByDay).map(([dayLabel, items]) => {
-            // dayLabel is already formatted as "Saturday March 7" from getScheduleByDay
-            // or "Schedule" if no date could be extracted
             const showDayLabel = dayLabel !== 'Schedule'
 
             return (
@@ -909,12 +1009,10 @@ export function EventDetailView({
                 ) : null}
                 <YStack gap="$1" paddingLeft="$4">
                   {items.map((item, index) => {
-                    // Format time properly - handle both time strings and ISO date strings
                     let displayTime = ''
-                    const timeValue = item.time || item.startTime
+                    const timeValue = item.time || (item.startTime ? String(item.startTime) : undefined)
 
-                    if (timeValue) {
-                      // Check if it looks like an ISO date string
+                    if (timeValue && typeof timeValue === 'string') {
                       if (timeValue.includes('T')) {
                         const date = new Date(timeValue)
                         const hours = date.getHours()
@@ -923,10 +1021,8 @@ export function EventDetailView({
                         const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
                         displayTime = `${displayHours}:${minutes.toString().padStart(2, '0')}${ampm}`
                       } else if (timeValue.includes('-')) {
-                        // It's a range like "7:30pm-9:00pm", take the first part
                         displayTime = timeValue.split('-')[0].trim()
                       } else {
-                        // Use as-is
                         displayTime = timeValue
                       }
                     }
@@ -993,7 +1089,7 @@ export function EventDetailView({
               Registration Information
             </Text>
 
-            {reg.required && reg.required !== 'false' && reg.required !== false ? (
+            {reg.required && reg.required !== 'false' ? (
               <Text fontSize="$4" color="$red10" fontWeight="600">
                 Registration Required
               </Text>

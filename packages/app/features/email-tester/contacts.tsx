@@ -21,7 +21,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts }) => {
     const sub = methods.watch((value, { name }) => {
       if (subscribers && name) {
         const [key] = name.split('.')
-        const email = subscribers[key]
+        const email = subscribers[Number(key)]
         const preference = value[key] as ContactsEmailPreferences
         const response = updateContacts({ email, lists: preference })
         console.log('fixing ', { email, preference, response })
@@ -48,7 +48,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts }) => {
   )
 }
 
-export const ConnectForm = ({ children }) => {
+export const ConnectForm = ({ children }: { children: (methods: any) => React.ReactNode }) => {
   const methods = useFormContext()
 
   return children({ ...methods })

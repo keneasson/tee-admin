@@ -37,7 +37,7 @@ test.describe('Brand System Performance', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     const startTime = Date.now()
@@ -61,7 +61,7 @@ test.describe('Brand System Performance', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     const startTime = Date.now()
@@ -89,7 +89,7 @@ test.describe('Brand System Performance', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -154,7 +154,7 @@ test.describe('Brand System Visual Regression', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -171,7 +171,7 @@ test.describe('Brand System Visual Regression', () => {
     await page.goto('/brand/typography')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -193,7 +193,7 @@ test.describe('Brand System Visual Regression', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -213,7 +213,7 @@ test.describe('Brand System Visual Regression', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -245,7 +245,7 @@ test.describe('Brand System Visual Regression', () => {
     await page.goto('/brand/navigation')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -272,7 +272,7 @@ test.describe('Brand System Accessibility Performance', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -299,7 +299,7 @@ test.describe('Brand System Accessibility Performance', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')

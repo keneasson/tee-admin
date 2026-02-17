@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { useSession } from 'next-auth/react'
+import { AuthSession, AuthStatus } from '@my/app/types'
 import {
   Button,
   Checkbox,
@@ -102,8 +102,16 @@ const listNames: { key: EmailListTypeKeys; label: string; defaultVisible: boolea
   { key: 'testList', label: 'Test List', defaultVisible: false }
 ]
 
-export const EmailLists: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for EmailLists component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface EmailListsProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const EmailLists: React.FC<EmailListsProps> = ({ session, status = 'authenticated' }) => {
   const [contactLists, setContactLists] = useState<SimplifiedContactListType>()
   const [allContacts, setAllContacts] = useState<SimplifiedContacts>({
     subscribed: {},
@@ -430,12 +438,12 @@ export const EmailLists: React.FC = () => {
 
     try {
       // Group changes by email
-      const changesByEmail: Record<string, Record<EmailListTypeKeys, boolean>> = {}
+      const changesByEmail: Record<string, Partial<Record<EmailListTypeKeys, boolean>>> = {}
       changes.forEach(({ email, list, subscribed }) => {
         if (!changesByEmail[email]) {
           changesByEmail[email] = {}
         }
-        changesByEmail[email][list] = subscribed
+        changesByEmail[email]![list] = subscribed
       })
 
       // Process each email's changes

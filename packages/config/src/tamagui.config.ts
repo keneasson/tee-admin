@@ -67,9 +67,7 @@ export const config = createTamagui({
     body: bodyFont,
     heading: headingFont,
   },
-  settings: {
-    allowedStyleValues: 'somewhat-strict',
-  },
+  settings: {},
   themes: {
     ...themes,
     ...teeThemes,

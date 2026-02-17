@@ -12,9 +12,9 @@ import { fetchUpcoming } from '@my/app/features/newsletter/fetch-upcoming'
 import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readings'
 import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
+import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
-import { useRouter } from 'next/navigation'
 import { Vote } from '@tamagui/lucide-icons'
 
 // Helper function to check if an election-cycle event is currently active
@@ -34,6 +34,11 @@ type NewsletterScreenProps = {
   isAuthLoading?: boolean
   isAdminOrOwner?: boolean
   onClearCache?: () => Promise<void>
+  /**
+   * Optional navigation callback for platform-specific routing
+   * If not provided, navigation is disabled
+   */
+  onNavigate?: (path: string) => void
 }
 
 export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
@@ -42,6 +47,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
   isAuthLoading = false,
   isAdminOrOwner = false,
   onClearCache,
+  onNavigate,
 }) => {
   const [program, setProgram] = useState<ProgramTypes[] | null>(null)
   const [readings, setReadings] = useState<[] | null>(null)
@@ -49,7 +55,6 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
   const [clearingCache, setClearingCache] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const isHydrated = useHydrated()
-  const router = useRouter()
 
   const refreshData = useCallback(async () => {
     setRefreshing(true)
@@ -65,9 +70,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
 
       if (eventsResponse.ok) {
         const data = await eventsResponse.json()
-        const publishedEvents = data.filter((event: Event) =>
-          event.status === 'published' || event.status === 'ready'
-        )
+        const publishedEvents = data.filter((event: Event) => isEventActive(event))
         setUpcomingEvents(publishedEvents)
       }
     } finally {
@@ -100,9 +103,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
         })
         if (response.ok) {
           const data = await response.json()
-          const publishedEvents = data.filter((event: Event) =>
-            event.status === 'published' || event.status === 'ready'
-          )
+          const publishedEvents = data.filter((event: Event) => isEventActive(event))
           setUpcomingEvents(publishedEvents)
         }
       } catch (error) {
@@ -265,7 +266,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                         <EventSummaryCard
                           event={businessMeetingEvent}
                           variant="newsletter"
-                          onPress={() => router.push(`/events/${businessMeetingEvent.id}`)}
+                          onPress={() => onNavigate?.(`/events/${businessMeetingEvent.id}`)}
                           userRole={userRole}
                           isMemberOrHigher={isMemberOrHigher}
                         />
@@ -354,10 +355,31 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
           const now = new Date()
           const freshThreshold = new Date(now.getTime() - FRESH_DAYS * 24 * 60 * 60 * 1000)
 
+          // Duration rules for special announcement types
+          const SPECIAL_DURATION_RULES: Record<string, { displayDuration: string; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
+            'funeral': { displayDuration: '2_weeks_then_thursday_before', priority: 2, includeInSummary: true, requiresCTA: false },
+            'engagement': { displayDuration: '3_weeks_from_publish', priority: 3, includeInSummary: true, requiresCTA: false },
+            'wedding': { displayDuration: '3_weeks_or_until_event_date', priority: 4, includeInSummary: true, requiresCTA: false },
+            'baptism': { displayDuration: '1_week_after_event', priority: 5, includeInSummary: true, requiresCTA: false },
+          }
+
           const specialEvents = upcomingEvents
             .filter(
               (event) => event.type === 'baptism' || event.type === 'wedding' || event.type === 'engagement' || event.type === 'funeral'
             )
+            .filter((event) => {
+              const rule = SPECIAL_DURATION_RULES[event.type]
+              if (!rule) return true
+              const result = EventDurationCalculator.shouldIncludeEvent({
+                event,
+                rule: rule as any,
+                currentDate: now,
+                firstIncludedDate: (event as any).newsletter?.firstIncludedDate
+                  ? new Date((event as any).newsletter.firstIncludedDate)
+                  : undefined,
+              })
+              return result.shouldInclude
+            })
 
           // Smart sort: fresh events first, then by type order, then by publish date
           const smartSort = (a: Event, b: Event) => {
@@ -393,7 +415,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                   key={event.id}
                   event={event}
                   variant="newsletter"
-                  onPress={() => router.push(`/events/${event.id}`)}
+                  onPress={() => onNavigate?.(`/events/${event.id}`)}
                   userRole={userRole}
                   isMemberOrHigher={isMemberOrHigher}
                 />
@@ -405,7 +427,10 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
         {/* Events Section - excludes baptisms, weddings, engagements, funerals, election-cycle (shown above/as message) */}
         <YStack gap="$3" testID="newsletter-upcoming-events">
           <H2 fontFamily="$body" fontWeight="600">Upcoming Events</H2>
-          <NewsEvents excludeTypes={['baptism', 'wedding', 'engagement', 'funeral', 'election-cycle']} />
+          <NewsEvents
+            excludeTypes={['baptism', 'wedding', 'engagement', 'funeral', 'election-cycle']}
+            onEventPress={(eventId) => onNavigate?.(`/events/${eventId}`)}
+          />
         </YStack>
 
         {/* Daily Bible Reading Section */}

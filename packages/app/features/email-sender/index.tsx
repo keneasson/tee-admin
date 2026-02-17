@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import {
   Button,
   Checkbox,
@@ -19,11 +18,10 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { emailReasons } from 'next-app/utils/email/email-send'
 import { Check, Send, Mail, AlertCircle, Edit3 } from '@tamagui/lucide-icons'
 import { sendEmail, getContactsList } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
-import { EmailListTypeKeys } from '@my/app/types'
+import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 
 // Confirmation dialog state type
@@ -36,8 +34,16 @@ interface ConfirmDialogState {
   onConfirm: () => void
 }
 
-export const EmailSender: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for EmailSender component
+ * Session must be passed from platform-specific wrapper (not using next-auth hooks directly)
+ */
+export interface EmailSenderProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'authenticated' }) => {
   const [email, setEmail] = useState<any>(null)
   const [reason, setReason] = useState<string | null>(null)
   const [test, setTest] = useState<boolean>(true) // Default to test mode for safety
@@ -162,7 +168,7 @@ export const EmailSender: React.FC = () => {
   }
 
   // Actually send the email (called after confirmation)
-  const doSendEmail = async (reason: emailReasons) => {
+  const doSendEmail = async (reason: EmailReasonType) => {
     setSending(true)
     setReason(reason)
     try {
@@ -178,7 +184,7 @@ export const EmailSender: React.FC = () => {
   }
 
   // Request to send email - shows confirmation first
-  const getEmail = async (reason: emailReasons, emailLabel: string) => {
+  const getEmail = async (reason: EmailReasonType, emailLabel: string) => {
     showSendConfirmation(emailLabel, reason, () => {
       closeConfirmDialog()
       doSendEmail(reason)
@@ -202,7 +208,7 @@ export const EmailSender: React.FC = () => {
     setSending(true)
     setReason(`${event.type}-announcement`)
     try {
-      const response = await sendEmail('event-announcement' as emailReasons, test, note, {
+      const response = await sendEmail('event-announcement' as EmailReasonType, test, note, {
         eventId: event.id,
         eventType: event.type,
       })
@@ -495,7 +501,7 @@ export const EmailSender: React.FC = () => {
                       width="calc(50% - $1.5)"
                       minWidth={250}
                       cursor="pointer"
-                      onPress={() => getEmail(type.id as emailReasons, type.label)}
+                      onPress={() => getEmail(type.id as EmailReasonType, type.label)}
                     >
                       <YStack gap="$2">
                         <XStack gap="$2" alignItems="center">

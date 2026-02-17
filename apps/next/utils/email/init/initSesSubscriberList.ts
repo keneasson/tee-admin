@@ -5,7 +5,7 @@ import {
   SubscriptionStatus,
 } from '@aws-sdk/client-sesv2'
 import { inputTemplate } from '../contact-lists'
-import { getAwsConfig } from '../contact'
+import { getAwsConfig } from '../sesClient'
 
 /**
  * This basically an initialization code and only needs to be run once... maybe

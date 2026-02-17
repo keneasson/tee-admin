@@ -25,5 +25,5 @@ export function Spinner({ size = 'small', ...props }: SpinnerProps) {
     pixelSize = 14
   }
 
-  return <TamaguiSpinner size={pixelSize} {...props} />
+  return <TamaguiSpinner size={pixelSize as any} {...props} />
 }

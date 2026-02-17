@@ -292,6 +292,34 @@ export class ScheduleService {
     }
   }
 
+  /**
+   * Check if data for a specific type is fresh (within maxAgeMinutes)
+   */
+  async isDataFresh(type: string, maxAgeMinutes: number): Promise<boolean> {
+    try {
+      const response = await this.client.send(new GetCommand({
+        TableName: tableNames.syncStatus,
+        Key: {
+          PK: `SYNC_STATUS#${type}`,
+          SK: 'STATUS',
+        },
+      }))
+
+      if (!response.Item?.lastUpdated) {
+        return false
+      }
+
+      const lastUpdated = new Date(response.Item.lastUpdated).getTime()
+      const now = Date.now()
+      const ageMinutes = (now - lastUpdated) / (1000 * 60)
+
+      return ageMinutes <= maxAgeMinutes
+    } catch (error) {
+      console.error(`Error checking data freshness for ${type}:`, error)
+      return false
+    }
+  }
+
   // Helper methods
   private getHeadersForSheetType(sheetType: string): string[] {
     switch (sheetType) {

@@ -1,6 +1,1 @@
-{
-  "version": 3,
-  "sources": ["/Users/keneasson/code/tee/youtube-admin/packages/config/src/index.ts"],
-  "mappings": ";;;;;;;;;;;AAAA;;0BAAc,6BAAd;",
-  "names": []
-}
+{"version":3,"names":["index_exports","module","exports","__toCommonJS","__reExport","require"],"sources":["../src/index.ts"],"sourcesContent":[null],"mappings":";;;;;;;;;;;;;;;AAAA,IAAAA,aAAA;AAAAC,MAAA,CAAAC,OAAA,GAAAC,YAAA,CAAAH,aAAA;AAAAI,UAAA,CAAAJ,aAAA,EAAcK,OAAA,sBAAdJ,MAAA,CAAAC,OAAA","ignoreList":[]}

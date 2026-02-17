@@ -15,7 +15,7 @@ import { EventsFooter } from '@my/app/features/events/index'
 
 export const TorontoFraternal2024: React.FC = () => {
   return (
-    <Wrapper subHheader={'Toronto Fraternal Gathering'}>
+    <Wrapper subHeader={'Toronto Fraternal Gathering'}>
       <Section
         borderTopColor={'$grey8Dark'}
         borderWidth={1}

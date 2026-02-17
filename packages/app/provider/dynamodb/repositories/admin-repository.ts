@@ -93,8 +93,8 @@ export class AdminRepository extends BaseRepository<DirectoryRecord> {
 
   // Get combined member data (profile + directory info)
   async getMemberData(email: string, sheetId?: string): Promise<MemberData | null> {
-    // Get profile record (existing functionality)
-    const profileResult = await this.get(this.buildUserPK(email), 'PROFILE')
+    // Get profile record (existing functionality) - profile records have different shape than DirectoryRecord
+    const profileResult = await this.get(this.buildUserPK(email), 'PROFILE') as any
     
     // Get directory record if sheetId provided
     let directoryRecord: DirectoryRecord | null = null

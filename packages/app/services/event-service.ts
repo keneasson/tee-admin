@@ -1,5 +1,5 @@
 import { scheduleRepo } from '@my/app/provider/dynamodb'
-import { Event, EventFilters, EventListResponse, UpdateEventRequest, EventType } from '@my/app/types/events'
+import { Event, EventFilters, EventListResponse, UpdateEventRequest, EventType, isEventActive } from '@my/app/types/events'
 import type { ScheduleRecord } from '@my/app/provider/dynamodb/types'
 import { EventValidator } from '@my/app/utils/event-validation'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
@@ -133,7 +133,7 @@ const extractEventTime = (event: Event): string => {
       date = event.startDate ? new Date(event.startDate) : new Date()
       break
     case 'recurring':
-      return event.recurringConfig.startTime
+      return event.recurringConfig!.startTime
     case 'election-cycle':
       return '00:00' // All-day event, no specific time
     default:
@@ -215,15 +215,15 @@ const generateSearchableContent = (event: Event): string => {
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'funeral':
-      searchParts.push(`${event.deceased.firstName} ${event.deceased.lastName}`)
+      searchParts.push(`${event.deceased?.firstName} ${event.deceased?.lastName}`)
       break
     case 'wedding':
-      searchParts.push(`${event.couple.bride.firstName} ${event.couple.bride.lastName}`)
-      searchParts.push(`${event.couple.groom.firstName} ${event.couple.groom.lastName}`)
+      searchParts.push(`${event.couple?.bride.firstName} ${event.couple?.bride.lastName}`)
+      searchParts.push(`${event.couple?.groom.firstName} ${event.couple?.groom.lastName}`)
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'baptism':
-      searchParts.push(`${event.candidate.firstName} ${event.candidate.lastName}`)
+      searchParts.push(`${event.candidate?.firstName} ${event.candidate?.lastName}`)
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'general':
@@ -257,19 +257,36 @@ const scheduleRecordToEvent = (record: ScheduleRecord): Event => {
         createdBy: 'system',
         createdAt: new Date(record.lastUpdated),
         updatedAt: new Date(record.lastUpdated),
+        active: false, // Default to inactive for legacy records
         status: 'draft',
         description: record.description,
         documents: [] // Default to empty array
       } as Event
     }
-    
+
+    // Determine active state from record or data
+    const recordActive = (record as any).active
+    const recordStatus = ((record as any).status as 'draft' | 'ready' | 'published' | 'archived') || eventData.status
+
+    // Compute active: use explicit active field, or derive from legacy status
+    let active: boolean
+    if (typeof recordActive === 'boolean') {
+      active = recordActive
+    } else if (typeof eventData.active === 'boolean') {
+      active = eventData.active
+    } else {
+      // Derive from legacy status
+      active = recordStatus === 'published' || recordStatus === 'ready'
+    }
+
     // Override with any direct fields from the record to ensure consistency
     return {
       ...eventData,
       id: record.eventId!,
       title: record.title || eventData.title,
       featured: (record as any).featured ?? eventData.featured,
-      status: ((record as any).status as 'draft' | 'ready' | 'published' | 'archived') || eventData.status,
+      active, // Use computed active state
+      status: recordStatus, // Keep for backward compatibility
       createdAt: (record as any).createdAt ? new Date((record as any).createdAt) : eventData.createdAt,
       updatedAt: (record as any).updatedAt ? new Date((record as any).updatedAt) : eventData.updatedAt,
       publishDate: (record as any).publishDate ? new Date((record as any).publishDate) : eventData.publishDate,
@@ -283,47 +300,50 @@ const eventToScheduleRecord = (event: Event, eventId: string): any => {
   const hostingEcclesiaName = extractHostingEcclesia(event)
   const eventDate = extractEventDate(event)  // Full date: "2025-10-12"
   const eventTime = extractEventTime(event)  // Time or null
-  
+
   const record: any = {
     PK: `EVENT#${eventId}`,
     SK: 'DETAILS',
-    
+
     // Single GSI for chronological queries
     GSI1PK: 'EVENTS',                       // Simple partition for all events
     GSI1SK: `${eventDate}#${eventId}`,     // Full date + ID: "2025-10-12#uuid123"
-    
+
     // Core fields
     date: eventDate,                       // Required: "2025-10-12"
     time: eventTime || null,               // Optional: "10:00" or null
     title: event.title,                    // Required
     eventType: event.type,                 // Required: "study-weekend"
     ecclesia: hostingEcclesiaName,         // For filtering
-    
+
     // Legacy fields for backward compatibility
     type: 'event' as const,
-    
+
     // Event-specific fields
     eventId,
     description: event.description,
     details: serializeEventData(event) as any, // Store the full Event object as JSON
-    
-    // Enhanced fields
+
+    // New simplified lifecycle
+    active: event.active ?? false, // Is event visible?
+
+    // Legacy status fields (kept for backward compatibility)
     status: event.status,
     featured: event.featured,
     createdBy: event.createdBy,
     createdAt: event.createdAt ? (typeof event.createdAt === 'string' ? event.createdAt : event.createdAt.toISOString()) : new Date().toISOString(),
     updatedAt: event.updatedAt ? (typeof event.updatedAt === 'string' ? event.updatedAt : event.updatedAt.toISOString()) : new Date().toISOString(),
     hostingEcclesia: hostingEcclesiaName,
-    
+
     // Search content for future Elasticsearch integration
     searchableContent: generateSearchableContent(event),
   }
-  
+
   // Only add publishDate if it exists to avoid null/undefined issues
   if (event.publishDate) {
     record.publishDate = typeof event.publishDate === 'string' ? event.publishDate : event.publishDate.toISOString()
   }
-  
+
   return record
 }
 
@@ -389,8 +409,9 @@ export const createEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'u
     id: eventId,
     createdAt: now,
     updatedAt: now,
-    status: processedEventData.status || 'draft', // Default to draft for progressive creation
-    published: processedEventData.published ?? false, // Default to unpublished
+    active: processedEventData.active ?? false, // Default to inactive for progressive creation
+    status: processedEventData.status || 'draft', // Legacy: kept for backward compatibility
+    published: processedEventData.published ?? false, // Legacy: kept for backward compatibility
   } as Event
 
   // Convert Event to ScheduleRecord format with all the rich data
@@ -436,7 +457,8 @@ export const saveEventDraft = async (eventData: Partial<Event> & { id?: string }
       title: eventData.title || 'Untitled Event',
       type: eventData.type || 'general',
       createdBy: eventData.createdBy || 'system',
-      status: 'draft',
+      active: false, // New events start inactive
+      status: 'draft', // Legacy: kept for backward compatibility
       ...eventData,
     } as Omit<Event, 'id' | 'createdAt' | 'updatedAt'>
     
@@ -517,8 +539,18 @@ export const updateEvent = async (updateData: UpdateEventRequest): Promise<Event
     processedUpdateData.registration.deadline = new Date(processedUpdateData.registration.deadline)
   }
   
+  // Fields that can be explicitly removed by omitting them from the update
+  // If the update data doesn't include these, remove them from the existing event
+  const removableFields = ['hostingEcclesia', 'location', 'locations', 'sections'] as const
+  const cleanedExisting = { ...existingEvent }
+  for (const field of removableFields) {
+    if (!(field in processedUpdateData)) {
+      delete (cleanedExisting as any)[field]
+    }
+  }
+
   const updatedEvent: Event = {
-    ...existingEvent,
+    ...cleanedExisting,
     ...processedUpdateData,
     updatedAt: new Date(),
   } as Event
@@ -845,10 +877,10 @@ export const getInterEcclesiaEvents = async (options?: {
     limit: 1000,
   })
 
-  // Filter for published/ready events from the specified ecclesia
+  // Filter for active events from the specified ecclesia
   const filteredEvents = result.events.filter(event => {
-    // Check status - must be published or ready
-    if (event.status !== 'published' && event.status !== 'ready') {
+    // Check active state (uses new active field with legacy fallback)
+    if (!isEventActive(event)) {
       return false
     }
 
@@ -879,7 +911,7 @@ export const getInterEcclesiaEvents = async (options?: {
 }
 
 /**
- * Get only published events for public consumption
+ * Get only active events for public consumption
  * Used by newsletter, events page, and other public-facing components
  * Includes ongoing multi-day events (shows until end date, not just start date)
  * Sorted by start date/time in ascending order (earliest first)
@@ -887,9 +919,10 @@ export const getInterEcclesiaEvents = async (options?: {
 export const getPublishedEvents = async (): Promise<Event[]> => {
   const allEvents = await getAllEvents(false)
   const publishedEvents = allEvents.filter(event => {
-    const isPublished = event.status === 'published' || event.status === 'ready'
-    const isActive = isEventActiveOrUpcoming(event)
-    return isPublished && isActive
+    // Use new isEventActive helper which handles both new and legacy fields
+    const isActiveState = isEventActive(event)
+    const isActiveOrUpcoming = isEventActiveOrUpcoming(event)
+    return isActiveState && isActiveOrUpcoming
   })
 
   // Sort by start date/time in ascending order (earliest first)

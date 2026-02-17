@@ -43,8 +43,6 @@ export default function RealSchedulePage() {
       {/* Real Schedule Table with Live Data */}
       <EnhancedScheduleWithData
         types={['memorial', 'bibleClass', 'sundaySchool', 'cyc']}
-        autoRefresh={true}
-        refreshInterval={5 * 60 * 1000} // 5 minutes
         showAdminFeatures={showAdminFeatures}
       />
       

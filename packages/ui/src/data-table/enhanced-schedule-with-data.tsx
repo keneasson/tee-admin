@@ -58,7 +58,7 @@ export function EnhancedScheduleWithData({
   if (loading && !hasExistingData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
-        <Spinner size={20} color={colors.primary} />
+        <Spinner size="large" color={colors.primary} />
         <Text color={colors.textSecondary} fontSize="$4">
           Loading schedule data...
         </Text>

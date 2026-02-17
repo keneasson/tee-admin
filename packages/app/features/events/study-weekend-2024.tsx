@@ -8,7 +8,7 @@ import { EventsFooter } from '@my/app/features/events/index'
 
 export const StudyWeekend2024: React.FC = () => {
   return (
-    <Wrapper subHheader={'Ecclesial Study Day'}>
+    <Wrapper subHeader={'Ecclesial Study Day'}>
       <Section
         borderTopColor={'$grey8Dark'}
         borderWidth={1}

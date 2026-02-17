@@ -146,6 +146,26 @@ export class YouTubeOAuthRepository extends BaseRepository<YouTubeOAuthToken> {
   }
 
   /**
+   * List all users with YouTube OAuth tokens
+   * Used for automated sync when no specific admin email is configured
+   */
+  async listAllTokens(): Promise<Array<{ userEmail: string; hasRefreshToken: boolean }>> {
+    const result = await this.scan({
+      filterExpression: 'skey = :skey',
+      expressionAttributeValues: {
+        ':skey': 'OAUTH#youtube',
+      },
+    })
+
+    return result.items
+      .filter((item) => item.refreshToken) // Only include users with refresh tokens
+      .map((item) => ({
+        userEmail: item.pkey.replace('USER#', ''),
+        hasRefreshToken: !!item.refreshToken,
+      }))
+  }
+
+  /**
    * Not used for OAuth tokens (required by BaseRepository)
    */
   protected buildSheetPK(sheetId: string): string {

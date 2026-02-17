@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { YStack, Text, Spinner, Heading } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { useAdminAccess } from '@/hooks/use-admin-access'
+import { useUserRole } from '@/hooks/use-user-role'
 import { PeopleBrowser } from '@my/ui/src/people/people-browser'
 
 interface Member {
@@ -15,7 +15,7 @@ interface Member {
 }
 
 export default function AdminContactsPage() {
-  const { hasAccess, isLoading: authLoading } = useAdminAccess()
+  const { isMemberOrHigher, isLoading: authLoading } = useUserRole()
   const router = useRouter()
   const isHydrated = useHydrated()
   const [members, setMembers] = useState<Member[]>([])
@@ -23,20 +23,27 @@ export default function AdminContactsPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedEcclesia, setSelectedEcclesia] = useState<string | null>(null)
-  const [deletingEmail, setDeletingEmail] = useState<string | null>(null)
+  const defaultApplied = useRef(false)
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (ecclesiaOverride?: string | null) => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (searchQuery) params.set('search', searchQuery)
-      if (selectedEcclesia) params.set('ecclesia', selectedEcclesia)
+      const ecc = ecclesiaOverride !== undefined ? ecclesiaOverride : selectedEcclesia
+      if (ecc) params.set('ecclesia', ecc)
 
       const res = await fetch(`/api/people?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
         setMembers(data.members || [])
         setEcclesias(data.ecclesias || [])
+
+        // On first load, default to viewer's home ecclesia
+        if (!defaultApplied.current && data.viewerEcclesia) {
+          defaultApplied.current = true
+          setSelectedEcclesia(data.viewerEcclesia)
+        }
       }
     } catch (error) {
       console.error('Error fetching members:', error)
@@ -46,50 +53,28 @@ export default function AdminContactsPage() {
   }, [searchQuery, selectedEcclesia])
 
   useEffect(() => {
-    if (hasAccess) {
+    if (isMemberOrHigher) {
       fetchMembers()
     }
-  }, [hasAccess, fetchMembers])
+  }, [isMemberOrHigher, fetchMembers])
 
   const handleMemberClick = (email: string) => {
     router.push(`/people/${encodeURIComponent(email)}`)
   }
 
-  const handleDelete = async (email: string) => {
-    const member = members.find(m => m.email === email)
-    const name = member?.name || email
-
-    if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis will remove them from the directory and unsubscribe them from email lists.`)) {
-      return
-    }
-
-    setDeletingEmail(email)
-    try {
-      const response = await fetch(`/api/contacts/${encodeURIComponent(email)}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        alert(`Deleted ${result.deletedRecords} record(s)${result.unsubscribedFromSES ? ' and unsubscribed from email lists' : ''}`)
-        fetchMembers() // Refresh the list
-      } else {
-        const error = await response.json()
-        alert(`Error: ${error.error}`)
-      }
-    } catch (error) {
-      console.error('Error deleting contact:', error)
-      alert('Failed to delete contact')
-    } finally {
-      setDeletingEmail(null)
-    }
-  }
-
-  if (!isHydrated || authLoading || !hasAccess) {
+  if (!isHydrated || authLoading) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
         <Spinner size="large" />
         <Text marginTop="$4">Loading...</Text>
+      </YStack>
+    )
+  }
+
+  if (!isMemberOrHigher) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
+        <Text>You need to be a member to view the Contact List.</Text>
       </YStack>
     )
   }
@@ -107,11 +92,10 @@ export default function AdminContactsPage() {
         members={members}
         ecclesias={ecclesias}
         loading={loading}
+        defaultEcclesia={selectedEcclesia}
         onMemberClick={handleMemberClick}
         onSearch={setSearchQuery}
         onFilterEcclesia={setSelectedEcclesia}
-        onDelete={handleDelete}
-        deletingEmail={deletingEmail}
       />
     </YStack>
   )

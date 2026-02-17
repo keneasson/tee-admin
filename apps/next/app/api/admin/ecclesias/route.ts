@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { getAllEcclesia } from '@/utils/dynamodb/locations'
-import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,11 +8,6 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userRole = (session.user as any).role
-    if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const ecclesias = await getAllEcclesia()

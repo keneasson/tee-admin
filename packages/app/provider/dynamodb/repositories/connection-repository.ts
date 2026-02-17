@@ -28,9 +28,9 @@ export class ConnectionRepository extends BaseRepository<ConnectionRecord> {
   async addConnection(userEmail: string, targetEmail: string): Promise<void> {
     const now = new Date().toISOString()
 
-    const record: ConnectionRecord = {
-      PK: `USER#${userEmail}`,
-      SK: `CONNECTION#${targetEmail}`,
+    const record = {
+      pkey: `USER#${userEmail}`,
+      skey: `CONNECTION#${targetEmail}`,
       targetEmail,
       status: 'active',
       createdAt: now,
@@ -107,9 +107,9 @@ export class ConnectionRepository extends BaseRepository<ConnectionRecord> {
       await this.update(pk, sk, { status: 'blocked' })
     } else {
       // Create a blocked connection
-      const record: ConnectionRecord = {
-        PK: pk,
-        SK: sk,
+      const record = {
+        pkey: pk,
+        skey: sk,
         targetEmail,
         status: 'blocked',
         createdAt: new Date().toISOString(),

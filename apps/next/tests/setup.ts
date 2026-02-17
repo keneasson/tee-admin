@@ -98,14 +98,15 @@ process.env.AWS_REGION = 'ca-central-1'
 process.env.NEXTAUTH_SECRET = 'test-secret'
 
 // Export mocks for use in tests
+type MockFn = ReturnType<typeof vi.fn>
 declare global {
-  var mockPut: typeof mockPut
-  var mockGet: typeof mockGet
-  var mockQuery: typeof mockQuery
-  var mockUpdate: typeof mockUpdate
-  var mockDelete: typeof mockDelete
-  var mockScan: typeof mockScan
-  var mockSend: typeof mockSend
+  var mockPut: MockFn
+  var mockGet: MockFn
+  var mockQuery: MockFn
+  var mockUpdate: MockFn
+  var mockDelete: MockFn
+  var mockScan: MockFn
+  var mockSend: MockFn
 }
 
 globalThis.mockPut = mockPut

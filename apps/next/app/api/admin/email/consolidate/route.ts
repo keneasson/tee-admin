@@ -120,9 +120,12 @@ async function handleMergeContacts(body: any, session: any) {
     // Check if email is unsubscribed in SES
     let isUnsubscribed = false
     try {
-      const sesContact = await getContacts({ email: sesEmail })
-      if (sesContact && sesContact.Contacts && sesContact.Contacts.length > 0) {
-        const contact = sesContact.Contacts[0]
+      const sesContact = await getContacts({ nextPageToken: undefined })
+      const matchingContact = sesContact?.Contacts?.find(
+        (c) => c.EmailAddress?.toLowerCase() === sesEmail.toLowerCase()
+      )
+      if (matchingContact) {
+        const contact = matchingContact
         // Email is unsubscribed if it has no topic preferences or all are OPT_OUT
         isUnsubscribed =
           !contact.TopicPreferences ||

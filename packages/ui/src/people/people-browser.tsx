@@ -14,6 +14,7 @@ interface PeopleBrowserProps {
   members: Member[]
   ecclesias: string[]
   loading?: boolean
+  defaultEcclesia?: string | null
   onMemberClick?: (email: string) => void
   onSearch?: (query: string) => void
   onFilterEcclesia?: (ecclesia: string | null) => void
@@ -25,6 +26,7 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
   members,
   ecclesias,
   loading = false,
+  defaultEcclesia,
   onMemberClick,
   onSearch,
   onFilterEcclesia,
@@ -32,7 +34,9 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
   deletingEmail,
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedEcclesia, setSelectedEcclesia] = useState<string | null>(null)
+  // Use parent-controlled ecclesia if provided, otherwise local state
+  const [localEcclesia, setLocalEcclesia] = useState<string | null>(defaultEcclesia ?? null)
+  const selectedEcclesia = defaultEcclesia !== undefined ? defaultEcclesia : localEcclesia
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
@@ -41,11 +45,11 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
 
   const handleEcclesiaChange = (value: string) => {
     const newValue = value === 'all' ? null : value
-    setSelectedEcclesia(newValue)
+    setLocalEcclesia(newValue)
     onFilterEcclesia?.(newValue)
   }
 
-  // Client-side filtering if no server-side handlers
+  // Client-side filtering
   const filteredMembers = members.filter((member) => {
     const matchesSearch = !searchQuery ||
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

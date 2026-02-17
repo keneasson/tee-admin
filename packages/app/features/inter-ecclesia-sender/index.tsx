@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import {
   Button,
   Checkbox,
@@ -21,6 +20,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, AlertCircle, Users, Calendar, Filter } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
 import { Event } from '@my/app/types/events'
+import { AuthSession, AuthStatus } from '@my/app/types'
 
 // Confirmation dialog state type
 interface ConfirmDialogState {
@@ -41,8 +41,16 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   general: 'General Event',
 }
 
-export const InterEcclesiaEmailSender: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for InterEcclesiaEmailSender component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface InterEcclesiaEmailSenderProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const InterEcclesiaEmailSender: React.FC<InterEcclesiaEmailSenderProps> = ({ session, status = 'authenticated' }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)

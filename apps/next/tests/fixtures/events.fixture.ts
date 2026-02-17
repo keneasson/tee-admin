@@ -36,6 +36,7 @@ const createBaseEvent = (type: EventType, options: BaseEventOptions = {}): Event
   id: options.id ?? generateId(),
   title: options.title ?? `Test ${type} Event`,
   type,
+  active: options.published ?? true, // New lifecycle model: active replaces published/status
   status: options.status ?? 'published',
   published: options.published ?? true,
   createdBy: options.createdBy ?? 'test-user',

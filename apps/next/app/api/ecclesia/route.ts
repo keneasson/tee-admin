@@ -24,14 +24,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, country, province, city, address, postalCode } = body
+    const { name, country, province, city, address, postalCode, venue } = body
 
-    // Validate required fields
-    if (!name || !country || !province || !city) {
+    // Validate required fields - only name is required
+    if (!name) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Name, country, province, and city are required',
+          error: 'Ecclesia name is required',
         },
         { status: 400 }
       )
@@ -50,11 +50,12 @@ export async function POST(request: NextRequest) {
 
     const ecclesia = await createEcclesia({
       name: name.trim(),
-      country: country.trim().toUpperCase(),
-      province: province.trim().toUpperCase(),
-      city: city.trim(),
+      country: (country || 'CA').trim().toUpperCase(),
+      province: (province || '').trim().toUpperCase(),
+      city: (city || '').trim(),
       address: address?.trim(),
       postalCode: postalCode?.trim(),
+      venue: venue?.trim(),
     })
     
     return NextResponse.json({
@@ -88,14 +89,14 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { originalName, name, country, province, city, address, postalCode } = body
+    const { originalName, name, country, province, city, address, postalCode, venue } = body
 
-    // Validate required fields
-    if (!originalName || !name || !country || !province || !city) {
+    // Validate required fields - only originalName and name are required
+    if (!originalName || !name) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Original name, name, country, province, and city are required',
+          error: 'Original name and new name are required',
         },
         { status: 400 }
       )
@@ -114,11 +115,12 @@ export async function PUT(request: NextRequest) {
 
     const ecclesia = await updateEcclesia(originalName, {
       name: name.trim(),
-      country: country.trim().toUpperCase(),
-      province: province.trim().toUpperCase(),
-      city: city.trim(),
+      country: (country || 'CA').trim().toUpperCase(),
+      province: (province || '').trim().toUpperCase(),
+      city: (city || '').trim(),
       address: address?.trim(),
       postalCode: postalCode?.trim(),
+      venue: venue?.trim(),
     })
 
     return NextResponse.json({

@@ -1,4 +1,4 @@
-import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
+import { Control, useController, FieldPath, FieldValues, PathValue, Path } from 'react-hook-form'
 import { YStack, XStack, Card, Text, Checkbox } from 'tamagui'
 import { Church, Check } from '@tamagui/lucide-icons'
 import { EventFormInput } from './event-form-input'
@@ -24,7 +24,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.isHosting` as FieldPath<T>,
     control,
-    defaultValue: false
+    defaultValue: false as PathValue<T, Path<T>>
   })
 
   const {
@@ -32,7 +32,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.name` as FieldPath<T>,
     control,
-    defaultValue: defaultEcclesiaName
+    defaultValue: defaultEcclesiaName as PathValue<T, Path<T>>
   })
 
   // Controllers for location fields
@@ -41,7 +41,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.city` as FieldPath<T>,
     control,
-    defaultValue: ''
+    defaultValue: '' as PathValue<T, Path<T>>
   })
 
   const {
@@ -49,7 +49,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.province` as FieldPath<T>,
     control,
-    defaultValue: ''
+    defaultValue: '' as PathValue<T, Path<T>>
   })
 
   const {
@@ -57,7 +57,7 @@ export function HostingEcclesiaSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.country` as FieldPath<T>,
     control,
-    defaultValue: ''
+    defaultValue: '' as PathValue<T, Path<T>>
   })
 
   const handleHostingChange = (checked: boolean) => {

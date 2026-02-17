@@ -276,7 +276,7 @@ export class GoogleSheetsService {
       const sheets = response.data.files || []
       console.log(`📊 Found ${sheets.length} accessible spreadsheets`)
       
-      return sheets.map(sheet => ({
+      return sheets.map((sheet: any) => ({
         id: sheet.id!,
         name: sheet.name!,
         modifiedTime: sheet.modifiedTime!,

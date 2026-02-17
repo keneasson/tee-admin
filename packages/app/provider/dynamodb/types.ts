@@ -53,17 +53,21 @@ export interface MemberData {
 
 // Unified Schedule/Event Record - All time-based data
 export interface ScheduleRecord extends BaseRecord {
-  PK: string // 'SCHEDULE#{date}' OR 'EVENT#{eventId}' 
+  PK: string // 'SCHEDULE#{date}' OR 'EVENT#{eventId}'
   SK: string // '{ecclesia}#{type}#{time}' OR 'DETAILS'
   GSI1PK?: string // 'ECCLESIA#{ecclesia}' - Optional for backward compatibility
   GSI1SK?: string // '{date}#{type}#{time}' - for ecclesia + date range queries
   GSI2PK?: string // 'TYPE#{type}' OR 'DATE#{date}' - Optional for backward compatibility
   GSI2SK?: string // '{date}#{time}' OR '{type}'
-  
+
   // Common fields
   ecclesia: string
-  date: string // ISO 8601 format
+  date: string // ISO 8601 format (YYYY-MM-DD) - used for queries and sorting
   type: 'memorial' | 'sundaySchool' | 'bibleClass' | 'cyc' | 'event'
+
+  // Timezone-aware datetime fields (Phase 2: Timezone Support)
+  dateTime?: string       // Full ISO datetime in UTC: "2026-02-01T16:00:00.000Z" (11am Toronto = 4pm UTC)
+  sourceTimezone?: string // IANA timezone: "America/Toronto" - the timezone where the event occurs
   
   // Schedule-specific fields (for memorial, sundaySchool, etc.)
   data?: MemorialServiceType | SundaySchoolType | BibleClassType | CycType // Changed from scheduleData for consistency
@@ -155,6 +159,17 @@ export interface SyncStatusRecord extends BaseRecord {
   errorMessage?: string
 }
 
+// User Preferences Record - Store user timezone and display preferences
+export interface UserPreferencesRecord extends BaseRecord {
+  PK: string // 'USER#{email}'
+  SK: string // 'PREFERENCES'
+  email: string
+  timezone?: string           // IANA timezone: "America/Vancouver"
+  useAutoTimezone?: boolean   // Detect from browser
+  dateFormat?: 'long' | 'short' // "Sunday, February 1, 2026" vs "Feb 1, 2026"
+  timeFormat?: '12h' | '24h'   // "7:30 PM" vs "19:30"
+}
+
 // Query result types
 export type ScheduleQueryResult = {
   items: ScheduleRecord[]
@@ -182,7 +197,7 @@ export interface MigrationResult {
 
 export interface SheetMigrationResult {
   sheetId: string
-  sheetType: 'schedule' | 'directory' | 'events'
+  sheetType: 'schedule' | 'directory' | 'events' | 'unknown'
   recordsProcessed: number
   recordsSuccessful: number
   recordsFailed: number
@@ -345,8 +360,9 @@ export interface ConnectionRecord extends BaseRecord {
 }
 
 // Contact request types
-export type ContactRequestType = 'callback' | 'email_me'
+export type ContactRequestType = 'phone' | 'email' | 'text'
 export type ContactRequestStatus = 'pending' | 'viewed' | 'responded' | 'declined'
+export type ContactRequestReason = 'personal' | 'ecclesial'
 
 // Contact Request Records
 export interface ContactRequestRecord extends BaseRecord {
@@ -356,6 +372,7 @@ export interface ContactRequestRecord extends BaseRecord {
   requesterEmail: string
   recipientEmail: string
   requestType: ContactRequestType
+  reason?: ContactRequestReason
   message?: string
   status: ContactRequestStatus
   createdAt: string
@@ -465,10 +482,18 @@ export interface PersonRecord extends BaseRecord {
   isInterEcclesiaRep?: boolean  // Flag: receives inter-ecclesia emails for their ecclesia
   isRecordingBrother?: boolean  // Flag: primary contact (Recording Brother) for their ecclesia
 
-  // Auth link (if registered user)
-  userId?: string        // Links to existing USER#{email} auth record
-  role?: 'owner' | 'admin' | 'member' | 'guest'
+  // Auth fields (unified from USER# records)
+  userId?: string        // Links to existing USER#{email} auth record (for backwards compat)
+  role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
   provider?: 'google' | 'credentials'
+
+  // Credentials auth (when provider === 'credentials')
+  hashedPassword?: string
+  emailVerified?: string  // ISO timestamp when email was verified
+
+  // OAuth fields (when provider === 'google')
+  googleId?: string       // Google user ID for account linking
+  image?: string          // Profile picture URL from OAuth provider
 
   createdAt: string
 }
@@ -550,4 +575,47 @@ export function isPersonAddressRecord(record: any): record is PersonAddressRecor
 
 export function isPersonPhoneRecord(record: any): record is PersonPhoneRecord {
   return record && record.pkey && record.pkey.startsWith('PERSON#') && record.skey?.startsWith('PHONE#')
+}
+
+// ===== TOKEN SYSTEM =====
+// Unified token management for email verification, password reset, and invitations
+
+export type TokenType = 'email_verification' | 'password_reset' | 'invitation' | 'otp'
+
+// Token Record - Stored under person, indexed by token value via GSI4
+// PK: PERSON#{personId}, SK: TOKEN#{tokenType}#{tokenId}
+// GSI4: gsi4pk = TOKEN#{tokenValue}, gsi4sk = {expiresAt}#{tokenType}
+export interface TokenRecord extends BaseRecord {
+  pkey: string           // PERSON#{personId}
+  skey: string           // TOKEN#{tokenType}#{tokenId}
+  gsi4pk: string         // TOKEN#{tokenValue} - for O(1) token lookup
+  gsi4sk: string         // {expiresAt}#{tokenType} - for expiry queries
+
+  tokenId: string        // UUID
+  tokenValue: string     // The actual token string (for verification)
+  tokenType: TokenType
+  email: string          // Email associated with this token
+  personId: string       // Person this token belongs to
+
+  expiresAt: string      // ISO 8601 timestamp
+  usedAt?: string        // When the token was consumed (null if unused)
+  createdAt: string
+
+  // Invitation-specific fields
+  invitedBy?: string     // PersonId of who created the invitation
+  invitedRole?: 'owner' | 'admin' | 'member' | 'guest'
+
+  // OTP-specific fields
+  otpCode?: string       // 6-digit numeric code for manual entry
+  attempts?: number      // Number of verification attempts made
+  maxAttempts?: number   // Maximum allowed attempts (default 5)
+}
+
+export type TokenQueryResult = {
+  items: TokenRecord[]
+  lastEvaluatedKey?: Record<string, any>
+}
+
+export function isTokenRecord(record: any): record is TokenRecord {
+  return record && record.pkey && record.pkey.startsWith('PERSON#') && record.skey?.startsWith('TOKEN#')
 }

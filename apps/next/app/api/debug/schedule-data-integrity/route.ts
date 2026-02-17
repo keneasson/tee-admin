@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
-import type { GoogleSheetTypes } from '@my/app/types'
+import type { ProgramTypeKeys } from '@my/app/types'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const scheduleType = searchParams.get('type') as GoogleSheetTypes || 'sundaySchool'
+    const scheduleType = (searchParams.get('type') || 'sundaySchool') as ProgramTypeKeys
     
     // Initialize schedule service
     const scheduleService = new ScheduleService()

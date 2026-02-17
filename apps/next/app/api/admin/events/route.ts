@@ -7,6 +7,7 @@ import {
   getEventById,
   deleteEvent
 } from '@my/app/services/event-service'
+import { isEventActive } from '@my/app/types/events'
 import { invalidateEventsCache } from '@/utils/cache'
 
 // Helper functions to extract date/time for sorting
@@ -142,9 +143,9 @@ export async function POST(request: NextRequest) {
       event = await createEvent(eventData)
     }
 
-    // Invalidate events cache if the event is published/ready
-    if (event.status === 'published' || event.status === 'ready') {
-      console.log('📰 Invalidating events cache after creating published event')
+    // Invalidate events cache if the event is active
+    if (isEventActive(event)) {
+      console.log('📰 Invalidating events cache after creating active event')
       await invalidateEventsCache()
     }
 
@@ -176,9 +177,9 @@ export async function PUT(request: NextRequest) {
     // Update uses saveEventDraft which handles both draft and published updates
     const event = await saveEventDraft(eventData)
 
-    // Invalidate events cache if the event is published/ready
-    if (event.status === 'published' || event.status === 'ready') {
-      console.log('📰 Invalidating events cache after updating published event')
+    // Invalidate events cache if the event is active
+    if (isEventActive(event)) {
+      console.log('📰 Invalidating events cache after updating active event')
       await invalidateEventsCache()
     }
 

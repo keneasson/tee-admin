@@ -42,18 +42,18 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
    */
   private getDefaultPrivacySettings(email: string): PrivacySettingsRecord {
     return {
-      PK: `USER#${email}`,
-      SK: 'PRIVACY_SETTINGS',
-      showName: 'authenticated', // Name visible to anyone logged in
+      pkey: `USER#${email}`,
+      skey: 'PRIVACY_SETTINGS',
+      showName: 'private',
       showPhone: 'private',
       showAddress: 'private',
-      showEmail: 'ecclesia_and_connections',
-      showFamily: 'connections_only',
+      showEmail: 'private',
+      showFamily: 'private',
       allowContactRequests: true,
       preferredContactMethod: 'either',
       lastUpdated: new Date().toISOString(),
       version: 0,
-    }
+    } as unknown as PrivacySettingsRecord
   }
 
   /**
@@ -96,17 +96,28 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
 
   /**
    * Check if a viewer can see a specific field of a target user
-   * Takes into account visibility level, connections, and ecclesia membership
+   * Takes into account visibility level, connections, ecclesia membership, and viewer role
    */
   async canViewField(
     viewerEmail: string,
     targetEmail: string,
     field: 'showName' | 'showPhone' | 'showAddress' | 'showEmail' | 'showFamily',
     viewerEcclesia?: string,
-    targetEcclesia?: string
+    targetEcclesia?: string,
+    viewerRole?: string
   ): Promise<boolean> {
     // User can always view their own data
     if (viewerEmail === targetEmail) {
+      return true
+    }
+
+    // Owner sees everything
+    if (viewerRole === 'owner') {
+      return true
+    }
+
+    // Admin sees same-ecclesia members fully
+    if (viewerRole === 'admin' && viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia) {
       return true
     }
 
@@ -147,7 +158,8 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
     viewerEmail: string,
     targetEmail: string,
     viewerEcclesia?: string,
-    targetEcclesia?: string
+    targetEcclesia?: string,
+    viewerRole?: string
   ): Promise<{
     canViewName: boolean
     canViewPhone: boolean
@@ -172,11 +184,11 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
 
     const [canViewName, canViewPhone, canViewAddress, canViewEmail, canViewFamily] =
       await Promise.all([
-        this.canViewField(viewerEmail, targetEmail, 'showName', viewerEcclesia, targetEcclesia),
-        this.canViewField(viewerEmail, targetEmail, 'showPhone', viewerEcclesia, targetEcclesia),
-        this.canViewField(viewerEmail, targetEmail, 'showAddress', viewerEcclesia, targetEcclesia),
-        this.canViewField(viewerEmail, targetEmail, 'showEmail', viewerEcclesia, targetEcclesia),
-        this.canViewField(viewerEmail, targetEmail, 'showFamily', viewerEcclesia, targetEcclesia),
+        this.canViewField(viewerEmail, targetEmail, 'showName', viewerEcclesia, targetEcclesia, viewerRole),
+        this.canViewField(viewerEmail, targetEmail, 'showPhone', viewerEcclesia, targetEcclesia, viewerRole),
+        this.canViewField(viewerEmail, targetEmail, 'showAddress', viewerEcclesia, targetEcclesia, viewerRole),
+        this.canViewField(viewerEmail, targetEmail, 'showEmail', viewerEcclesia, targetEcclesia, viewerRole),
+        this.canViewField(viewerEmail, targetEmail, 'showFamily', viewerEcclesia, targetEcclesia, viewerRole),
       ])
 
     return {

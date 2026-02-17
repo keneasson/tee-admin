@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         ExpressionAttributeValues: {
           ':newRole': newRole
         },
-        ReturnValues: 'ALL_NEW'
+        ReturnValues: 'ALL_NEW' as const
       }
       
       const updateCommand = new UpdateCommand(updateParams)

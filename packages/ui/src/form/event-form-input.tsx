@@ -40,7 +40,7 @@ export function EventFormInput<T extends FieldValues>({
     }
   })
   
-  const debounceTimerRef = useRef<NodeJS.Timeout>()
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>()
   
   // Debounced change handler
   const handleChange = useCallback((text: string) => {
@@ -94,7 +94,7 @@ export function EventFormInput<T extends FieldValues>({
         disabled={disabled}
         multiline={multiline}
         numberOfLines={multiline ? 4 : 1}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete as any}
         keyboardType={type === 'email' ? 'email-address' : type === 'tel' ? 'phone-pad' : type === 'number' ? 'numeric' : 'default'}
         paddingHorizontal="$3"
         paddingVertical="$2.5"

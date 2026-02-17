@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 
+// Declare mock variables used via global setup
+declare const mockScan: ReturnType<typeof vi.fn>
+declare const mockQuery: ReturnType<typeof vi.fn>
+declare const mockPut: ReturnType<typeof vi.fn>
+
 // Import the actual functions to test them directly
-import { 
-  createCredentialsUser as actualCreateCredentialsUser,
-  findAnyUserByEmail as actualFindAnyUserByEmail 
+import {
+  createCredentialsUser,
+  findAnyUserByEmail
 } from '../../utils/dynamodb/credentials-users'
 
 describe('Credentials Authentication', () => {

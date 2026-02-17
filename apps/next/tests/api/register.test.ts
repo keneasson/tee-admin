@@ -18,6 +18,11 @@ vi.mock('../../utils/password', () => ({
   validatePassword: vi.fn(),
 }))
 
+// Import mocked functions at module level for use across all tests
+import { createCredentialsUser, findCredentialsUserByEmail, validateInvitationCode, createEmailVerificationToken } from '../../utils/dynamodb/credentials-users'
+import { sendVerificationEmail } from '../../utils/email/send-verification-email'
+import { validatePassword } from '../../utils/password'
+
 describe('/api/auth/register', () => {
 
   beforeEach(() => {

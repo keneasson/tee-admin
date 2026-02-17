@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
-import type { GoogleSheetTypes } from '@my/app/types'
+import type { ProgramTypeKeys } from '@my/app/types'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const scheduleType = searchParams.get('type') as GoogleSheetTypes || 'memorial'
+    const scheduleType = (searchParams.get('type') || 'memorial') as ProgramTypeKeys
     
     // Initialize schedule service
     const scheduleService = new ScheduleService()
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
           utcDate: new Date(entry.Date || entry.date).toISOString(),
           otherFields: Object.keys(entry).filter(key => key.toLowerCase() !== 'date')
         })) || [],
-        sheetId: googleData.sheetId || null
+        sheetId: (googleData as any).sheetId || null
       } : null,
       
       // Comparison analysis

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
+import { AuthSession, AuthStatus } from '@my/app/types'
 import {
   Button,
   Checkbox,
@@ -135,8 +135,16 @@ function DraggableDroppableCard({
   )
 }
 
-export const DirectoryEmailSync: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for DirectoryEmailSync component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface DirectoryEmailSyncProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session, status = 'authenticated' }) => {
   const [loading, setLoading] = useState(false)
   const [syncData, setSyncData] = useState<EmailSyncData | null>(null)
   const [editingEmails, setEditingEmails] = useState<Record<string, string>>({})
@@ -631,7 +639,7 @@ export const DirectoryEmailSync: React.FC = () => {
 
   if (loading && !syncData) {
     return (
-      <Wrapper subHheader="Directory Email Sync">
+      <Wrapper subHeader="Directory Email Sync">
         <Section gap={'$4'}>
           <YStack alignItems="center" gap="$4" paddingVertical="$8">
             <Spinner size="large" />
@@ -643,7 +651,7 @@ export const DirectoryEmailSync: React.FC = () => {
   }
 
   return (
-    <Wrapper subHheader="Directory Email Sync">
+    <Wrapper subHeader="Directory Email Sync">
       <Section gap={'$4'}>
         <YStack gap="$4">
           {/* Header */}
@@ -828,7 +836,7 @@ export const DirectoryEmailSync: React.FC = () => {
                                       size="$2"
                                       defaultValue={editingNames[person.sesOnlyEmail!]?.firstName || ''}
                                       onBlur={(e) => {
-                                        const text = (e.target as HTMLInputElement).value
+                                        const text = (e.target as unknown as HTMLInputElement).value
                                         setEditingNames((prev) => ({
                                           ...prev,
                                           [person.sesOnlyEmail!]: {
@@ -843,7 +851,7 @@ export const DirectoryEmailSync: React.FC = () => {
                                       size="$2"
                                       defaultValue={editingNames[person.sesOnlyEmail!]?.lastName || ''}
                                       onBlur={(e) => {
-                                        const text = (e.target as HTMLInputElement).value
+                                        const text = (e.target as unknown as HTMLInputElement).value
                                         setEditingNames((prev) => ({
                                           ...prev,
                                           [person.sesOnlyEmail!]: {

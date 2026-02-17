@@ -37,7 +37,7 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
       <Accordion overflow="hidden" type="multiple">
         <Accordion.Item value="a1">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">
-            {({ open }) => (
+            {({ open }: { open: boolean }) => (
               <>
                 <Paragraph>Zoom Info - Click to open</Paragraph>
                 <Square animation="quick" rotate={open ? '180deg' : '0deg'}>

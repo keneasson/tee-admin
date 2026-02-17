@@ -1,4 +1,4 @@
-import { Event, EventType } from '@my/app/types/events'
+import { Event, EventType, isEventActive } from '@my/app/types/events'
 import {
   Pencil,
   Calendar,
@@ -63,7 +63,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             frequencyText = `bi-weekly ${selectedDays}`
           } else if (frequency === 'monthly') {
             frequencyText = 'monthly'
-          } else if ((frequency as any) === 'custom') {
+          } else if (frequency === 'custom') {
             frequencyText = 'custom dates'
           }
           
@@ -116,43 +116,25 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
     return ''
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return '$orange11'
-      case 'published':
-      case 'ready':
-        return '$green11'
-      case 'archived':
-        return '$red11'
-      default:
-        return '$blue11'
-    }
+  // Use new active field with legacy fallback
+  const active = isEventActive(event)
+
+  const getStatusColor = () => {
+    if (active) return '$green11'
+    if (event.status === 'archived') return '$red11'
+    return '$orange11' // Inactive/draft
   }
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return '$orange3'
-      case 'published':
-      case 'ready':
-        return '$green3'
-      case 'archived':
-        return '$red3'
-      default:
-        return '$blue3'
-    }
+  const getStatusBadgeColor = () => {
+    if (active) return '$green3'
+    if (event.status === 'archived') return '$red3'
+    return '$orange3' // Inactive/draft
   }
 
-  const getStatusDisplayName = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'Ready'
-      case 'ready':
-        return 'Ready'
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
-    }
+  const getStatusDisplayName = () => {
+    if (active) return 'Active'
+    if (event.status === 'archived') return 'Archived'
+    return 'Inactive'
   }
 
   const secondaryInfo = getEventSecondaryInfo(event)
@@ -170,7 +152,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
       padding="$4"
       borderWidth={1}
       borderColor="$borderColor"
-      animation="medium"
+      animation="quick"
       opacity={isDeleting ? 0 : 1}
       height={isDeleting ? 0 : 'auto'}
       overflow="hidden"
@@ -211,12 +193,12 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             <XStack
               paddingHorizontal="$2"
               paddingVertical="$1"
-              backgroundColor={getStatusBadgeColor(event.status)}
+              backgroundColor={getStatusBadgeColor()}
               borderRadius="$2"
               alignItems="center"
             >
-              <Text fontSize="$2" color={getStatusColor(event.status)} fontWeight="500">
-                {getStatusDisplayName(event.status)}
+              <Text fontSize="$2" color={getStatusColor()} fontWeight="500">
+                {getStatusDisplayName()}
               </Text>
             </XStack>
             
@@ -298,13 +280,13 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
 
         <XStack justifyContent="space-between" alignItems="center" marginTop="$2">
           <Text fontSize="$2" color="$gray11">
-            Updated: {new Date(event.updatedAt).toLocaleDateString()}
+            Created: {new Date(event.createdAt).toLocaleDateString()}
           </Text>
 
-          {event.status === 'published' ? <XStack space="$1" alignItems="center">
+          {active ? <XStack space="$1" alignItems="center">
               <Circle size="$0.5" backgroundColor="$green10" />
               <Text fontSize="$2" color="$green11" fontWeight="500">
-                Published
+                Live
               </Text>
             </XStack> : null}
         </XStack>
@@ -324,14 +306,7 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
             key="content"
             bordered
             elevate
-            animation={[
-              'quick',
-              {
-                opacity: {
-                  overshootClamping: true,
-                },
-              },
-            ]}
+            animation="quick"
             enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
             exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
             space
@@ -467,27 +442,28 @@ export function EventListSelector({
     return true
   })
 
-  // Sort events by updatedAt descending (newest first)
+  // Sort events by createdAt descending (newest first) - per user request
   const sortByDate = (a: Event, b: Event) => {
-    const dateA = new Date(a.updatedAt).getTime()
-    const dateB = new Date(b.updatedAt).getTime()
-    return dateB - dateA // Descending order
+    const dateA = new Date(a.createdAt).getTime()
+    const dateB = new Date(b.createdAt).getTime()
+    return dateB - dateA // Descending order (newest first)
   }
 
-  // Group events by status for better organization, sorted by date descending (newest first)
-  const draftEvents = filteredEvents.filter((e) => e.status === 'draft').sort(sortByDate)
-  const publishedEvents = filteredEvents.filter((e) => e.status === 'published').sort(sortByDate)
-  const otherEvents = filteredEvents.filter((e) => e.status !== 'draft' && e.status !== 'published').sort(sortByDate)
+  // Group events by active state for better organization, sorted by date descending (newest first)
+  // Use isEventActive helper for backward compatibility with legacy status field
+  const inactiveEvents = filteredEvents.filter((e) => !isEventActive(e) && e.status !== 'archived').sort(sortByDate)
+  const activeEvents = filteredEvents.filter((e) => isEventActive(e)).sort(sortByDate)
+  const archivedEvents = filteredEvents.filter((e) => e.status === 'archived').sort(sortByDate)
 
   // Paginated views - show only up to the visible count
-  const visibleDraftEvents = draftEvents.slice(0, draftVisible)
-  const visiblePublishedEvents = publishedEvents.slice(0, publishedVisible)
-  const visibleOtherEvents = otherEvents.slice(0, otherVisible)
+  const visibleInactiveEvents = inactiveEvents.slice(0, draftVisible)
+  const visibleActiveEvents = activeEvents.slice(0, publishedVisible)
+  const visibleArchivedEvents = archivedEvents.slice(0, otherVisible)
 
   // Check if there are more events to load
-  const hasMoreDrafts = draftEvents.length > draftVisible
-  const hasMorePublished = publishedEvents.length > publishedVisible
-  const hasMoreOther = otherEvents.length > otherVisible
+  const hasMoreInactive = inactiveEvents.length > draftVisible
+  const hasMoreActive = activeEvents.length > publishedVisible
+  const hasMoreArchived = archivedEvents.length > otherVisible
 
   return (
     <YStack space="$4">
@@ -509,28 +485,28 @@ export function EventListSelector({
             </YStack>
 
             <Button
-              variant={filterType === 'all' ? 'solid' : 'outlined'}
+              variant={filterType === 'all' ? undefined : 'outlined'}
               onPress={() => setFilterType('all')}
               size="$3"
             >
               All Types
             </Button>
             <Button
-              variant={filterType === 'study-weekend' ? 'solid' : 'outlined'}
+              variant={filterType === 'study-weekend' ? undefined : 'outlined'}
               onPress={() => setFilterType('study-weekend')}
               size="$3"
             >
               Study Weekend
             </Button>
             <Button
-              variant={filterType === 'baptism' ? 'solid' : 'outlined'}
+              variant={filterType === 'baptism' ? undefined : 'outlined'}
               onPress={() => setFilterType('baptism')}
               size="$3"
             >
               Baptism
             </Button>
             <Button
-              variant={filterType === 'wedding' ? 'solid' : 'outlined'}
+              variant={filterType === 'wedding' ? undefined : 'outlined'}
               onPress={() => setFilterType('wedding')}
               size="$3"
             >
@@ -540,25 +516,25 @@ export function EventListSelector({
 
           <XStack space="$2">
             <Button
-              variant={filterStatus === 'all' ? 'solid' : 'outlined'}
+              variant={filterStatus === 'all' ? undefined : 'outlined'}
               onPress={() => setFilterStatus('all')}
               size="$3"
             >
               All Status
             </Button>
             <Button
-              variant={filterStatus === 'draft' ? 'solid' : 'outlined'}
-              onPress={() => setFilterStatus('draft')}
-              size="$3"
-            >
-              Drafts
-            </Button>
-            <Button
-              variant={filterStatus === 'published' ? 'solid' : 'outlined'}
+              variant={filterStatus === 'published' ? undefined : 'outlined'}
               onPress={() => setFilterStatus('published')}
               size="$3"
             >
-              Published
+              Active
+            </Button>
+            <Button
+              variant={filterStatus === 'draft' ? undefined : 'outlined'}
+              onPress={() => setFilterStatus('draft')}
+              size="$3"
+            >
+              Inactive
             </Button>
           </XStack>
         </YStack>
@@ -586,47 +562,16 @@ export function EventListSelector({
         </Card>
       ) : (
         <YStack space="$4">
-          {/* Draft Events Section */}
-          {draftEvents.length > 0 ? <YStack space="$3">
-              <XStack space="$2" alignItems="center">
-                <Circle size="$1" backgroundColor="$gray8" />
-                <Text fontSize="$5" fontWeight="600" color="$gray11">
-                  Draft Events ({draftEvents.length})
-                </Text>
-              </XStack>
-              <YStack space="$3">
-                {visibleDraftEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onSelect={onSelect}
-                    onPreview={onPreview}
-                    onDelete={handleDelete}
-                    isDeleting={deletingEventId === event.id}
-                  />
-                ))}
-                {hasMoreDrafts ? (
-                  <Button
-                    variant="outlined"
-                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
-                    alignSelf="center"
-                  >
-                    Load More ({draftEvents.length - draftVisible} remaining)
-                  </Button>
-                ) : null}
-              </YStack>
-            </YStack> : null}
-
-          {/* Published Events Section */}
-          {publishedEvents.length > 0 ? <YStack space="$3">
+          {/* Active Events Section */}
+          {activeEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
                 <Circle size="$1" backgroundColor="$green8" />
                 <Text fontSize="$5" fontWeight="600" color="$green11">
-                  Published Events ({publishedEvents.length})
+                  Active Events ({activeEvents.length})
                 </Text>
               </XStack>
               <YStack space="$3">
-                {visiblePublishedEvents.map((event) => (
+                {visibleActiveEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
@@ -636,25 +581,28 @@ export function EventListSelector({
                     isDeleting={deletingEventId === event.id}
                   />
                 ))}
-                {hasMorePublished ? (
+                {hasMoreActive ? (
                   <Button
                     variant="outlined"
                     onPress={() => setPublishedVisible((prev) => prev + EVENTS_PER_PAGE)}
                     alignSelf="center"
                   >
-                    Load More ({publishedEvents.length - publishedVisible} remaining)
+                    Load More ({activeEvents.length - publishedVisible} remaining)
                   </Button>
                 ) : null}
               </YStack>
             </YStack> : null}
 
-          {/* Other Events Section */}
-          {otherEvents.length > 0 ? <YStack space="$3">
-              <Text fontSize="$5" fontWeight="600">
-                Other Events ({otherEvents.length})
-              </Text>
+          {/* Inactive Events Section */}
+          {inactiveEvents.length > 0 ? <YStack space="$3">
+              <XStack space="$2" alignItems="center">
+                <Circle size="$1" backgroundColor="$gray8" />
+                <Text fontSize="$5" fontWeight="600" color="$gray11">
+                  Inactive Events ({inactiveEvents.length})
+                </Text>
+              </XStack>
               <YStack space="$3">
-                {visibleOtherEvents.map((event) => (
+                {visibleInactiveEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
@@ -664,13 +612,44 @@ export function EventListSelector({
                     isDeleting={deletingEventId === event.id}
                   />
                 ))}
-                {hasMoreOther ? (
+                {hasMoreInactive ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({inactiveEvents.length - draftVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
+
+          {/* Archived Events Section */}
+          {archivedEvents.length > 0 ? <YStack space="$3">
+              <XStack space="$2" alignItems="center">
+                <Circle size="$1" backgroundColor="$red8" />
+                <Text fontSize="$5" fontWeight="600" color="$red11">
+                  Archived Events ({archivedEvents.length})
+                </Text>
+              </XStack>
+              <YStack space="$3">
+                {visibleArchivedEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreArchived ? (
                   <Button
                     variant="outlined"
                     onPress={() => setOtherVisible((prev) => prev + EVENTS_PER_PAGE)}
                     alignSelf="center"
                   >
-                    Load More ({otherEvents.length - otherVisible} remaining)
+                    Load More ({archivedEvents.length - otherVisible} remaining)
                   </Button>
                 ) : null}
               </YStack>

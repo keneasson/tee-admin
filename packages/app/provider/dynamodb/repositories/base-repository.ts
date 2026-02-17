@@ -72,7 +72,16 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     }
   }
 
-  async update(pk: string, sk: string, updates: Partial<T>): Promise<T> {
+  async update(
+    pk: string,
+    sk: string,
+    updates: Partial<T>,
+    options?: {
+      conditionExpression?: string
+      additionalExpressionAttributeNames?: Record<string, string>
+      additionalExpressionAttributeValues?: Record<string, any>
+    }
+  ): Promise<T> {
     try {
       const updateExpressions: string[] = []
       const expressionAttributeNames: Record<string, string> = {}
@@ -123,6 +132,14 @@ export abstract class BaseRepository<T extends Record<string, any>> {
         expressionAttributeValues[':one'] = 1
       }
 
+      // Merge any additional expression attributes from options
+      if (options?.additionalExpressionAttributeNames) {
+        Object.assign(expressionAttributeNames, options.additionalExpressionAttributeNames)
+      }
+      if (options?.additionalExpressionAttributeValues) {
+        Object.assign(expressionAttributeValues, options.additionalExpressionAttributeValues)
+      }
+
       const keys = this.getKeyAttributes()
       const command = new UpdateCommand({
         TableName: this.tableName,
@@ -131,6 +148,8 @@ export abstract class BaseRepository<T extends Record<string, any>> {
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,
         ReturnValues: 'ALL_NEW',
+        // Add conditional expression if provided (for atomic operations)
+        ...(options?.conditionExpression && { ConditionExpression: options.conditionExpression }),
       })
 
       const result = await docClient.send(command)
@@ -265,7 +284,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
 
         // Handle unprocessed items
         if (result.UnprocessedItems?.[this.tableName]) {
-          requestItems = result.UnprocessedItems[this.tableName]
+          requestItems = result.UnprocessedItems[this.tableName] as typeof requestItems
           retries++
           
           if (retries < maxRetries) {

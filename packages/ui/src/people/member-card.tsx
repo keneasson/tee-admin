@@ -43,7 +43,7 @@ export const MemberCard: React.FC<MemberCardProps> = ({
               backgroundColor="$red9"
               color="white"
               hoverStyle={{ backgroundColor: '$red10' }}
-              onPress={(e: React.MouseEvent) => {
+              onPress={(e: any) => {
                 e.stopPropagation()
                 onDelete()
               }}

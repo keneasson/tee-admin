@@ -292,15 +292,7 @@ export class EventValidator {
         })
       }
 
-      // Hosting ecclesia is now optional - removed requirement
-
-      if (!event.location?.name?.trim()) {
-        errors.push({
-          field: 'location.name',
-          message: 'Location name is required for published events',
-          code: 'REQUIRED_FIELD'
-        })
-      }
+      // Hosting ecclesia and location are optional
     }
 
     return { isValid: errors.length === 0, errors, warnings }

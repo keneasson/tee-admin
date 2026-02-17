@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Enrich contacts with directory data
       let enrichedCount = 0
-      const enrichedContacts = contactResponse.Contacts?.map(contact => {
+      const enrichedContacts = contactResponse.Contacts?.map((contact: any) => {
         const email = contact.EmailAddress?.toLowerCase().trim()
         const directoryEntry = email ? directoryMap.get(email) : undefined
 
@@ -110,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Log a sample enriched contact for debugging
       if (enrichedCount > 0) {
-        const sampleEnriched = enrichedContacts.find(c => c.AttributesData)
+        const sampleEnriched = enrichedContacts.find((c: any) => c.AttributesData)
         if (sampleEnriched) {
           console.log('📝 Sample enriched contact:', {
             email: sampleEnriched.EmailAddress,

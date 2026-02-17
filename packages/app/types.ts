@@ -38,6 +38,41 @@ export enum EmailListTypes {
 export type ProgramTypeKeys = keyof typeof ProgramsTypes
 export type EmailListTypeKeys = keyof typeof EmailListTypes
 
+/**
+ * Email reason types for sending emails
+ * Moved from apps/next/utils/email/email-send.tsx for cross-platform compatibility
+ */
+export type EmailReasonType =
+  | 'sunday-school'
+  | 'newsletter'
+  | 'bible-class'
+  | 'recap'
+  | 'business-meeting'
+  | 'custom'
+  | 'event-announcement'
+  | 'inter-ecclesia'
+
+/**
+ * Auth session types for cross-platform components
+ * Components in packages/app should receive these as props, not use next-auth hooks
+ */
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
+
+export interface AuthSession {
+  user?: {
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    role?: string
+  }
+  expires?: string
+}
+
+export interface AuthProps {
+  session: AuthSession | null
+  status: AuthStatus
+}
+
 export type GoogleSheet = {
   name: string
   key: string
@@ -133,6 +168,9 @@ export type MemorialServiceType = {
   'Hymn-memorial': string
   'Hymn-closing': string
   YouTube: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T16:00:00.000Z"
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 }
 
 export type SundaySchoolType = {
@@ -140,6 +178,9 @@ export type SundaySchoolType = {
   Key: ProgramsTypes.sundaySchool
   Refreshments: string
   'Holidays and Special Events'?: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T14:30:00.000Z"
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 }
 
 export type SundayEvents = MemorialServiceType &
@@ -160,6 +201,9 @@ export type BibleClassType = {
   Presider: string
   Speaker: string
   Topic: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-06T00:30:00.000Z" (7:30pm Toronto)
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 }
 
 export type NextBibleClassProps = {
@@ -186,6 +230,9 @@ type CycSpecial = {
 export type CycType = {
   Date: Date
   Key: ProgramsTypes.cyc
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 } & (CycRegular | CycSpecial)
 
 export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType

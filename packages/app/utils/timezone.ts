@@ -58,6 +58,12 @@ export function formatDateInTimezone(
 ): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
 
+  // If options provided, use them directly (just add timezone)
+  // Otherwise use defaults
+  if (options) {
+    return dateObj.toLocaleDateString('en-US', { ...options, timeZone: timezone })
+  }
+
   const defaultOptions: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     month: 'long',
@@ -66,7 +72,7 @@ export function formatDateInTimezone(
     timeZone: timezone,
   }
 
-  return dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options })
+  return dateObj.toLocaleDateString('en-US', defaultOptions)
 }
 
 /**
@@ -204,4 +210,132 @@ export function toDateOnlyString(date: Date): string {
 export function hasTimeComponent(date: Date | string): boolean {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   return dateObj.getHours() !== 0 || dateObj.getMinutes() !== 0
+}
+
+/**
+ * Format schedule datetime for display
+ *
+ * This is the primary function for displaying schedule dates/times.
+ * It handles both new timezone-aware data (with dateTime field) and
+ * legacy data (date-only string).
+ *
+ * @param options - Formatting options
+ * @param options.dateTime - Full ISO datetime in UTC (e.g., "2026-02-01T16:00:00.000Z")
+ * @param options.date - Date-only string (YYYY-MM-DD) - used if dateTime not available
+ * @param options.eventTimezone - IANA timezone where event occurs (e.g., "America/Toronto")
+ * @param options.userTimezone - User's preferred timezone for display
+ * @param options.includeTime - Whether to include time in output (default: true for dateTime, false for date-only)
+ * @returns Object with formatted date and time strings
+ */
+export function formatScheduleDateTime(options: {
+  dateTime?: string
+  date?: string
+  eventTimezone?: string
+  userTimezone?: string
+  includeTime?: boolean
+}): {
+  dateDisplay: string       // "Sunday, February 1, 2026"
+  timeDisplay: string       // "11:00am" or "11:00am Toronto, 8:00am Vancouver"
+  fullDisplay: string       // Combined date and time
+  dayOfWeek: string         // "Sunday"
+} {
+  const {
+    dateTime,
+    date,
+    eventTimezone = DEFAULT_TIMEZONE,
+    userTimezone = DEFAULT_TIMEZONE,
+    includeTime = !!dateTime,
+  } = options
+
+  // If we have a dateTime, use it for accurate timezone conversion
+  if (dateTime) {
+    const dateObj = new Date(dateTime)
+
+    // Format date in user's timezone
+    const dateDisplay = formatDateInTimezone(dateObj, userTimezone, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+
+    // Get day of week
+    const dayOfWeek = formatDateInTimezone(dateObj, userTimezone, {
+      weekday: 'long',
+    })
+
+    // Format time with dual timezone display if different
+    const timeDisplay = formatTimeWithDualTimezone(dateObj, eventTimezone, userTimezone)
+
+    return {
+      dateDisplay,
+      timeDisplay,
+      fullDisplay: includeTime ? `${dateDisplay} at ${timeDisplay}` : dateDisplay,
+      dayOfWeek,
+    }
+  }
+
+  // Fallback: date-only string (legacy data)
+  // Use UTC to prevent date shifting
+  if (date) {
+    const parsedDate = parseDateOnly(date)
+    const dateDisplay = parsedDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+
+    const dayOfWeek = parsedDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+    })
+
+    return {
+      dateDisplay,
+      timeDisplay: '',
+      fullDisplay: dateDisplay,
+      dayOfWeek,
+    }
+  }
+
+  // No date provided
+  return {
+    dateDisplay: 'Date not available',
+    timeDisplay: '',
+    fullDisplay: 'Date not available',
+    dayOfWeek: '',
+  }
+}
+
+/**
+ * Format a schedule date for email templates
+ * Ensures consistent formatting with proper timezone handling
+ */
+export function formatScheduleDateForEmail(
+  dateTime: string | undefined,
+  date: string | Date | undefined,
+  eventTimezone: string = DEFAULT_TIMEZONE
+): string {
+  // If we have dateTime, use it
+  if (dateTime) {
+    const result = formatScheduleDateTime({
+      dateTime,
+      eventTimezone,
+      userTimezone: eventTimezone, // Emails always show event timezone
+      includeTime: false,
+    })
+    return result.dateDisplay
+  }
+
+  // Fallback to date-only
+  if (date) {
+    const dateStr = date instanceof Date ? toDateOnlyString(date) : date
+    const result = formatScheduleDateTime({
+      date: dateStr,
+      eventTimezone,
+    })
+    return result.dateDisplay
+  }
+
+  return 'Date not available'
 }

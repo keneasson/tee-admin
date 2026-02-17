@@ -627,6 +627,13 @@ const EventDateDisplay = (event: Event): string => {
 }
 
 // Format date for readings display (similar to the bible-readings-layout)
+/**
+ * Format date for readings display
+ *
+ * CRITICAL: Bible readings dates represent calendar dates, not specific moments.
+ * Uses UTC methods to avoid timezone shift issues where midnight UTC becomes
+ * the previous day in Toronto time.
+ */
 const formatReadingDate = (date: Date | string): string => {
   if (!date) return 'Date unavailable'
 
@@ -649,9 +656,11 @@ const formatReadingDate = (date: Date | string): string => {
     'Dec',
   ]
 
-  const dayName = dayNames[dateObj.getDay()]
-  const monthName = monthNames[dateObj.getMonth()]
-  const day = dateObj.getDate()
+  // CRITICAL: Use UTC methods to get the correct calendar date
+  // Local methods would shift midnight UTC to previous day in Toronto timezone
+  const dayName = dayNames[dateObj.getUTCDay()]
+  const monthName = monthNames[dateObj.getUTCMonth()]
+  const day = dateObj.getUTCDate()
 
   return `${dayName}, ${monthName} ${day}`
 }
@@ -926,6 +935,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               )}
                             </Column>
                           </Row>
+                          {event.YouTube ? <YouTubeLink url={event.YouTube} /> : null}
                         </Section>
                       )
                     }
@@ -1234,11 +1244,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             )
                           }
 
-                          return location.name ? (
+                          return (location.name || location.placeName) ? (
                             <>
                               <br />
                               <br />
-                              <strong>{location.name}</strong>
+                              <strong>{location.name || location.placeName}</strong>
                               {location.address && (
                                 <>
                                   <br />
@@ -1251,6 +1261,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                   {[location.city, location.province, location.postalCode]
                                     .filter(Boolean)
                                     .join(', ')}
+                                </>
+                              )}
+                              {location.mapsUrl && (
+                                <>
+                                  <br />
+                                  <Link href={location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                    Get Directions
+                                  </Link>
                                 </>
                               )}
                             </>
@@ -1518,8 +1536,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             (event as any).location
                           ) : (
                             <>
-                              {(event as any).location.name && (
-                                <strong>{(event as any).location.name}</strong>
+                              {((event as any).location.name || (event as any).location.placeName) && (
+                                <strong>{(event as any).location.name || (event as any).location.placeName}</strong>
                               )}
                               {(event as any).location.address && (
                                 <>
@@ -1527,23 +1545,18 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                   {(event as any).location.address}
                                 </>
                               )}
-                              {((event as any).location.city ||
-                                (event as any).location.province) && (
-                                <>
-                                  <br />
-                                  {[
-                                    (event as any).location.city,
-                                    (event as any).location.province,
-                                    (event as any).location.postalCode,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(', ')}
-                                </>
-                              )}
                               {(event as any).location.directions && (
                                 <>
                                   <br />
                                   <em>{(event as any).location.directions}</em>
+                                </>
+                              )}
+                              {(event as any).location.mapsUrl && (
+                                <>
+                                  <br />
+                                  <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                    Get Directions
+                                  </Link>
                                 </>
                               )}
                             </>
@@ -1730,51 +1743,68 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           )}
 
                           {/* Location - just the name, full details on event page */}
-                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.name && (
+                          {(event as any).location && typeof (event as any).location !== 'string' && ((event as any).location.name || (event as any).location.placeName) && (
                             <>
                               <br />
                               <br />
-                              <strong>Location:</strong> {(event as any).location.name}
+                              <strong>Location:</strong> {(event as any).location.name || (event as any).location.placeName}
+                              {(event as any).location.mapsUrl && (
+                                <>
+                                  {' — '}
+                                  <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                    Directions
+                                  </Link>
+                                </>
+                              )}
                             </>
                           )}
 
-                          {/* Schedule grouped by day */}
-                          {(() => {
-                            const scheduleByDay = groupScheduleByDay((event as any).schedule)
-                            if (!scheduleByDay) return null
+                          {/* Multi-section events: condensed summary with "View Details" link */}
+                          {(event as any).sections && (event as any).sections.length > 0 ? (
+                            <>
+                              <br />
+                              <br />
+                              <em>Multiple locations — see event page for full schedule</em>
+                            </>
+                          ) : (
+                            /* Schedule grouped by day (flat schedule, no sections) */
+                            (() => {
+                              const scheduleByDay = groupScheduleByDay((event as any).schedule)
+                              if (!scheduleByDay) return null
 
-                            return (
-                              <>
-                                <br />
-                                <br />
-                                <strong>Schedule:</strong>
-                                {Object.entries(scheduleByDay).map(([dayLabel, items]) => {
-                                  const showDayLabel = dayLabel !== 'Schedule'
-                                  return (
-                                    <React.Fragment key={dayLabel}>
-                                      {showDayLabel && (
-                                        <>
-                                          <br />
-                                          <span style={{ color: '#cc0000', fontWeight: 'bold' }}>{dayLabel}</span>
-                                        </>
-                                      )}
-                                      {items.map((item: any, idx: number) => {
-                                        const time = formatScheduleTime(item.time || item.startTime)
-                                        return (
-                                          <React.Fragment key={idx}>
+                              return (
+                                <>
+                                  <br />
+                                  <br />
+                                  <strong>Schedule:</strong>
+                                  {Object.entries(scheduleByDay).map(([dayLabel, items]) => {
+                                    const showDayLabel = dayLabel !== 'Schedule'
+                                    return (
+                                      <React.Fragment key={dayLabel}>
+                                        {showDayLabel && (
+                                          <>
                                             <br />
-                                            &nbsp;&nbsp;&nbsp;&nbsp;{time && `${time}  `}
-                                            {item.activity || ''}
-                                            {item.title ? ` ${item.title}` : ''}
-                                          </React.Fragment>
-                                        )
-                                      })}
-                                    </React.Fragment>
-                                  )
-                                })}
-                              </>
-                            )
-                          })()}
+                                            <span style={{ color: '#cc0000', fontWeight: 'bold' }}>{dayLabel}</span>
+                                          </>
+                                        )}
+                                        {items.map((item: any, idx: number) => {
+                                          const time = formatScheduleTime(item.time || item.startTime)
+                                          return (
+                                            <React.Fragment key={idx}>
+                                              <br />
+                                              &nbsp;&nbsp;&nbsp;&nbsp;{time && `${time}  `}
+                                              {item.activity || ''}
+                                              {item.title ? ` ${item.title}` : ''}
+                                            </React.Fragment>
+                                          )
+                                        })}
+                                      </React.Fragment>
+                                    )
+                                  })}
+                                </>
+                              )
+                            })()
+                          )}
 
                           {/* Parking info */}
                           {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.parkingInfo && (
@@ -1874,7 +1904,13 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </>
                           )}
                           {/* Location for events that have it */}
-                          {(event as any).location && (
+                          {(event as any).sections && (event as any).sections.length > 0 ? (
+                            <>
+                              <br />
+                              <br />
+                              <em>Multiple locations — see event page for full schedule</em>
+                            </>
+                          ) : (event as any).location ? (
                             <>
                               <br />
                               <br />
@@ -1882,8 +1918,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 (event as any).location
                               ) : (
                                 <>
-                                  {(event as any).location.name && (
-                                    <strong>{(event as any).location.name}</strong>
+                                  {((event as any).location.name || (event as any).location.placeName) && (
+                                    <strong>{(event as any).location.name || (event as any).location.placeName}</strong>
                                   )}
                                   {(event as any).location.address && (
                                     <>
@@ -1910,10 +1946,18 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                       <em>{(event as any).location.directions}</em>
                                     </>
                                   )}
+                                  {(event as any).location.mapsUrl && (
+                                    <>
+                                      <br />
+                                      <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                        Get Directions
+                                      </Link>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </>
-                          )}
+                          ) : null}
                           {/* Description for non-baptism events (baptism uses the formal wording above) */}
                           {event.type !== 'baptism' && event.description && (
                             <>
@@ -2107,26 +2151,36 @@ const Lunch = ({ lunch }: { lunch: string }) => {
 }
 
 const MemorialServiceProgram = (event: SundayEvents) => {
-  if (event.Exhort === '') {
+  // No service at hall: Both Exhort AND Preside are blank
+  const noServiceAtHall = !event.Exhort && !event.Preside
+
+  if (noServiceAtHall) {
+    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    const explanation = event.Activities || event['Holidays and Special Events']
     return (
-      /**
-       * When there's no Memorial Service at TEE's Hall, we need to provide clear alternatives.
-       */
       <Text style={defaultText}>
-        <strong>There will be no Memorial service at the Toronto East Hall.</strong>
-        {event['Holidays and Special Events'] && (
-          <Text>{event['Holidays and Special Events']}</Text>
-        )}
+        <strong>There will be no service at our hall.</strong>
+        {explanation ? (
+          <>
+            <br />
+            <br />
+            <Text>{explanation}</Text>
+          </>
+        ) : null}
       </Text>
     )
   }
+
+  // If Exhort is blank but Preside has a value, exhorter is TBD
+  const exhorterDisplay = event.Exhort || '--'
+
   return (
     <Text style={defaultText}>
       {'Presiding: '}
       <strong>{event.Preside}</strong>
       <br />
       {'Exhorting: '}
-      <strong>{event.Exhort}</strong>
+      <strong>{exhorterDisplay}</strong>
       <br />
       {'Keyboardist: '}
       <strong>{event.Organist}</strong>
@@ -2147,17 +2201,24 @@ const MemorialServiceProgram = (event: SundayEvents) => {
         <>No Second Collection.</>
       )}
       <Lunch lunch={event.Lunch} />
-      {event.YouTube ? (
-        <>
-          <br />
-          <br />
-          <strong>Watch on YouTube: </strong>
-          <Link href={event.YouTube} style={link}>
-            {event.YouTube}
-          </Link>
-        </>
-      ) : null}
     </Text>
+  )
+}
+
+const YouTubeLink = ({ url }: { url: string }) => {
+  if (!url) return null
+  return (
+    <Row>
+      <Column>
+        <Text style={{ ...defaultText, paddingTop: '12px' }}>
+          <strong>Watch on YouTube:</strong>
+          <br />
+          <Link href={url} style={{ ...link, fontSize: '14px', wordBreak: 'break-all' as const }}>
+            {url}
+          </Link>
+        </Text>
+      </Column>
+    </Row>
   )
 }
 

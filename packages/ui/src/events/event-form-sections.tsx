@@ -1,4 +1,4 @@
-import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext } from 'react-hook-form'
+import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext, PathValue, Path } from 'react-hook-form'
 import { formatEcclesiaToLocation, createLocationFieldUpdates } from './location-utils'
 import { LocationFieldsContainer } from './location-components'
 import { YStack, XStack, Card, Text, Button, Separator, Checkbox } from 'tamagui'
@@ -7,7 +7,10 @@ import { EventFormInput } from '../form/event-form-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventFormSelect } from '../form/event-form-select'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
+import { AddressAutocomplete } from '../form/address-autocomplete'
 import { CountrySelect, ProvinceSelect } from '../form/location-select'
+import type { ParsedAddress } from '@my/app/types/address-autocomplete'
+import { buildMapsUrl } from '@my/app/types/address-autocomplete'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { useAdminSpacing } from '../hooks/use-admin-spacing'
@@ -107,6 +110,22 @@ export function LocationSection<T extends FieldValues>({
     control,
     name: `${namePrefix}._atTheHall` as FieldPath<T>
   }) as boolean | undefined
+
+  // Watch address and name for autocomplete integration
+  const addressValue = useWatch({
+    control,
+    name: `${namePrefix}.address` as FieldPath<T>
+  }) as string | undefined
+
+  const locationName = useWatch({
+    control,
+    name: `${namePrefix}.name` as FieldPath<T>
+  }) as string | undefined
+
+  const locationCountry = useWatch({
+    control,
+    name: `${namePrefix}.country` as FieldPath<T>
+  }) as string | undefined
 
   // Use pure functions for data transformation
   const handleAtTheHallChange = (checked: boolean) => {
@@ -224,17 +243,33 @@ export function LocationSection<T extends FieldValues>({
                   <EventFormInput
                     control={control}
                     name={`${namePrefix}.name` as any}
-                    label="Location Name"
-                    placeholder="e.g., Toronto East Ecclesial Hall"
-                    required={required ? locationMode !== 'online' : null}
+                    label="Venue Name"
+                    placeholder=""
+                    required={required}
                   />
 
-                  <EventFormInput
-                    control={control}
-                    name={`${namePrefix}.address` as any}
+                  <AddressAutocomplete
+                    value={addressValue || ''}
+                    onChangeText={(text) => {
+                      if (setValue) setValue(`${namePrefix}.address` as any, text)
+                    }}
+                    onAddressSelect={(parsed: ParsedAddress) => {
+                      if (!setValue) return
+                      setValue(`${namePrefix}.address` as any, parsed.formattedAddress || parsed.streetAddress)
+                      setValue(`${namePrefix}.city` as any, parsed.city)
+                      setValue(`${namePrefix}.province` as any, parsed.province)
+                      setValue(`${namePrefix}.postalCode` as any, parsed.postalCode)
+                      setValue(`${namePrefix}.country` as any, parsed.country)
+                      setValue(`${namePrefix}.mapsUrl` as any, buildMapsUrl(parsed))
+                      if (parsed.lat) setValue(`${namePrefix}.lat` as any, parsed.lat)
+                      if (parsed.lng) setValue(`${namePrefix}.lng` as any, parsed.lng)
+                      if (parsed.placeId) setValue(`${namePrefix}.placeId` as any, parsed.placeId)
+                      if (parsed.name) setValue(`${namePrefix}.placeName` as any, parsed.name)
+                    }}
                     label="Address"
                     placeholder="123 Main Street"
-                    required={required ? locationMode !== 'online' : null}
+                    country={locationCountry}
+                    disabled={!setValue}
                   />
 
                   <XStack space="$2">
@@ -244,7 +279,7 @@ export function LocationSection<T extends FieldValues>({
                         name={`${namePrefix}.city` as any}
                         label="City"
                         placeholder="Toronto"
-                        required={required ? locationMode !== 'online' : null}
+                        required={required}
                       />
                     </YStack>
 
@@ -255,7 +290,7 @@ export function LocationSection<T extends FieldValues>({
                         countryFieldName={`${namePrefix}.country` as any}
                         label="Province"
                         placeholder="Select Province"
-                        required={required ? locationMode !== 'online' : null}
+                        required={required}
                       />
                     </YStack>
 
@@ -317,7 +352,7 @@ export function LocationSection<T extends FieldValues>({
                 label="Meeting Link"
                 placeholder="https://zoom.us/j/123456789 or https://meet.google.com/..."
                 type="url"
-                required={required ? locationMode !== 'in-person' : null}
+                required={required}
               />
 
               <EventFormSelect
@@ -552,7 +587,6 @@ export function ScheduleSection<T extends FieldValues>({
                       name={`${namePrefix}.${index}.endTime` as any}
                       label="End Time (Optional)"
                       includeTime
-                      placeholder="Leave blank if no specific end time"
                     />
                   </YStack>
                 </XStack>
@@ -601,7 +635,7 @@ export function RegistrationSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.hasFee` as FieldPath<T>,
     control,
-    defaultValue: false
+    defaultValue: false as PathValue<T, Path<T>>
   })
 
   return (
@@ -810,7 +844,8 @@ export function MultipleLocationsSection<T extends FieldValues>({
                   <ProvinceSelect
                     control={control}
                     name={`${namePrefix}.${index}.province` as any}
-                    country={(field as any).country || 'Canada'}
+                    countryFieldName={`${namePrefix}.${index}.country` as any}
+                    label="Province"
                   />
                 </YStack>
                 
@@ -831,17 +866,17 @@ export function MultipleLocationsSection<T extends FieldValues>({
                     name={`${namePrefix}.${index}.directions` as any}
                     label="Directions"
                     placeholder="Additional directions to help people find this location"
-                    multiline
+                    rows={3}
                   />
                 </YStack>
-                
+
                 <YStack flex={1}>
                   <OptimizedTextarea
                     control={control}
                     name={`${namePrefix}.${index}.parkingInfo` as any}
                     label="Parking Information"
                     placeholder="Parking availability and instructions"
-                    multiline
+                    rows={3}
                   />
                 </YStack>
               </XStack>

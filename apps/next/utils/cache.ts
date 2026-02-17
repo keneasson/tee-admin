@@ -32,7 +32,7 @@ export const CACHE_TAGS = {
  * Get cache tags for a specific sheet type
  */
 export function getScheduleCacheTags(sheetType: string): string[] {
-  const tags = [CACHE_TAGS.SCHEDULES_ALL, CACHE_TAGS.ALL_SCHEDULE_DATA]
+  const tags: string[] = [CACHE_TAGS.SCHEDULES_ALL, CACHE_TAGS.ALL_SCHEDULE_DATA]
   
   switch (sheetType.toLowerCase()) {
     case 'memorial':

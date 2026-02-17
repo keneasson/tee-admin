@@ -1,11 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { YStack, XStack, Text, Button, Label, Input, Select, Spinner } from 'tamagui'
-import { ChevronDown } from '@tamagui/lucide-icons'
-
-interface LocationOption {
-  code: string
-  name: string
-}
+import { YStack, XStack, Text, Button, Label, Input } from 'tamagui'
+import { AddressAutocomplete } from './address-autocomplete'
+import type { ParsedAddress } from '@my/app/types/address-autocomplete'
 
 interface EcclesiaFormData {
   name: string
@@ -14,6 +10,7 @@ interface EcclesiaFormData {
   city: string
   address?: string
   postalCode?: string
+  venue?: string
 }
 
 interface AddEcclesiaFormProps {
@@ -26,51 +23,6 @@ interface AddEcclesiaFormProps {
   mode?: 'add' | 'edit'
 }
 
-// Cache for location data
-const locationCache = {
-  countries: null as LocationOption[] | null,
-  provinces: new Map<string, LocationOption[]>()
-}
-
-// API functions
-const fetchCountries = async (): Promise<LocationOption[]> => {
-  if (locationCache.countries) {
-    return locationCache.countries
-  }
-
-  try {
-    const response = await fetch('/api/locations/countries')
-    if (!response.ok) throw new Error('Failed to fetch countries')
-    
-    const data = await response.json()
-    const countries = Array.isArray(data) ? data : (data.data || [])
-    locationCache.countries = countries
-    return countries
-  } catch (error) {
-    console.error('Error fetching countries:', error)
-    return []
-  }
-}
-
-const fetchProvinces = async (countryCode: string): Promise<LocationOption[]> => {
-  if (locationCache.provinces.has(countryCode)) {
-    return locationCache.provinces.get(countryCode)!
-  }
-
-  try {
-    const response = await fetch(`/api/locations/${countryCode}/provinces`)
-    if (!response.ok) throw new Error('Failed to fetch provinces')
-    
-    const data = await response.json()
-    const provinces = Array.isArray(data) ? data : (data.data || [])
-    locationCache.provinces.set(countryCode, provinces)
-    return provinces
-  } catch (error) {
-    console.error('Error fetching provinces:', error)
-    return []
-  }
-}
-
 export function AddEcclesiaForm({
   initialData,
   initialName = '',
@@ -81,17 +33,14 @@ export function AddEcclesiaForm({
 }: AddEcclesiaFormProps) {
   const [formData, setFormData] = useState<EcclesiaFormData>({
     name: initialData?.name || initialName,
-    country: initialData?.country || 'CA', // Default to Canada
+    country: initialData?.country || 'CA',
     province: initialData?.province || '',
     city: initialData?.city || '',
     address: initialData?.address || '',
-    postalCode: initialData?.postalCode || ''
+    postalCode: initialData?.postalCode || '',
+    venue: initialData?.venue || ''
   })
-  
-  const [countries, setCountries] = useState<LocationOption[]>([])
-  const [provinces, setProvinces] = useState<LocationOption[]>([])
-  const [loadingCountries, setLoadingCountries] = useState(false)
-  const [loadingProvinces, setLoadingProvinces] = useState(false)
+
   const [errors, setErrors] = useState<Partial<EcclesiaFormData>>({})
 
   // Reset form when initialData changes (e.g., when editing different ecclesia)
@@ -102,67 +51,27 @@ export function AddEcclesiaForm({
       province: initialData?.province || '',
       city: initialData?.city || '',
       address: initialData?.address || '',
-      postalCode: initialData?.postalCode || ''
+      postalCode: initialData?.postalCode || '',
+      venue: initialData?.venue || ''
     })
     setErrors({})
   }, [initialData, initialName])
 
-  // Load countries on mount
-  useEffect(() => {
-    setLoadingCountries(true)
-    fetchCountries().then(data => {
-      setCountries(data)
-      setLoadingCountries(false)
-    })
-  }, [])
-
-  // Load provinces when country changes or on mount
-  useEffect(() => {
-    if (formData.country) {
-      setLoadingProvinces(true)
-      fetchProvinces(formData.country).then(data => {
-        setProvinces(data)
-        setLoadingProvinces(false)
-      })
-    } else {
-      setProvinces([])
-    }
-  }, [formData.country])
-
   // Update field and clear error
   const updateField = (field: keyof EcclesiaFormData, value: string) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value }
-      
-      // Clear province when country changes
-      if (field === 'country' && value !== prev.country) {
-        updated.province = ''
-      }
-      
-      return updated
-    })
-    
-    // Clear error for this field
+    setFormData(prev => ({ ...prev, [field]: value }))
+
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
   }
 
-  // Validate form
+  // Validate form - only name is required now
   const validateForm = (): boolean => {
     const newErrors: Partial<EcclesiaFormData> = {}
 
     if (!formData.name.trim()) {
       newErrors.name = 'Ecclesia name is required'
-    }
-    if (!formData.country) {
-      newErrors.country = 'Country is required'
-    }
-    if (!formData.province) {
-      newErrors.province = 'Province/State is required'
-    }
-    if (!formData.city.trim()) {
-      newErrors.city = 'City is required'
     }
 
     setErrors(newErrors)
@@ -179,7 +88,8 @@ export function AddEcclesiaForm({
       province: formData.province,
       city: formData.city.trim(),
       address: formData.address?.trim() || undefined,
-      postalCode: formData.postalCode?.trim() || undefined
+      postalCode: formData.postalCode?.trim() || undefined,
+      venue: formData.venue?.trim() || undefined
     })
 
     if (!success) {
@@ -189,20 +99,8 @@ export function AddEcclesiaForm({
 
   // Check if form is valid
   const isValid = useMemo(() => {
-    return formData.name.trim() && 
-           formData.country && 
-           formData.province && 
-           formData.city.trim()
+    return !!formData.name.trim()
   }, [formData])
-
-  // Get display names for selected values
-  const selectedCountryName = useMemo(() => {
-    return countries.find(c => c.code === formData.country)?.name || formData.country
-  }, [countries, formData.country])
-
-  const selectedProvinceName = useMemo(() => {
-    return provinces.find(p => p.code === formData.province)?.name || formData.province
-  }, [provinces, formData.province])
 
   return (
     <YStack gap="$4" padding="$4" minWidth={400} backgroundColor="$brandLight">
@@ -232,14 +130,34 @@ export function AddEcclesiaForm({
         {errors.name ? <Text color="$red11" fontSize="$3">{errors.name}</Text> : null}
       </YStack>
 
-      {/* Address Field (Optional) */}
+      {/* Address Field (Optional) - Google Places autocomplete */}
+      <AddressAutocomplete
+        value={formData.address || ''}
+        onChangeText={(text) => updateField('address', text)}
+        onAddressSelect={(parsed: ParsedAddress) => {
+          setFormData((prev) => ({
+            ...prev,
+            address: parsed.formattedAddress || parsed.streetAddress,
+            city: parsed.city,
+            province: parsed.province,
+            postalCode: parsed.postalCode || '',
+            country: parsed.country,
+            venue: parsed.name || prev.venue || '',
+          }))
+        }}
+        label="Address (Optional)"
+        disabled={isLoading}
+      />
+
+      {/* Venue Field (Optional) - auto-filled from Google place name */}
       <YStack gap="$2">
         <Label fontSize="$4" fontWeight="600">
-          Hall Address (Optional)
+          Venue (Optional)
         </Label>
         <Input
-          value={formData.address}
-          onChangeText={(text) => updateField('address', text)}
+          value={formData.venue}
+          onChangeText={(text) => updateField('venue', text)}
+          placeholder="Auto-filled from address lookup"
           borderWidth={2}
           borderColor="$textTertiary"
           backgroundColor="$background"
@@ -254,167 +172,16 @@ export function AddEcclesiaForm({
           paddingVertical="$2.5"
           disabled={isLoading}
         />
-      </YStack>
-
-      {/* City Field */}
-      <YStack gap="$2">
-        <Label fontSize="$4" fontWeight="600">
-          City <Text color="$red10">*</Text>
-        </Label>
-        <Input
-          value={formData.city}
-          onChangeText={(text) => updateField('city', text)}
-          placeholder="Enter city name"
-          borderWidth={2}
-          borderColor={errors.city ? '$error' : '$textTertiary'}
-          backgroundColor="$background"
-          focusStyle={{
-            borderColor: errors.city ? '$error' : '$primary',
-            borderWidth: 2
-          }}
-          hoverStyle={{
-            borderColor: errors.city ? '$error' : '$textSecondary'
-          }}
-          paddingHorizontal="$3"
-          paddingVertical="$2.5"
-          disabled={isLoading}
-        />
-        {errors.city ? <Text color="$red11" fontSize="$3">{errors.city}</Text> : null}
-      </YStack>
-
-      {/* Country Field */}
-      <YStack gap="$2">
-        <Label fontSize="$4" fontWeight="600">
-          Country <Text color="$red10">*</Text>
-        </Label>
-        <Select
-          value={formData.country}
-          onValueChange={(value) => updateField('country', value)}
-          disabled={isLoading || loadingCountries}
-        >
-          <Select.Trigger
-            width="100%"
-            iconAfter={loadingCountries ? <Spinner size="small" /> : <ChevronDown size="$1" />}
-            borderWidth={2}
-            borderColor={errors.country ? '$error' : '$textTertiary'}
-            backgroundColor="$background"
-            focusStyle={{
-              borderColor: errors.country ? '$error' : '$primary',
-              borderWidth: 2
-            }}
-            hoverStyle={{
-              borderColor: errors.country ? '$error' : '$textSecondary'
-            }}
-            paddingHorizontal="$3"
-            paddingVertical="$2.5"
-          >
-            <Select.Value>
-              {selectedCountryName || 'Select country'}
-            </Select.Value>
-          </Select.Trigger>
-          <Select.Content zIndex={200000}>
-            <Select.ScrollUpButton />
-            <Select.Viewport>
-              {countries.map((country, idx) => (
-                <Select.Item key={country.code} index={idx} value={country.code}>
-                  <Select.ItemText>{country.name}</Select.ItemText>
-                  <Select.ItemIndicator marginLeft="auto">
-                    <Text>✓</Text>
-                  </Select.ItemIndicator>
-                </Select.Item>
-              ))}
-            </Select.Viewport>
-            <Select.ScrollDownButton />
-          </Select.Content>
-        </Select>
-        {errors.country ? <Text color="$red11" fontSize="$3">{errors.country}</Text> : null}
-      </YStack>
-
-      {/* Province Field */}
-      <YStack gap="$2">
-        <Label fontSize="$4" fontWeight="600">
-          {formData.country === 'CA' ? 'Province' : 'State'} <Text color="$red10">*</Text>
-        </Label>
-        <Select
-          value={formData.province}
-          onValueChange={(value) => updateField('province', value)}
-          disabled={isLoading || loadingProvinces || !formData.country}
-        >
-          <Select.Trigger
-            width="100%"
-            iconAfter={loadingProvinces ? <Spinner size="small" /> : <ChevronDown size="$1" />}
-            borderWidth={2}
-            borderColor={errors.province ? '$error' : '$textTertiary'}
-            backgroundColor="$background"
-            focusStyle={{
-              borderColor: errors.province ? '$error' : '$primary',
-              borderWidth: 2
-            }}
-            hoverStyle={{
-              borderColor: errors.province ? '$error' : '$textSecondary'
-            }}
-            paddingHorizontal="$3"
-            paddingVertical="$2.5"
-          >
-            <Select.Value>
-              {selectedProvinceName || `Select ${formData.country === 'CA' ? 'province' : 'state'}`}
-            </Select.Value>
-          </Select.Trigger>
-          <Select.Content zIndex={200000}>
-            <Select.ScrollUpButton />
-            <Select.Viewport>
-              {provinces.length > 0 ? (
-                provinces.map((province, idx) => (
-                  <Select.Item key={province.code} index={idx} value={province.code}>
-                    <Select.ItemText>{province.name}</Select.ItemText>
-                    <Select.ItemIndicator marginLeft="auto">
-                      <Text>✓</Text>
-                    </Select.ItemIndicator>
-                  </Select.Item>
-                ))
-              ) : (
-                <Select.Item value="" index={0} disabled>
-                  <Select.ItemText>
-                    {loadingProvinces ? 'Loading...' : 'No provinces available'}
-                  </Select.ItemText>
-                </Select.Item>
-              )}
-            </Select.Viewport>
-            <Select.ScrollDownButton />
-          </Select.Content>
-        </Select>
-        {errors.province ? <Text color="$red11" fontSize="$3">{errors.province}</Text> : null}
-      </YStack>
-
-      {/* Postal Code / Zip Code Field (Optional) */}
-      <YStack gap="$2">
-        <Label fontSize="$4" fontWeight="600">
-          {formData.country === 'US' ? 'Zip Code' : 'Postal Code'} (Optional)
-        </Label>
-        <Input
-          value={formData.postalCode}
-          onChangeText={(text) => updateField('postalCode', text)}
-          borderWidth={2}
-          borderColor="$textTertiary"
-          backgroundColor="$background"
-          focusStyle={{
-            borderColor: '$primary',
-            borderWidth: 2
-          }}
-          hoverStyle={{
-            borderColor: '$textSecondary'
-          }}
-          paddingHorizontal="$3"
-          paddingVertical="$2.5"
-          disabled={isLoading}
-        />
+        <Text fontSize="$2" color="$gray10">
+          e.g., community centre, church hall — filled automatically from address
+        </Text>
       </YStack>
 
       {/* Action Buttons */}
       <XStack gap="$3" justifyContent="flex-end" paddingTop="$2">
-        <Button 
-          size="$4" 
-          variant="outlined" 
+        <Button
+          size="$4"
+          variant="outlined"
           borderWidth={2}
           borderColor="$textTertiary"
           onPress={onCancel}

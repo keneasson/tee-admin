@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'solito/navigation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { AuthSession, AuthStatus } from '@my/app/types'
 import {
   NavigationContainer,
   EnhancedNavigationButton,
@@ -21,6 +21,11 @@ import { ThemeToggle } from './theme-toggle'
 
 type WithNavigationProps = {
   children: React.ReactNode
+  /**
+   * Session data must be passed from platform-specific wrapper
+   */
+  session: AuthSession | null
+  status?: AuthStatus
 }
 
 type MainPageType = {
@@ -46,8 +51,7 @@ const adminPages: MainPageType[] = [
   { path: '/brand/playground', label: 'Feature Flags', icon: '🚀' },
 ]
 
-export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children }) => {
-  const { data: session } = useSession()
+export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children, session, status = 'authenticated' }) => {
   const router = useRouter()
   const currentPath = usePathname()
   const themeName = useThemeName()
@@ -93,7 +97,7 @@ export const EnhancedWithNavigation: React.FC<WithNavigationProps> = ({ children
   // Custom footer with logout/login
   const Footer = () => (
     <YStack gap="$2">
-      {session?.user ? <NavitemLogout /> : <LogInUser />}
+      {session?.user ? <NavitemLogout /> : <LogInUser onNavigate={(path) => router.push(path)} />}
 
       <View
         backgroundColor="$background"

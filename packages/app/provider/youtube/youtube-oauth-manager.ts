@@ -59,7 +59,7 @@ export class YouTubeOAuthManager {
       // Store tokens in DynamoDB
       await this.tokenRepo.storeTokens(userEmail, {
         access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        refresh_token: tokens.refresh_token ?? undefined,
         expires_in: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
         scope: tokens.scope || '',
         token_type: tokens.token_type || 'Bearer',

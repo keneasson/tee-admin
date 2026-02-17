@@ -3,12 +3,28 @@ import type {
   ContactRequestRecord,
   ContactRequestType,
   ContactRequestStatus,
+  ContactRequestReason,
   ContactRequestQueryResult,
 } from '../types'
 
 // Generate a simple unique ID
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
+// Maximum active (pending + non-expired) requests a user can have outstanding
+const MAX_ACTIVE_REQUESTS = 3
+
+// Requests expire after 7 days
+const REQUEST_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Check if a contact request has expired (older than 7 days)
+ */
+function isExpired(request: ContactRequestRecord): boolean {
+  if (!request.createdAt) return false
+  const createdAt = new Date(request.createdAt).getTime()
+  return Date.now() - createdAt > REQUEST_EXPIRY_MS
 }
 
 /**
@@ -33,18 +49,20 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
     requesterEmail: string,
     recipientEmail: string,
     requestType: ContactRequestType,
-    message?: string
+    message?: string,
+    reason?: ContactRequestReason
   ): Promise<ContactRequestRecord> {
     const requestId = generateRequestId()
     const now = new Date().toISOString()
 
-    const record: ContactRequestRecord = {
-      PK: `USER#${recipientEmail}`,
-      SK: `CONTACT_REQUEST#${requestId}`,
+    const record = {
+      pkey: `USER#${recipientEmail}`,
+      skey: `CONTACT_REQUEST#${requestId}`,
       requestId,
       requesterEmail,
       recipientEmail,
       requestType,
+      reason,
       message,
       status: 'pending',
       createdAt: now,
@@ -53,7 +71,7 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
     }
 
     await this.put(record as any)
-    return record
+    return record as unknown as ContactRequestRecord
   }
 
   /**
@@ -72,11 +90,11 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
   }
 
   /**
-   * Get pending contact requests for a user
+   * Get pending contact requests for a user (excludes expired)
    */
   async getPendingRequests(email: string): Promise<ContactRequestRecord[]> {
     const result = await this.getReceivedRequests(email)
-    return result.items.filter(req => req.status === 'pending')
+    return result.items.filter(req => req.status === 'pending' && !isExpired(req))
   }
 
   /**
@@ -159,6 +177,22 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
       expressionAttributeValues: { ':email': email },
     })
     return result.items as ContactRequestRecord[]
+  }
+
+  /**
+   * Count active (pending + non-expired) sent requests for a user
+   * Used to enforce the MAX_ACTIVE_REQUESTS limit
+   */
+  async countActiveSentRequests(email: string): Promise<number> {
+    const sent = await this.getSentRequests(email)
+    return sent.filter(req => req.status === 'pending' && !isExpired(req)).length
+  }
+
+  /**
+   * Get the maximum number of active requests allowed
+   */
+  static get MAX_ACTIVE_REQUESTS(): number {
+    return MAX_ACTIVE_REQUESTS
   }
 }
 

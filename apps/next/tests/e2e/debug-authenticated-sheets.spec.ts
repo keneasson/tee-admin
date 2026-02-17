@@ -128,7 +128,7 @@ test.describe('Authenticated Google Sheets Testing', () => {
               
               break
             } catch (error) {
-              console.log(`❌ Could not click element: ${error.message}`)
+              console.log(`Could not click element: ${(error as Error).message}`)
             }
           }
         }
@@ -137,7 +137,7 @@ test.describe('Authenticated Google Sheets Testing', () => {
       }
       
     } catch (error) {
-      console.log('❌ Error accessing public sheet:', error.message)
+      console.log('Error accessing public sheet:', (error as Error).message)
     }
   })
 

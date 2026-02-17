@@ -159,7 +159,7 @@ export function useEnhancedSchedule(
 
       // Handle API error response
       if ('error' in result) {
-        throw new Error(result.error || 'Unknown API error')
+        throw new Error((result as any).error || 'Unknown API error')
       }
 
       // Update state with successful response - single source of truth approach

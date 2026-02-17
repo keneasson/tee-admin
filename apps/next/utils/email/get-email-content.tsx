@@ -22,12 +22,14 @@ import { StudyWeekendContent } from 'email-builder/components/StudyWeekendConten
 import { getEventById } from '@my/app/services/event-service'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
+import type { DisplayDuration } from '@my/app/types/newsletter-rules'
+import { syncYouTubeUrlsForEmail } from '../youtube-sync-helper'
 
 // Event display duration rules - same as news-events.tsx
-const EVENT_DURATION_RULES: Record<string, { displayDuration: string; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
+const EVENT_DURATION_RULES: Record<string, { displayDuration: DisplayDuration; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
   'recurring': { displayDuration: 'until_event_date', priority: 1, includeInSummary: true, requiresCTA: false },
   'funeral': { displayDuration: '2_weeks_then_thursday_before', priority: 2, includeInSummary: true, requiresCTA: false },
-  'engagement': { displayDuration: '3_weeks_or_until_event_date', priority: 3, includeInSummary: true, requiresCTA: false },
+  'engagement': { displayDuration: '3_weeks_from_publish', priority: 3, includeInSummary: true, requiresCTA: false },
   'wedding': { displayDuration: '3_weeks_or_until_event_date', priority: 4, includeInSummary: true, requiresCTA: false },
   'baptism': { displayDuration: '1_week_after_event', priority: 5, includeInSummary: true, requiresCTA: false },
   'study-weekend': { displayDuration: 'until_event_date', priority: 6, includeInSummary: true, requiresCTA: true },
@@ -167,6 +169,12 @@ export const getEmailContent = async (
       })
       return [htmlContent, textContent]
     case 'recap':
+      // Fallback: Sync YouTube URLs if any are missing (primary sync happens at livestream creation)
+      const recapSyncResult = await syncYouTubeUrlsForEmail(14)
+      if (recapSyncResult?.updated && recapSyncResult.updated > 0) {
+        console.log(`📺 YouTube fallback sync for recap: ${recapSyncResult.updated} URLs synced`)
+      }
+
       const memorialEvents = await get_upcoming_program(['memorial', 'sundaySchool'])
       console.log('memorialEvents', memorialEvents)
       const mergeEvents = mergeSundayEvents(memorialEvents)
@@ -189,6 +197,12 @@ export const getEmailContent = async (
       )
       return [bibleClassHtmlContent, bibleClassTextContent]
     case 'newsletter':
+      // Fallback: Sync YouTube URLs if any are missing (primary sync happens at livestream creation)
+      const newsletterSyncResult = await syncYouTubeUrlsForEmail(14)
+      if (newsletterSyncResult?.updated && newsletterSyncResult.updated > 0) {
+        console.log(`📺 YouTube fallback sync for newsletter: ${newsletterSyncResult.updated} URLs synced`)
+      }
+
       // Fetch all required data for newsletter
       const [scheduleData, upcomingEvents, readingsData] = await Promise.all([
         get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),

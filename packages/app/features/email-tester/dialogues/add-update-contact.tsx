@@ -9,7 +9,7 @@ export type AddUpdateContactParams = {}
 type AddUpdateContactType = {
   email: string
   firstName: string
-  lastName: boolean
+  lastName: string
   lists: { [K in EmailListTypeKeys]: boolean }
 }
 
@@ -18,6 +18,8 @@ const listNameMap: { [K in EmailListTypeKeys]: string } = {
   memorial: 'Memorial',
   bibleClass: 'Bible Class',
   newsletter: 'Newsletter',
+  members: 'Members',
+  interEcclesia: 'Inter-Ecclesia',
   testList: 'Test List',
 }
 
@@ -60,7 +62,7 @@ export const AddUpdateContact: React.FC<AddUpdateContactParams> = () => {
           {...register('lastName', { required: true })}
           label="Last Name"
         />
-        {Object.keys(EmailListTypes).map((listType: EmailListTypes) => (
+        {(Object.keys(EmailListTypes) as EmailListTypeKeys[]).map((listType) => (
           <CheckboxWithCheck
             key={listType}
             control={control}

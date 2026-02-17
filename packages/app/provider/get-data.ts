@@ -6,9 +6,12 @@ import {
   GetContactType,
   ProgramsTypes,
   SimplifiedContactListType,
+  EmailReasonType,
 } from '@my/app/types'
 import { CreateUpdateListType } from '../types'
-import { emailReasons } from 'next-app/utils/email/email-send'
+
+// Use shared EmailReasonType instead of importing from next-app
+type emailReasons = EmailReasonType
 
 const API_PATH =
   process.env.NEXT_PUBLIC_API_PATH || Constants?.expoConfig?.extra?.EXPO_PUBLIC_API_PATH
@@ -42,7 +45,7 @@ export const sendEmail = async (
     eventId?: string
     eventType?: string
   }
-): Promise<string> => {
+): Promise<any> => {
   const params = new URLSearchParams()
   if (isTest) {
     params.append('test', 'true')

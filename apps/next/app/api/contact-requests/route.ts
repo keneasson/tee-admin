@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../utils/auth'
-import { contactRequestRepository } from '@my/app/provider/dynamodb/repositories/contact-request-repository'
+import { contactRequestRepository, ContactRequestRepository } from '@my/app/provider/dynamodb/repositories/contact-request-repository'
 import { privacyRepository } from '@my/app/provider/dynamodb/repositories/privacy-repository'
 import { connectionRepository } from '@my/app/provider/dynamodb/repositories/connection-repository'
-import type { ContactRequestType } from '@my/app/provider/dynamodb/types'
+import type { ContactRequestType, ContactRequestReason } from '@my/app/provider/dynamodb/types'
 
-const validRequestTypes: ContactRequestType[] = ['callback', 'email_me']
+const validRequestTypes: ContactRequestType[] = ['phone', 'email', 'text']
+const validReasons: ContactRequestReason[] = ['personal', 'ecclesial']
 
 /**
  * GET /api/contact-requests - Get contact requests received by current user
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { recipientEmail, requestType, message } = body
+    const { recipientEmail, requestType, message, reason } = body
 
     // Validate required fields
     if (!recipientEmail || !requestType) {
@@ -78,11 +79,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate reason if provided
+    if (reason && !validReasons.includes(reason)) {
+      return NextResponse.json(
+        { error: `Invalid reason. Must be one of: ${validReasons.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
     // Can't request contact from yourself
     if (recipientEmail === session.user.email) {
       return NextResponse.json(
         { error: 'Cannot request contact from yourself' },
         { status: 400 }
+      )
+    }
+
+    // Check active request limit
+    const activeCount = await contactRequestRepository.countActiveSentRequests(session.user.email)
+    if (activeCount >= ContactRequestRepository.MAX_ACTIVE_REQUESTS) {
+      return NextResponse.json(
+        { error: `You have reached the maximum of ${ContactRequestRepository.MAX_ACTIVE_REQUESTS} active contact requests. Please wait for existing requests to be responded to or expire (7 days).` },
+        { status: 429 }
       )
     }
 
@@ -121,7 +139,8 @@ export async function POST(request: NextRequest) {
       session.user.email,
       recipientEmail,
       requestType,
-      message
+      message,
+      reason
     )
 
     return NextResponse.json({

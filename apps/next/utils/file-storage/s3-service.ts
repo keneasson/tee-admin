@@ -31,7 +31,8 @@ export class S3FileStorageService implements FileStorageService {
   async upload(file: File | Buffer, key: string, options?: UploadOptions): Promise<string> {
     try {
       // Validate file size
-      const fileSize = file instanceof Buffer ? file.length : file.size
+      const isBuffer = Buffer.isBuffer(file)
+      const fileSize = isBuffer ? file.length : (file as File).size
       const maxSize = options?.maxSizeBytes || this.config.maxFileSizeBytes || 10 * 1024 * 1024 // 10MB default
 
       if (fileSize > maxSize) {
@@ -43,7 +44,7 @@ export class S3FileStorageService implements FileStorageService {
 
       // Validate content type
       const contentType =
-        options?.contentType || (file instanceof File ? file.type : 'application/octet-stream')
+        options?.contentType || (!isBuffer ? (file as File).type : 'application/octet-stream')
       if (this.config.allowedMimeTypes && !this.config.allowedMimeTypes.includes(contentType)) {
         throw new FileStorageError(
           `Content type ${contentType} not allowed`,
@@ -52,7 +53,7 @@ export class S3FileStorageService implements FileStorageService {
       }
 
       // Prepare file data
-      const fileData = file instanceof Buffer ? file : Buffer.from(await file.arrayBuffer())
+      const fileData = isBuffer ? file : Buffer.from(await (file as File).arrayBuffer())
 
       // Upload to S3 following AWS best practices
       const command = new PutObjectCommand({

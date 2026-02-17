@@ -24,7 +24,10 @@ export class EventDurationCalculator {
       
       case '3_weeks_after_event':
         return this.calculateWeeksAfterEvent(event, currentDate, 3)
-      
+
+      case '3_weeks_from_publish':
+        return this.calculateWeeksFromPublish(event, currentDate, 3)
+
       case '3_weeks_from_first_inclusion':
         return this.calculateWeeksFromFirstInclusion(firstIncludedDate, currentDate, 3)
       
@@ -95,6 +98,36 @@ export class EventDurationCalculator {
       reason: shouldInclude
         ? `Event occurred on ${eventDate.toDateString()}, displaying for ${weeks} weeks until ${cutoffDate.toDateString()}`
         : `${weeks} week display period ended on ${cutoffDate.toDateString()}`
+    }
+  }
+
+  /**
+   * Include for X weeks from the publish/announcement date
+   * Used for: engagement announcements (show 3 Thursdays from when announced)
+   */
+  private static calculateWeeksFromPublish(event: any, currentDate: Date, weeks: number): DurationCalculationResult {
+    const publishDate = event.publishDate ? new Date(event.publishDate)
+      : event.createdAt ? new Date(event.createdAt)
+      : null
+
+    if (!publishDate) {
+      return {
+        shouldInclude: true,
+        reason: 'No publish date specified - including by default'
+      }
+    }
+
+    const cutoffDate = new Date(publishDate)
+    cutoffDate.setDate(cutoffDate.getDate() + (weeks * 7))
+
+    const shouldInclude = currentDate <= cutoffDate
+
+    return {
+      shouldInclude,
+      displayUntilDate: cutoffDate,
+      reason: shouldInclude
+        ? `Published on ${publishDate.toDateString()}, displaying for ${weeks} weeks until ${cutoffDate.toDateString()}`
+        : `${weeks} week display period from publish date ended on ${cutoffDate.toDateString()}`
     }
   }
 
@@ -316,8 +349,10 @@ export class EventDurationCalculator {
       'serviceDate',      // funeral
       'ceremonyDate',     // wedding
       'baptismDate',      // baptism
+      'engagementDate',   // engagement - when the engagement occurred
       'startDate',        // general
-      'dateRange.start'   // study-weekend
+      'dateRange.start',  // study-weekend
+      'publishDate'       // fallback for events without specific dates
     ]
 
     for (const field of dateFields) {

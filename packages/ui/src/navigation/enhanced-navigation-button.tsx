@@ -15,8 +15,8 @@ interface EnhancedNavigationButtonProps {
   icon?: string | React.ReactNode
   /** Theme mode for color selection */
   mode?: ColorMode
-  /** Whether to show a notification badge */
-  badge?: number | boolean
+  /** Whether to show a notification badge (number for count, boolean for dot, string for label) */
+  badge?: number | boolean | string
   /** Whether the button is disabled */
   disabled?: boolean
   /** Size variant of the button */

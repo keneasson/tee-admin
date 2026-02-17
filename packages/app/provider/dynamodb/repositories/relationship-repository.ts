@@ -47,9 +47,9 @@ export class RelationshipRepository extends BaseRepository<RelationshipRecord> {
     const now = new Date().toISOString()
 
     // Create forward relationship (source -> target)
-    const forwardRecord: RelationshipRecord = {
-      PK: `USER#${sourceEmail}`,
-      SK: `RELATIONSHIP#${targetEmail}#${type}`,
+    const forwardRecord = {
+      pkey: `USER#${sourceEmail}`,
+      skey: `RELATIONSHIP#${targetEmail}#${type}`,
       sourceEmail,
       targetEmail,
       relationshipType: type,
@@ -61,9 +61,9 @@ export class RelationshipRepository extends BaseRepository<RelationshipRecord> {
 
     // Create inverse relationship (target -> source)
     const inverseType = this.getInverseRelationship(type)
-    const inverseRecord: RelationshipRecord = {
-      PK: `USER#${targetEmail}`,
-      SK: `RELATIONSHIP#${sourceEmail}#${inverseType}`,
+    const inverseRecord = {
+      pkey: `USER#${targetEmail}`,
+      skey: `RELATIONSHIP#${sourceEmail}#${inverseType}`,
       sourceEmail: targetEmail,
       targetEmail: sourceEmail,
       relationshipType: inverseType,

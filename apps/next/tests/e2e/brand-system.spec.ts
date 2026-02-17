@@ -90,7 +90,7 @@ test.describe('Brand Colors Page', () => {
   test('should display color palette interface', async ({ page }) => {
     // Skip if redirected to signin
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show color palette content
@@ -104,7 +104,7 @@ test.describe('Brand Colors Page', () => {
 
   test('should toggle between light and dark modes', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Test mode switching
@@ -117,7 +117,7 @@ test.describe('Brand Colors Page', () => {
 
   test('should display accessibility contrast testing', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show contrast testing section
@@ -131,7 +131,7 @@ test.describe('Brand Colors Page', () => {
 
   test('should display current usage analysis', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Should show usage analysis
@@ -149,7 +149,7 @@ test.describe('Brand Typography Page', () => {
 
   test('should display typography system', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await expect(page.getByText('Typography System')).toBeVisible()
@@ -161,7 +161,7 @@ test.describe('Brand Typography Page', () => {
 
   test('should display all typography categories', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Check for all typography sections
@@ -174,7 +174,7 @@ test.describe('Brand Typography Page', () => {
 
   test('should toggle typography specifications', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Toggle specifications display
@@ -193,7 +193,7 @@ test.describe('Component Showcase Page', () => {
 
   test('should display component showcase without hydration errors', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Wait for page to load and hydrate
@@ -205,7 +205,7 @@ test.describe('Component Showcase Page', () => {
 
   test('should display all component categories', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -219,7 +219,7 @@ test.describe('Component Showcase Page', () => {
 
   test('should allow variant switching for components', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -233,7 +233,7 @@ test.describe('Component Showcase Page', () => {
 
   test('should show/hide code examples', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -256,7 +256,7 @@ test.describe('Navigation Testing Page', () => {
 
   test('should display navigation testing environment', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await expect(page.getByText('Navigation Testing Environment')).toBeVisible()
@@ -265,7 +265,7 @@ test.describe('Navigation Testing Page', () => {
 
   test('should allow theme switching', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Test theme toggle buttons
@@ -284,7 +284,7 @@ test.describe('Feature Playground Page', () => {
 
   test('should display feature flag playground', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await expect(page.getByText('Feature Flag Playground')).toBeVisible()
@@ -293,7 +293,7 @@ test.describe('Feature Playground Page', () => {
 
   test('should display feature flag controls', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await expect(page.getByText('Feature Flag Controls')).toBeVisible()
@@ -305,7 +305,7 @@ test.describe('Feature Playground Page', () => {
 
   test('should allow feature flag overrides', async ({ page }) => {
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Look for override buttons

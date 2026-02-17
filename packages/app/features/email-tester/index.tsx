@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useSession } from 'next-auth/react'
 
 import { Button, Checkbox, Heading, Paragraph, Text, XStack, YStack } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
@@ -9,13 +8,21 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { ManageContacts } from './manage-contacts'
-import { emailReasons } from 'next-app/utils/email/email-send'
+import { EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Check } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
 // import { setRole } from '../../provider/auth/setRole'
 
-export const EmailTester: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for EmailTester component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface EmailTesterProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const EmailTester: React.FC<EmailTesterProps> = ({ session, status = 'authenticated' }) => {
 
   const [email, setEmail] = useState<any>(null)
   const [reason, setReason] = useState<string | null>(null)
@@ -68,7 +75,7 @@ export const EmailTester: React.FC = () => {
     )
   }
 
-  const getEmail = async (reason: emailReasons) => {
+  const getEmail = async (reason: EmailReasonType) => {
     console.log('getEmail - test', test)
     setReason(reason)
     const response = await sendEmail(reason, test)

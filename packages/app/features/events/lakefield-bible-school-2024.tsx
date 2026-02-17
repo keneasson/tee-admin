@@ -6,7 +6,7 @@ import { EventsFooter } from '@my/app/features/events/index'
 
 export const LakefieldBibleSchool2024: React.FC = () => {
   return (
-    <Wrapper subHheader={'Bible School'}>
+    <Wrapper subHeader={'Bible School'}>
       <Section
         borderTopColor={'$grey8Dark'}
         borderWidth={1}
