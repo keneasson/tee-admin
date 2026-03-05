@@ -3,13 +3,31 @@ import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { unsubscribeContact } from '../../../../utils/email/contact'
+import { invalidatePeopleCache } from '../../people/cache'
+import { invalidateGuestCache } from '../../people/guests/cache'
 
-const VALID_ROLES = [ROLES.OWNER, ROLES.ADMIN, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED] as const
+// Note: 'recorder' is deprecated as a role — RB is set via the nomination flow (isRecordingBrother boolean).
+// Kept in VALID_ROLES for backwards compat with existing data but not in ALLOWED_ASSIGNMENTS for new assignments.
+const VALID_ROLES = [ROLES.OWNER, ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED] as const
+
+// Roles that each caller level is allowed to assign
+// Note: RECORDER removed — RB is a designation, not a role to be assigned
+const ALLOWED_ASSIGNMENTS: Record<string, string[]> = {
+  [ROLES.OWNER]: [ROLES.OWNER, ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED],
+  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED],
+  [ROLES.REP]: [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED],
+}
+
+// Roles that can call set-role (isRecordingBrother checked separately below)
+const CALLER_ROLES = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP]
 
 /**
  * PUT /api/admin/set-role - Change a user's role
- * Only Owner and Admin can call this.
+ * Owner and Admin can change any user's role (with hierarchy limits).
+ * Recorder and Rep can only change roles for members of their own ecclesia.
  * Admin cannot set role to 'owner'.
+ * Recorder cannot set role to 'admin' or 'owner'.
+ * Rep cannot set role to 'recorder', 'admin', or 'owner'.
  * Cannot remove the only owner.
  */
 export async function PUT(request: NextRequest) {
@@ -24,9 +42,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const callerRole = (session.user as any).role as string
-    if (callerRole !== ROLES.OWNER && callerRole !== ROLES.ADMIN) {
+    const callerIsRB = !!(session.user as any).isRecordingBrother
+    if (!CALLER_ROLES.includes(callerRole) && !callerIsRB) {
       return NextResponse.json(
-        { error: 'Only Owner or Admin can change roles' },
+        { error: 'Insufficient permissions to change roles' },
         { status: 403 }
       )
     }
@@ -41,6 +60,13 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    if (newRole === ROLES.RECORDER) {
+      return NextResponse.json(
+        { error: 'Recording Brother is now a designation, not a role. Use the RB nomination flow to set a Recording Brother.' },
+        { status: 400 }
+      )
+    }
+
     if (!VALID_ROLES.includes(newRole)) {
       return NextResponse.json(
         { error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` },
@@ -48,10 +74,13 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Admin cannot promote to owner
-    if (callerRole === ROLES.ADMIN && newRole === ROLES.OWNER) {
+    // Check if the caller is allowed to assign this role
+    // RB designation grants same permissions as legacy recorder role for role assignments
+    const effectiveRole = callerIsRB && !ALLOWED_ASSIGNMENTS[callerRole] ? ROLES.REP : callerRole
+    const allowed = ALLOWED_ASSIGNMENTS[effectiveRole]
+    if (!allowed || !allowed.includes(newRole)) {
       return NextResponse.json(
-        { error: 'Only an Owner can promote someone to Owner' },
+        { error: `You cannot assign the role '${newRole}'` },
         { status: 403 }
       )
     }
@@ -63,6 +92,24 @@ export async function PUT(request: NextRequest) {
         { error: 'User not found' },
         { status: 404 }
       )
+    }
+
+    // Recorder/Rep/RB: enforce same-ecclesia restriction
+    if (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP) {
+      const callerPerson = await personRepository.getByEmail(session.user.email)
+      if (!callerPerson) {
+        return NextResponse.json(
+          { error: 'Caller not found' },
+          { status: 403 }
+        )
+      }
+
+      if (callerPerson.ecclesia !== targetPerson.ecclesia) {
+        return NextResponse.json(
+          { error: 'You can only change roles for members of your own ecclesia' },
+          { status: 403 }
+        )
+      }
     }
 
     const previousRole = targetPerson.role || ROLES.GUEST
@@ -98,8 +145,14 @@ export async function PUT(request: NextRequest) {
 
     // Update PersonRecord
     await personRepository.updatePerson(targetPerson.personId, {
-      role: newRole as 'owner' | 'admin' | 'member' | 'guest' | 'deceased',
+      role: newRole as 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased',
     })
+
+    // Invalidate caches when role changes involve guests
+    if (previousRole === ROLES.GUEST || newRole === ROLES.GUEST) {
+      invalidateGuestCache()
+      invalidatePeopleCache()
+    }
 
     // When marking as deceased, unsubscribe their emails from SES —
     // but only if no living person still shares that email address.

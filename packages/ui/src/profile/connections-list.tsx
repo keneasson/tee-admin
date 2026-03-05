@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Input, Spinner, Separator } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner, Separator } from 'tamagui'
+import { Button } from '../Button'
 import { Plus, Trash2, UserPlus, UserX, Link2 } from '@tamagui/lucide-icons'
 
 interface Connection {

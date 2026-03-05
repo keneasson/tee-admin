@@ -40,29 +40,10 @@ export class WebhookSyncService {
     const startTime = Date.now()
     
     try {
-      let currentVersion = Date.now().toString() // Default version
-      
-      // Check if data actually changed using version/checksum (skip if Drive API unavailable)
-      try {
-        currentVersion = await this.getSheetVersion(sheetId)
-        const lastSyncedVersion = await this.getLastSyncedVersion(sheetId)
-        
-        if (currentVersion === lastSyncedVersion) {
-          return {
-            sheetId,
-            sheetType: 'unknown',
-            recordsProcessed: 0,
-            recordsSuccessful: 0,
-            recordsFailed: 0,
-            errors: [],
-            executionTime: Date.now() - startTime,
-          }
-        }
-      } catch (versionError) {
-        console.warn(`⚠️ Version check failed for sheet ${sheetId}, proceeding with sync:`, (versionError as Error).message)
-        // Continue with sync even if version check fails - use timestamp as version
-        currentVersion = Date.now().toString()
-      }
+      // Version check disabled — getLastSyncedVersion() is not yet implemented (always returns ''),
+      // and getSheetVersion() requires the Google Drive API which may not be enabled.
+      // Always sync on webhook to ensure data freshness.
+      const currentVersion = Date.now().toString()
       
       // Determine sheet type and get data
       const sheetType = await this.determineSheetType(sheetId)

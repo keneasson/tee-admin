@@ -22,6 +22,7 @@ export const brandColors = {
     errorForeground: '#FFFFFF',
     info: '#1565C0', // Darker blue (contrasts 8.9:1 with white)
     infoForeground: '#FFFFFF',
+    infoHover: '#1976D2', // Lighter blue for hover (contrasts 7.5:1 with white)
     
     // Text colors - High contrast hierarchy
     textPrimary: '#1A1A1A', // Near black (contrasts 18.1:1 with white)
@@ -75,6 +76,7 @@ export const brandColors = {
     errorForeground: '#FFFFFF',
     info: '#2196F3', // Material blue (contrasts 6.9:1 with dark bg)
     infoForeground: '#000000',
+    infoHover: '#42A5F5', // Lighter blue for hover (contrasts 8.6:1 with black)
     
     // Text colors - Excellent contrast for dark mode
     textPrimary: '#FFFFFF', // Pure white

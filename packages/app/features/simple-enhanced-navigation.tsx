@@ -50,18 +50,13 @@ const systemAdminPages: MainPageType[] = [
   { path: '/admin/events', label: 'Event Management' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
+  { path: '/admin/metrics', label: 'Metrics' },
 ]
 
 // Community pages visible to all authenticated users (member+)
 const communityPages: MainPageType[] = [
-  { path: '/admin/community/ecclesias', label: 'Ecclesial Directory' },
-  { path: '/admin/community/contacts', label: 'Contact List' },
-]
-
-// Community Tools (admin-only extras)
-const communityAdminPages: MainPageType[] = [
-  { path: '/admin/community/ecclesias', label: 'Ecclesial Directory' },
-  { path: '/admin/community/contacts', label: 'Contact List' },
+  { path: '/directory/ecclesias', label: 'Ecclesial Directory' },
+  { path: '/directory/people', label: 'Contact List' },
 ]
 
 // Brand System Tools
@@ -210,47 +205,10 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             ))}
           </YStack> : null}
 
-      {/* Community - for members (non-admin/owner authenticated users) */}
-      {user && user.role === ROLES.MEMBER ? <YStack gap="$1">
-            <Text
-              fontSize="$2"
-              fontWeight="600"
-              color={colors.textSecondary}
-              textTransform="uppercase"
-            >
-              Community
-            </Text>
-            {communityPages.map((page) => (
-              <Button
-                key={page.path}
-                onPress={navigateTo(page.path)}
-                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
-                borderRadius="$2"
-                justifyContent="flex-start"
-                paddingHorizontal="$3"
-                paddingVertical="$2"
-                hoverStyle={{
-                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
-                }}
-              >
-                <Text
-                  color={
-                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
-                  }
-                  fontWeight={currentPath === page.path ? '600' : '400'}
-                  hoverStyle={{
-                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
-                  }}
-                >
-                  {page.label}
-                </Text>
-              </Button>
-            ))}
-          </YStack> : null}
-
-      {/* Community Tools - admin/owner get full list */}
+      {/* Community - for members, rep, recorder, admin, owner */}
       {user &&
-        (user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
+        (user.role === ROLES.MEMBER || user.role === ROLES.REP || user.role === ROLES.RECORDER ||
+         user.role === ROLES.ADMIN || user.role === ROLES.OWNER) ? <YStack gap="$1">
             <Text
               fontSize="$2"
               fontWeight="600"
@@ -259,32 +217,35 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             >
               Community
             </Text>
-            {communityAdminPages.map((page) => (
+            {communityPages.map((page) => {
+              const isActive = currentPath?.startsWith(page.path) ?? false
+              return (
               <Button
                 key={page.path}
                 onPress={navigateTo(page.path)}
-                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                backgroundColor={isActive ? colors.primary : 'transparent'}
                 borderRadius="$2"
                 justifyContent="flex-start"
                 paddingHorizontal="$3"
                 paddingVertical="$2"
                 hoverStyle={{
-                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                  backgroundColor: isActive ? colors.primaryHover : colors.backgroundSecondary,
                 }}
               >
                 <Text
                   color={
-                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                    isActive ? colors.primaryForeground : colors.textPrimary
                   }
-                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  fontWeight={isActive ? '600' : '400'}
                   hoverStyle={{
-                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                    color: isActive ? colors.primaryForeground : colors.textSecondary,
                   }}
                 >
                   {page.label}
                 </Text>
               </Button>
-            ))}
+              )
+            })}
           </YStack> : null}
 
       {/* System Admin Tools */}

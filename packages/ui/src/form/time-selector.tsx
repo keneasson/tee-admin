@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { XStack, YStack, Select, Button, Text } from 'tamagui'
+import { XStack, YStack, Select, Text } from 'tamagui'
+import { Button } from '../Button'
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 
 interface TimeSelectorProps<T extends FieldValues> {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Input, Select, Checkbox, Spinner, View } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Select, Checkbox, Spinner, View } from 'tamagui'
+import { Button } from '../Button'
 import { Plus, Trash2, Edit3, Check, X, MapPin, Home, Briefcase, Mail } from '@tamagui/lucide-icons'
 import type { AddressType } from '@my/app/provider/dynamodb/types'
 import { AddressAutocomplete } from '../form/address-autocomplete'
@@ -155,7 +156,7 @@ export const AddressList: React.FC<AddressListProps> = ({
           onAddressSelect={(parsed: ParsedAddress) => {
             setAddress({
               ...address,
-              street1: parsed.formattedAddress || parsed.streetAddress,
+              street1: parsed.streetAddress,
               city: parsed.city,
               province: parsed.province,
               postalCode: parsed.postalCode,

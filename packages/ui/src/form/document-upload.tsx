@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
-import { YStack, XStack, Text, Button, Spinner, Input } from 'tamagui'
+import { YStack, XStack, Text, Spinner, Input } from 'tamagui'
+import { Button } from '../Button'
 import { Upload, X, File, AlertCircle, FileText, Link2, Pencil, GripVertical } from '@tamagui/lucide-icons'
 import { useDropzone } from 'react-dropzone'
 import { DocumentAttachment } from '@my/app/types/events'

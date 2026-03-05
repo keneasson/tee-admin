@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 /**
  * GET /api/user/lookup?email=xxx - Look up a person by email
@@ -14,6 +15,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      )
+    }
+
+    // Require at least member role
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json(
+        { error: 'Member access required' },
+        { status: 403 }
       )
     }
 

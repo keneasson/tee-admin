@@ -27,7 +27,7 @@ export class GoogleSheetsService {
         keyFile,
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets.readonly',
-          'https://www.googleapis.com/auth/drive.readonly',
+          // Drive API scope removed — not needed for sheet sync and may not be enabled in GCP project
         ],
       })
     } else {
@@ -94,7 +94,7 @@ export class GoogleSheetsService {
         credentials,
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets.readonly',
-          'https://www.googleapis.com/auth/drive.readonly',
+          // Drive API scope removed — not needed for sheet sync and may not be enabled in GCP project
         ],
       })
     }

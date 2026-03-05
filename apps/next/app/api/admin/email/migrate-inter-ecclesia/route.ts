@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getContacts } from '@/utils/email/contact'
 import { getRawContactLists, createContactListTopic } from '@/utils/email/contact-lists'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
+
+async function requireAdmin(): Promise<NextResponse | null> {
+  const session = await auth()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+  const callerRole = (session.user as any).role as string || ROLES.GUEST
+  if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+  return null
+}
 
 /**
  * Contact from SES with AttributesData
@@ -73,6 +87,9 @@ async function getAllInterEcclesiaContacts(): Promise<SESContactWithAttributes[]
  */
 export async function POST(request: NextRequest) {
   try {
+    const authError = await requireAdmin()
+    if (authError) return authError
+
     const dryRun = request.nextUrl.searchParams.get('dryRun') === 'true'
     console.log(`🔄 Starting inter-ecclesia migration to PersonRecords (dryRun: ${dryRun})...`)
 
@@ -245,6 +262,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
+    const authError = await requireAdmin()
+    if (authError) return authError
+
     // Get all inter-ecclesia reps from PersonRecords
     const reps = await personRepository.listInterEcclesiaReps()
 

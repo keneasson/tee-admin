@@ -1,5 +1,6 @@
 import React from 'react'
-import { YStack, XStack, Text, Card, Button, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Card, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import { ChevronRight, Trash2 } from '@tamagui/lucide-icons'
 
 interface MemberCardProps {
@@ -7,6 +8,7 @@ interface MemberCardProps {
   name: string
   ecclesia?: string
   canViewDetails?: boolean
+  privacy?: Record<string, string> // kept for backward compat, not rendered on cards
   onPress?: () => void
   onDelete?: () => void
   isDeleting?: boolean
@@ -29,7 +31,7 @@ export const MemberCard: React.FC<MemberCardProps> = ({
       hoverStyle={onPress ? { backgroundColor: '$backgroundFocus' } : undefined}
     >
       <XStack justifyContent="space-between" alignItems="center" gap="$2">
-        <YStack flex={1}>
+        <YStack flex={1} gap="$1.5">
           <Text fontSize="$4" fontWeight="500">{name}</Text>
           {ecclesia ? (
             <Text fontSize="$2" theme="alt2">{ecclesia}</Text>

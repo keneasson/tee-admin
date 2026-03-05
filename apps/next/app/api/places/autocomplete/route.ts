@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '../../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json({ error: 'Member access required' }, { status: 403 })
+    }
+
     const { input, sessionToken, country } = await request.json()
 
     if (!input || typeof input !== 'string' || input.length < 3) {
@@ -15,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, predictions: [] })
     }
 
-    // Map app country codes to Google's ISO codes
+    // Map app country codes and full names to Google's ISO codes
     const COUNTRY_TO_GOOGLE: Record<string, string> = {
       CA: 'ca',
       US: 'us',
@@ -23,6 +34,13 @@ export async function POST(request: NextRequest) {
       AU: 'au',
       NZ: 'nz',
       ZA: 'za',
+      canada: 'ca',
+      'united states': 'us',
+      usa: 'us',
+      'united kingdom': 'gb',
+      australia: 'au',
+      'new zealand': 'nz',
+      'south africa': 'za',
     }
 
     const params = new URLSearchParams({
@@ -31,7 +49,9 @@ export async function POST(request: NextRequest) {
     })
 
     // Restrict to single country if provided, otherwise no restriction
-    const googleCountry = country ? COUNTRY_TO_GOOGLE[country] || country.toLowerCase() : null
+    const googleCountry = country
+      ? COUNTRY_TO_GOOGLE[country] || COUNTRY_TO_GOOGLE[country.toLowerCase()] || country.toLowerCase()
+      : null
     if (googleCountry) {
       params.set('components', `country:${googleCountry}`)
     }

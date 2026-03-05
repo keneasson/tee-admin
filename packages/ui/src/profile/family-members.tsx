@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Input, Select, Spinner, Label } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Select, Spinner, Label } from 'tamagui'
+import { Button } from '../Button'
 import { Plus, Trash2, Users, Heart, User } from '@tamagui/lucide-icons'
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
 
@@ -36,6 +37,22 @@ const relationshipTypeLabels: Record<RelationshipType, string> = {
   extended_family: 'Extended Family',
   household_member: 'Household Member',
 }
+
+const relationshipTypePlurals: Record<RelationshipType, string> = {
+  spouse: 'Spouses',
+  parent: 'Parents',
+  child: 'Children',
+  sibling: 'Siblings',
+  grandparent: 'Grandparents',
+  grandchild: 'Grandchildren',
+  extended_family: 'Extended Family',
+  household_member: 'Household Members',
+}
+
+// Display order: spouse first, then children, then others
+const relationshipDisplayOrder: RelationshipType[] = [
+  'spouse', 'child', 'sibling', 'parent', 'grandchild', 'grandparent', 'extended_family', 'household_member',
+]
 
 const relationshipTypeIcons: Record<RelationshipType, React.ReactNode> = {
   spouse: <Heart size={16} />,
@@ -294,13 +311,16 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
         <Text fontSize="$3" theme="alt2">No family members added yet.</Text>
       ) : null}
 
-      {Object.entries(groupedMembers).map(([type, typeMembers]) => (
+      {relationshipDisplayOrder
+        .filter((type) => groupedMembers[type]?.length > 0)
+        .map((type) => {
+          const typeMembers = groupedMembers[type]
+          return (
         <YStack key={type} gap="$2">
           <XStack gap="$2" alignItems="center">
-            {relationshipTypeIcons[type as RelationshipType]}
+            {relationshipTypeIcons[type]}
             <Text fontSize="$3" fontWeight="600" theme="alt2">
-              {relationshipTypeLabels[type as RelationshipType]}
-              {typeMembers.length > 1 ? 's' : ''}
+              {typeMembers.length > 1 ? relationshipTypePlurals[type] : relationshipTypeLabels[type]}
             </Text>
           </XStack>
           {typeMembers.map((member) => (
@@ -336,7 +356,8 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
             </Card>
           ))}
         </YStack>
-      ))}
+          )
+        })}
     </YStack>
   )
 }

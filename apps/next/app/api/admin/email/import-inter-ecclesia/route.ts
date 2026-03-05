@@ -5,8 +5,22 @@ import { inputTemplate, createContactListTopic, getRawContactLists } from '@/uti
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { getEcclesiaByName, createEcclesia } from '@/utils/dynamodb/locations'
 import { EmailListTypes } from '@my/app/types'
+import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import * as fs from 'fs'
 import * as path from 'path'
+
+async function requireAdmin(): Promise<NextResponse | null> {
+  const session = await auth()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+  const callerRole = (session.user as any).role as string || ROLES.GUEST
+  if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+  return null
+}
 
 type ImportResult = {
   email: string
@@ -98,6 +112,9 @@ async function ensureInterEcclesiaTopicExists(): Promise<boolean> {
  */
 export async function POST(request: NextRequest) {
   try {
+    const authError = await requireAdmin()
+    if (authError) return authError
+
     const dryRun = request.nextUrl.searchParams.get('dryRun') === 'true'
     console.log(`🔄 Starting inter-ecclesia contact import (dryRun: ${dryRun})...`)
 
@@ -406,6 +423,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
+    const authError = await requireAdmin()
+    if (authError) return authError
+
     // Check if CSV file exists
     const csvPath = path.join(process.cwd(), 'data', 'subscribed_email_audience_export_76bfa2143c.csv')
     const csvExists = fs.existsSync(csvPath)
@@ -525,6 +545,9 @@ function inferLocation(ecclesiaName: string): { country: string; province: strin
  */
 export async function PATCH(request: NextRequest) {
   try {
+    const authError = await requireAdmin()
+    if (authError) return authError
+
     const dryRun = request.nextUrl.searchParams.get('dryRun') === 'true'
     console.log(`🏛️ Stubbing ecclesias from inter-ecclesia reps (dryRun: ${dryRun})...`)
 

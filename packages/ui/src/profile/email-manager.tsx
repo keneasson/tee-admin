@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Input, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import { Mail, Plus, Trash2, GripVertical, Check, AlertCircle, Send, ExternalLink } from '@tamagui/lucide-icons'
 
 export interface EmailEntry {

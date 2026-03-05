@@ -1,5 +1,6 @@
 import React from 'react'
-import { Dialog, Button, Text, XStack, YStack, Card, Separator } from 'tamagui'
+import { Dialog, Text, XStack, YStack, Card, Separator } from 'tamagui'
+import { Button } from '../Button'
 import { ArrowRight, Users, Mail, AlertTriangle } from '@tamagui/lucide-icons'
 import type { PersonEntry, EmailRow } from './draggable-contact-card'
 import { brandColors } from '../branding/brand-colors'

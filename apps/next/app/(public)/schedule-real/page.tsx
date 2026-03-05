@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { YStack, H1, Text, Separator } from '@my/ui'
 import { EnhancedScheduleWithData } from '@my/ui/src/data-table/enhanced-schedule-with-data'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
@@ -9,6 +9,7 @@ import { useSession } from 'next-auth/react'
 export default function RealSchedulePage() {
   const isHydrated = useHydrated()
   const { data: session } = useSession()
+  const [activeTab, setActiveTab] = useState('memorial')
 
   if (!isHydrated) {
     return (
@@ -42,7 +43,8 @@ export default function RealSchedulePage() {
       
       {/* Real Schedule Table with Live Data */}
       <EnhancedScheduleWithData
-        types={['memorial', 'bibleClass', 'sundaySchool', 'cyc']}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         showAdminFeatures={showAdminFeatures}
       />
       

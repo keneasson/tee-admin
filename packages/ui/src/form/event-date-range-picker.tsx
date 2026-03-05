@@ -1,6 +1,7 @@
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 import React, { useState, useRef, useEffect } from 'react'
-import { Label, Text, YStack, XStack, Button, Popover, Card, Select, Adapt, Sheet, ScrollView } from 'tamagui'
+import { Label, Text, YStack, XStack, Popover, Card, Select, Adapt, Sheet, ScrollView } from 'tamagui'
+import { Button } from '../Button'
 import { Calendar, Clock, ChevronDown, ChevronUp, Check } from '@tamagui/lucide-icons'
 
 interface EventDateRange {
@@ -80,6 +81,13 @@ function CalendarGrid({
       color = '$primary'
     }
     
+    const hoverBg = (isStartSelected || isEndSelected) ? '$blue9'
+      : isInRange ? '$blue3'
+      : isToday ? '$blue3' : '$gray3'
+    const pressBg = (isStartSelected || isEndSelected) ? '$blue8'
+      : isInRange ? '$blue4'
+      : isToday ? '$blue4' : '$gray4'
+
     days.push(
       <Button
         key={day}
@@ -91,7 +99,15 @@ function CalendarGrid({
         borderWidth={isToday && !isStartSelected && !isEndSelected ? 1 : 0}
         borderColor="$primary"
         onPress={() => onDateSelect(date)}
-        pressStyle={{ scale: 0.95 }}
+        hoverStyle={{
+          opacity: 1,
+          backgroundColor: hoverBg,
+        }}
+        pressStyle={{
+          opacity: 1,
+          scale: 0.95,
+          backgroundColor: pressBg,
+        }}
       >
         {day}
       </Button>

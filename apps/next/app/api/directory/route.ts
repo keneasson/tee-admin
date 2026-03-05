@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { auth } from '../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 // Cache for 15 minutes in production (directory data changes less frequently)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -11,10 +12,19 @@ export async function GET(request: NextRequest) {
   try {
     // Check authentication - directory data requires auth
     const session = await auth()
-    if (!session) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      )
+    }
+
+    // Require at least member role
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json(
+        { error: 'Member access required' },
+        { status: 403 }
       )
     }
 
@@ -83,6 +93,21 @@ export async function GET(request: NextRequest) {
 // Handle POST for user lookup (used by authentication)
 export async function POST(request: NextRequest) {
   try {
+    const postSession = await auth()
+    if (!postSession?.user?.email) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+    const postCallerRole = (postSession.user as any).role as string || ROLES.GUEST
+    if (postCallerRole === ROLES.GUEST || postCallerRole === ROLES.DECEASED) {
+      return NextResponse.json(
+        { error: 'Member access required' },
+        { status: 403 }
+      )
+    }
+
     const { email } = await request.json()
     
     if (!email) {

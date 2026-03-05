@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
-import { YStack, XStack, Text, Button, Spinner, Image } from 'tamagui'
+import { YStack, XStack, Text, Spinner, Image } from 'tamagui'
+import { Button } from '../Button'
 import { Upload, X, AlertCircle, Image as ImageLucideIcon } from '@tamagui/lucide-icons'
 import { useDropzone } from 'react-dropzone'
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '../../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { ParsedAddress } from '@my/app/types/address-autocomplete'
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
@@ -61,6 +63,15 @@ function parseAddressComponents(components: AddressComponent[]): ParsedAddress {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json({ success: false, error: 'Member access required' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const placeId = searchParams.get('placeId')
     const sessionToken = searchParams.get('sessionToken')

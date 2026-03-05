@@ -1,10 +1,12 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
-import { ResponsiveDataTable } from './responsive-data-table'
+import { ResponsiveDataTable, type RowStyleOverride } from './responsive-data-table'
 import { ScheduleTabs, type ScheduleTab } from './schedule-tabs'
 import { type ColumnDef } from '@tanstack/react-table'
-import { YStack, Text, Button, XStack, useThemeName } from 'tamagui'
+import { YStack, Text, XStack, useThemeName } from 'tamagui'
+import { Button } from '../Button'
+import { Copy, ExternalLink } from '@tamagui/lucide-icons'
 import { brandColors, type ColorMode } from '../branding/brand-colors'
 
 // Enhanced schedule event interface matching requirements
@@ -57,6 +59,7 @@ const SCHEDULE_COLUMN_CONFIG = {
     { key: 'date', header: 'Date', type: 'date' },
     { key: 'Presider', header: 'Presider', type: 'person' },
     { key: 'Speaker', header: 'Speaker', type: 'person' },
+    { key: 'Topic', header: 'Topic', type: 'text' },
   ],
   sundaySchool: [
     { key: 'date', header: 'Date', type: 'date' },
@@ -70,24 +73,35 @@ const SCHEDULE_COLUMN_CONFIG = {
   ],
 }
 
+// Detect joint Bible class rows (hosted by another ecclesia)
+const isJointBibleClass = (row: any): boolean =>
+  row.original.type === 'bibleClass' && !!row.original.Host
+
 // Create person cell with highlighting and conflict detection
 const createPersonCell = (colors: any, currentUser?: string) => ({ row, getValue }: any) => {
   const name = getValue() as string
   const isUserHighlighted = currentUser && name?.toLowerCase().includes(currentUser.split('@')[0].toLowerCase())
   const hasConflict = row.original.hasConflict
-  
+  const isJoint = isJointBibleClass(row)
+
   // Check if event is in the past
   const today = new Date()
   const torontoToday = new Date(today.toLocaleString('en-US', { timeZone: 'America/Toronto' }))
   const eventDate = new Date(row.original.date)
   const isPastEvent = eventDate < torontoToday
-  
+
+  // Determine colors based on whether row is a joint Bible class
+  const baseTextColor = isJoint ? colors.infoForeground : colors.textPrimary
+  const pastTextColor = isJoint ? colors.infoForeground : colors.textTertiary
+  const highlightColor = isJoint ? colors.infoForeground : colors.primary
+  const highlightBg = isJoint ? `${colors.infoForeground}20` : colors.backgroundSecondary
+
   return (
     <XStack gap="$2" alignItems="center" flexWrap="wrap">
-      <Text 
-        fontWeight={row.original.isNextEvent ? '600' : '400'}
-        color={isUserHighlighted ? colors.primary : (isPastEvent ? colors.textTertiary : colors.textPrimary)}
-        backgroundColor={isUserHighlighted ? colors.backgroundSecondary : 'transparent'}
+      <Text
+        fontWeight={row.original.isNextEvent || (isJoint && isUserHighlighted) ? '600' : '400'}
+        color={isUserHighlighted ? highlightColor : (isPastEvent ? pastTextColor : baseTextColor)}
+        backgroundColor={isUserHighlighted ? highlightBg : 'transparent'}
         paddingHorizontal={isUserHighlighted ? '$2' : 0}
         borderRadius={isUserHighlighted ? '$2' : 0}
         numberOfLines={1}
@@ -96,9 +110,9 @@ const createPersonCell = (colors: any, currentUser?: string) => ({ row, getValue
       >
         {name || '—'}
       </Text>
-      {hasConflict && name && isUserHighlighted ? <Button 
-          backgroundColor={colors.warning} 
-          color={colors.warningForeground} 
+      {hasConflict && name && isUserHighlighted ? <Button
+          backgroundColor={colors.warning}
+          color={colors.warningForeground}
           size="$1"
           disabled
           borderRadius="$2"
@@ -116,13 +130,18 @@ const createPersonCell = (colors: any, currentUser?: string) => ({ row, getValue
 const createDateCell = (colors: any) => ({ row, getValue }: any) => {
   const dateValue = getValue()
   const isNextEvent = row.original.isNextEvent
-  
+  const isJoint = isJointBibleClass(row)
+
   // Check if event is in the past
   const today = new Date()
   const torontoToday = new Date(today.toLocaleString('en-US', { timeZone: 'America/Toronto' }))
   const eventDate = new Date(dateValue)
   const isPastEvent = eventDate < torontoToday
-  
+
+  // Determine colors based on whether row is a joint Bible class
+  const baseTextColor = isJoint ? colors.infoForeground : colors.textPrimary
+  const pastTextColor = isJoint ? colors.infoForeground : colors.textTertiary
+
   // Handle date-only strings (YYYY-MM-DD) to avoid timezone issues
   let formattedDate: string
   if (typeof dateValue === 'string' && dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -144,20 +163,20 @@ const createDateCell = (colors: any) => ({ row, getValue }: any) => {
       timeZone: 'America/Toronto',
     })
   }
-  
+
   return (
     <XStack gap="$2" alignItems="center">
-      <Text 
-        fontWeight={isNextEvent ? '600' : '400'} 
+      <Text
+        fontWeight={isNextEvent ? '600' : '400'}
         numberOfLines={1}
-        color={isPastEvent ? colors.textTertiary : colors.textPrimary}
+        color={isPastEvent ? pastTextColor : baseTextColor}
         opacity={isPastEvent ? 0.7 : 1}
       >
         {formattedDate}
       </Text>
-      {isNextEvent ? <Button 
-          backgroundColor={colors.success} 
-          color={colors.successForeground} 
+      {isNextEvent ? <Button
+          backgroundColor={colors.success}
+          color={colors.successForeground}
           size="$1"
           disabled
           borderRadius="$2"
@@ -174,17 +193,22 @@ const createDateCell = (colors: any) => ({ row, getValue }: any) => {
 // Create text cell for non-person fields
 const createTextCell = (colors: any) => ({ row, getValue }: any) => {
   const value = getValue() as string
-  
+  const isJoint = isJointBibleClass(row)
+
   // Check if event is in the past
   const today = new Date()
   const torontoToday = new Date(today.toLocaleString('en-US', { timeZone: 'America/Toronto' }))
   const eventDate = new Date(row.original.date)
   const isPastEvent = eventDate < torontoToday
-  
+
+  // Determine colors based on whether row is a joint Bible class
+  const baseTextColor = isJoint ? colors.infoForeground : colors.textPrimary
+  const pastTextColor = isJoint ? colors.infoForeground : colors.textTertiary
+
   return (
-    <Text 
+    <Text
       fontWeight={row.original.isNextEvent ? '600' : '400'}
-      color={isPastEvent ? colors.textTertiary : colors.textPrimary}
+      color={isPastEvent ? pastTextColor : baseTextColor}
       numberOfLines={1}
       opacity={isPastEvent ? 0.7 : 1}
     >
@@ -193,27 +217,35 @@ const createTextCell = (colors: any) => ({ row, getValue }: any) => {
   )
 }
 
+// Column width configuration: sizes tuned to fit content with comfortable padding
+const COLUMN_SIZES: Record<string, { size: number; minSize: number; maxSize: number }> = {
+  date:   { size: 130, minSize: 110, maxSize: 160 },
+  person: { size: 150, minSize: 100, maxSize: 220 },
+  text:   { size: 200, minSize: 120, maxSize: 400 },
+}
+
 // Enhanced column definitions with dynamic configuration based on schedule type
 const createEnhancedColumns = (
-  colors: any, 
-  currentUser?: string, 
+  colors: any,
+  currentUser?: string,
   scheduleType?: string
 ): ColumnDef<EnhancedScheduleEvent>[] => {
-  const config = SCHEDULE_COLUMN_CONFIG[scheduleType as keyof typeof SCHEDULE_COLUMN_CONFIG] || 
+  const config = SCHEDULE_COLUMN_CONFIG[scheduleType as keyof typeof SCHEDULE_COLUMN_CONFIG] ||
                  SCHEDULE_COLUMN_CONFIG.memorial // Default to memorial
-  
-  return config.map((col) => ({
-    accessorKey: col.key,
-    header: col.header,
-    cell: col.type === 'date' 
-      ? createDateCell(colors)
-      : col.type === 'person' 
-        ? createPersonCell(colors, currentUser)
-        : createTextCell(colors),
-    size: col.type === 'date' ? 120 : col.type === 'text' ? 150 : 200,
-    minSize: col.type === 'date' ? 100 : col.type === 'text' ? 120 : 150,
-    maxSize: col.type === 'date' ? 140 : col.type === 'text' ? 200 : 300,
-  }))
+
+  return config.map((col) => {
+    const sizing = COLUMN_SIZES[col.type] || COLUMN_SIZES.text
+    return {
+      accessorKey: col.key,
+      header: col.header,
+      cell: col.type === 'date'
+        ? createDateCell(colors)
+        : col.type === 'person'
+          ? createPersonCell(colors, currentUser)
+          : createTextCell(colors),
+      ...sizing,
+    }
+  })
 }
 
 export function EnhancedScheduleResponsive({
@@ -240,12 +272,25 @@ export function EnhancedScheduleResponsive({
   const currentData = data[currentTab] || []
   const columns = React.useMemo(() => createEnhancedColumns(colors, currentUser, currentTab), [colors, currentUser, currentTab])
 
+  // Style override for joint Bible class rows — uses semantic "info" color
+  const getRowStyle = React.useCallback((row: any): RowStyleOverride | null => {
+    if (!isJointBibleClass(row)) return null
+    return {
+      backgroundColor: colors.info,
+      backgroundColorHover: colors.infoHover,
+      textColor: colors.infoForeground,
+      textColorSecondary: `${colors.infoForeground}B3`, // 70% opacity
+      borderColor: `${colors.infoForeground}30`, // subtle separator
+    }
+  }, [colors])
+
   // Check if row can expand based on schedule type and available secondary data
   const getRowCanExpand = React.useCallback((row: any) => {
     const event = row.original
     switch (event.type) {
       case 'bibleClass':
-        return !!(event.Topic || event.topic)
+        // Expand only for joint Bible class details (Host, Zoom, InPerson)
+        return !!(event.Host || event.ZoomURL || event.MeetingID || event.InPerson)
       case 'memorial':
         return !!(event.Lunch || event.lunch || event.Activities || event.activities)
       case 'sundaySchool':
@@ -261,18 +306,66 @@ export function EnhancedScheduleResponsive({
   const renderSubComponent = React.useCallback(({ row }: { row: any }) => {
     const event = row.original
     const scheduleType = event.type
-    
+
     return (
-      <YStack gap="$2" padding="$2">
-        {scheduleType === 'bibleClass' && (event.Topic || event.topic) ? <XStack gap="$2" alignItems="center">
-            <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
-              Topic:
+      <YStack gap="$2">
+        {/* Joint Bible Class details — rendered on info background */}
+        {scheduleType === 'bibleClass' && event.Host ? <>
+            <Text fontSize="$3" fontWeight="700" color={colors.infoForeground}>
+              Host: {event.Host}
             </Text>
-            <Text fontSize="$3" color={colors.textPrimary} flex={1}>
-              {event.Topic || event.topic}
-            </Text>
-          </XStack> : null}
-        
+            {/* Meeting link — first, with Join Now + clipboard copy */}
+            {event.ZoomURL ? <XStack gap="$2" alignItems="center">
+                <Button
+                  size="$2"
+                  backgroundColor={colors.infoForeground}
+                  color={colors.info}
+                  icon={<ExternalLink size={14} color={colors.info} />}
+                  onPress={() => {
+                    if (typeof window !== 'undefined') window.open(event.ZoomURL, '_blank')
+                  }}
+                >
+                  Join Now
+                </Button>
+                <Button
+                  size="$2"
+                  variant="outlined"
+                  borderColor={colors.infoForeground}
+                  icon={<Copy size={14} color={colors.infoForeground} />}
+                  onPress={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(event.ZoomURL)
+                    }
+                  }}
+                />
+              </XStack> : null}
+            {event.MeetingID ? <XStack gap="$2" alignItems="center">
+                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
+                  Meeting ID:
+                </Text>
+                <Text fontSize="$3" color={colors.infoForeground} flex={1}>
+                  {event.MeetingID}
+                </Text>
+              </XStack> : null}
+            {event.MeetingPwd ? <XStack gap="$2" alignItems="center">
+                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
+                  Password:
+                </Text>
+                <Text fontSize="$3" color={colors.infoForeground} flex={1}>
+                  {event.MeetingPwd}
+                </Text>
+              </XStack> : null}
+            {/* In-person address — deduplicated, just street address */}
+            {event.InPerson ? <YStack gap="$1">
+                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
+                  In Person
+                </Text>
+                {event.resolvedAddress ? <Text fontSize="$3" color={colors.infoForeground}>
+                    {event.resolvedAddress}
+                  </Text> : null}
+              </YStack> : null}
+          </> : null}
+
         {scheduleType === 'memorial' ? <YStack gap="$1">
             {(event.Lunch || event.lunch) ? <XStack gap="$2" alignItems="center">
                 <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
@@ -315,6 +408,7 @@ export function EnhancedScheduleResponsive({
               maxPageSize={1000}
               renderSubComponent={renderSubComponent}
               getRowCanExpand={getRowCanExpand}
+              getRowStyle={getRowStyle}
             />
           </YStack>
         ) : (

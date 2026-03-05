@@ -1,6 +1,7 @@
 import { MapPin, X } from '@tamagui/lucide-icons'
 import { useRef, useState } from 'react'
-import { Button, Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
+import { Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import type { PlacePrediction, ParsedAddress } from '@my/app/types/address-autocomplete'
 
 interface AddressAutocompleteProps {
@@ -121,8 +122,8 @@ export function AddressAutocomplete({
 
   const handleSelect = async (prediction: PlacePrediction) => {
     setShowDropdown(false)
-    // Show full description immediately while fetching details
-    onChangeText(prediction.description)
+    // Show the main text (street portion) immediately while fetching details
+    onChangeText(prediction.mainText)
     setIsFetchingDetails(true)
 
     try {
@@ -134,8 +135,8 @@ export function AddressAutocomplete({
       const data = await response.json()
 
       if (data.success && data.address) {
-        // Update input with the formatted address from Google
-        onChangeText(data.address.formattedAddress || prediction.description)
+        // Update input with just the street address, not the full formatted address
+        onChangeText(data.address.streetAddress || prediction.mainText)
         onAddressSelect(data.address)
       }
     } catch (err) {

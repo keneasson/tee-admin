@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Select, Spinner, Separator } from 'tamagui'
+import { YStack, XStack, Text, Card, Select, Spinner, Separator } from 'tamagui'
+import { Button } from '../Button'
 import { Shield, Eye, EyeOff, Phone, Mail, MapPin, Users, Save } from '@tamagui/lucide-icons'
+import { Dialog } from 'tamagui'
 import type { VisibilityLevel } from '@my/app/provider/dynamodb/types'
 
 // Custom Toggle with text labels for WCAG compliance and clear state indication
@@ -77,6 +79,7 @@ interface PrivacySettingsData {
   showEmail: VisibilityLevel
   showFamily: VisibilityLevel
   allowContactRequests: boolean
+  allowConnectionRequests: boolean
   preferredContactMethod: 'email' | 'phone' | 'either'
 }
 
@@ -116,6 +119,8 @@ const fieldLabels: Record<FieldKey, { label: string; icon: React.ReactNode }> = 
   showFamily: { label: 'Family Members', icon: <Users size={16} /> },
 }
 
+type DisableModalType = 'contact' | 'connection' | null
+
 export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
   settings,
   editable = false,
@@ -124,6 +129,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
   const [localSettings, setLocalSettings] = useState(settings)
   const [hasChanges, setHasChanges] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [disableModalType, setDisableModalType] = useState<DisableModalType>(null)
 
   const updateSetting = <K extends keyof PrivacySettingsData>(
     key: K,
@@ -131,6 +137,47 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
   ) => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }))
     setHasChanges(true)
+  }
+
+  const handleToggleContactRequests = (newValue: boolean) => {
+    if (!newValue) {
+      // Turning OFF — show confirmation modal
+      setDisableModalType('contact')
+    } else {
+      updateSetting('allowContactRequests', true)
+    }
+  }
+
+  const handleToggleConnectionRequests = (newValue: boolean) => {
+    if (!newValue) {
+      // Turning OFF — show confirmation modal
+      setDisableModalType('connection')
+    } else {
+      updateSetting('allowConnectionRequests', true)
+    }
+  }
+
+  const handleConfirmDisable = () => {
+    if (disableModalType === 'contact') {
+      updateSetting('allowContactRequests', false)
+    } else if (disableModalType === 'connection') {
+      updateSetting('allowConnectionRequests', false)
+    }
+    setDisableModalType(null)
+  }
+
+  const handleMakePrivate = () => {
+    // Set all visibility to private but keep requests enabled
+    setLocalSettings((prev) => ({
+      ...prev,
+      showName: 'private',
+      showPhone: 'private',
+      showAddress: 'private',
+      showEmail: 'private',
+      showFamily: 'private',
+    }))
+    setHasChanges(true)
+    setDisableModalType(null)
   }
 
   const handleSave = async () => {
@@ -143,6 +190,8 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
       setLoading(false)
     }
   }
+
+  const disableModalLabel = disableModalType === 'contact' ? 'contact' : 'connection'
 
   const renderVisibilitySelect = (field: FieldKey) => (
     <Card padding="$3" backgroundColor="$backgroundHover">
@@ -234,11 +283,32 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
             {editable ? (
               <LabeledToggle
                 checked={localSettings.allowContactRequests}
-                onCheckedChange={(val) => updateSetting('allowContactRequests', val)}
+                onCheckedChange={handleToggleContactRequests}
               />
             ) : (
               <Text fontSize="$3" theme="alt2">
                 {localSettings.allowContactRequests ? 'Enabled' : 'Disabled'}
+              </Text>
+            )}
+          </XStack>
+        </Card>
+
+        <Card padding="$3" backgroundColor="$backgroundHover">
+          <XStack justifyContent="space-between" alignItems="center">
+            <YStack flex={1}>
+              <Text fontSize="$4" fontWeight="500">Allow Connection Requests</Text>
+              <Text fontSize="$2" theme="alt2">
+                Let others connect with you to see your contact details based on your privacy settings
+              </Text>
+            </YStack>
+            {editable ? (
+              <LabeledToggle
+                checked={localSettings.allowConnectionRequests}
+                onCheckedChange={handleToggleConnectionRequests}
+              />
+            ) : (
+              <Text fontSize="$3" theme="alt2">
+                {localSettings.allowConnectionRequests ? 'Enabled' : 'Disabled'}
               </Text>
             )}
           </XStack>
@@ -278,6 +348,65 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({
           </YStack>
         </Card>
       </YStack>
+
+      {/* Confirmation modal for disabling contact/connection requests */}
+      <Dialog modal open={disableModalType !== null} onOpenChange={(open) => { if (!open) setDisableModalType(null) }}>
+        <Dialog.Portal>
+          <Dialog.Overlay
+            key="overlay"
+            animation="quick"
+            opacity={0.5}
+            enterStyle={{ opacity: 0 }}
+            exitStyle={{ opacity: 0 }}
+          />
+          <Dialog.Content
+            key="content"
+            bordered
+            elevate
+            animation="quick"
+            enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+            exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+            gap="$4"
+            padding="$4"
+            maxWidth={500}
+          >
+            <Dialog.Title fontSize="$6" fontWeight="600">
+              Are you sure?
+            </Dialog.Title>
+            <Dialog.Description fontSize="$4" color="$gray11" lineHeight="$4">
+              Our system endeavours to respect your privacy by allowing you to manage who can
+              connect with you. Disabling these features is more likely to result in people who
+              need to reach you from being unable to do so, rather than preventing abuse of this
+              system. We highly recommend you stay contactable, but change your privacy settings
+              to &quot;Private&quot;.{'\n\n'}Would you like to do that instead?
+            </Dialog.Description>
+
+            <YStack gap="$2" marginTop="$2">
+              <Button
+                theme="blue"
+                onPress={handleMakePrivate}
+              >
+                Make me private
+              </Button>
+              <Button
+                theme="red"
+                onPress={handleConfirmDisable}
+              >
+                No — disable all {disableModalLabel} requests
+              </Button>
+              <Dialog.Close asChild>
+                <Button
+                  variant="outlined"
+                  borderWidth={2}
+                  borderColor="$textTertiary"
+                >
+                  Cancel
+                </Button>
+              </Dialog.Close>
+            </YStack>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
     </YStack>
   )
 }

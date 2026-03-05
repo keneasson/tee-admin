@@ -1,7 +1,8 @@
 import { Plus, Search, X } from '@tamagui/lucide-icons'
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { Control, FieldPath, FieldValues, useController } from 'react-hook-form'
-import { Button, Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
+import { Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import { AddEcclesiaModal } from './add-ecclesia-modal'
 
 interface EcclesiaSuggestion {

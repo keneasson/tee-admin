@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
+import { docClient, tableNames } from '../config'
 import type {
   PersonRecord,
   PersonEmailRecord,
@@ -20,7 +22,7 @@ export interface CreatePersonInput {
   ecclesia: string
   memberStatus?: MemberStatus
   isInterEcclesiaRep?: boolean
-  role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
+  role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
   provider?: 'google' | 'credentials'
   userId?: string
 }
@@ -42,7 +44,7 @@ export interface CredentialsRegistrationData {
   firstName: string
   lastName: string
   ecclesia: string
-  role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
+  role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
 }
 
 // Person with auth fields for authentication
@@ -51,12 +53,15 @@ export interface PersonAuthData {
   email: string
   hashedPassword?: string
   emailVerified?: string
-  role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
+  role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
   provider?: 'google' | 'credentials'
   firstName: string
   lastName: string
   displayName: string
   ecclesia: string
+  memberStatus?: string
+  isInterEcclesiaRep?: boolean
+  isRecordingBrother?: boolean
 }
 
 export interface PersonWithDetails extends PersonRecord {
@@ -268,8 +273,8 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       const current = await this.getById(personId)
       if (!current) throw new Error(`Person ${personId} not found`)
 
-      const firstName = updates.firstName || current.firstName
-      const lastName = updates.lastName || current.lastName
+      const firstName = updates.firstName || current.firstName || ''
+      const lastName = updates.lastName || current.lastName || ''
       const ecclesia = updates.ecclesia || current.ecclesia
 
       updates.displayName = `${firstName} ${lastName}`.trim()
@@ -291,6 +296,30 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       { ':pk': pk, ':skPrefix': 'EMAIL#' }
     )
     return result.items as unknown as PersonEmailRecord[]
+  }
+
+  /**
+   * Remove a specific email record from a person
+   */
+  async removeEmail(personId: string, emailId: string): Promise<void> {
+    await this.delete(`PERSON#${personId}`, `EMAIL#${emailId}`)
+  }
+
+  /**
+   * Find all EMAIL# records across all people for a specific email address.
+   * Queries GSI1 and filters for EMAIL# skey items (not PROFILE items).
+   */
+  async getEmailsByEmail(email: string): Promise<PersonEmailRecord[]> {
+    const result = await this.query(
+      'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :prefix)',
+      { ':gsi1pk': `EMAIL#${email.toLowerCase()}`, ':prefix': 'PERSON' },
+      { indexName: 'gsi1' }
+    )
+
+    // Filter to only EMAIL# records (not PROFILE records which have skey='PROFILE')
+    return result.items.filter(
+      (item: any) => item.skey?.startsWith('EMAIL#')
+    ) as unknown as PersonEmailRecord[]
   }
 
   async addEmail(personId: string, email: Omit<PersonEmailRecord, 'pkey' | 'skey' | 'emailId' | 'lastUpdated' | 'version' | 'gsi1pk' | 'gsi1sk'>): Promise<PersonEmailRecord> {
@@ -612,6 +641,32 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /**
+   * Count members in a specific ecclesia using GSI2 with Select: 'COUNT'.
+   * Reads only index metadata — no item data is transferred.
+   */
+  async countByEcclesia(ecclesia: string): Promise<number> {
+    let count = 0
+    let lastKey: Record<string, any> | undefined
+
+    do {
+      const command = new QueryCommand({
+        TableName: tableNames.admin,
+        IndexName: 'gsi2',
+        KeyConditionExpression: 'gsi2pk = :gsi2pk',
+        ExpressionAttributeValues: { ':gsi2pk': `ECCLESIA#${ecclesia}` },
+        Select: 'COUNT',
+        ExclusiveStartKey: lastKey,
+      })
+
+      const result = await docClient.send(command)
+      count += result.Count || 0
+      lastKey = result.LastEvaluatedKey
+    } while (lastKey)
+
+    return count
+  }
+
+  /**
    * List all persons (paginated)
    */
   async listAll(options?: {
@@ -665,7 +720,12 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * Uses GSI1 for O(1) email lookup - replaces scan-based getUserFromDynamoDB
    */
   async getByEmailForAuth(email: string): Promise<PersonAuthData | null> {
-    const person = await this.getByEmail(email)
+    let person = await this.getByEmail(email)
+    if (!person) {
+      // Fallback: check secondary emails via begins_with query
+      const persons = await this.getAllPersonsByEmail(email)
+      person = persons[0] || null
+    }
     if (!person) return null
 
     return {
@@ -679,6 +739,9 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       lastName: person.lastName,
       displayName: person.displayName,
       ecclesia: person.ecclesia,
+      memberStatus: person.memberStatus,
+      isInterEcclesiaRep: person.isInterEcclesiaRep,
+      isRecordingBrother: person.isRecordingBrother,
     }
   }
 
@@ -688,7 +751,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    */
   async createFromOAuth(profile: GoogleOAuthProfile, options?: {
     ecclesia?: string
-    role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
+    role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
   }): Promise<PersonRecord> {
     // Parse name from profile
     const firstName = profile.given_name || profile.name?.split(' ')[0] || ''
@@ -845,7 +908,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     personId: string
     hashedPassword: string | undefined
     emailVerified: string | undefined
-    role: 'owner' | 'admin' | 'member' | 'guest' | 'deceased' | undefined
+    role: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased' | undefined
     displayName: string
   } | null> {
     const person = await this.getByEmail(email)

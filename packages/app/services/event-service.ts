@@ -799,12 +799,26 @@ const POST_EVENT_DISPLAY_DAYS: Record<string, number> = {
  */
 const isEventActiveOrUpcoming = (event: Event): boolean => {
   const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  // Use Toronto timezone to avoid UTC date shift
+  // (e.g., 8pm EST = 1am UTC next day, which would incorrectly exclude today's events)
+  const todayStr = today.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
   const endDate = extractEventEndDate(event)
 
   if (endDate) {
     // Multi-day event: show until end date has passed
     return endDate >= todayStr
+  }
+
+  // Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+  // recurringConfig.startDate is the SERIES start, not the next occurrence.
+  // Always include if the series hasn't ended - client handles day-level filtering.
+  if (event.type === 'recurring') {
+    if (event.recurringConfig?.endDate) {
+      const endStr = new Date(event.recurringConfig.endDate)
+        .toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+      return endStr >= todayStr
+    }
+    return true // No end date = always active
   }
 
   // Funeral special handling: use publishDate + 14 days as the window

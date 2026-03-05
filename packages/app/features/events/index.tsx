@@ -10,13 +10,19 @@ import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { EventDetailView } from '@my/ui/src/events/event-detail-view'
 import { Event, isEventActive } from '@my/app/types/events'
 
+export type BackLink = {
+  href: string
+  label: string
+}
+
 type EventProps = {
   eventId?: string | string[]
   userRole?: string
   isMemberOrHigher?: boolean
   isAuthLoading?: boolean
+  backLink?: BackLink
 }
-export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
+export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
   if (!eventId) {
     return <EventListing userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
   }
@@ -28,7 +34,7 @@ export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigh
 
   // Handle dynamic events
   if (typeof eventId === 'string') {
-    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
+    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} backLink={backLink} />
   }
 
   return <EventListing isNotFound={true} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
@@ -127,9 +133,10 @@ type DynamicEventDetailProps = {
   userRole?: string
   isMemberOrHigher?: boolean
   isAuthLoading?: boolean
+  backLink?: BackLink
 }
 
-export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
+export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
   const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
@@ -174,7 +181,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
       <Wrapper subHeader={'Event Not Found'}>
         <Section>
           <Paragraph color={'red'}>{error || 'Event not found'}</Paragraph>
-          <EventsFooter />
+          <EventsFooter backLink={backLink} />
         </Section>
       </Wrapper>
     )
@@ -189,18 +196,18 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
           isMemberOrHigher={isMemberOrHigher}
           isAuthLoading={isAuthLoading}
         />
-        <EventsFooter />
+        <EventsFooter backLink={backLink} />
       </Section>
     </Wrapper>
   )
 }
 
-export const EventsFooter: React.FC = () => {
+export const EventsFooter: React.FC<{ backLink?: BackLink }> = ({ backLink }) => {
   const router = useRouter()
   return (
     <XStack paddingTop="$6">
       <Text
-        onPress={() => router.back()}
+        onPress={() => backLink ? router.push(backLink.href) : router.back()}
         color="$blue10"
         fontWeight="600"
         fontSize="$3"
@@ -208,7 +215,7 @@ export const EventsFooter: React.FC = () => {
         textDecorationLine="none"
         hoverStyle={{ textDecorationLine: "underline" }}
       >
-        ← Back
+        {backLink ? `${backLink.label} →` : '← Back'}
       </Text>
     </XStack>
   )

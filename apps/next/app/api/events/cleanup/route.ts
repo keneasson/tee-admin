@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getAllEvents, deleteEvent } from '@my/app/services/event-service'
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action') // 'analyze', 'dryrun', or 'cleanup'
     
@@ -97,11 +103,16 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
+    const deleteCallerRole = (session.user as any).role as string || ROLES.GUEST
+    if (deleteCallerRole !== ROLES.ADMIN && deleteCallerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const dryRun = searchParams.get('dryRun') === 'true'
     

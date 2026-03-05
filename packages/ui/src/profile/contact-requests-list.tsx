@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Spinner, View } from 'tamagui'
+import { YStack, XStack, Text, Card, Spinner, View } from 'tamagui'
+import { Button } from '../Button'
 import { Phone, Mail, Check, X, Eye, Trash2, Bell } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestStatus } from '@my/app/provider/dynamodb/types'
 

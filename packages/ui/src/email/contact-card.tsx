@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { YStack, XStack, Card, Text, Button, Separator, styled, useThemeName } from 'tamagui'
+import { YStack, XStack, Card, Text, Separator, styled, useThemeName } from 'tamagui'
+import { Button } from '../Button'
 import { AlertTriangle, Mail, GripVertical, User, MapPin, Phone, Users, Save, X, Archive, ArchiveRestore } from '@tamagui/lucide-icons'
 import { brandColors } from '../branding/brand-colors'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'

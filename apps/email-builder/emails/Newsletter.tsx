@@ -1032,6 +1032,22 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 // Check if there's no class - same logic as NextBibleClass component: !event.Speaker
                 const hasClass = !!event.Speaker
 
+                // Joint Bible Class logic
+                const isJoint = !!event.Host
+                const hasInPerson = !!event.InPerson
+                const hasCustomZoom = !!(event.ZoomURL || event.MeetingID)
+
+                // Build heading
+                let bcHeading: string
+                if (!hasClass) {
+                  bcHeading = event.Date as string
+                } else if (isJoint) {
+                  bcHeading = `Joint Bible Class with ${event.Host} - ${event.Date} at 7:30pm`
+                  if (hasInPerson) bcHeading += ' - In Person'
+                } else {
+                  bcHeading = `Bible Class for ${event.Date} at 7:30pm - on Zoom`
+                }
+
                 return (
                   <Container
                     key={`bc-${date}-${index}`}
@@ -1045,15 +1061,41 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                       {hasClass ? (
                         <>
                           <Heading style={defaultText}>
-                            Bible Class for {event.Date} at 7:30pm - on Zoom
+                            {bcHeading}
                           </Heading>
                           <Row>
                             <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
                           </Row>
+                          {/* In-person details for joint Bible Class */}
+                          {hasInPerson ? (
+                            <Text style={{ ...defaultText, marginTop: '12px', padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
+                              <strong>In Person{event.Host ? ` at ${event.Host}` : ''}</strong>
+                              <br />
+                              {event.resolvedAddress || event.InPerson}
+                            </Text>
+                          ) : null}
+                          {/* Custom Zoom details for joint Bible Class */}
+                          {!hasInPerson && hasCustomZoom ? (
+                            <Text style={{ ...defaultText, marginTop: '12px' }}>
+                              <strong>Using {event.Host}&apos;s Zoom</strong>
+                              <br />
+                              {event.MeetingID ? <>Meeting ID: {event.MeetingID}<br /></> : null}
+                              {event.MeetingPwd ? <>Password: {event.MeetingPwd}<br /></> : null}
+                            </Text>
+                          ) : null}
+                          {/* Hybrid: both in-person AND Zoom */}
+                          {hasInPerson && hasCustomZoom ? (
+                            <Text style={{ ...defaultText, marginTop: '8px' }}>
+                              <strong>Also available on {event.Host}&apos;s Zoom</strong>
+                              <br />
+                              {event.MeetingID ? <>Meeting ID: {event.MeetingID}<br /></> : null}
+                              {event.MeetingPwd ? <>Password: {event.MeetingPwd}<br /></> : null}
+                            </Text>
+                          ) : null}
                         </>
                       ) : (
                         <>
-                          <Heading style={defaultText}>{event.Date}</Heading>
+                          <Heading style={defaultText}>{bcHeading}</Heading>
                           <Text style={defaultText}>
                             <strong>No Bible Class tonight</strong>
                           </Text>

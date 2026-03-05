@@ -13,7 +13,12 @@ export async function GET() {
       )
     }
 
-    const person = await personRepository.getByEmail(session.user.email)
+    // Try primary email first, then fall back to secondary email lookup
+    let person = await personRepository.getByEmail(session.user.email)
+    if (!person) {
+      const persons = await personRepository.getAllPersonsByEmail(session.user.email)
+      person = persons[0] || null
+    }
 
     if (!person) {
       return NextResponse.json({
@@ -32,6 +37,8 @@ export async function GET() {
         id: person.personId,
         email: person.primaryEmail,
         name: person.displayName,
+        firstName: person.firstName,
+        lastName: person.lastName,
         role: person.role || 'guest',
         ecclesia: person.ecclesia,
       }
@@ -57,31 +64,82 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { ecclesia } = body
+    const { ecclesia, firstName, lastName } = body
 
-    if (!ecclesia || typeof ecclesia !== 'string' || ecclesia.trim().length === 0) {
+    // Build updates object from provided fields
+    const updates: Record<string, string> = {}
+
+    if (ecclesia !== undefined) {
+      if (typeof ecclesia !== 'string' || ecclesia.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'Ecclesia name is required' },
+          { status: 400 }
+        )
+      }
+      updates.ecclesia = ecclesia.trim()
+    }
+
+    if (firstName !== undefined) {
+      if (typeof firstName !== 'string' || firstName.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'First name cannot be empty' },
+          { status: 400 }
+        )
+      }
+      if (firstName.trim().length > 50) {
+        return NextResponse.json(
+          { error: 'First name is too long (max 50 characters)' },
+          { status: 400 }
+        )
+      }
+      updates.firstName = firstName.trim()
+    }
+
+    if (lastName !== undefined) {
+      if (typeof lastName !== 'string' || lastName.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'Last name cannot be empty' },
+          { status: 400 }
+        )
+      }
+      if (lastName.trim().length > 50) {
+        return NextResponse.json(
+          { error: 'Last name is too long (max 50 characters)' },
+          { status: 400 }
+        )
+      }
+      updates.lastName = lastName.trim()
+    }
+
+    if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: 'Ecclesia name is required' },
+        { error: 'No valid fields to update' },
         { status: 400 }
       )
     }
 
-    // Update PersonRecord ecclesia
-    const person = await personRepository.getByEmail(session.user.email)
+    // Try primary email first, then fall back to secondary email lookup
+    let person = await personRepository.getByEmail(session.user.email)
+    if (!person) {
+      const persons = await personRepository.getAllPersonsByEmail(session.user.email)
+      person = persons[0] || null
+    }
+
     if (!person) {
       return NextResponse.json(
-        { error: 'User profile not found' },
+        { error: 'User profile not found. Please contact an administrator.' },
         { status: 404 }
       )
     }
 
-    await personRepository.updatePerson(person.personId, {
-      ecclesia: ecclesia.trim(),
-    })
+    const updated = await personRepository.updatePerson(person.personId, updates)
 
     return NextResponse.json({
       success: true,
-      ecclesia: ecclesia.trim(),
+      ecclesia: updated.ecclesia,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      displayName: updated.displayName,
     })
   } catch (error) {
     console.error('Update user profile error:', error)

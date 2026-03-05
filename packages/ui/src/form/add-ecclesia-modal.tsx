@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Dialog, Button } from 'tamagui'
+import { Dialog } from 'tamagui'
+import { Button } from '../Button'
 import { Plus } from '@tamagui/lucide-icons'
 import { AddEcclesiaForm } from './add-ecclesia-form'
 

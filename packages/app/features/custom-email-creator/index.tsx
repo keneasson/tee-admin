@@ -263,7 +263,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
           </XStack>
 
           {drafts.length > 0 ? (
-            <ScrollView maxHeight={200} borderWidth={1} borderColor="$gray6" borderRadius="$2">
+            <ScrollView maxHeight={200} borderWidth={1} borderColor="$gray6" borderRadius="$2" overflow="scroll">
               <YStack>
                 {drafts.map((draft, index) => (
                   <XStack

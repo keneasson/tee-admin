@@ -1,6 +1,7 @@
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 import React, { useState } from 'react'
-import { Label, Text, YStack, XStack, Button, Card, ScrollView } from 'tamagui'
+import { Label, Text, YStack, XStack, Card, ScrollView } from 'tamagui'
+import { Button } from '../Button'
 import { Calendar, ChevronLeft, ChevronRight, X } from '@tamagui/lucide-icons'
 
 interface MultiDateSelectorProps<T extends FieldValues> {
@@ -72,6 +73,9 @@ function CalendarGrid({
       color = '$primary'
     }
     
+    const hoverBg = isSelected ? '$blue9' : isToday ? '$blue3' : '$gray3'
+    const pressBg = isSelected ? '$blue8' : isToday ? '$blue4' : '$gray4'
+
     days.push(
       <Button
         key={day}
@@ -84,7 +88,15 @@ function CalendarGrid({
         borderWidth={isToday && !isSelected ? 2 : 0}
         borderColor="$primary"
         onPress={() => !isDisabled && onDateToggle(dateStr)}
-        pressStyle={isDisabled ? {} : { scale: 0.95 }}
+        hoverStyle={isDisabled ? {} : {
+          opacity: 1,
+          backgroundColor: hoverBg,
+        }}
+        pressStyle={isDisabled ? {} : {
+          opacity: 1,
+          scale: 0.95,
+          backgroundColor: pressBg,
+        }}
         disabled={isDisabled}
       >
         {day}

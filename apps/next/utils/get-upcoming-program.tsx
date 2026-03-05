@@ -3,7 +3,8 @@ import { convertHumanReadableDate } from './date'
 import { formatScheduleDateForEmail } from '@my/app/utils/timezone'
 
 import { ProgramsTypes } from '@my/app/types'
-import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
+import type { BibleClassType, ProgramTypeKeys, ProgramTypes } from '@my/app/types'
+import { getEcclesiaByName } from './dynamodb/locations'
 
 /**
  * Get upcoming program events from DynamoDB
@@ -74,6 +75,31 @@ export async function get_upcoming_program(
             DateTime: event.DateTime,
             ServiceTimezone: event.ServiceTimezone,
           } as ProgramTypes)
+        }
+
+        // Resolve host ecclesia address for joint Bible classes
+        if (sheetKey === 'bibleClass') {
+          for (const item of upcoming) {
+            const bc = item as BibleClassType
+            if (bc.Key !== ProgramsTypes.bibleClass || !bc.Host) continue
+            if (bc.InPerson === 'Yes') {
+              try {
+                const ecclesia = await getEcclesiaByName(bc.Host)
+                if (ecclesia) {
+                  // Exclude venue from address to avoid duplicating the Host name
+                  const parts = [ecclesia.address, ecclesia.city, ecclesia.province, ecclesia.postalCode].filter(Boolean)
+                  bc.resolvedAddress = parts.join(', ')
+                } else {
+                  console.warn(`⚠️ Ecclesia "${bc.Host}" not found for address resolution`)
+                }
+              } catch (err) {
+                console.warn(`⚠️ Failed to resolve address for "${bc.Host}":`, err)
+              }
+            } else if (bc.InPerson && bc.InPerson !== 'Yes') {
+              // InPerson contains the full address directly
+              bc.resolvedAddress = bc.InPerson
+            }
+          }
         }
 
         console.log(`✅ Found ${upcomingEvents.length} upcoming ${sheetKey} events`)

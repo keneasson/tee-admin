@@ -1,6 +1,7 @@
 'use client'
 
-import { YStack, XStack, Text, H2, H4, Separator, Card, Button, Image } from 'tamagui'
+import { YStack, XStack, Text, H2, H4, Separator, Card, Image } from 'tamagui'
+import { Button } from '../Button'
 import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
 import { Event, EventSection } from '@my/app/types/events'
 import {

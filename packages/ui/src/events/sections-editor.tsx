@@ -1,5 +1,6 @@
 import { Control, useFieldArray, useWatch, FieldValues, FieldPath } from 'react-hook-form'
-import { YStack, XStack, Card, Text, Button } from 'tamagui'
+import { YStack, XStack, Card, Text } from 'tamagui'
+import { Button } from '../Button'
 import { Plus, Trash2, ChevronDown, ChevronUp } from '@tamagui/lucide-icons'
 import { useState } from 'react'
 import { EventFormInput } from '../form/event-form-input'

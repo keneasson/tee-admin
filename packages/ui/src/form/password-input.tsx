@@ -2,7 +2,8 @@
 
 import React, { useId, useState } from 'react'
 import type { InputProps } from 'tamagui'
-import { Input, Label, YStack, Text, XStack, Button } from 'tamagui'
+import { Input, Label, YStack, Text, XStack } from 'tamagui'
+import { Button } from '../Button'
 import { Eye, EyeOff } from '@tamagui/lucide-icons'
 import { type Control, Controller, FieldValues, Path } from 'react-hook-form'
 import { FormFieldset } from './form-fieldset'

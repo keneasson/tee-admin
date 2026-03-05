@@ -331,6 +331,18 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // Require admin/owner authentication
+    const { auth } = await import('@/utils/auth')
+    const { ROLES } = await import('@my/app/provider/auth/auth-roles')
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const email = request.nextUrl.searchParams.get('email')
 
     if (!email) {

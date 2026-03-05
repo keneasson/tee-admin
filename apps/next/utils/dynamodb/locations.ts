@@ -20,6 +20,17 @@ export interface LocationData {
   type: 'country' | 'province' | 'state'
 }
 
+export type ServiceType = 'memorial' | 'bible_class' | 'cyc' | 'sunday_school' | 'other'
+
+export interface EcclesiaService {
+  id: string
+  name: string
+  type: ServiceType
+  day?: string
+  time?: string
+  location?: string
+}
+
 export interface EcclesiaData {
   name: string
   country: string
@@ -28,6 +39,12 @@ export interface EcclesiaData {
   address?: string
   postalCode?: string
   venue?: string
+  phone?: string
+  contactEmail?: string
+  recordingBrotherEmail?: string
+  recordingBrotherName?: string
+  recordingBrotherPersonId?: string  // Hard link to PersonRecord
+  services?: EcclesiaService[]
   createdAt: Date
   updatedAt: Date
 }
@@ -116,6 +133,27 @@ export async function getProvinces(countryCode: string): Promise<LocationData[]>
   }
 }
 
+// Helper to map a DynamoDB item to EcclesiaData
+function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
+  return {
+    name: item.name,
+    country: item.country,
+    province: item.province,
+    city: item.city,
+    address: item.address,
+    postalCode: item.postalCode,
+    venue: item.venue,
+    phone: item.phone,
+    contactEmail: item.contactEmail,
+    recordingBrotherEmail: item.recordingBrotherEmail,
+    recordingBrotherName: item.recordingBrotherName,
+    recordingBrotherPersonId: item.recordingBrotherPersonId,
+    services: item.services,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
 // Ecclesia functions
 export async function createEcclesia(data: {
   name: string
@@ -164,11 +202,13 @@ export async function createEcclesia(data: {
 }
 
 // Helper function to get ecclesia by name using GSI1
+// Falls back to fuzzy search if exact name match fails (handles typos like "Ecclesial" vs "Ecclesia")
 export async function getEcclesiaByName(name: string): Promise<EcclesiaData | null> {
   try {
+    // Try exact match first
     const result = await client.query({
       TableName: TABLE_NAME,
-      IndexName: 'gsi1', // Query the GSI1 for name-based lookups
+      IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: {
         ':pk': `ECCLESIA#${name}`,
@@ -176,22 +216,18 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
       Limit: 1
     })
 
-    if (!result.Items || result.Items.length === 0) {
-      return null
+    if (result.Items && result.Items.length > 0) {
+      return mapItemToEcclesia(result.Items[0])
     }
 
-    const item = result.Items[0]
-    return {
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      postalCode: item.postalCode,
-      venue: item.venue,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
+    // Fallback: fuzzy search (handles minor name mismatches from Google Sheets)
+    const fuzzyResults = await searchEcclesia(name, 1)
+    if (fuzzyResults.length > 0) {
+      console.log(`⚠️ Ecclesia "${name}" not found exactly, matched "${fuzzyResults[0].name}" via fuzzy search`)
+      return fuzzyResults[0]
     }
+
+    return null
   } catch (error) {
     console.error('Error getting ecclesia by name:', error)
     return null
@@ -217,17 +253,7 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
     const queryLower = query.toLowerCase()
     const filteredItems = result.Items
       .filter(item => item.name && item.name.toLowerCase().includes(queryLower))
-      .map((item) => ({
-        name: item.name,
-        country: item.country,
-        province: item.province,
-        city: item.city,
-        address: item.address,
-        postalCode: item.postalCode,
-        venue: item.venue,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      }))
+      .map(mapItemToEcclesia)
     
     // Sort results: exact matches first, then prefix matches, then contains
     filteredItems.sort((a, b) => {
@@ -271,17 +297,7 @@ export async function getEcclesiaByCountry(country: string): Promise<EcclesiaDat
 
     if (!result.Items) return []
 
-    return result.Items.map((item) => ({
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      postalCode: item.postalCode,
-      venue: item.venue,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }))
+    return result.Items.map(mapItemToEcclesia)
   } catch (error) {
     console.error('Error getting ecclesia by country:', error)
     return []
@@ -300,17 +316,7 @@ export async function getEcclesiaByProvince(country: string, province: string): 
 
     if (!result.Items) return []
 
-    return result.Items.map((item) => ({
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      postalCode: item.postalCode,
-      venue: item.venue,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }))
+    return result.Items.map(mapItemToEcclesia)
   } catch (error) {
     console.error('Error getting ecclesia by province:', error)
     return []
@@ -330,17 +336,7 @@ export async function getEcclesiaByCity(country: string, province: string, city:
 
     if (!result.Items) return []
 
-    return result.Items.map((item) => ({
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      postalCode: item.postalCode,
-      venue: item.venue,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }))
+    return result.Items.map(mapItemToEcclesia)
   } catch (error) {
     console.error('Error getting ecclesia by city:', error)
     return []
@@ -362,17 +358,7 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
 
     if (!result.Items) return []
 
-    return result.Items.map((item) => ({
-      name: item.name,
-      country: item.country,
-      province: item.province,
-      city: item.city,
-      address: item.address,
-      postalCode: item.postalCode,
-      venue: item.venue,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }))
+    return result.Items.map(mapItemToEcclesia)
   } catch (error) {
     console.error('Error getting all ecclesia:', error)
     return []
@@ -470,6 +456,99 @@ export async function updateEcclesia(
   } catch (error) {
     console.error('Error updating ecclesia:', error)
     throw error
+  }
+}
+
+export async function updateEcclesiaFields(
+  name: string,
+  updates: {
+    recordingBrotherEmail?: string
+    recordingBrotherName?: string
+    recordingBrotherPersonId?: string
+    phone?: string
+    contactEmail?: string
+    address?: string
+    venue?: string
+    postalCode?: string
+    services?: EcclesiaService[]
+  }
+): Promise<EcclesiaData | null> {
+  try {
+    const ecclesia = await getEcclesiaByName(name)
+    if (!ecclesia) {
+      throw new Error(`Ecclesia "${name}" not found`)
+    }
+
+    const expressions: string[] = ['updatedAt = :updatedAt']
+    const values: Record<string, any> = { ':updatedAt': new Date().toISOString() }
+    const names: Record<string, string> = {}
+
+    const fieldMap: Array<{ key: string; attr: string; exprName?: string }> = [
+      { key: 'recordingBrotherEmail', attr: ':rbEmail' },
+      { key: 'recordingBrotherName', attr: ':rbName' },
+      { key: 'recordingBrotherPersonId', attr: ':rbPersonId' },
+      { key: 'phone', attr: ':phone' },
+      { key: 'contactEmail', attr: ':contactEmail' },
+      { key: 'address', attr: ':address' },
+      { key: 'venue', attr: ':venue' },
+      { key: 'postalCode', attr: ':postalCode' },
+      { key: 'services', attr: ':services' },
+    ]
+
+    for (const { key, attr } of fieldMap) {
+      if ((updates as any)[key] !== undefined) {
+        expressions.push(`${key} = ${attr}`)
+        values[attr] = (updates as any)[key] ?? null
+      }
+    }
+
+    await client.update({
+      TableName: TABLE_NAME,
+      Key: {
+        pkey: `ECCLESIA#${ecclesia.country}|${ecclesia.province}`,
+        skey: `${ecclesia.city}#${ecclesia.name}`,
+      },
+      UpdateExpression: `SET ${expressions.join(', ')}`,
+      ExpressionAttributeValues: values,
+      ...(Object.keys(names).length > 0 ? { ExpressionAttributeNames: names } : {}),
+    })
+
+    return {
+      ...ecclesia,
+      ...updates,
+      updatedAt: new Date(),
+    }
+  } catch (error) {
+    console.error('Error updating ecclesia fields:', error)
+    throw error
+  }
+}
+
+/**
+ * Look up an ecclesia by its Recording Brother email.
+ * Used during sign-in to auto-assign role and ecclesia for RBs.
+ */
+export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise<EcclesiaData | null> {
+  try {
+    const result = await client.scan({
+      TableName: TABLE_NAME,
+      FilterExpression: '#type = :ecclesiaType AND recordingBrotherEmail = :email',
+      ExpressionAttributeValues: {
+        ':ecclesiaType': 'ECCLESIA',
+        ':email': email.toLowerCase(),
+      },
+      ExpressionAttributeNames: {
+        '#type': 'type',
+      },
+    })
+
+    if (!result.Items || result.Items.length === 0) return null
+
+    const item = result.Items[0]
+    return mapItemToEcclesia(item)
+  } catch (error) {
+    console.error('Error looking up ecclesia by recording brother email:', error)
+    return null
   }
 }
 

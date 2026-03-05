@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { privacyRepository } from '@my/app/provider/dynamodb/repositories/privacy-repository'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { connectionRepository } from '@my/app/provider/dynamodb/repositories/connection-repository'
+import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { ContactRequestType } from '@my/app/provider/dynamodb/types'
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
@@ -9,6 +11,7 @@ import { invalidatePeopleCache } from '../cache'
 
 interface MemberProfile {
   email: string
+  personId?: string
   name?: string
   firstName?: string
   lastName?: string
@@ -19,6 +22,8 @@ interface MemberProfile {
     country: string
     venue?: string
     address?: string
+    recordingBrotherEmail?: string
+    recordingBrotherName?: string
   }
   isInterEcclesia?: boolean
   isPrivate?: boolean
@@ -31,14 +36,17 @@ interface MemberProfile {
   emails?: Array<{
     email: string
     emailType: string
+    emailId?: string
   }>
   phones?: Array<{
+    phoneId?: string
     type: string
     number: string
     isPrimary: boolean
     isHousehold: boolean
   }>
   addresses?: Array<{
+    addressId?: string
     type: string
     label?: string
     street1: string
@@ -55,6 +63,15 @@ interface MemberProfile {
     name?: string
     relationshipType: string
   }>
+  privacy?: {
+    showName: string
+    showEmail: string
+    showPhone: string
+    showAddress: string
+    showFamily: string
+  }
+  connectionStatus?: 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'self'
+  needsConnection?: boolean
   permissions: {
     canViewName: boolean
     canViewPhone: boolean
@@ -84,14 +101,36 @@ export async function GET(
       )
     }
 
-    const { email: targetEmail } = await params
-    const decodedEmail = decodeURIComponent(targetEmail).trim().toLowerCase()
+    // Require at least member role
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json(
+        { error: 'Member access required' },
+        { status: 403 }
+      )
+    }
+
+    const { email: paramValue } = await params
+    const decodedParam = decodeURIComponent(paramValue).trim()
     const viewerEmail = session.user.email
     const viewerRole = (session.user as any).role as string || ROLES.GUEST
-    const isOwnProfile = viewerEmail.toLowerCase() === decodedEmail
+    const viewerIsRecordingBrother = !!(session.user as any).isRecordingBrother
 
-    // Look up target person via GSI1 (O(1) by any email)
-    const targetPerson = await personRepository.getByEmail(decodedEmail)
+    // Detect if param is a UUID (personId) or an email
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedParam)
+
+    let targetPerson
+    if (isUUID) {
+      targetPerson = await personRepository.getById(decodedParam)
+    } else {
+      // Legacy email-based lookup (backward compat)
+      const decodedEmail = decodedParam.toLowerCase()
+      targetPerson = await personRepository.getByEmail(decodedEmail)
+      if (!targetPerson) {
+        const persons = await personRepository.getAllPersonsByEmail(decodedEmail)
+        targetPerson = persons[0] || null
+      }
+    }
 
     if (!targetPerson) {
       return NextResponse.json(
@@ -100,8 +139,14 @@ export async function GET(
       )
     }
 
-    // Look up viewer's ecclesia for privacy checks
-    const viewerPerson = isOwnProfile ? targetPerson : await personRepository.getByEmail(viewerEmail)
+    const isOwnProfile = viewerEmail.toLowerCase() === targetPerson.primaryEmail.toLowerCase()
+
+    // Look up viewer's ecclesia for privacy checks (try primary, then secondary email)
+    let viewerPerson = isOwnProfile ? targetPerson : await personRepository.getByEmail(viewerEmail)
+    if (!viewerPerson && !isOwnProfile) {
+      const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
+      viewerPerson = persons[0] || null
+    }
     const viewerEcclesia = viewerPerson?.ecclesia
     const targetEcclesia = targetPerson.ecclesia
 
@@ -139,22 +184,10 @@ export async function GET(
       permissions,
     }
 
-    // Include enriched ecclesia data when available
+    // Include inter-ecclesia flag
     const isInterEcclesia = !isOwnProfile && !!viewerEcclesia && !!targetEcclesia && viewerEcclesia !== targetEcclesia
     if (isInterEcclesia) {
       profile.isInterEcclesia = true
-    }
-    if (targetEcclesia) {
-      const ecclesiaData = await getEcclesiaByName(targetEcclesia)
-      if (ecclesiaData) {
-        profile.ecclesiaInfo = {
-          city: ecclesiaData.city,
-          province: ecclesiaData.province,
-          country: ecclesiaData.country,
-          venue: ecclesiaData.venue,
-          address: ecclesiaData.address,
-        }
-      }
     }
 
     // Fetch phones from PERSON# partition (single source of truth)
@@ -178,6 +211,7 @@ export async function GET(
       profile.emails = emailRecords.map(e => ({
         email: e.email,
         emailType: e.emailType,
+        ...(profile.canEdit ? { emailId: e.emailId } : {}),
       }))
     }
 
@@ -188,6 +222,7 @@ export async function GET(
         number: p.number,
         isPrimary: p.isPrimary,
         isHousehold: p.isHousehold,
+        ...(profile.canEdit ? { phoneId: p.phoneId } : {}),
       }))
     }
 
@@ -205,13 +240,17 @@ export async function GET(
         country: a.country,
         isPrimary: a.isPrimary,
         isHousehold: a.isHousehold,
+        ...(profile.canEdit ? { addressId: a.addressId } : {}),
       }))
     }
 
     // Family members (privacy gated)
     if (permissions.canViewFamily) {
-      // TODO: Wire up relationship repository when available
-      profile.family = []
+      const familyRecords = await relationshipRepository.getFamilyMembers(targetPerson.primaryEmail)
+      profile.family = familyRecords.map(rel => ({
+        email: rel.targetEmail,
+        relationshipType: rel.relationshipType,
+      }))
     }
 
     // Admin data for Owner/Admin viewers
@@ -219,13 +258,71 @@ export async function GET(
       profile.firstName = targetPerson.firstName
       profile.lastName = targetPerson.lastName
       profile.canEdit = !isOwnProfile
+      if (!isOwnProfile) {
+        profile.personId = targetPerson.personId
+      }
 
       profile.role = targetPerson.role || ROLES.GUEST
       profile.canSetRole = !isOwnProfile
       if (viewerRole === ROLES.OWNER) {
-        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       } else {
-        profile.allowedRoles = [ROLES.ADMIN, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+      }
+    }
+
+    // Recorder/Rep/RB data — same-ecclesia members only
+    const isRecorderOrRepRole = viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
+    if (isRecorderOrRepRole && !isOwnProfile) {
+      const isSameEcclesia = viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+      if (isSameEcclesia) {
+        profile.firstName = targetPerson.firstName
+        profile.lastName = targetPerson.lastName
+        profile.canEdit = true
+        profile.personId = targetPerson.personId
+        profile.role = targetPerson.role || ROLES.GUEST
+        profile.canSetRole = true
+        if (viewerIsRecordingBrother || viewerRole === ROLES.RECORDER) {
+          profile.allowedRoles = [ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        } else {
+          profile.allowedRoles = [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        }
+      }
+    }
+
+    // Include raw privacy settings for admin/recorder/rep/RB viewers
+    // so the detail page can show privacy indicator dots next to each section
+    const isPrivilegedViewer = viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN ||
+      viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
+    if (isPrivilegedViewer && !isOwnProfile) {
+      const isSameEcclesiaForPrivacy = viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+      // Owner/Admin see all; Recorder/Rep only see same-ecclesia
+      if (viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN || isSameEcclesiaForPrivacy) {
+        const privacySettings = await privacyRepository.getPrivacySettings(targetPerson.primaryEmail)
+        profile.privacy = {
+          showName: privacySettings.showName || 'private',
+          showEmail: privacySettings.showEmail || 'private',
+          showPhone: privacySettings.showPhone || 'private',
+          showAddress: privacySettings.showAddress || 'private',
+          showFamily: privacySettings.showFamily || 'private',
+        }
+      }
+    }
+
+    // Connection status and needsConnection for Connect button
+    if (isOwnProfile) {
+      profile.connectionStatus = 'self'
+      profile.needsConnection = false
+    } else {
+      const connStatus = await connectionRepository.getConnectionStatus(viewerEmail, targetPerson.primaryEmail)
+      profile.connectionStatus = connStatus === 'blocked' ? 'none' : connStatus
+
+      // needsConnection = true when Connect button should show
+      if (connStatus === 'none') {
+        const targetPrivacy = await privacyRepository.getPrivacySettings(targetPerson.primaryEmail)
+        profile.needsConnection = targetPrivacy.allowConnectionRequests !== false
+      } else {
+        profile.needsConnection = false
       }
     }
 
@@ -261,30 +358,55 @@ export async function PATCH(
     }
 
     const viewerRole = (session.user as any).role as string || ROLES.GUEST
-    if (viewerRole !== ROLES.OWNER && viewerRole !== ROLES.ADMIN) {
+    const viewerIsRB = !!(session.user as any).isRecordingBrother
+    const canEditRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP]
+    if (!canEditRoles.includes(viewerRole) && !viewerIsRB) {
       return NextResponse.json(
-        { error: 'Admin access required' },
+        { error: 'Insufficient permissions' },
         { status: 403 }
       )
     }
 
-    const { email: targetEmail } = await params
-    const decodedEmail = decodeURIComponent(targetEmail).trim().toLowerCase()
+    const { email: paramValue } = await params
+    const decodedParam = decodeURIComponent(paramValue).trim()
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedParam)
+
+    let targetPerson
+    if (isUUID) {
+      targetPerson = await personRepository.getById(decodedParam)
+    } else {
+      const decodedEmail = decodedParam.toLowerCase()
+      targetPerson = await personRepository.getByEmail(decodedEmail)
+      if (!targetPerson) {
+        const persons = await personRepository.getAllPersonsByEmail(decodedEmail)
+        targetPerson = persons[0] || null
+      }
+    }
+
+    if (!targetPerson) {
+      return NextResponse.json(
+        { error: 'Member not found' },
+        { status: 404 }
+      )
+    }
 
     // Don't allow editing own profile via this endpoint
-    if (session.user.email.toLowerCase() === decodedEmail) {
+    if (session.user.email.toLowerCase() === targetPerson.primaryEmail.toLowerCase()) {
       return NextResponse.json(
         { error: 'Use the profile page to edit your own profile' },
         { status: 400 }
       )
     }
 
-    const targetPerson = await personRepository.getByEmail(decodedEmail)
-    if (!targetPerson) {
-      return NextResponse.json(
-        { error: 'Member not found' },
-        { status: 404 }
-      )
+    // Recorder/Rep/RB: enforce same-ecclesia restriction
+    if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
+      const viewerPerson = await personRepository.getByEmail(session.user.email)
+      if (!viewerPerson || viewerPerson.ecclesia !== targetPerson.ecclesia) {
+        return NextResponse.json(
+          { error: 'You can only edit members of your own ecclesia' },
+          { status: 403 }
+        )
+      }
     }
 
     const body = await request.json()

@@ -49,12 +49,20 @@ export class EventDurationCalculator {
   }
 
   /**
-   * Include until the event date
+   * Include until the event date (inclusive - shows for the entire day in user's timezone)
    * Used for: study-weekend, general events, fraternals, bible-school
+   * Recurring events are handled specially - they show as long as the series is active
    */
   private static calculateUntilEventDate(event: any, currentDate: Date): DurationCalculationResult {
+    // Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+    // recurringConfig.startDate is the SERIES start, not the next occurrence.
+    // Show as long as the series hasn't ended.
+    if (event.type === 'recurring' && event.recurringConfig) {
+      return this.calculateRecurringSeries(event, currentDate)
+    }
+
     const eventDate = this.getEventDate(event)
-    
+
     if (!eventDate) {
       return {
         shouldInclude: true,
@@ -62,14 +70,46 @@ export class EventDurationCalculator {
       }
     }
 
-    const shouldInclude = currentDate <= eventDate
-    
+    // Timezone-aware date comparison:
+    // - currentDate uses user's local timezone (browser's new Date())
+    // - eventDate uses UTC (stored as midnight UTC from "YYYY-MM-DD" strings)
+    // This ensures events show until midnight in the user's timezone
+    const shouldInclude = this.isUserDateOnOrBefore(currentDate, eventDate)
+
     return {
       shouldInclude,
       displayUntilDate: eventDate,
-      reason: shouldInclude 
-        ? `Event is scheduled for ${eventDate.toDateString()}` 
+      reason: shouldInclude
+        ? `Event is scheduled for ${eventDate.toDateString()}`
         : `Event date ${eventDate.toDateString()} has passed`
+    }
+  }
+
+  /**
+   * Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+   * They show continuously as long as the series is active (endDate not passed).
+   */
+  private static calculateRecurringSeries(event: any, currentDate: Date): DurationCalculationResult {
+    const endDate = event.recurringConfig.endDate
+      ? (event.recurringConfig.endDate instanceof Date
+          ? event.recurringConfig.endDate
+          : new Date(event.recurringConfig.endDate))
+      : null
+
+    if (endDate && !this.isUserDateOnOrBefore(currentDate, endDate)) {
+      return {
+        shouldInclude: false,
+        displayUntilDate: endDate,
+        reason: `Recurring series ended on ${endDate.toDateString()}`
+      }
+    }
+
+    return {
+      shouldInclude: true,
+      displayUntilDate: endDate || undefined,
+      reason: endDate
+        ? `Recurring event active until ${endDate.toDateString()}`
+        : 'Recurring event with no end date - always active'
     }
   }
 
@@ -330,6 +370,7 @@ export class EventDurationCalculator {
 
   /**
    * Check if two dates are the same day (ignoring time)
+   * Both dates use the same timezone context (local methods)
    */
   private static isSameDay(date1: Date, date2: Date): boolean {
     return (
@@ -340,10 +381,30 @@ export class EventDurationCalculator {
   }
 
   /**
+   * Timezone-aware date comparison for event filtering.
+   *
+   * Event dates stored as "YYYY-MM-DD" create midnight UTC dates, so we use
+   * UTC accessors (getUTCFullYear etc.) to get the intended calendar date.
+   *
+   * currentDate (from browser's new Date()) uses local accessors to get the
+   * user's actual calendar date in their timezone.
+   *
+   * This ensures events show until midnight in the USER's timezone.
+   */
+  private static isUserDateOnOrBefore(currentDate: Date, eventDate: Date): boolean {
+    const currentStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
+    const eventStr = `${eventDate.getUTCFullYear()}-${String(eventDate.getUTCMonth() + 1).padStart(2, '0')}-${String(eventDate.getUTCDate()).padStart(2, '0')}`
+    return currentStr <= eventStr
+  }
+
+  /**
    * Extract the primary event date from an event object
    */
   private static getEventDate(event: any): Date | null {
     // Try different date fields based on event type
+    // Note: recurringConfig.startDate is NOT included here because it's the
+    // SERIES start date, not the next occurrence. Recurring events are handled
+    // by calculateRecurringSeries() instead.
     const dateFields = [
       'eventDate',
       'serviceDate',      // funeral

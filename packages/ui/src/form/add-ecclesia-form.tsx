@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { YStack, XStack, Text, Button, Label, Input } from 'tamagui'
+import { YStack, XStack, Text, Label, Input } from 'tamagui'
+import { Button } from '../Button'
 import { AddressAutocomplete } from './address-autocomplete'
 import type { ParsedAddress } from '@my/app/types/address-autocomplete'
 

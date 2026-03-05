@@ -1,4 +1,5 @@
-import { YStack, XStack, Card, Text, Button } from 'tamagui'
+import { YStack, XStack, Card, Text } from 'tamagui'
+import { Button } from '../Button'
 import { Calendar, Heart, Users, FileText, Droplets, RefreshCw, Vote, CircleDot } from '@tamagui/lucide-icons'
 import { EventType } from '@my/app/types/events'
 

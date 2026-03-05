@@ -342,6 +342,7 @@ export interface PrivacySettingsRecord extends BaseRecord {
 
   // Contact preferences
   allowContactRequests: boolean   // Allow "call me back" requests
+  allowConnectionRequests: boolean // Allow "connect" requests from other members
   preferredContactMethod: 'email' | 'phone' | 'either'
 }
 
@@ -357,6 +358,8 @@ export interface ConnectionRecord extends BaseRecord {
   targetEmail: string
   status: ConnectionStatus
   createdAt: string
+  initiatedBy?: string      // email of who sent the connection request
+  connectionToken?: string  // OTP token value for email accept/decline
 }
 
 // Contact request types
@@ -456,7 +459,7 @@ export function isContactRequestRecord(record: any): record is ContactRequestRec
 // UUID-based person identity replacing email-based USER# records
 
 // Member status in the ecclesia
-export type MemberStatus = 'member' | 'visitor' | 'friend' | 'former'
+export type MemberStatus = 'member' | 'visitor' | 'friend' | 'former' | 'draft'
 
 // Person Record - Core identity with UUID
 // PK: PERSON#{personId}, SK: PROFILE
@@ -480,11 +483,15 @@ export interface PersonRecord extends BaseRecord {
 
   // Inter-ecclesia communications
   isInterEcclesiaRep?: boolean  // Flag: receives inter-ecclesia emails for their ecclesia
-  isRecordingBrother?: boolean  // Flag: primary contact (Recording Brother) for their ecclesia
+  isRecordingBrother?: boolean  // Flag: primary contact (Recording Brother) for their ecclesia — CANONICAL source of truth
+
+  // Recording Brother email preference (only when isRecordingBrother === true)
+  rbEmailPreference?: 'personal' | 'ecclesia'  // Which email to use for inter-ecclesia
+  rbEcclesiaEmail?: string                      // Ecclesia-specific RB email (only when preference is 'ecclesia')
 
   // Auth fields (unified from USER# records)
   userId?: string        // Links to existing USER#{email} auth record (for backwards compat)
-  role?: 'owner' | 'admin' | 'member' | 'guest' | 'deceased'
+  role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
   provider?: 'google' | 'credentials'
 
   // Credentials auth (when provider === 'credentials')
@@ -603,7 +610,7 @@ export interface TokenRecord extends BaseRecord {
 
   // Invitation-specific fields
   invitedBy?: string     // PersonId of who created the invitation
-  invitedRole?: 'owner' | 'admin' | 'member' | 'guest'
+  invitedRole?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest'
 
   // OTP-specific fields
   otpCode?: string       // 6-digit numeric code for manual entry
@@ -618,4 +625,71 @@ export type TokenQueryResult = {
 
 export function isTokenRecord(record: any): record is TokenRecord {
   return record && record.pkey && record.pkey.startsWith('PERSON#') && record.skey?.startsWith('TOKEN#')
+}
+
+// ===== DRAFT MEMBER SYSTEM =====
+// Draft members require approval before becoming real PersonRecords
+
+export type DraftStatus = 'pending' | 'approved' | 'rejected'
+
+// Draft Member Record - Stored in tee-admin table
+// PK: DRAFT#{ecclesia}, SK: MEMBER#{draftId}
+// GSI1: DRAFT_STATUS#pending, {ecclesia}#{createdAt}
+export interface DraftMemberRecord extends BaseRecord {
+  pkey: string           // DRAFT#{ecclesia}
+  skey: string           // MEMBER#{draftId}
+  gsi1pk: string         // DRAFT_STATUS#pending (or approved/rejected)
+  gsi1sk: string         // {ecclesia}#{createdAt}
+
+  draftId: string
+  firstName: string
+  lastName: string
+  email: string
+  ecclesia: string
+  status: DraftStatus
+  createdBy: string      // email of submitter
+  createdByName: string
+  reviewedBy?: string    // email of reviewer
+  reviewedAt?: string    // ISO timestamp
+  reviewNote?: string
+  createdAt: string
+}
+
+export function isDraftMemberRecord(record: any): record is DraftMemberRecord {
+  return record && record.pkey && record.pkey.startsWith('DRAFT#') && record.skey?.startsWith('MEMBER#')
+}
+
+// ===== RB NOMINATION SYSTEM =====
+// Recording Brother nominations require two seconds to confirm
+
+export type RBNominationStatus = 'open' | 'confirmed' | 'accepted' | 'withdrawn'
+
+export interface RBNominationSecond {
+  email: string
+  name: string
+  at: string // ISO timestamp
+}
+
+// RB Nomination Record - Stored in tee-admin table
+// PK: RB_NOM#{ecclesia}, SK: NOMINATION#{nominationId}
+export interface RBNominationRecord extends BaseRecord {
+  pkey: string           // RB_NOM#{ecclesia}
+  skey: string           // NOMINATION#{nominationId}
+
+  nominationId: string
+  ecclesia: string
+  nomineeEmail: string
+  nomineeName: string
+  nominatedBy: string    // email of nominator
+  nominatedByName: string
+  seconds: RBNominationSecond[]
+  secondsNeeded: number  // default 2
+  status: RBNominationStatus
+  emailPreference?: 'personal' | 'ecclesia'  // Which email to use for inter-ecclesia
+  rbEcclesiaEmail?: string                    // Ecclesia-specific RB email (only when preference is 'ecclesia')
+  createdAt: string
+}
+
+export function isRBNominationRecord(record: any): record is RBNominationRecord {
+  return record && record.pkey && record.pkey.startsWith('RB_NOM#') && record.skey?.startsWith('NOMINATION#')
 }

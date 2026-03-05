@@ -1,13 +1,24 @@
 import React, { useState } from 'react'
 import { YStack, XStack, Text, Input, Select, Spinner, ScrollView, View } from 'tamagui'
-import { Search, Filter } from '@tamagui/lucide-icons'
+import { Button } from '../Button'
+import { Search, Filter, Plus, FileText, Globe } from '@tamagui/lucide-icons'
 import { MemberCard } from './member-card'
 
+interface MemberPrivacy {
+  showName: 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+  showEmail: 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+  showPhone: 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+  showAddress: 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+  showFamily: 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+}
+
 interface Member {
+  id: string
   email: string
   name: string
   ecclesia?: string
   canViewDetails?: boolean
+  privacy?: MemberPrivacy
 }
 
 interface PeopleBrowserProps {
@@ -15,11 +26,17 @@ interface PeopleBrowserProps {
   ecclesias: string[]
   loading?: boolean
   defaultEcclesia?: string | null
-  onMemberClick?: (email: string) => void
+  isGlobalSearch?: boolean
+  onMemberClick?: (id: string) => void
   onSearch?: (query: string) => void
   onFilterEcclesia?: (ecclesia: string | null) => void
   onDelete?: (email: string) => void
   deletingEmail?: string | null
+  canAddMember?: boolean
+  canReviewDrafts?: boolean
+  onAddMember?: () => void
+  pendingDraftCount?: number
+  onShowDrafts?: () => void
 }
 
 export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
@@ -27,11 +44,17 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
   ecclesias,
   loading = false,
   defaultEcclesia,
+  isGlobalSearch = false,
   onMemberClick,
   onSearch,
   onFilterEcclesia,
   onDelete,
   deletingEmail,
+  canAddMember,
+  canReviewDrafts,
+  onAddMember,
+  pendingDraftCount = 0,
+  onShowDrafts,
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   // Use parent-controlled ecclesia if provided, otherwise local state
@@ -49,21 +72,44 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
     onFilterEcclesia?.(newValue)
   }
 
-  // Client-side filtering
+  // Client-side filtering — skip ecclesia filter when doing a global search
   const filteredMembers = members.filter((member) => {
     const matchesSearch = !searchQuery ||
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.ecclesia?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesEcclesia = !selectedEcclesia || member.ecclesia === selectedEcclesia
+    const matchesEcclesia = isGlobalSearch || !selectedEcclesia || member.ecclesia === selectedEcclesia
     return matchesSearch && matchesEcclesia
   })
 
   return (
     <YStack gap="$4" flex={1}>
       {/* Header */}
-      <XStack gap="$2" alignItems="center">
+      <XStack gap="$2" alignItems="center" flexWrap="wrap">
         <Text fontSize="$6" fontWeight="600">Contact List</Text>
         <Text fontSize="$3" theme="alt2">({filteredMembers.length} members)</Text>
+        <XStack flex={1} />
+        {canReviewDrafts && pendingDraftCount > 0 ? (
+          <Button
+            size="$3"
+            theme="yellow"
+            icon={FileText}
+            borderWidth={2}
+            onPress={onShowDrafts}
+          >
+            Review Drafts ({pendingDraftCount})
+          </Button>
+        ) : null}
+        {canAddMember ? (
+          <Button
+            size="$3"
+            theme="blue"
+            icon={Plus}
+            borderWidth={2}
+            onPress={onAddMember}
+          >
+            Add Member
+          </Button>
+        ) : null}
       </XStack>
 
       {/* Search and Filter */}
@@ -108,12 +154,22 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
         ) : null}
       </XStack>
 
+      {/* Global search indicator */}
+      {isGlobalSearch && selectedEcclesia ? (
+        <XStack gap="$2" alignItems="center" paddingHorizontal="$2">
+          <Globe size={14} color="$blue10" />
+          <Text fontSize="$3" color="$blue10">
+            Searching all ecclesias
+          </Text>
+        </XStack>
+      ) : null}
+
       {/* Loading State */}
       {loading ? (
-        <YStack flex={1} alignItems="center" justifyContent="center" padding="$6">
-          <Spinner size="small" />
-          <Text fontSize="$3" theme="alt2" marginTop="$2">Loading members...</Text>
-        </YStack>
+        <XStack alignItems="center" justifyContent="center" padding="$6" gap="$2">
+          <Spinner size="small" width={20} height={20} />
+          <Text fontSize="$3" theme="alt2">Loading members...</Text>
+        </XStack>
       ) : null}
 
       {/* Empty State */}
@@ -132,13 +188,13 @@ export const PeopleBrowser: React.FC<PeopleBrowserProps> = ({
         <ScrollView flex={1}>
           <XStack flexWrap="wrap" gap="$2">
             {filteredMembers.map((member) => (
-              <View key={member.email} width={280} minWidth={200} flexGrow={1} maxWidth={400}>
+              <View key={member.id} width={280} minWidth={200} flexGrow={1} maxWidth={400}>
                 <MemberCard
                   email={member.email}
                   name={member.name}
                   ecclesia={member.ecclesia}
                   canViewDetails={member.canViewDetails}
-                  onPress={onMemberClick ? () => onMemberClick(member.email) : undefined}
+                  onPress={onMemberClick ? () => onMemberClick(member.id) : undefined}
                   onDelete={onDelete ? () => onDelete(member.email) : undefined}
                   isDeleting={deletingEmail === member.email}
                 />

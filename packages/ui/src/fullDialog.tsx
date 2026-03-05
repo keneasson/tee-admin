@@ -1,6 +1,7 @@
 'use client'
 
-import { Adapt, Button, Dialog, type DialogProps, Sheet, Unspaced } from 'tamagui'
+import { Adapt, Dialog, type DialogProps, Sheet, Unspaced } from 'tamagui'
+import { Button } from './Button'
 import { X } from '@tamagui/lucide-icons'
 import type { JSX } from 'react'
 

@@ -1,9 +1,12 @@
+import { randomUUID } from 'crypto'
 import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
+import { addUtmParameters } from './utm-links'
+import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 
 const adminMailDomain = '@tee-admin.com'
 
@@ -11,7 +14,7 @@ const SES_RATE_LIMIT = 14
 
 // Re-export EmailReasonType from shared types for backward compatibility
 export { type EmailReasonType as emailReasons } from '@my/app/types'
-import { type EmailReasonType } from '@my/app/types'
+import { type EmailReasonType, type EmailSubReason } from '@my/app/types'
 type emailReasons = EmailReasonType // Local alias for use in this file
 
 const senders = {
@@ -73,9 +76,13 @@ export type emailSendProps = {
   test?: boolean
   customList?: string // For custom emails to specify which list to send to
   customSubject?: string // For custom emails to specify subject
+  subReason?: EmailSubReason // Categorization for per-send tracking
+  description?: string // Free-text description for the send record
+  sentBy?: string // Email of the user who triggered the send
 }
 
 type Sends = { sends: string[]; skips: string[] }
+type SendResult = Sends & { campaignId: string }
 
 async function getAllContacts({
   listTopic,
@@ -102,20 +109,25 @@ export const emailSend = async function ({
   test = false,
   customList,
   customSubject,
-}: emailSendProps): Promise<Sends | Error> {
+  subReason = 'general',
+  description,
+  sentBy,
+}: emailSendProps): Promise<SendResult | Error> {
   if (Object.keys(senders).findIndex((r) => r === reason) === -1) {
     throw new Error(`${reason} is not a valid email type`)
   }
+
+  const campaignId = randomUUID()
+
   try {
     // For custom emails, use the provided list, otherwise use the default for that reason
     const listTopic = test === true ? 'testList' : (customList || senders[reason].contactList)
     const sesClient = getSesClient()
-    const result = { sends: [], skips: [] }
 
     console.log('why test=false sends test', { test, listTopic })
     const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
     if (!contacts) {
-      return result
+      return { sends: [], skips: [], campaignId }
     }
 
     const senderEmails = contacts
@@ -144,6 +156,7 @@ export const emailSend = async function ({
         reason,
         sesClient,
         replyTo,
+        campaignId,
       })
       allSent = {
         sends: [...allSent.sends, ...sends.sends],
@@ -152,7 +165,25 @@ export const emailSend = async function ({
     }
 
     console.log('total sent', allSent.sends.length)
-    return allSent
+
+    // Create send record for per-email tracking (best-effort, don't fail the send)
+    try {
+      await sendRecordRepository.createSendRecord({
+        campaignId,
+        reason,
+        subReason,
+        subject,
+        description,
+        recipientCount: senderEmails.length,
+        sentCount: allSent.sends.length,
+        failedCount: allSent.skips.length,
+        sentBy,
+      })
+    } catch (recordError) {
+      console.error('Failed to create send record (non-fatal):', recordError)
+    }
+
+    return { ...allSent, campaignId }
   } catch (error) {
     console.error('SES Sending Email command', error)
     throw error
@@ -169,6 +200,7 @@ type SingleSendProps = {
   reason: string
   sesClient: SESv2Client
   replyTo?: string
+  campaignId: string
 }
 
 /**
@@ -206,6 +238,7 @@ async function chunkSend({
   reason,
   sesClient,
   replyTo,
+  campaignId,
 }: SingleSendProps): Promise<string[]> {
   const sent = []
   try {
@@ -223,6 +256,10 @@ async function chunkSend({
         personalizedText = emailText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
       }
 
+      // Add UTM tracking parameters to all tee-admin.com links
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+      personalizedHtml = addUtmParameters(personalizedHtml, reason, today)
+
       const emailCmd = new SendEmailCommand({
         FromEmailAddress: from,
         ReplyToAddresses: replyTo ? [replyTo] : undefined,
@@ -238,6 +275,10 @@ async function chunkSend({
           {
             Name: 'Reason',
             Value: reason,
+          },
+          {
+            Name: 'Campaign',
+            Value: campaignId,
           },
         ],
         Content: {

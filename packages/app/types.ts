@@ -53,6 +53,21 @@ export type EmailReasonType =
   | 'inter-ecclesia'
 
 /**
+ * Sub-reason for categorizing the purpose of an email send.
+ * Especially valuable for inter-ecclesia and custom emails.
+ */
+export type EmailSubReason =
+  | 'memorial'
+  | 'lecture'
+  | 'fraternal'
+  | 'youth'
+  | 'schedule'
+  | 'transfer'
+  | 'appeal'
+  | 'correction'
+  | 'general'
+
+/**
  * Auth session types for cross-platform components
  * Components in packages/app should receive these as props, not use next-auth hooks
  */
@@ -204,6 +219,15 @@ export type BibleClassType = {
   // Timezone-aware datetime fields
   DateTime?: string        // Full ISO datetime in UTC: "2026-02-06T00:30:00.000Z" (7:30pm Toronto)
   ServiceTimezone?: string // IANA timezone: "America/Toronto"
+  // Joint Bible Class fields (from Google Sheets)
+  Host?: string              // Host ecclesia name
+  ZoomURL?: string           // Override Zoom URL
+  MeetingID?: string         // Override Meeting ID
+  MeetingPwd?: string        // Override Meeting Password
+  InPerson?: string          // "Yes" or full address
+  // Resolved at email render time (not from Sheets)
+  resolvedAddress?: string   // Full address from ecclesia lookup
+  resolvedVenue?: string     // Venue name from ecclesia lookup
 }
 
 export type NextBibleClassProps = {

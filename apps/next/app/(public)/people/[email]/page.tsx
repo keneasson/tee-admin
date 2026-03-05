@@ -3,16 +3,18 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useParams, useRouter } from 'next/navigation'
-import { Section, Text, YStack, XStack, Heading, Card, Button, Separator, Spinner, Select, Adapt, Sheet, Input } from '@my/ui'
+import { Section, Text, YStack, XStack, Heading, Card, Button, Separator, Spinner, Select, Adapt, Sheet, Input, View } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { ContactRequestButton } from '@my/ui/src/profile/contact-request-button'
+import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
-import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search } from '@tamagui/lucide-icons'
+import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
 
 interface MemberProfile {
   email: string
+  personId?: string
   name?: string
   firstName?: string
   lastName?: string
@@ -23,6 +25,8 @@ interface MemberProfile {
     country: string
     venue?: string
     address?: string
+    recordingBrotherEmail?: string
+    recordingBrotherName?: string
   }
   isInterEcclesia?: boolean
   isPrivate?: boolean
@@ -35,14 +39,17 @@ interface MemberProfile {
   emails?: Array<{
     email: string
     emailType: string
+    emailId?: string
   }>
   phones?: Array<{
+    phoneId?: string
     type: string
     number: string
     isPrimary: boolean
     isHousehold: boolean
   }>
   addresses?: Array<{
+    addressId?: string
     type: string
     label?: string
     street1: string
@@ -59,6 +66,15 @@ interface MemberProfile {
     name?: string
     relationshipType: string
   }>
+  privacy?: {
+    showName: string
+    showEmail: string
+    showPhone: string
+    showAddress: string
+    showFamily: string
+  }
+  connectionStatus?: 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'self'
+  needsConnection?: boolean
   permissions: {
     canViewName: boolean
     canViewPhone: boolean
@@ -67,6 +83,46 @@ interface MemberProfile {
     canViewFamily: boolean
     canRequestContact: boolean
   }
+}
+
+type VisibilityLevel = 'authenticated' | 'ecclesia_and_connections' | 'connections_only' | 'private'
+
+function getPrivacyColor(level: string): string {
+  switch (level) {
+    case 'authenticated':
+      return '#22c55e' // green
+    case 'ecclesia_and_connections':
+    case 'connections_only':
+      return '#f59e0b' // amber
+    case 'private':
+    default:
+      return '#ef4444' // red
+  }
+}
+
+function getPrivacyLabel(level: string): string {
+  switch (level) {
+    case 'authenticated': return 'Public'
+    case 'ecclesia_and_connections': return 'Members only'
+    case 'connections_only': return 'Connections only'
+    case 'private': return 'Private'
+    default: return 'Private'
+  }
+}
+
+/** Small colored dot + label showing the privacy level for a field */
+function PrivacyIndicator({ level }: { level: string }) {
+  return (
+    <XStack gap="$1" alignItems="center" {...({ title: getPrivacyLabel(level) } as any)}>
+      <View
+        width={8}
+        height={8}
+        borderRadius={4}
+        backgroundColor={getPrivacyColor(level)}
+      />
+      <Text fontSize={10} color="$gray10">{getPrivacyLabel(level)}</Text>
+    </XStack>
+  )
 }
 
 export default function MemberProfilePage() {
@@ -92,19 +148,37 @@ export default function MemberProfilePage() {
   const ecclesiaTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const ecclesiaContainerRef = useRef<HTMLDivElement>(null)
 
-  const memberEmail = decodeURIComponent((params?.email as string) || '')
-  // Use both URL param and profile email for comparison (handles encoding issues)
+  // Inline add form state
+  const [addingEmail, setAddingEmail] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [addingPhone, setAddingPhone] = useState(false)
+  const [newPhoneType, setNewPhoneType] = useState('mobile')
+  const [newPhoneNumber, setNewPhoneNumber] = useState('')
+  const [addingAddress, setAddingAddress] = useState(false)
+  const [newAddressType, setNewAddressType] = useState('home')
+  const [newStreet1, setNewStreet1] = useState('')
+  const [newCity, setNewCity] = useState('')
+  const [newProvince, setNewProvince] = useState('')
+  const [newPostalCode, setNewPostalCode] = useState('')
+  const [newCountry, setNewCountry] = useState('Canada')
+  const [addingFamily, setAddingFamily] = useState(false)
+  const [newFamilyEmail, setNewFamilyEmail] = useState('')
+  const [newRelationType, setNewRelationType] = useState('spouse')
+  const [contactSaving, setContactSaving] = useState(false)
+  const [contactError, setContactError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const memberId = decodeURIComponent((params?.email as string) || '')
   const sessionEmail = session?.user?.email?.toLowerCase() || ''
-  const isOwnProfile = sessionEmail !== '' && (
-    sessionEmail === memberEmail.toLowerCase() ||
-    sessionEmail === profile?.email?.toLowerCase()
-  )
+  const isOwnProfile = sessionEmail !== '' && sessionEmail === profile?.email?.toLowerCase()
+
+  const contactsUrl = `/api/people/${encodeURIComponent(memberId)}/contacts`
 
   const fetchProfile = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/people/${encodeURIComponent(memberEmail)}`)
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`)
       if (res.ok) {
         const data = await res.json()
         setProfile(data.profile)
@@ -119,7 +193,7 @@ export default function MemberProfilePage() {
     } finally {
       setLoading(false)
     }
-  }, [memberEmail])
+  }, [memberId])
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -148,7 +222,7 @@ export default function MemberProfilePage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipientEmail: memberEmail,
+        recipientEmail: profile!.email,
         requestType: type,
         message,
         reason,
@@ -167,7 +241,7 @@ export default function MemberProfilePage() {
       const res = await fetch('/api/admin/set-role', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: memberEmail, newRole }),
+        body: JSON.stringify({ email: profile!.email, newRole }),
       })
       const data = await res.json()
       if (res.ok && data.success) {
@@ -204,12 +278,51 @@ export default function MemberProfilePage() {
     window.open(`https://maps.google.com/?q=${query}`, '_blank')
   }
 
+  const handleConnect = async () => {
+    const res = await fetch('/api/connections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetEmail: profile!.email }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Failed to send connection request')
+    }
+  }
+
+  const handleAcceptConnection = async () => {
+    if (!profile) return
+    const res = await fetch('/api/connections', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterEmail: profile!.email, action: 'accept' }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Failed to accept connection')
+    }
+    // Refresh profile to show updated data now that connection is active
+    fetchProfile()
+  }
+
+  const handleDeclineConnection = async () => {
+    const res = await fetch('/api/connections', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterEmail: profile!.email, action: 'decline' }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Failed to decline connection')
+    }
+  }
+
   const handleSuggestEdit = async (field: EditRequestField, currentValue: string | undefined, suggestedValue: string, message?: string) => {
     const res = await fetch('/api/edit-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        targetEmail: memberEmail,
+        targetEmail: profile!.email,
         field,
         suggestedValue,
         currentValue,
@@ -275,7 +388,7 @@ export default function MemberProfilePage() {
     setSaving(true)
     setEditMessage(null)
     try {
-      const res = await fetch(`/api/people/${encodeURIComponent(memberEmail)}`, {
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -301,6 +414,100 @@ export default function MemberProfilePage() {
       setEditMessage({ type: 'error', text: 'An error occurred' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ===== Admin contact CRUD helpers =====
+
+  const addContact = async (body: Record<string, string>) => {
+    setContactSaving(true)
+    setContactError(null)
+    try {
+      const res = await fetch(contactsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setContactError(data.error || 'Failed to add')
+        return false
+      }
+      return true
+    } catch {
+      setContactError('An error occurred')
+      return false
+    } finally {
+      setContactSaving(false)
+    }
+  }
+
+  const deleteContact = async (queryParams: string) => {
+    setDeletingId(queryParams)
+    try {
+      const res = await fetch(`${contactsUrl}?${queryParams}`, { method: 'DELETE' })
+      if (res.ok) {
+        fetchProfile()
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleAddEmail = async () => {
+    const ok = await addContact({ type: 'email', email: newEmail.trim() })
+    if (ok) {
+      setNewEmail('')
+      setAddingEmail(false)
+      fetchProfile()
+    }
+  }
+
+  const handleAddPhone = async () => {
+    const ok = await addContact({ type: 'phone', phoneType: newPhoneType, number: newPhoneNumber.trim() })
+    if (ok) {
+      setNewPhoneNumber('')
+      setNewPhoneType('mobile')
+      setAddingPhone(false)
+      fetchProfile()
+    }
+  }
+
+  const handleAddAddress = async () => {
+    const ok = await addContact({
+      type: 'address',
+      addressType: newAddressType,
+      street1: newStreet1.trim(),
+      city: newCity.trim(),
+      province: newProvince.trim(),
+      postalCode: newPostalCode.trim(),
+      country: newCountry.trim(),
+    })
+    if (ok) {
+      setNewStreet1('')
+      setNewCity('')
+      setNewProvince('')
+      setNewPostalCode('')
+      setNewCountry('Canada')
+      setNewAddressType('home')
+      setAddingAddress(false)
+      fetchProfile()
+    }
+  }
+
+  const handleAddFamily = async () => {
+    const ok = await addContact({
+      type: 'relationship',
+      targetEmail: newFamilyEmail.trim(),
+      relationshipType: newRelationType,
+    })
+    if (ok) {
+      setNewFamilyEmail('')
+      setNewRelationType('spouse')
+      setAddingFamily(false)
+      fetchProfile()
     }
   }
 
@@ -351,6 +558,7 @@ export default function MemberProfilePage() {
   }
 
   const { permissions } = profile
+  const canEdit = profile.canEdit && !isOwnProfile
 
   // Limited profile: detailed contact info is private, but show what we know
   if (profile.isPrivate) {
@@ -362,44 +570,43 @@ export default function MemberProfilePage() {
               Back to Contact List
             </Button>
 
-            {/* Header — show name and/or ecclesia, no lock */}
-            <Card padding="$6" backgroundColor="$backgroundHover">
-              <YStack gap="$3">
-                <Heading size={4}>
-                  {profile.name || profile.ecclesia || profile.email}
+            {/* Header — show name and/or ecclesia */}
+            <Card padding="$4" backgroundColor="$backgroundHover">
+              <YStack gap="$2">
+                <Heading size="$7">
+                  {profile.name || profile.ecclesia || 'Member'}
                 </Heading>
                 {profile.name && profile.ecclesia ? (
                   <Text fontSize="$3" theme="alt2">{profile.ecclesia}</Text>
                 ) : null}
-                {profile.ecclesiaInfo ? (
-                  <XStack gap="$1" alignItems="center">
-                    <MapPin size={14} color="$gray10" />
-                    <Text fontSize="$3" theme="alt2">
-                      {profile.ecclesiaInfo.city}, {profile.ecclesiaInfo.province}
-                      {profile.ecclesiaInfo.venue ? ` \u2022 ${profile.ecclesiaInfo.venue}` : ''}
-                    </Text>
-                  </XStack>
-                ) : null}
-                {profile.ecclesiaInfo?.address ? (
-                  <Text fontSize="$2" theme="alt2">{profile.ecclesiaInfo.address}</Text>
-                ) : null}
               </YStack>
             </Card>
 
-            {/* Email — already visible in the URL, just show it */}
-            <Card padding="$4" backgroundColor="$backgroundHover">
-              <XStack gap="$3" alignItems="center">
-                <Mail size={20} color="$blue10" />
-                <Text fontSize="$4" fontWeight="500">{profile.email}</Text>
-                <Button size="$2" marginLeft="auto" onPress={() => { window.location.href = `mailto:${profile.email}` }}>
-                  Email
-                </Button>
-              </XStack>
-            </Card>
-
-            <Text fontSize="$2" theme="alt2">
-              Detailed contact information is not publicly shared for this member.
+            <Text fontSize="$3" theme="alt2">
+              Contact details are private. Use the buttons below to reach out or connect.
             </Text>
+
+            {/* Contact actions — left-aligned */}
+            <XStack gap="$2" flexWrap="wrap">
+              {permissions.canRequestContact ? (
+                <ContactRequestButton
+                  recipientEmail={profile.email}
+                  recipientName={profile.name}
+                  allowedTypes={profile.availableContactMethods || ['email']}
+                  onRequest={handleContactRequest}
+                  requesterPhones={myPhones}
+                />
+              ) : null}
+              <ConnectButton
+                targetEmail={profile.email}
+                targetName={profile.name}
+                connectionStatus={profile.connectionStatus || 'none'}
+                needsConnection={profile.needsConnection || false}
+                onConnect={handleConnect}
+                onAccept={handleAcceptConnection}
+                onDecline={handleDeclineConnection}
+              />
+            </XStack>
           </YStack>
         </Section>
       </Wrapper>
@@ -520,83 +727,84 @@ export default function MemberProfilePage() {
                 </XStack>
               </YStack>
             ) : (
-              <XStack justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap="$4">
-                <YStack gap="$2" flex={1}>
-                  {permissions.canViewName ? (
-                    <>
-                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Heading size={4}>{profile.name || 'Unknown'}</Heading>
-                        {isOwnProfile ? (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
-                            <Text fontSize="$2" color="$blue10" fontWeight="600">Your Profile</Text>
-                          </Card>
-                        ) : profile.canEdit ? (
-                          <Button
-                            size="$2"
-                            icon={Edit3}
-                            chromeless
-                            circular
-                            onPress={startEditing}
-                          />
-                        ) : (
-                          <SuggestEditButton
-                            targetEmail={profile.email}
-                            targetName={profile.name}
-                            field="name"
-                            currentValue={profile.name}
-                            onRequest={(value, msg) => handleSuggestEdit('name', profile.name, value, msg)}
-                            iconOnly
-                          />
-                        )}
-                      </XStack>
-                      {profile.ecclesia ? (
-                        <YStack gap="$1">
-                          <Text fontSize="$3" theme="alt2">{profile.ecclesia}</Text>
-                          {profile.ecclesiaInfo ? (
-                            <XStack gap="$1" alignItems="center">
-                              <MapPin size={12} color="$gray10" />
-                              <Text fontSize="$2" theme="alt2">
-                                {profile.ecclesiaInfo.city}, {profile.ecclesiaInfo.province}
-                                {profile.ecclesiaInfo.venue ? ` \u2022 ${profile.ecclesiaInfo.venue}` : ''}
-                              </Text>
-                            </XStack>
-                          ) : null}
-                        </YStack>
+              <YStack gap="$3">
+                {permissions.canViewName ? (
+                  <>
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                      <Heading size="$7">{profile.name || 'Unknown'}</Heading>
+                      {profile.privacy?.showName ? (
+                        <PrivacyIndicator level={profile.privacy.showName} />
                       ) : null}
-                      {profile.isDeceased ? (
-                        <Text fontSize="$3" color="$gray10">This member has passed away.</Text>
-                      ) : null}
-                    </>
-                  ) : (
-                    <XStack gap="$2" alignItems="center">
-                      <Lock size={20} />
-                      <Text fontSize="$4" theme="alt2">Name hidden</Text>
+                      {isOwnProfile ? (
+                        <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
+                          <Text fontSize="$2" color="$blue10" fontWeight="600">Your Profile</Text>
+                        </Card>
+                      ) : profile.canEdit ? (
+                        <Button
+                          size="$2"
+                          icon={Edit3}
+                          chromeless
+                          circular
+                          onPress={startEditing}
+                        />
+                      ) : (
+                        <SuggestEditButton
+                          targetEmail={profile.email}
+                          targetName={profile.name}
+                          field="name"
+                          currentValue={profile.name}
+                          onRequest={(value, msg) => handleSuggestEdit('name', profile.name, value, msg)}
+                          iconOnly
+                        />
+                      )}
                     </XStack>
-                  )}
-                </YStack>
+                    {profile.ecclesia ? (
+                      <Text fontSize="$3" theme="alt2">{profile.ecclesia}</Text>
+                    ) : null}
+                    {profile.isDeceased ? (
+                      <Text fontSize="$3" color="$gray10">This member has passed away.</Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <XStack gap="$2" alignItems="center">
+                    <Lock size={20} />
+                    <Text fontSize="$4" theme="alt2">Name hidden</Text>
+                  </XStack>
+                )}
 
-                {/* Only show "Edit Profile" on your OWN profile */}
-                {isOwnProfile ? (
-                  <Button
-                    icon={Edit3}
-                    onPress={() => router.push('/profile')}
-                    theme="blue"
-                  >
-                    Edit Profile
-                  </Button>
-                ) : null}
-
-                {/* Show contact request button on OTHER profiles */}
-                {!isOwnProfile && permissions.canRequestContact ? (
-                  <ContactRequestButton
-                    recipientEmail={profile.email}
-                    recipientName={profile.name}
-                    allowedTypes={profile.availableContactMethods || ['email']}
-                    onRequest={handleContactRequest}
-                    requesterPhones={myPhones}
-                  />
-                ) : null}
-              </XStack>
+                {/* Action buttons — left-aligned */}
+                <XStack gap="$2" flexWrap="wrap">
+                  {isOwnProfile ? (
+                    <Button
+                      icon={Edit3}
+                      onPress={() => router.push('/profile')}
+                      theme="blue"
+                    >
+                      Edit Profile
+                    </Button>
+                  ) : null}
+                  {!isOwnProfile && permissions.canRequestContact ? (
+                    <ContactRequestButton
+                      recipientEmail={profile.email}
+                      recipientName={profile.name}
+                      allowedTypes={profile.availableContactMethods || ['email']}
+                      onRequest={handleContactRequest}
+                      requesterPhones={myPhones}
+                    />
+                  ) : null}
+                  {!isOwnProfile ? (
+                    <ConnectButton
+                      targetEmail={profile.email}
+                      targetName={profile.name}
+                      connectionStatus={profile.connectionStatus || 'none'}
+                      needsConnection={profile.needsConnection || false}
+                      onConnect={handleConnect}
+                      onAccept={handleAcceptConnection}
+                      onDecline={handleDeclineConnection}
+                    />
+                  ) : null}
+                </XStack>
+              </YStack>
             )}
           </Card>
 
@@ -670,116 +878,213 @@ export default function MemberProfilePage() {
           <Separator />
           {permissions.canViewEmail ? (
             <YStack gap="$3">
-              <XStack gap="$2" alignItems="center" justifyContent="space-between">
-                <XStack gap="$2" alignItems="center">
-                  <Mail size={20} />
-                  <Text fontSize="$4" fontWeight="600">Email</Text>
-                </XStack>
+              <XStack gap="$2" alignItems="center">
+                <Mail size={20} />
+                <Text fontSize="$4" fontWeight="600">Email</Text>
+                {profile.privacy?.showEmail ? (
+                  <PrivacyIndicator level={profile.privacy.showEmail} />
+                ) : null}
                 {isOwnProfile ? (
-                  <Button size="$2" icon={Edit3} onPress={() => router.push('/profile')}>
-                    Edit
-                  </Button>
+                  <Button size="$2" icon={Edit3} chromeless circular onPress={() => router.push('/profile')} />
+                ) : null}
+                {canEdit ? (
+                  <Button
+                    size="$2"
+                    icon={Plus}
+                    chromeless
+                    circular
+                    onPress={() => { setAddingEmail(!addingEmail); setContactError(null) }}
+                  />
                 ) : null}
               </XStack>
               {profile.emails && profile.emails.length > 0 ? (
                 profile.emails.map((emailEntry, index) => (
-                  <Card key={index} padding="$3" backgroundColor="$backgroundHover">
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <YStack flex={1}>
-                        <Text fontSize="$4" fontWeight="500">{emailEntry.email}</Text>
-                        <Text fontSize="$2" theme="alt2">{emailEntry.emailType}</Text>
-                      </YStack>
-                      {!isOwnProfile ? (
-                        <XStack gap="$2">
-                          <Button size="$2" onPress={() => handleEmailClick(emailEntry.email)}>
-                            Email
-                          </Button>
-                          <SuggestEditButton
-                            targetEmail={profile.email}
-                            targetName={profile.name}
-                            field="email"
-                            currentValue={emailEntry.email}
-                            onRequest={(value, msg) => handleSuggestEdit('email', emailEntry.email, value, msg)}
-                            iconOnly
-                          />
-                        </XStack>
-                      ) : null}
-                    </XStack>
-                  </Card>
-                ))
-              ) : (
-                <Card padding="$3" backgroundColor="$backgroundHover">
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <XStack gap="$3" alignItems="center" flex={1}>
-                      <Mail size={20} color="$blue10" />
-                      <Text fontSize="$4" fontWeight="500">{profile.email}</Text>
-                    </XStack>
-                    {!isOwnProfile ? (
-                      <Button size="$2" onPress={() => handleEmailClick(profile.email)}>
-                        Email
-                      </Button>
+                  <XStack key={index} gap="$2" alignItems="center">
+                    <Text
+                      fontSize="$4"
+                      color="$blue10"
+                      textDecorationLine="underline"
+                      cursor="pointer"
+                      onPress={() => handleEmailClick(emailEntry.email)}
+                    >
+                      {emailEntry.email}
+                    </Text>
+                    {canEdit && emailEntry.emailId ? (
+                      <Button
+                        size="$2"
+                        icon={Trash2}
+                        chromeless
+                        circular
+                        disabled={deletingId === `type=email&id=${emailEntry.emailId}`}
+                        onPress={() => deleteContact(`type=email&id=${emailEntry.emailId}`)}
+                      />
+                    ) : !isOwnProfile ? (
+                      <SuggestEditButton
+                        targetEmail={profile.email}
+                        targetName={profile.name}
+                        field="email"
+                        currentValue={emailEntry.email}
+                        onRequest={(value, msg) => handleSuggestEdit('email', emailEntry.email, value, msg)}
+                        iconOnly
+                      />
                     ) : null}
                   </XStack>
-                </Card>
+                ))
+              ) : (
+                <Text
+                  fontSize="$4"
+                  color="$blue10"
+                  textDecorationLine="underline"
+                  cursor="pointer"
+                  onPress={() => handleEmailClick(profile.email)}
+                >
+                  {profile.email}
+                </Text>
               )}
+              {/* Add email form */}
+              {addingEmail ? (
+                <Card padding="$3" backgroundColor="$backgroundHover">
+                  <YStack gap="$2">
+                    <Input
+                      placeholder="Email address"
+                      value={newEmail}
+                      onChangeText={setNewEmail}
+                      autoFocus
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                    {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
+                    <XStack gap="$2" justifyContent="flex-end">
+                      <Button size="$3" icon={X} onPress={() => { setAddingEmail(false); setContactError(null) }} disabled={contactSaving}>
+                        Cancel
+                      </Button>
+                      <Button size="$3" theme="blue" onPress={handleAddEmail} disabled={contactSaving || !newEmail.includes('@')}>
+                        {contactSaving ? 'Adding...' : 'Add'}
+                      </Button>
+                    </XStack>
+                  </YStack>
+                </Card>
+              ) : null}
             </YStack>
           ) : (
-            <Card padding="$3" backgroundColor="$backgroundHover">
-              <XStack gap="$2" alignItems="center">
-                <Lock size={16} />
-                <Mail size={16} color="$gray10" />
-              </XStack>
-            </Card>
+            <XStack gap="$2" alignItems="center">
+              <Lock size={16} />
+              <Mail size={16} color="$gray10" />
+              <Text fontSize="$3" theme="alt2">Email hidden</Text>
+            </XStack>
           )}
 
           {/* Phone Numbers */}
           <Separator />
           {permissions.canViewPhone ? (
             <YStack gap="$3">
-              <XStack gap="$2" alignItems="center" justifyContent="space-between">
-                <XStack gap="$2" alignItems="center">
-                  <Phone size={20} />
-                  <Text fontSize="$4" fontWeight="600">Phone</Text>
-                </XStack>
+              <XStack gap="$2" alignItems="center">
+                <Phone size={20} />
+                <Text fontSize="$4" fontWeight="600">Phone</Text>
+                {profile.privacy?.showPhone ? (
+                  <PrivacyIndicator level={profile.privacy.showPhone} />
+                ) : null}
                 {isOwnProfile ? (
-                  <Button size="$2" icon={Edit3} onPress={() => router.push('/profile')}>
-                    Edit
-                  </Button>
+                  <Button size="$2" icon={Edit3} chromeless circular onPress={() => router.push('/profile')} />
+                ) : null}
+                {canEdit ? (
+                  <Button
+                    size="$2"
+                    icon={Plus}
+                    chromeless
+                    circular
+                    onPress={() => { setAddingPhone(!addingPhone); setContactError(null) }}
+                  />
                 ) : null}
               </XStack>
               {profile.phones && profile.phones.length > 0 ? (
                 profile.phones.map((phone, index) => (
-                  <Card key={index} padding="$3" backgroundColor="$backgroundHover">
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <YStack flex={1}>
-                        <Text fontSize="$4" fontWeight="500">{phone.number}</Text>
-                        <Text fontSize="$2" theme="alt2">
-                          {phone.type}
-                          {phone.isPrimary ? ' • Primary' : ''}
-                          {phone.isHousehold ? ' • Household' : ''}
-                        </Text>
-                      </YStack>
-                      {!isOwnProfile ? (
-                        <XStack gap="$2">
-                          <Button size="$2" onPress={() => handlePhoneClick(phone.number)}>
-                            Call
-                          </Button>
-                          <SuggestEditButton
-                            targetEmail={profile.email}
-                            targetName={profile.name}
-                            field="phone"
-                            currentValue={phone.number}
-                            onRequest={(value, msg) => handleSuggestEdit('phone', phone.number, value, msg)}
-                            iconOnly
-                          />
-                        </XStack>
-                      ) : null}
-                    </XStack>
-                  </Card>
+                  <XStack key={index} gap="$2" alignItems="center">
+                    <Text
+                      fontSize="$4"
+                      color="$blue10"
+                      textDecorationLine="underline"
+                      cursor="pointer"
+                      onPress={() => handlePhoneClick(phone.number)}
+                    >
+                      {phone.number}
+                    </Text>
+                    <Text fontSize="$2" theme="alt2">
+                      {phone.type}
+                      {phone.isPrimary ? ' • Primary' : ''}
+                      {phone.isHousehold ? ' • Household' : ''}
+                    </Text>
+                    {canEdit && phone.phoneId ? (
+                      <Button
+                        size="$2"
+                        icon={Trash2}
+                        chromeless
+                        circular
+                        disabled={deletingId === `type=phone&id=${phone.phoneId}`}
+                        onPress={() => deleteContact(`type=phone&id=${phone.phoneId}`)}
+                      />
+                    ) : !isOwnProfile ? (
+                      <SuggestEditButton
+                        targetEmail={profile.email}
+                        targetName={profile.name}
+                        field="phone"
+                        currentValue={phone.number}
+                        onRequest={(value, msg) => handleSuggestEdit('phone', phone.number, value, msg)}
+                        iconOnly
+                      />
+                    ) : null}
+                  </XStack>
                 ))
               ) : (
                 <Text fontSize="$3" theme="alt2">No phone numbers available.</Text>
               )}
+              {/* Add phone form */}
+              {addingPhone ? (
+                <Card padding="$3" backgroundColor="$backgroundHover">
+                  <YStack gap="$2">
+                    <XStack gap="$2" flexWrap="wrap">
+                      <Select
+                        value={newPhoneType}
+                        onValueChange={setNewPhoneType}
+                        disablePreventBodyScroll
+                      >
+                        <Select.Trigger width={130} iconAfter={ChevronDown}>
+                          <Select.Value placeholder="Type" />
+                        </Select.Trigger>
+                        <Select.Content zIndex={200000}>
+                          <Select.Viewport>
+                            <Select.Group>
+                              {['mobile', 'home', 'work', 'other'].map((t, i) => (
+                                <Select.Item key={t} index={i} value={t}>
+                                  <Select.ItemText>{t.charAt(0).toUpperCase() + t.slice(1)}</Select.ItemText>
+                                </Select.Item>
+                              ))}
+                            </Select.Group>
+                          </Select.Viewport>
+                        </Select.Content>
+                      </Select>
+                      <Input
+                        flex={1}
+                        minWidth={150}
+                        placeholder="Phone number"
+                        value={newPhoneNumber}
+                        onChangeText={setNewPhoneNumber}
+                        autoFocus
+                        keyboardType="phone-pad"
+                      />
+                    </XStack>
+                    {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
+                    <XStack gap="$2" justifyContent="flex-end">
+                      <Button size="$3" icon={X} onPress={() => { setAddingPhone(false); setContactError(null) }} disabled={contactSaving}>
+                        Cancel
+                      </Button>
+                      <Button size="$3" theme="blue" onPress={handleAddPhone} disabled={contactSaving || newPhoneNumber.trim().length < 7}>
+                        {contactSaving ? 'Adding...' : 'Add'}
+                      </Button>
+                    </XStack>
+                  </YStack>
+                </Card>
+              ) : null}
             </YStack>
           ) : (
             <Card padding="$3" backgroundColor="$backgroundHover">
@@ -794,15 +1099,23 @@ export default function MemberProfilePage() {
           <Separator />
           {permissions.canViewAddress ? (
             <YStack gap="$3">
-              <XStack gap="$2" alignItems="center" justifyContent="space-between">
-                <XStack gap="$2" alignItems="center">
-                  <MapPin size={20} />
-                  <Text fontSize="$4" fontWeight="600">Address</Text>
-                </XStack>
+              <XStack gap="$2" alignItems="center">
+                <MapPin size={20} />
+                <Text fontSize="$4" fontWeight="600">Address</Text>
+                {profile.privacy?.showAddress ? (
+                  <PrivacyIndicator level={profile.privacy.showAddress} />
+                ) : null}
                 {isOwnProfile ? (
-                  <Button size="$2" icon={Edit3} onPress={() => router.push('/profile')}>
-                    Edit
-                  </Button>
+                  <Button size="$2" icon={Edit3} chromeless circular onPress={() => router.push('/profile')} />
+                ) : null}
+                {canEdit ? (
+                  <Button
+                    size="$2"
+                    icon={Plus}
+                    chromeless
+                    circular
+                    onPress={() => { setAddingAddress(!addingAddress); setContactError(null) }}
+                  />
                 ) : null}
               </XStack>
               {profile.addresses && profile.addresses.length > 0 ? (
@@ -814,41 +1127,102 @@ export default function MemberProfilePage() {
                   ].filter(Boolean).join('\n')
 
                   return (
-                    <Card key={index} padding="$3" backgroundColor="$backgroundHover">
-                      <XStack justifyContent="space-between" alignItems="flex-start">
-                        <YStack gap="$1" flex={1}>
-                          <Text fontSize="$3" fontWeight="500">
-                            {address.label || address.type}
-                            {address.isPrimary ? ' • Primary' : ''}
-                          </Text>
-                          <Text fontSize="$3">{address.street1}</Text>
-                          {address.street2 ? <Text fontSize="$3">{address.street2}</Text> : null}
-                          <Text fontSize="$3">
-                            {address.city}, {address.province} {address.postalCode}
-                          </Text>
-                        </YStack>
-                        {!isOwnProfile ? (
-                          <XStack gap="$2">
-                            <Button size="$2" onPress={() => handleAddressClick(address)}>
-                              Map
-                            </Button>
-                            <SuggestEditButton
-                              targetEmail={profile.email}
-                              targetName={profile.name}
-                              field="address"
-                              currentValue={fullAddress}
-                              onRequest={(value, msg) => handleSuggestEdit('address', fullAddress, value, msg)}
-                              iconOnly
-                            />
-                          </XStack>
+                    <YStack key={index} gap="$1">
+                      <XStack gap="$2" alignItems="center">
+                        <Text fontSize="$3" fontWeight="500">
+                          {address.label || address.type}
+                          {address.isPrimary ? ' • Primary' : ''}
+                        </Text>
+                        {canEdit && address.addressId ? (
+                          <Button
+                            size="$2"
+                            icon={Trash2}
+                            chromeless
+                            circular
+                            disabled={deletingId === `type=address&id=${address.addressId}`}
+                            onPress={() => deleteContact(`type=address&id=${address.addressId}`)}
+                          />
+                        ) : !isOwnProfile ? (
+                          <SuggestEditButton
+                            targetEmail={profile.email}
+                            targetName={profile.name}
+                            field="address"
+                            currentValue={fullAddress}
+                            onRequest={(value, msg) => handleSuggestEdit('address', fullAddress, value, msg)}
+                            iconOnly
+                          />
                         ) : null}
                       </XStack>
-                    </Card>
+                      <Text
+                        fontSize="$3"
+                        color="$blue10"
+                        textDecorationLine="underline"
+                        cursor="pointer"
+                        onPress={() => handleAddressClick(address)}
+                      >
+                        {address.street1}
+                        {address.street2 ? `, ${address.street2}` : ''}
+                        {`, ${address.city}, ${address.province} ${address.postalCode}`}
+                      </Text>
+                    </YStack>
                   )
                 })
               ) : (
                 <Text fontSize="$3" theme="alt2">No addresses available.</Text>
               )}
+              {/* Add address form */}
+              {addingAddress ? (
+                <Card padding="$3" backgroundColor="$backgroundHover">
+                  <YStack gap="$2">
+                    <Select
+                      value={newAddressType}
+                      onValueChange={setNewAddressType}
+                      disablePreventBodyScroll
+                    >
+                      <Select.Trigger width={150} iconAfter={ChevronDown}>
+                        <Select.Value placeholder="Type" />
+                      </Select.Trigger>
+                      <Select.Content zIndex={200000}>
+                        <Select.Viewport>
+                          <Select.Group>
+                            {['home', 'work', 'mailing', 'other'].map((t, i) => (
+                              <Select.Item key={t} index={i} value={t}>
+                                <Select.ItemText>{t.charAt(0).toUpperCase() + t.slice(1)}</Select.ItemText>
+                              </Select.Item>
+                            ))}
+                          </Select.Group>
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select>
+                    <Input
+                      placeholder="Street address"
+                      value={newStreet1}
+                      onChangeText={setNewStreet1}
+                      autoFocus
+                    />
+                    <XStack gap="$2" flexWrap="wrap">
+                      <Input flex={1} minWidth={120} placeholder="City" value={newCity} onChangeText={setNewCity} />
+                      <Input width={80} placeholder="Province" value={newProvince} onChangeText={setNewProvince} />
+                      <Input width={100} placeholder="Postal code" value={newPostalCode} onChangeText={setNewPostalCode} />
+                    </XStack>
+                    <Input placeholder="Country" value={newCountry} onChangeText={setNewCountry} />
+                    {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
+                    <XStack gap="$2" justifyContent="flex-end">
+                      <Button size="$3" icon={X} onPress={() => { setAddingAddress(false); setContactError(null) }} disabled={contactSaving}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="$3"
+                        theme="blue"
+                        onPress={handleAddAddress}
+                        disabled={contactSaving || !newStreet1.trim() || !newCity.trim() || !newProvince.trim() || !newPostalCode.trim()}
+                      >
+                        {contactSaving ? 'Adding...' : 'Add'}
+                      </Button>
+                    </XStack>
+                  </YStack>
+                </Card>
+              ) : null}
             </YStack>
           ) : (
             <Card padding="$3" backgroundColor="$backgroundHover">
@@ -863,15 +1237,23 @@ export default function MemberProfilePage() {
           <Separator />
           {permissions.canViewFamily ? (
             <YStack gap="$3">
-              <XStack gap="$2" alignItems="center" justifyContent="space-between">
-                <XStack gap="$2" alignItems="center">
-                  <Users size={20} />
-                  <Text fontSize="$4" fontWeight="600">Family</Text>
-                </XStack>
+              <XStack gap="$2" alignItems="center">
+                <Users size={20} />
+                <Text fontSize="$4" fontWeight="600">Family</Text>
+                {profile.privacy?.showFamily ? (
+                  <PrivacyIndicator level={profile.privacy.showFamily} />
+                ) : null}
                 {isOwnProfile ? (
-                  <Button size="$2" icon={Edit3} onPress={() => router.push('/profile')}>
-                    Edit
-                  </Button>
+                  <Button size="$2" icon={Edit3} chromeless circular onPress={() => router.push('/profile')} />
+                ) : null}
+                {canEdit ? (
+                  <Button
+                    size="$2"
+                    icon={Plus}
+                    chromeless
+                    circular
+                    onPress={() => { setAddingFamily(!addingFamily); setContactError(null) }}
+                  />
                 ) : null}
               </XStack>
               {profile.family && profile.family.length > 0 ? (
@@ -893,12 +1275,69 @@ export default function MemberProfilePage() {
                           {member.relationshipType.replace('_', ' ')}
                         </Text>
                       </YStack>
+                      {canEdit ? (
+                        <Button
+                          size="$2"
+                          icon={Trash2}
+                          chromeless
+                          circular
+                          disabled={deletingId === `type=relationship&targetEmail=${encodeURIComponent(member.email)}&relationshipType=${member.relationshipType}`}
+                          onPress={(e: any) => {
+                            e.stopPropagation()
+                            deleteContact(`type=relationship&targetEmail=${encodeURIComponent(member.email)}&relationshipType=${member.relationshipType}`)
+                          }}
+                        />
+                      ) : null}
                     </XStack>
                   </Card>
                 ))
               ) : (
                 <Text fontSize="$3" theme="alt2">No family members listed.</Text>
               )}
+              {/* Add family form */}
+              {addingFamily ? (
+                <Card padding="$3" backgroundColor="$backgroundHover">
+                  <YStack gap="$2">
+                    <Select
+                      value={newRelationType}
+                      onValueChange={setNewRelationType}
+                      disablePreventBodyScroll
+                    >
+                      <Select.Trigger width={180} iconAfter={ChevronDown}>
+                        <Select.Value placeholder="Relationship" />
+                      </Select.Trigger>
+                      <Select.Content zIndex={200000}>
+                        <Select.Viewport>
+                          <Select.Group>
+                            {['spouse', 'parent', 'child', 'sibling', 'grandparent', 'grandchild', 'extended_family', 'household_member'].map((t, i) => (
+                              <Select.Item key={t} index={i} value={t}>
+                                <Select.ItemText>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</Select.ItemText>
+                              </Select.Item>
+                            ))}
+                          </Select.Group>
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select>
+                    <Input
+                      placeholder="Family member's email"
+                      value={newFamilyEmail}
+                      onChangeText={setNewFamilyEmail}
+                      autoFocus
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                    {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
+                    <XStack gap="$2" justifyContent="flex-end">
+                      <Button size="$3" icon={X} onPress={() => { setAddingFamily(false); setContactError(null) }} disabled={contactSaving}>
+                        Cancel
+                      </Button>
+                      <Button size="$3" theme="blue" onPress={handleAddFamily} disabled={contactSaving || !newFamilyEmail.includes('@')}>
+                        {contactSaving ? 'Adding...' : 'Add'}
+                      </Button>
+                    </XStack>
+                  </YStack>
+                </Card>
+              ) : null}
             </YStack>
           ) : (
             <Card padding="$3" backgroundColor="$backgroundHover">

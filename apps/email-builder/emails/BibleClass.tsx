@@ -52,6 +52,21 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   // Find the next actual class (skipping any "no class" entries)
   const nextActualClass = hasNoClass && nextEvent && !isNoClass(nextEvent) ? nextEvent : undefined
 
+  // Joint Bible Class logic
+  const isJoint = !!currentEvent?.Host
+  const hasInPerson = !!currentEvent?.InPerson
+  const hasCustomZoom = !!(currentEvent?.ZoomURL || currentEvent?.MeetingID)
+  // Show default Toronto East Zoom when: not joint, OR joint without InPerson and without custom Zoom
+  const showDefaultZoom = !isJoint || (!hasInPerson && !hasCustomZoom)
+  // Show custom (host) Zoom when host provides Zoom details
+  const showHostZoom = hasCustomZoom
+  // Hide all Zoom only when InPerson is set but no custom Zoom
+  const hideZoom = hasInPerson && !hasCustomZoom
+
+  const headingText = isJoint
+    ? `Special Joint Bible Class with ${currentEvent.Host}`
+    : 'Toronto East Bible Class'
+
   return (
     <Html lang="en">
       <Head>
@@ -60,11 +75,11 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
       <Preview>{hasNoClass ? 'No Bible Class Tonight' : 'Bible Class Tonight'}</Preview>
       <Body style={main}>
         <Section style={header}>
-          <Heading>Toronto East Bible Class</Heading>
+          <Heading>{headingText}</Heading>
         </Section>
 
         {/* Optional Note Section */}
-        {note && note.trim() && (
+        {note && note.trim() ? (
           <Section style={{
             backgroundColor: '#fff3cd',
             padding: '16px',
@@ -87,7 +102,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
               <AutoLinkText text={note} />
             </Text>
           </Section>
-        )}
+        ) : null}
 
         <Container style={container} className="container">
           {hasNoClass ? (
@@ -97,7 +112,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
                   There is no scheduled Bible class tonight.
                 </Text>
               </Section>
-              {nextActualClass && (
+              {nextActualClass ? (
                 <Section style={{ marginTop: '24px' }}>
                   <Text style={defaultText}>
                     <strong>The next scheduled Bible Class will be:</strong>
@@ -105,34 +120,94 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
                     {nextActualClass.Date.toString()} at 7:30pm
                     <br />
                     Led by Brother {nextActualClass.Speaker}
-                    {nextActualClass.Topic && (
+                    {nextActualClass.Topic ? (
                       <>
                         <br />
                         <em>{nextActualClass.Topic}</em>
                       </>
-                    )}
+                    ) : null}
                   </Text>
                 </Section>
-              )}
+              ) : null}
             </>
           ) : (
             <>
               <Section style={program}>
                 <Heading style={defaultText}>
-                  Please join us on Zoom for our Weekly Bible Class
+                  {isJoint
+                    ? `Please join us for a Special Joint Bible Class with ${currentEvent.Host}`
+                    : 'Please join us on Zoom for our Weekly Bible Class'}
                   <br />
                   7:30pm EST.
                 </Heading>
               </Section>
               <Row>
                 <Column>
-                  {currentEvent && <BibleClassProgram event={currentEvent} />}
+                  {currentEvent ? <BibleClassProgram event={currentEvent} /> : null}
                 </Column>
               </Row>
             </>
           )}
         </Container>
-        {!hasNoClass && (
+
+        {/* In-Person Location Section */}
+        {!hasNoClass && hasInPerson ? (
+          <Container style={container} className="container">
+            <Section style={{
+              backgroundColor: '#e8f5e9',
+              padding: '16px',
+              borderRadius: '4px',
+              marginBottom: '8px',
+            }}>
+              <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '16px', margin: '0 0 8px 0' }}>
+                In Person{currentEvent.Host ? ` at ${currentEvent.Host}` : ''}
+              </Text>
+              <Text style={{ ...defaultText, margin: '0' }}>
+                {currentEvent.resolvedAddress || currentEvent.InPerson}
+              </Text>
+            </Section>
+          </Container>
+        ) : null}
+
+        {/* Host Zoom Section (custom Zoom from host ecclesia) */}
+        {!hasNoClass && showHostZoom ? (
+          <Container style={container} className="container zoom-info">
+            <Section style={{
+              backgroundColor: '#fff3cd',
+              padding: '12px 16px',
+              borderRadius: '4px',
+              marginBottom: '12px',
+            }}>
+              <Text style={{ ...defaultText, margin: '0', fontStyle: 'italic' }}>
+                Note: This week&apos;s Bible Class uses {currentEvent.Host}&apos;s Zoom meeting room.
+              </Text>
+            </Section>
+            <Text style={defaultText}>
+              {currentEvent.ZoomURL ? (
+                <>
+                  <Link href={currentEvent.ZoomURL} style={link}>
+                    Click to join Zoom
+                  </Link>
+                  <br />
+                </>
+              ) : null}
+              {currentEvent.MeetingID ? (
+                <>
+                  Meeting ID: {currentEvent.MeetingID}
+                  <br />
+                </>
+              ) : null}
+              {currentEvent.MeetingPwd ? (
+                <>
+                  Password: {currentEvent.MeetingPwd}
+                </>
+              ) : null}
+            </Text>
+          </Container>
+        ) : null}
+
+        {/* Default Toronto East Zoom Section */}
+        {!hasNoClass && !hideZoom && showDefaultZoom && !showHostZoom ? (
           <Container style={container} className="container zoom-info">
             <Text style={defaultText}>
               <Link
@@ -154,7 +229,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
               +1 647 558 0588 Canada (Toronto)
             </Text>
           </Container>
-        )}
+        ) : null}
         <Footer />
       </Body>
     </Html>

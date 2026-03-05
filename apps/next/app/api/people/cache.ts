@@ -1,15 +1,24 @@
 /** Shared in-memory cache for the people list API */
 
 interface MemberListItem {
+  id: string
   email: string
   name: string
   lastName: string
   ecclesia?: string
 }
 
+interface GuestCountEntry {
+  ecclesia: string | undefined
+  count: number
+}
+
 interface CachedMembers {
   members: MemberListItem[]
   ecclesias: string[]
+  /** Per-ecclesia guest counts for recorder filtering, plus a total for admin/owner */
+  guestCounts: GuestCountEntry[]
+  guestTotal: number
   timestamp: number
 }
 

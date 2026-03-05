@@ -1,5 +1,4 @@
 import { revalidateTag } from 'next/cache'
-import { googleSheetsConfig } from '@my/app/config/google-sheets'
 
 /**
  * Cache tags for different data types to enable selective invalidation
@@ -146,13 +145,15 @@ export async function invalidateAllCache(): Promise<void> {
  * Determine sheet type from Google Sheets ID
  */
 export function getSheetTypeFromId(sheetId: string): string {
+  // Lazy import to avoid eagerly loading Google service account file
+  const { googleSheetsConfig } = require('@my/app/config/google-sheets')
   const sheetType = googleSheetsConfig.getSheetType(sheetId)
-  
+
   if (!sheetType) {
     console.warn(`⚠️ Unknown sheet ID: ${sheetId}`)
     return 'unknown'
   }
-  
+
   console.log(`📋 Mapped sheet ID ${sheetId} to type: ${sheetType}`)
   return sheetType
 }
@@ -161,6 +162,7 @@ export function getSheetTypeFromId(sheetId: string): string {
  * Get Google Sheet ID from sheet type (reverse mapping)
  */
 export function getSheetIdFromType(sheetType: string): string | null {
+  const { googleSheetsConfig } = require('@my/app/config/google-sheets')
   return googleSheetsConfig.getSheetId(sheetType)
 }
 
@@ -168,5 +170,6 @@ export function getSheetIdFromType(sheetType: string): string | null {
  * Get all configured Google Sheet IDs and their types
  */
 export function getAllSheetMappings(): Array<{id: string, type: string, name: string}> {
+  const { googleSheetsConfig } = require('@my/app/config/google-sheets')
   return googleSheetsConfig.getAllSheets()
 }

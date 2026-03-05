@@ -3,6 +3,7 @@ import type {
   ConnectionRecord,
   ConnectionStatus,
   ConnectionQueryResult,
+  VisibilityLevel,
 } from '../types'
 
 /**
@@ -163,6 +164,130 @@ export class ConnectionRepository extends BaseRepository<ConnectionRecord> {
     const pk = `USER#${userEmail}`
     const sk = `CONNECTION#${targetEmail}`
     return this.update(pk, sk, { status })
+  }
+
+  // ===== CONNECTION REQUEST FLOW =====
+
+  /**
+   * Create a pending connection request (both directions)
+   * Creates TWO records: one under requester, one under target
+   */
+  async requestConnection(
+    requesterEmail: string,
+    targetEmail: string,
+    connectionToken: string
+  ): Promise<void> {
+    const now = new Date().toISOString()
+
+    // Record under requester: "I sent a request to target"
+    const requesterRecord = {
+      pkey: `USER#${requesterEmail}`,
+      skey: `CONNECTION#${targetEmail}`,
+      targetEmail,
+      status: 'pending' as ConnectionStatus,
+      initiatedBy: requesterEmail,
+      connectionToken,
+      createdAt: now,
+      lastUpdated: now,
+      version: 0,
+    }
+
+    // Record under target: "I received a request from requester"
+    const targetRecord = {
+      pkey: `USER#${targetEmail}`,
+      skey: `CONNECTION#${requesterEmail}`,
+      targetEmail: requesterEmail,
+      status: 'pending' as ConnectionStatus,
+      initiatedBy: requesterEmail,
+      connectionToken,
+      createdAt: now,
+      lastUpdated: now,
+      version: 0,
+    }
+
+    await Promise.all([
+      this.put(requesterRecord as any),
+      this.put(targetRecord as any),
+    ])
+  }
+
+  /**
+   * Accept a connection request — updates BOTH records to active
+   */
+  async acceptConnection(userEmail: string, requesterEmail: string): Promise<void> {
+    const now = new Date().toISOString()
+
+    await Promise.all([
+      this.update(`USER#${userEmail}`, `CONNECTION#${requesterEmail}`, {
+        status: 'active' as ConnectionStatus,
+        connectionToken: undefined,
+        lastUpdated: now,
+      } as any),
+      this.update(`USER#${requesterEmail}`, `CONNECTION#${userEmail}`, {
+        status: 'active' as ConnectionStatus,
+        connectionToken: undefined,
+        lastUpdated: now,
+      } as any),
+    ])
+  }
+
+  /**
+   * Decline a connection request — deletes BOTH pending records
+   */
+  async declineConnection(userEmail: string, requesterEmail: string): Promise<void> {
+    await Promise.all([
+      this.delete(`USER#${userEmail}`, `CONNECTION#${requesterEmail}`),
+      this.delete(`USER#${requesterEmail}`, `CONNECTION#${userEmail}`),
+    ])
+  }
+
+  /**
+   * Get pending requests received by this user (from others)
+   */
+  async getPendingRequests(email: string): Promise<ConnectionRecord[]> {
+    const result = await this.getConnections(email)
+    return result.items.filter(
+      conn => conn.status === 'pending' && conn.initiatedBy !== email
+    )
+  }
+
+  /**
+   * Get the connection status between two users
+   */
+  async getConnectionStatus(
+    userEmail: string,
+    targetEmail: string
+  ): Promise<'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked'> {
+    const connection = await this.getConnection(userEmail, targetEmail)
+
+    if (!connection) return 'none'
+    if (connection.status === 'blocked') return 'blocked'
+    if (connection.status === 'active') return 'connected'
+    if (connection.status === 'pending') {
+      return connection.initiatedBy === userEmail ? 'pending_sent' : 'pending_received'
+    }
+    return 'none'
+  }
+
+  /**
+   * Check if target has any privacy fields set to connection-gated levels
+   * Returns true if a Connect button would be useful
+   */
+  hasConnectionGatedFields(privacySettings: {
+    showName: VisibilityLevel
+    showPhone: VisibilityLevel
+    showAddress: VisibilityLevel
+    showEmail: VisibilityLevel
+    showFamily: VisibilityLevel
+  }): boolean {
+    const connectionLevels: VisibilityLevel[] = ['ecclesia_and_connections', 'connections_only']
+    return (
+      connectionLevels.includes(privacySettings.showName) ||
+      connectionLevels.includes(privacySettings.showPhone) ||
+      connectionLevels.includes(privacySettings.showAddress) ||
+      connectionLevels.includes(privacySettings.showEmail) ||
+      connectionLevels.includes(privacySettings.showFamily)
+    )
   }
 }
 

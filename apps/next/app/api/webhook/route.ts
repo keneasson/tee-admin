@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WebhookSyncService } from '@my/app/provider/sync/webhook-sync-service'
 import { googleSheetsConfig } from '@my/app/config/google-sheets'
 
-// Public webhook handler using proper WebhookSyncService
+// Webhook handler — requires WEBHOOK_SECRET for authentication
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
-  
+
   try {
+    // Validate webhook secret
+    const webhookSecret = process.env.WEBHOOK_SECRET
+    const authHeader = request.headers.get('authorization') || request.headers.get('x-webhook-secret')
+    if (webhookSecret && authHeader !== `Bearer ${webhookSecret}` && authHeader !== webhookSecret) {
+      return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 })
+    }
+
     const payload = await request.json()
-    
 
     // Extract sheet ID from payload
     const sheetId = payload.sheetId || payload.spreadsheetId
@@ -65,18 +71,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Health check (no auth required)
+// Health check (no auth required — does not expose env details)
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     status: 'healthy',
     service: 'google-sheets-webhook',
     timestamp: new Date().toISOString(),
-    endpoint: '/api/webhook',
-    environment: {
-      hasWebhookSecret: !!process.env.WEBHOOK_SECRET,
-      configuredSheets: googleSheetsConfig.getAllSheets().map(s => s.type),
-      hasGoogleServiceAccountKey: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE,
-      hasAwsCredentials: !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY),
-    }
   })
 }

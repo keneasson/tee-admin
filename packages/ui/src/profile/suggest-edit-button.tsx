@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, TextArea, Input, Spinner, Sheet, Label, ScrollView } from 'tamagui'
+import { YStack, XStack, Text, Card, TextArea, Input, Spinner, Sheet, Label, ScrollView } from 'tamagui'
+import { Button } from '../Button'
 import { Edit3, X, User, Phone, MapPin, Mail } from '@tamagui/lucide-icons'
 import type { EditRequestField } from '@my/app/provider/dynamodb/types'
 

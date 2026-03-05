@@ -2,20 +2,22 @@
 
 import { useSession } from 'next-auth/react'
 
-type UserRole = 'GUEST' | 'MEMBER' | 'ADMIN' | 'OWNER'
+type UserRole = 'GUEST' | 'MEMBER' | 'REP' | 'RECORDER' | 'ADMIN' | 'OWNER'
 type RequiredRole = UserRole | UserRole[]
 
 // Hook for checking roles in Next.js components
 export function useUserRole() {
   const { data: session, status } = useSession()
   const userRole = session?.user?.role
+  // RB is a designation, not a hierarchy role — sourced from JWT/session
+  const isRecordingBrother = !!(session?.user as any)?.isRecordingBrother
 
   const hasRequiredRole = (
     requiredRole: RequiredRole | undefined,
     exactMatch: boolean = false
   ): boolean => {
     // Role hierarchy for permission checking (higher index = more permissions)
-    const ROLE_HIERARCHY: UserRole[] = ['GUEST', 'MEMBER', 'ADMIN', 'OWNER']
+    const ROLE_HIERARCHY: UserRole[] = ['GUEST', 'MEMBER', 'REP', 'RECORDER', 'ADMIN', 'OWNER']
 
     // If no role required, allow access
     if (!requiredRole) return true
@@ -51,10 +53,17 @@ export function useUserRole() {
     isLoading: status === 'loading',
     isGuest: normalizedRole === 'GUEST',
     isMember: normalizedRole === 'MEMBER',
+    isRep: normalizedRole === 'REP',
+    isRecorder: normalizedRole === 'RECORDER',
     isAdmin: normalizedRole === 'ADMIN',
     isOwner: normalizedRole === 'OWNER',
+    isRecordingBrother,
     hasRole: hasRequiredRole,
     isAdminOrOwner: normalizedRole === 'ADMIN' || normalizedRole === 'OWNER',
-    isMemberOrHigher: hasRequiredRole('MEMBER', false)
+    // RB is a designation: isRecordingBrother OR role-hierarchy admin/owner
+    isRecorderOrHigher: isRecordingBrother || hasRequiredRole('ADMIN', false),
+    // RB or rep or admin/owner
+    isRepOrHigher: isRecordingBrother || hasRequiredRole('REP', false),
+    isMemberOrHigher: hasRequiredRole('MEMBER', false),
   }
 }

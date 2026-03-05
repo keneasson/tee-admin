@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { YStack, XStack, Dialog, Button, Text, Input, ScrollView, Separator } from 'tamagui'
+import { YStack, XStack, Dialog, Text, Input, ScrollView, Separator } from 'tamagui'
+import { Button } from '../Button'
 import { Search, User, Mail, X, AlertTriangle, MapPin } from '@tamagui/lucide-icons'
 
 type EmailStatus = 'active' | 'archived'

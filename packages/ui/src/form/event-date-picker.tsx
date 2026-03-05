@@ -1,6 +1,7 @@
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 import React, { useState, useRef, useEffect } from 'react'
-import { Label, Text, YStack, XStack, Button, Popover, Card, Select, Adapt, Sheet, Checkbox, ScrollView } from 'tamagui'
+import { Label, Text, YStack, XStack, Popover, Card, Select, Adapt, Sheet, Checkbox, ScrollView } from 'tamagui'
+import { Button } from '../Button'
 import { Calendar, Clock, ChevronDown, ChevronUp, Check } from '@tamagui/lucide-icons'
 
 interface EventDatePickerProps<T extends FieldValues> {
@@ -60,7 +61,15 @@ function CalendarGrid({
         borderWidth={isToday && !isSelected ? 1 : 0}
         borderColor="$blue10"
         onPress={() => onDateSelect(date)}
-        pressStyle={{ scale: 0.95 }}
+        hoverStyle={{
+          opacity: 1,
+          backgroundColor: isSelected ? '$blue9' : isToday ? '$blue3' : '$gray3',
+        }}
+        pressStyle={{
+          opacity: 1,
+          scale: 0.95,
+          backgroundColor: isSelected ? '$blue8' : isToday ? '$blue4' : '$gray4',
+        }}
       >
         {day}
       </Button>
@@ -184,13 +193,11 @@ export function EventDatePicker<T extends FieldValues>({
 
   const handleDateSelect = (date: Date) => {
     setTempDate(date)
-    if (!includeTime || hidesTimes) {
-      // For date-only or hidden times, close popover and defer onChange until dismiss
-      setIsOpen(false)
-    } else {
+    if (includeTime && !hidesTimes) {
       // For datetime, update the date but keep the current time
       updateDateTime(date, tempHour, tempMinute, tempPeriod)
     }
+    // Never auto-close — user must press "Done" to save and close
   }
   
   // Handle popover close - this is where we trigger onChange for date-only picks

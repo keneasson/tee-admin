@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
-import { Section, Text, YStack, XStack, Heading, Separator, Spinner, Tabs } from '@my/ui'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { Section, Text, YStack, XStack, Heading, Separator, Spinner, Tabs, Card, Input, Button } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
 import { PhoneManager, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
@@ -10,6 +10,7 @@ import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/fami
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
 import { ContactRequestsList } from '@my/ui/src/profile/contact-requests-list'
+import { Church, Search, Pencil, Check, X, User } from '@tamagui/lucide-icons'
 import type { AddressType, PhoneType, RelationshipType, VisibilityLevel } from '@my/app/provider/dynamodb/types'
 
 interface UserProfileProps {
@@ -55,6 +56,7 @@ interface PrivacySettingsData {
   showEmail: VisibilityLevel
   showFamily: VisibilityLevel
   allowContactRequests: boolean
+  allowConnectionRequests: boolean
   preferredContactMethod: 'email' | 'phone' | 'either'
 }
 
@@ -86,12 +88,29 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [privacySettings, setPrivacySettings] = useState<PrivacySettingsData | null>(null)
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([])
   const [activeTab, setActiveTab] = useState('contact')
+  const [displayName, setDisplayName] = useState<string>(userName || '')
+  const [ecclesia, setEcclesia] = useState<string>(userEcclesia || '')
+  const [editingEcclesia, setEditingEcclesia] = useState(false)
+  const [ecclesiaInput, setEcclesiaInput] = useState('')
+  const [ecclesiaSuggestions, setEcclesiaSuggestions] = useState<Array<{ name: string; city: string; province: string }>>([])
+  const [showEcclesiaDrop, setShowEcclesiaDrop] = useState(false)
+  const [ecclesiaSearching, setEcclesiaSearching] = useState(false)
+  const [savingEcclesia, setSavingEcclesia] = useState(false)
+  const [ecclesiaError, setEcclesiaError] = useState('')
+  const ecclesiaTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [editingName, setEditingName] = useState(false)
+  const [firstNameInput, setFirstNameInput] = useState('')
+  const [lastNameInput, setLastNameInput] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState('')
 
   // Fetch all user data
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [addressesRes, phonesRes, emailsRes, relationshipsRes, connectionsRes, privacyRes, requestsRes] = await Promise.all([
+      const [addressesRes, phonesRes, emailsRes, relationshipsRes, connectionsRes, privacyRes, requestsRes, profileRes] = await Promise.all([
         fetch('/api/user/addresses'),
         fetch('/api/user/phones'),
         fetch('/api/user/emails'),
@@ -99,6 +118,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         fetch('/api/user/connections'),
         fetch('/api/user/privacy'),
         fetch('/api/contact-requests'),
+        fetch('/api/user/profile'),
       ])
 
       if (addressesRes.ok) {
@@ -141,6 +161,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       if (requestsRes.ok) {
         const data = await requestsRes.json()
         setContactRequests(data.requests || [])
+      }
+
+      if (profileRes.ok) {
+        const data = await profileRes.json()
+        if (data.user?.name) {
+          setDisplayName(data.user.name)
+        }
+        if (data.user?.firstName) {
+          setFirstName(data.user.firstName)
+        }
+        if (data.user?.lastName) {
+          setLastName(data.user.lastName)
+        }
+        if (data.user?.ecclesia) {
+          setEcclesia(data.user.ecclesia)
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
@@ -373,6 +409,123 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
+  // Name handlers
+  const startEditingName = () => {
+    setFirstNameInput(firstName)
+    setLastNameInput(lastName)
+    setEditingName(true)
+    setNameError('')
+  }
+
+  const cancelEditingName = () => {
+    setEditingName(false)
+    setNameError('')
+  }
+
+  const saveName = async () => {
+    if (!firstNameInput.trim() || !lastNameInput.trim()) {
+      setNameError('Both first and last name are required')
+      return
+    }
+    setSavingName(true)
+    setNameError('')
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: firstNameInput.trim(),
+          lastName: lastNameInput.trim(),
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFirstName(data.firstName)
+        setLastName(data.lastName)
+        setDisplayName(data.displayName)
+        setEditingName(false)
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }))
+        setNameError(data.error || `Save failed (${res.status})`)
+      }
+    } catch {
+      setNameError('Network error — please try again')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  // Ecclesia handlers
+  const startEditingEcclesia = () => {
+    setEcclesiaInput(ecclesia)
+    setEditingEcclesia(true)
+  }
+
+  const cancelEditingEcclesia = () => {
+    setEditingEcclesia(false)
+    setEcclesiaSuggestions([])
+    setShowEcclesiaDrop(false)
+  }
+
+  const handleEcclesiaInput = (text: string) => {
+    setEcclesiaInput(text)
+    setEcclesiaError('')
+    if (ecclesiaTimeoutRef.current) clearTimeout(ecclesiaTimeoutRef.current)
+
+    if (text.length < 3) {
+      setEcclesiaSuggestions([])
+      setShowEcclesiaDrop(false)
+      return
+    }
+
+    ecclesiaTimeoutRef.current = setTimeout(async () => {
+      setEcclesiaSearching(true)
+      try {
+        const res = await fetch(`/api/ecclesia/search?q=${encodeURIComponent(text)}&limit=5`)
+        const data = await res.json()
+        if (data.success && data.data) {
+          setEcclesiaSuggestions(data.data)
+          setShowEcclesiaDrop(true)
+        }
+      } catch {
+        // ignore search errors
+      } finally {
+        setEcclesiaSearching(false)
+      }
+    }, 300)
+  }
+
+  const selectEcclesiaSuggestion = (name: string) => {
+    setEcclesiaInput(name)
+    setShowEcclesiaDrop(false)
+    setEcclesiaSuggestions([])
+  }
+
+  const saveEcclesia = async () => {
+    if (!ecclesiaInput.trim()) return
+    setSavingEcclesia(true)
+    setEcclesiaError('')
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ecclesia: ecclesiaInput.trim() }),
+      })
+      if (res.ok) {
+        setEcclesia(ecclesiaInput.trim())
+        setEditingEcclesia(false)
+        setEcclesiaError('')
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }))
+        setEcclesiaError(data.error || `Save failed (${res.status})`)
+      }
+    } catch (err) {
+      setEcclesiaError('Network error — please try again')
+    } finally {
+      setSavingEcclesia(false)
+    }
+  }
+
   if (loading) {
     return (
       <Wrapper>
@@ -395,10 +548,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {/* Header */}
           <YStack gap="$2">
             <Heading size={5}>My Profile</Heading>
-            <Text fontSize="$4">{userName || userEmail}</Text>
+            <Text fontSize="$4">{displayName || userName || userEmail}</Text>
             <XStack gap="$4">
               <Text fontSize="$3" theme="alt2">Role: {userRole || 'Guest'}</Text>
-              {userEcclesia ? <Text fontSize="$3" theme="alt2">Ecclesia: {userEcclesia}</Text> : null}
+              {ecclesia ? <Text fontSize="$3" theme="alt2">{ecclesia}</Text> : null}
             </XStack>
           </YStack>
 
@@ -437,6 +590,151 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
             <Tabs.Content value="contact">
               <YStack gap="$6" paddingTop="$4" paddingBottom="$8">
+                {/* Name */}
+                <YStack gap="$3">
+                  {editingName ? (
+                    <Card padding="$3" backgroundColor="$backgroundHover">
+                      <YStack gap="$2">
+                        <Input
+                          value={firstNameInput}
+                          onChangeText={(text) => { setFirstNameInput(text); setNameError('') }}
+                          placeholder="First name"
+                          autoFocus
+                        />
+                        <Input
+                          value={lastNameInput}
+                          onChangeText={(text) => { setLastNameInput(text); setNameError('') }}
+                          placeholder="Last name"
+                        />
+                        {nameError ? (
+                          <Text fontSize="$2" color="$red10">{nameError}</Text>
+                        ) : null}
+                        <XStack gap="$2" justifyContent="flex-end">
+                          <Button size="$2" icon={X} onPress={cancelEditingName} disabled={savingName}>
+                            Cancel
+                          </Button>
+                          <Button
+                            size="$2"
+                            icon={Check}
+                            theme="blue"
+                            onPress={saveName}
+                            disabled={savingName || !firstNameInput.trim() || !lastNameInput.trim()}
+                          >
+                            {savingName ? 'Saving...' : 'Save'}
+                          </Button>
+                        </XStack>
+                      </YStack>
+                    </Card>
+                  ) : (
+                    <Card padding="$3" backgroundColor="$backgroundHover">
+                      <XStack gap="$3" alignItems="center" justifyContent="space-between">
+                        <XStack gap="$3" alignItems="center" flex={1}>
+                          <User size={20} color="$blue10" />
+                          <Text fontSize="$4" fontWeight="500">
+                            {displayName || 'No name set'}
+                          </Text>
+                        </XStack>
+                        <Button size="$2" icon={Pencil} chromeless circular onPress={startEditingName} />
+                      </XStack>
+                    </Card>
+                  )}
+                </YStack>
+
+                {/* Ecclesia */}
+                <YStack gap="$3">
+                  {editingEcclesia ? (
+                    <Card padding="$3" backgroundColor="$backgroundHover">
+                      <YStack gap="$2" position="relative">
+                        <XStack position="relative">
+                          <Input
+                            flex={1}
+                            value={ecclesiaInput}
+                            onChangeText={handleEcclesiaInput}
+                            placeholder="Type ecclesia name..."
+                            autoComplete="off"
+                            autoFocus
+                            onFocus={() => {
+                              if (ecclesiaInput.length >= 3 && ecclesiaSuggestions.length > 0) {
+                                setShowEcclesiaDrop(true)
+                              }
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => setShowEcclesiaDrop(false), 200)
+                            }}
+                          />
+                          <XStack position="absolute" right="$2" top={0} bottom={0} alignItems="center">
+                            {ecclesiaSearching ? (
+                              <Spinner size="small" />
+                            ) : (
+                              <Search size={16} color="$gray10" />
+                            )}
+                          </XStack>
+                        </XStack>
+                        {showEcclesiaDrop && ecclesiaSuggestions.length > 0 ? (
+                          <YStack
+                            position="absolute"
+                            top="100%"
+                            left={0}
+                            right={0}
+                            marginTop="$1"
+                            backgroundColor="$background"
+                            borderWidth={1}
+                            borderColor="$borderColor"
+                            borderRadius="$3"
+                            maxHeight={200}
+                            overflow="hidden"
+                            zIndex={99999}
+                            elevation={5}
+                          >
+                            {ecclesiaSuggestions.map((s) => (
+                              <Button
+                                key={`${s.name}-${s.city}`}
+                                chromeless
+                                justifyContent="flex-start"
+                                paddingHorizontal="$3"
+                                paddingVertical="$2"
+                                borderRadius={0}
+                                hoverStyle={{ backgroundColor: '$backgroundHover' }}
+                                pressStyle={{ backgroundColor: '$backgroundHover' }}
+                                onPress={() => selectEcclesiaSuggestion(s.name)}
+                              >
+                                <YStack alignItems="flex-start" gap="$0.5">
+                                  <Text fontSize="$3" fontWeight="600">{s.name}</Text>
+                                  <Text fontSize="$2" theme="alt2">{s.city}, {s.province}</Text>
+                                </YStack>
+                              </Button>
+                            ))}
+                          </YStack>
+                        ) : null}
+                        {ecclesiaError ? (
+                          <Text fontSize="$2" color="$red10">{ecclesiaError}</Text>
+                        ) : null}
+                        <XStack gap="$2" justifyContent="flex-end">
+                          <Button size="$2" icon={X} onPress={cancelEditingEcclesia} disabled={savingEcclesia}>
+                            Cancel
+                          </Button>
+                          <Button size="$2" icon={Check} theme="blue" onPress={saveEcclesia} disabled={savingEcclesia || !ecclesiaInput.trim()}>
+                            {savingEcclesia ? 'Saving...' : 'Save'}
+                          </Button>
+                        </XStack>
+                      </YStack>
+                    </Card>
+                  ) : (
+                    <Card padding="$3" backgroundColor="$backgroundHover">
+                      <XStack gap="$3" alignItems="center" justifyContent="space-between">
+                        <XStack gap="$3" alignItems="center" flex={1}>
+                          <Church size={20} color="$blue10" />
+                          <Text fontSize="$4" fontWeight="500">
+                            {ecclesia || 'No ecclesia set'}
+                          </Text>
+                        </XStack>
+                        <Button size="$2" icon={Pencil} chromeless circular onPress={startEditingEcclesia} />
+                      </XStack>
+                    </Card>
+                  )}
+                </YStack>
+
+                <Separator />
                 <EmailManager
                   emails={emails}
                   onChange={setEmails}
@@ -463,7 +761,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.Content>
 
             <Tabs.Content value="family">
-              <YStack paddingTop="$4" paddingBottom="$8">
+              <YStack paddingTop="$4" paddingBottom="$8" gap="$4">
+                {ecclesia ? (
+                  <Card padding="$3" backgroundColor="$backgroundHover">
+                    <XStack gap="$2" alignItems="center">
+                      <Church size={16} color="$blue10" />
+                      <Text fontSize="$3" theme="alt2">{ecclesia}</Text>
+                    </XStack>
+                  </Card>
+                ) : null}
                 <FamilyMembers
                   members={familyMembers}
                   editable

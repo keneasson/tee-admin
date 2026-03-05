@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unsubscribeContact } from '../../../../utils/email/contact'
+import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 
 // Types for SNS/SES notifications
 interface SNSMessage {
@@ -17,7 +18,7 @@ interface SNSMessage {
 }
 
 interface SESBounceNotification {
-  notificationType: 'Bounce' | 'Complaint' | 'Delivery'
+  notificationType: 'Bounce' | 'Complaint' | 'Delivery' | 'Open' | 'Click'
   bounce?: {
     bounceType: 'Permanent' | 'Transient' | 'Undetermined'
     bounceSubType: string
@@ -38,6 +39,18 @@ interface SESBounceNotification {
     feedbackId: string
     complaintFeedbackType?: string
   }
+  open?: {
+    timestamp: string
+    userAgent: string
+    ipAddress: string
+  }
+  click?: {
+    timestamp: string
+    userAgent: string
+    ipAddress: string
+    link: string
+    linkTags?: Record<string, string[]>
+  }
   mail: {
     timestamp: string
     source: string
@@ -45,6 +58,7 @@ interface SESBounceNotification {
     sendingAccountId: string
     messageId: string
     destination: string[]
+    tags?: Record<string, string[]>
   }
 }
 
@@ -89,6 +103,27 @@ export async function POST(request: NextRequest) {
 
       console.log('📬 SES notification type:', sesNotification.notificationType)
 
+      // Extract campaign ID from SES message tags (best-effort)
+      const campaignId = sesNotification.mail.tags?.Campaign?.[0]
+
+      // Handle Open events — update send record metrics
+      if (sesNotification.notificationType === 'Open') {
+        console.log('📬 Open event received')
+        if (campaignId) {
+          await sendRecordRepository.incrementMetric(campaignId, 'opens')
+        }
+        return NextResponse.json({ success: true, type: 'open', campaignId })
+      }
+
+      // Handle Click events — update send record metrics
+      if (sesNotification.notificationType === 'Click') {
+        console.log('📬 Click event received:', sesNotification.click?.link)
+        if (campaignId) {
+          await sendRecordRepository.incrementMetric(campaignId, 'clicks')
+        }
+        return NextResponse.json({ success: true, type: 'click', campaignId })
+      }
+
       // Handle bounces
       if (sesNotification.notificationType === 'Bounce' && sesNotification.bounce) {
         const { bounceType, bounceSubType, bouncedRecipients } = sesNotification.bounce
@@ -117,6 +152,11 @@ export async function POST(request: NextRequest) {
             }
           })
         )
+
+        // Update send record bounce count
+        if (campaignId) {
+          await sendRecordRepository.incrementMetric(campaignId, 'bounces', bouncedRecipients.length)
+        }
 
         return NextResponse.json({
           success: true,
@@ -148,6 +188,11 @@ export async function POST(request: NextRequest) {
           })
         )
 
+        // Update send record complaint count
+        if (campaignId) {
+          await sendRecordRepository.incrementMetric(campaignId, 'complaints', complainedRecipients.length)
+        }
+
         return NextResponse.json({
           success: true,
           type: 'complaint',
@@ -156,10 +201,14 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Delivery notifications - just log, no action needed
+      // Delivery notifications — update send record delivery count
       if (sesNotification.notificationType === 'Delivery') {
         console.log('📬 Delivery confirmation received')
-        return NextResponse.json({ success: true, type: 'delivery' })
+        if (campaignId) {
+          const recipientCount = sesNotification.mail.destination.length
+          await sendRecordRepository.incrementMetric(campaignId, 'deliveries', recipientCount)
+        }
+        return NextResponse.json({ success: true, type: 'delivery', campaignId })
       }
     }
 

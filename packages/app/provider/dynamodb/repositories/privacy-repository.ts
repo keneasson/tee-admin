@@ -50,6 +50,7 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
       showEmail: 'private',
       showFamily: 'private',
       allowContactRequests: true,
+      allowConnectionRequests: true,
       preferredContactMethod: 'either',
       lastUpdated: new Date().toISOString(),
       version: 0,
@@ -116,8 +117,11 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
       return true
     }
 
-    // Admin sees same-ecclesia members fully
-    if (viewerRole === 'admin' && viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia) {
+    // Admin, Recorder, and Rep see same-ecclesia members fully
+    if (
+      (viewerRole === 'admin' || viewerRole === 'recorder' || viewerRole === 'rep') &&
+      viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+    ) {
       return true
     }
 

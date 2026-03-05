@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import {
   createEvent,
   getAllEvents,
@@ -85,6 +86,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const eventId = searchParams.get('id')
 
@@ -132,6 +138,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const postCallerRole = (session.user as any).role as string || ROLES.GUEST
+    if (postCallerRole !== ROLES.ADMIN && postCallerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const eventData = await request.json()
     eventData.createdBy = session.user.email
 
@@ -168,6 +179,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const putCallerRole = (session.user as any).role as string || ROLES.GUEST
+    if (putCallerRole !== ROLES.ADMIN && putCallerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const eventData = await request.json()
 
     if (!eventData.id) {
@@ -200,6 +216,11 @@ export async function DELETE(request: NextRequest) {
 
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const deleteCallerRole = (session.user as any).role as string || ROLES.GUEST
+    if (deleteCallerRole !== ROLES.ADMIN && deleteCallerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

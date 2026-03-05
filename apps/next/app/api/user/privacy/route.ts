@@ -35,6 +35,7 @@ export async function GET() {
         showEmail: settings.showEmail,
         showFamily: settings.showFamily,
         allowContactRequests: settings.allowContactRequests,
+        allowConnectionRequests: settings.allowConnectionRequests,
         preferredContactMethod: settings.preferredContactMethod,
       },
     })
@@ -69,6 +70,7 @@ export async function PATCH(request: NextRequest) {
       showEmail,
       showFamily,
       allowContactRequests,
+      allowConnectionRequests,
       preferredContactMethod,
     } = body
 
@@ -99,6 +101,7 @@ export async function PATCH(request: NextRequest) {
     if (showEmail !== undefined) updates.showEmail = showEmail
     if (showFamily !== undefined) updates.showFamily = showFamily
     if (allowContactRequests !== undefined) updates.allowContactRequests = allowContactRequests
+    if (allowConnectionRequests !== undefined) updates.allowConnectionRequests = allowConnectionRequests
     if (preferredContactMethod !== undefined) updates.preferredContactMethod = preferredContactMethod
 
     if (Object.keys(updates).length === 0) {
@@ -119,6 +122,7 @@ export async function PATCH(request: NextRequest) {
         showEmail: updated.showEmail,
         showFamily: updated.showFamily,
         allowContactRequests: updated.allowContactRequests,
+        allowConnectionRequests: updated.allowConnectionRequests,
         preferredContactMethod: updated.preferredContactMethod,
       },
       message: 'Privacy settings updated successfully',

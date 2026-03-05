@@ -5,6 +5,7 @@ import type { GoogleSheetTypes, GoogleSheetData, ProgramsTypes } from '@my/app/t
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
 import { SERVICE_TIMES, getServiceTimeConfigByString } from '@my/app/config/schedule-times'
+import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 
 // Helper to get schedule config from centralized SERVICE_TIMES
 function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>) {
@@ -164,8 +165,9 @@ function transformScheduleData(
         return !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
       
       case 'bibleClass':
-        // Bible class must have presider or speaker
-        return !!(event.Presider || event.Speaker)
+        // Bible class must have presider or speaker (with actual content, not just whitespace)
+        // Joint classes with only Host data but no presider/speaker are also valid
+        return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
       
       case 'sundaySchool':
         // Sunday school must have refreshments assigned
@@ -231,8 +233,13 @@ function addScheduleSpecificFields(event: any, row: any, scheduleType: Exclude<G
     case 'bibleClass':
       event.Presider = row.Presider || ''
       event.Speaker = row.Speaker || ''
-      // Secondary information for bible class
       event.Topic = row.Topic || row.topic || ''
+      // Joint Bible Class fields (from Google Sheets)
+      if (row.Host) event.Host = row.Host
+      if (row.ZoomURL) event.ZoomURL = row.ZoomURL
+      if (row.MeetingID) event.MeetingID = String(row.MeetingID)
+      if (row.MeetingPwd) event.MeetingPwd = String(row.MeetingPwd)
+      if (row.InPerson) event.InPerson = row.InPerson
       break
     
     case 'sundaySchool':
@@ -352,6 +359,26 @@ export async function GET(request: NextRequest) {
       }))
     })
     
+    // Resolve ecclesia addresses for joint Bible classes
+    if (transformedData['bibleClass']) {
+      for (const event of transformedData['bibleClass']) {
+        if (event.Host && event.InPerson === 'Yes') {
+          try {
+            const ecclesia = await getEcclesiaByName(event.Host)
+            if (ecclesia) {
+              // Exclude venue from address to avoid duplicating the Host name
+              const parts = [ecclesia.address, ecclesia.city, ecclesia.province, ecclesia.postalCode].filter(Boolean)
+              event.resolvedAddress = parts.join(', ')
+            }
+          } catch (err) {
+            console.warn(`⚠️ Failed to resolve address for "${event.Host}":`, err)
+          }
+        } else if (event.Host && event.InPerson && event.InPerson !== 'Yes') {
+          event.resolvedAddress = event.InPerson
+        }
+      }
+    }
+
     // Apply date filtering and pagination to each schedule type
     const filteredData: Record<string, EnhancedScheduleEvent[]> = {}
     let totalEvents = 0

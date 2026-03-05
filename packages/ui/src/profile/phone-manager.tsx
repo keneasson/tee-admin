@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Button, Card, Input, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import { Phone, Plus, Trash2, GripVertical, Check } from '@tamagui/lucide-icons'
 
 export type PhoneType = 'mobile' | 'home' | 'work' | 'other'

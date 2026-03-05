@@ -4,7 +4,8 @@ import React, { useState, useCallback } from 'react'
 import { BaseDataTable } from './base-data-table'
 import { ScheduleTabs, type ScheduleTab } from './schedule-tabs'
 import { type ColumnDef } from '@tanstack/react-table'
-import { YStack, Text, Button, XStack, useThemeName } from 'tamagui'
+import { YStack, Text, XStack, useThemeName } from 'tamagui'
+import { Button } from '../Button'
 import { brandColors, type ColorMode } from '../branding/brand-colors'
 
 // Enhanced schedule event interface matching requirements

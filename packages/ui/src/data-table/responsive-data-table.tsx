@@ -28,6 +28,14 @@ import {
 } from '@my/ui'
 import { brandColors } from '../branding/brand-colors'
 
+export interface RowStyleOverride {
+  backgroundColor: string
+  backgroundColorHover: string
+  textColor: string
+  textColorSecondary: string
+  borderColor: string
+}
+
 export interface ResponsiveDataTableProps<TData> {
   data: TData[]
   columns: ColumnDef<TData>[]
@@ -36,6 +44,7 @@ export interface ResponsiveDataTableProps<TData> {
   maxPageSize?: number
   renderSubComponent?: (props: { row: any }) => React.ReactElement
   getRowCanExpand?: (row: any) => boolean
+  getRowStyle?: (row: any) => RowStyleOverride | null
 }
 
 export function ResponsiveDataTable<TData>({
@@ -46,6 +55,7 @@ export function ResponsiveDataTable<TData>({
   maxPageSize = 100,
   renderSubComponent,
   getRowCanExpand,
+  getRowStyle,
 }: ResponsiveDataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -97,33 +107,36 @@ export function ResponsiveDataTable<TData>({
   })
 
   // Mobile Card Layout
-  const renderMobileCard = (row: any) => (
-    <View
-      key={row.id}
-      backgroundColor={colors.surface}
-      borderWidth={1}
-      borderColor={colors.border}
-      borderRadius="$4"
-      padding="$4"
-      marginBottom="$2"
-    >
-      {row.getVisibleCells().map((cell: any, index: number) => {
-        const header = cell.column.columnDef.header
-        return (
-          <XStack key={cell.id} justifyContent="space-between" marginBottom={index === row.getVisibleCells().length - 1 ? 0 : '$2'}>
-            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2" flex={0.4}>
-              {typeof header === 'string' ? header : cell.column.id}
-            </Text>
-            <View flex={0.6} alignItems="flex-end">
-              <Text color={colors.textPrimary} fontSize="$2" textAlign="right" numberOfLines={2}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+  const renderMobileCard = (row: any) => {
+    const rowStyle = getRowStyle?.(row) ?? null
+    return (
+      <View
+        key={row.id}
+        backgroundColor={rowStyle?.backgroundColor ?? colors.surface}
+        borderWidth={1}
+        borderColor={rowStyle?.borderColor ?? colors.border}
+        borderRadius="$4"
+        padding="$4"
+        marginBottom="$2"
+      >
+        {row.getVisibleCells().map((cell: any, index: number) => {
+          const header = cell.column.columnDef.header
+          return (
+            <XStack key={cell.id} justifyContent="space-between" marginBottom={index === row.getVisibleCells().length - 1 ? 0 : '$2'}>
+              <Text fontWeight="600" color={rowStyle?.textColorSecondary ?? colors.textSecondary} fontSize="$2" flex={0.4}>
+                {typeof header === 'string' ? header : cell.column.id}
               </Text>
-            </View>
-          </XStack>
-        )
-      })}
-    </View>
-  )
+              <View flex={0.6} alignItems="flex-end">
+                <Text color={rowStyle?.textColor ?? colors.textPrimary} fontSize="$2" textAlign="right" numberOfLines={2}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </Text>
+              </View>
+            </XStack>
+          )
+        })}
+      </View>
+    )
+  }
 
   // Desktop Table Layout with Fixed Sizing
   const renderDesktopTable = () => (
@@ -193,13 +206,15 @@ export function ResponsiveDataTable<TData>({
           borderBottomLeftRadius="$4"
           borderBottomRightRadius="$4"
         >
-          {table.getRowModel().rows.map((row, rowIndex) => (
+          {table.getRowModel().rows.map((row, rowIndex) => {
+            const rowStyle = getRowStyle?.(row) ?? null
+            return (
             <React.Fragment key={row.id}>
               {/* Main Row */}
               <XStack
-                backgroundColor={rowIndex % 2 === 0 ? colors.surface : colors.backgroundSecondary}
+                backgroundColor={rowStyle?.backgroundColor ?? (rowIndex % 2 === 0 ? colors.surface : colors.backgroundSecondary)}
                 hoverStyle={{
-                  backgroundColor: colors.backgroundTertiary,
+                  backgroundColor: rowStyle?.backgroundColorHover ?? colors.backgroundTertiary,
                 }}
               >
                 {row.getVisibleCells().map((cell, cellIndex) => (
@@ -210,7 +225,7 @@ export function ResponsiveDataTable<TData>({
                     maxWidth={300}
                     padding="$3"
                     borderRightWidth={cellIndex === row.getVisibleCells().length - 1 ? 0 : 1}
-                    borderRightColor={colors.border}
+                    borderRightColor={rowStyle?.borderColor ?? colors.border}
                     justifyContent="center"
                   >
                     <XStack gap="$2" alignItems="center">
@@ -220,18 +235,19 @@ export function ResponsiveDataTable<TData>({
                           variant="outlined"
                           onPress={row.getToggleExpandedHandler()}
                           backgroundColor="transparent"
+                          borderColor={rowStyle?.textColorSecondary ?? colors.textSecondary}
                           padding="$1"
                           minHeight="auto"
                           minWidth="auto"
                         >
-                          <Text fontSize="$2" color={colors.textSecondary}>
+                          <Text fontSize="$2" color={rowStyle?.textColorSecondary ?? colors.textSecondary}>
                             {row.getIsExpanded() ? '▼' : '▶'}
                           </Text>
                         </Button> : null}
-                      
+
                       <View maxWidth="100%" overflow="hidden" flex={1}>
-                        <Text 
-                          color={colors.textPrimary} 
+                        <Text
+                          color={rowStyle?.textColor ?? colors.textPrimary}
                           numberOfLines={1}
                           ellipsizeMode="tail"
                         >
@@ -242,12 +258,12 @@ export function ResponsiveDataTable<TData>({
                   </View>
                 ))}
               </XStack>
-              
-              {/* Expanded Secondary Row */}
+
+              {/* Expanded Secondary Row — match parent row style */}
               {row.getIsExpanded() && renderSubComponent ? <XStack
-                  backgroundColor={colors.backgroundSecondary}
+                  backgroundColor={rowStyle?.backgroundColor ?? (rowIndex % 2 === 0 ? colors.surface : colors.backgroundSecondary)}
                   borderTopWidth={1}
-                  borderTopColor={colors.border + '40'}
+                  borderTopColor={rowStyle?.borderColor ?? (colors.border + '40')}
                   padding="$3"
                 >
                   <View width="100%">
@@ -255,21 +271,23 @@ export function ResponsiveDataTable<TData>({
                   </View>
                 </XStack> : null}
             </React.Fragment>
-          ))}
+            )
+          })}
         </View>
       </View>
     </ScrollView>
   )
 
-  // Helper function to calculate column widths
-  const getColumnWidth = (index: number, totalColumns: number) => {
-    // Distribute width more evenly, with slight variations for different column types
-    const baseWidth = 100 / totalColumns
-    switch (index) {
-      case 0: return `${baseWidth * 1.2}%` // First column slightly wider
-      case totalColumns - 1: return `${baseWidth * 0.8}%` // Last column slightly narrower
-      default: return `${baseWidth}%`
-    }
+  // Helper function to calculate column widths using configured column sizes
+  const getColumnWidth = (index: number, _totalColumns: number) => {
+    const headers = table.getHeaderGroups()[0]?.headers
+    if (!headers) return 'auto'
+    const header = headers[index]
+    if (!header) return 'auto'
+    // Use the column's configured size for proportional distribution
+    const totalSize = headers.reduce((sum, h) => sum + (h.column.getSize() || 150), 0)
+    const colSize = header.column.getSize() || 150
+    return `${(colSize / totalSize) * 100}%`
   }
 
   return (

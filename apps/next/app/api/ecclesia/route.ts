@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { createEcclesia, getAllEcclesia, updateEcclesia, deleteEcclesia } from '../../../utils/dynamodb/locations'
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json({ error: 'Member access required' }, { status: 403 })
+    }
+
     const ecclesias = await getAllEcclesia()
-    
+
     return NextResponse.json({
       success: true,
       data: ecclesias,
@@ -23,6 +34,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { name, country, province, city, address, postalCode, venue } = body
 
@@ -88,6 +108,15 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { originalName, name, country, province, city, address, postalCode, venue } = body
 
@@ -152,6 +181,15 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const name = searchParams.get('name')
 

@@ -21,6 +21,7 @@ import { verifyCredentialsUser, findCredentialsUserByEmail } from './dynamodb/cr
 import { personRepository, type GoogleOAuthProfile } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { verifyEcclesiaToken } from './email/ecclesia-token'
+import { getEcclesiaByRecordingBrotherEmail } from './dynamodb/locations'
 
 // Feature flag for unified people system - uses PersonRecord instead of scan-based USER# lookups
 const USE_UNIFIED_PEOPLE = process.env.UNIFIED_PEOPLE_AUTH === 'true'
@@ -106,13 +107,22 @@ export const authOptions: NextAuthConfig = {
           // Look up or create PersonRecord
           let person = await personRepository.getByEmail(email)
           if (!person) {
+            // Check if this email is a Recording Brother — auto-assign member role + ecclesia
+            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(email)
+            const rbRole = rbEcclesia ? 'member' : 'guest'
+            const rbEcclesiaName = rbEcclesia?.name || 'Unknown'
+
+            if (rbEcclesia) {
+              console.log('📋 OTP: Recording Brother detected for', rbEcclesiaName, '— assigning member role')
+            }
+
             const created = await personRepository.create({
               email,
-              firstName: '',
+              firstName: rbEcclesia?.recordingBrotherName || '',
               lastName: '',
-              ecclesia: 'Unknown',
-              memberStatus: 'visitor',
-              role: 'guest',
+              ecclesia: rbEcclesiaName,
+              memberStatus: rbEcclesia ? 'member' : 'visitor',
+              role: rbRole,
               provider: 'credentials',
             })
             await personRepository.markEmailVerified(created.personId)
@@ -167,9 +177,43 @@ export const authOptions: NextAuthConfig = {
   },
   callbacks: {
     async jwt({ token, user }: { token: JWT; user?: User }) {
-      // Add role to the token when user signs in
+      // On sign-in, try to get role from the user object (set by signIn callback)
       if (user) {
-        token.role = (user as User & { role?: string }).role
+        const userRole = (user as User & { role?: string }).role
+        if (userRole) {
+          token.role = userRole
+        }
+      }
+
+      // Always refresh name, role, and RB designation from PersonRecord.
+      // This keeps the JWT in sync when admins change a user's name or role.
+      if (token.email) {
+        try {
+          const person = await personRepository.getByEmailForAuth(token.email as string)
+          if (person) {
+            // Derive role: explicit role → memberStatus/isInterEcclesiaRep → keep existing
+            const derivedRole = person.role
+              || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
+            if (derivedRole) {
+              token.role = derivedRole
+            }
+            if (person.displayName) {
+              token.name = person.displayName
+            }
+            // RB is a designation, not a role — sync to JWT
+            token.isRecordingBrother = !!person.isRecordingBrother
+          } else if (!token.role) {
+            // Only check RB fallback if we still have no role
+            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(token.email as string)
+            if (rbEcclesia) {
+              console.log('📋 JWT callback: Recording Brother for', rbEcclesia.name, '→ member')
+              token.role = ROLES.MEMBER
+            }
+          }
+        } catch (e) {
+          console.error('⚠️ JWT callback: PersonRecord lookup failed:', e)
+          // On error, keep existing token values rather than resetting
+        }
       }
       return token
     },
@@ -206,22 +250,94 @@ export const authOptions: NextAuthConfig = {
         if (USE_UNIFIED_PEOPLE) {
           // STEP 1: Check PersonRecord via GSI1 (O(1) lookup - no scan!)
           const person = await personRepository.getByEmailForAuth(userEmail)
-          if (person && person.role) {
-            // Block deceased users from signing in
-            if (person.role === ROLES.DECEASED) {
-              console.log('🚫 [Unified] Deceased user blocked from sign-in:', userEmail)
-              return false
+          if (person) {
+            // Derive role: explicit role → memberStatus/isInterEcclesiaRep → undefined
+            const derivedRole = person.role
+              || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
+
+            if (derivedRole) {
+              // Block deceased users from signing in
+              if (derivedRole === ROLES.DECEASED) {
+                console.log('🚫 [Unified] Deceased user blocked from sign-in:', userEmail)
+                return false
+              }
+              console.log('✅ [Unified] Found person with role:', derivedRole, person.role ? '' : '(derived from memberStatus)')
+              extUser.role = derivedRole
+
+              // Connect Google account + persist derived role if it was missing
+              try {
+                const connectUpdates: Record<string, any> = {}
+                if (user.id && !person.provider) connectUpdates.provider = 'google'
+                if (user.id) connectUpdates.googleId = user.id
+                if (user.image) connectUpdates.image = user.image
+                if (!person.role && derivedRole) connectUpdates.role = derivedRole
+                if (Object.keys(connectUpdates).length > 0) {
+                  await personRepository.updatePerson(person.personId, connectUpdates)
+                  console.log('🔗 [Unified] Updated PersonRecord:', person.personId, !person.role ? `(persisted role: ${derivedRole})` : '')
+                }
+              } catch (connectError) {
+                // Don't block sign-in if connect fails
+                console.error('⚠️ [Unified] Failed to update PersonRecord:', connectError)
+              }
+
+              return true
             }
-            console.log('✅ [Unified] Found person with role:', person.role)
-            extUser.role = person.role
-            return true
           }
 
           // STEP 2: Check legacy directory for new users
           console.log('📂 [Unified] Person not found, checking legacy directory...')
           const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
           if (!legacyUser) {
-            console.log('⚠️ [Unified] No legacy user found for:', userEmail)
+            // STEP 2.5: Check if this email is a Recording Brother
+            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(userEmail)
+            if (rbEcclesia) {
+              console.log('📋 [Unified] Recording Brother detected for', rbEcclesia.name, '— assigning member role')
+              extUser.role = ROLES.MEMBER
+
+              try {
+                const oauthProfile: GoogleOAuthProfile = {
+                  id: user.id || '',
+                  email: userEmail,
+                  name: user.name || rbEcclesia.recordingBrotherName || undefined,
+                  given_name: rbEcclesia.recordingBrotherName || undefined,
+                  family_name: undefined,
+                  picture: user.image || undefined,
+                }
+
+                await personRepository.createFromOAuth(oauthProfile, {
+                  ecclesia: rbEcclesia.name,
+                  role: ROLES.MEMBER as 'member',
+                })
+                console.log('✅ [Unified] PersonRecord created for Recording Brother:', rbEcclesia.name)
+              } catch (createError) {
+                console.error('⚠️ [Unified] Failed to create RB PersonRecord:', createError)
+              }
+
+              return true
+            }
+
+            // STEP 3: No match anywhere — create a guest PersonRecord so they exist in the system
+            // (Admins can then find them in the Contact List and upgrade their role)
+            console.log('📝 [Unified] New user, creating guest PersonRecord for:', userEmail)
+            try {
+              const oauthProfile: GoogleOAuthProfile = {
+                id: user.id || '',
+                email: userEmail,
+                name: user.name || undefined,
+                given_name: (profile?.given_name as string) || user.name?.split(' ')[0] || undefined,
+                family_name: (profile?.family_name as string) || user.name?.split(' ').slice(1).join(' ') || undefined,
+                picture: user.image || undefined,
+              }
+
+              await personRepository.createFromOAuth(oauthProfile, {
+                ecclesia: '',
+                role: ROLES.GUEST as 'guest',
+              })
+              console.log('✅ [Unified] Guest PersonRecord created for:', userEmail)
+            } catch (createError) {
+              console.error('⚠️ [Unified] Failed to create guest PersonRecord:', createError)
+            }
+
             return true
           }
 
@@ -307,13 +423,15 @@ export const authOptions: NextAuthConfig = {
       }
     },
     async session({ session, user, token }: { session: Session; user?: User; token?: JWT }) {
-      // Safely add role to the Session.User
+      // Safely add role and RB designation to the Session.User
       try {
         const userWithRole = user as (User & { role?: string }) | undefined
-        const tokenWithRole = token as (JWT & { role?: string }) | undefined
+        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean }) | undefined
         const finalRole = userWithRole?.role || tokenWithRole?.role || ROLES.GUEST
         console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
         ;(session.user as User & { role: string }).role = finalRole
+        // RB designation: sourced from JWT (set during jwt callback from PersonRecord)
+        ;(session.user as any).isRecordingBrother = tokenWithRole?.isRecordingBrother || false
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error

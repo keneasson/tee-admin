@@ -12,7 +12,8 @@ import {
   Trash,
 } from '@tamagui/lucide-icons'
 import { useState, useEffect } from 'react'
-import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet, AnimatePresence } from 'tamagui'
+import { Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet, AnimatePresence } from 'tamagui'
+import { Button } from '../Button'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 
 interface EventListSelectorProps {
@@ -562,6 +563,37 @@ export function EventListSelector({
         </Card>
       ) : (
         <YStack space="$4">
+          {/* Inactive Events Section (shown first - these are drafts/WIP) */}
+          {inactiveEvents.length > 0 ? <YStack space="$3">
+              <XStack space="$2" alignItems="center">
+                <Circle size="$1" backgroundColor="$gray8" />
+                <Text fontSize="$5" fontWeight="600" color="$gray11">
+                  Inactive Events ({inactiveEvents.length})
+                </Text>
+              </XStack>
+              <YStack space="$3">
+                {visibleInactiveEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreInactive ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({inactiveEvents.length - draftVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
+
           {/* Active Events Section */}
           {activeEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
@@ -588,37 +620,6 @@ export function EventListSelector({
                     alignSelf="center"
                   >
                     Load More ({activeEvents.length - publishedVisible} remaining)
-                  </Button>
-                ) : null}
-              </YStack>
-            </YStack> : null}
-
-          {/* Inactive Events Section */}
-          {inactiveEvents.length > 0 ? <YStack space="$3">
-              <XStack space="$2" alignItems="center">
-                <Circle size="$1" backgroundColor="$gray8" />
-                <Text fontSize="$5" fontWeight="600" color="$gray11">
-                  Inactive Events ({inactiveEvents.length})
-                </Text>
-              </XStack>
-              <YStack space="$3">
-                {visibleInactiveEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onSelect={onSelect}
-                    onPreview={onPreview}
-                    onDelete={handleDelete}
-                    isDeleting={deletingEventId === event.id}
-                  />
-                ))}
-                {hasMoreInactive ? (
-                  <Button
-                    variant="outlined"
-                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
-                    alignSelf="center"
-                  >
-                    Load More ({inactiveEvents.length - draftVisible} remaining)
                   </Button>
                 ) : null}
               </YStack>
