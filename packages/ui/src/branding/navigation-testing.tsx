@@ -4,8 +4,6 @@ import React, { useState } from 'react'
 import { YStack, XStack, Text, H2, H3, Button, Separator, View } from '@my/ui'
 import { NavigationButtonItem } from '../navigation-button-item'
 import { NavHeading, NavItem } from '../nav-item'
-import { useFeatureFlag } from '@my/app/features/feature-flags'
-import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { brandColors, type ColorMode } from './brand-colors'
 
 // Mock navigation data
@@ -24,7 +22,6 @@ const mockUser = {
 export function NavigationTesting() {
   const [currentPath, setCurrentPath] = useState('/')
   const [theme, setTheme] = useState<ColorMode>('light')
-  const newNavDesign = useFeatureFlag(FEATURE_FLAGS.NEW_NAVIGATION_DESIGN)
   
   // Get colors for the selected theme
   const themeColors = brandColors[theme]
@@ -87,7 +84,7 @@ export function NavigationTesting() {
           Current Path: <Text fontFamily="$body">{currentPath}</Text>
         </Text>
         <Text fontSize="$3" color="$textSecondary">
-          New Navigation Design: {newNavDesign ? '✅ Enabled' : '❌ Disabled'}
+          Navigation Design: Enhanced (active)
         </Text>
       </YStack>
       
@@ -193,11 +190,10 @@ export function NavigationTesting() {
         </View>
       </YStack>
       
-      {/* Feature Flag Testing */}
-      {newNavDesign ? <>
-          <Separator />
+      {/* Enhanced Navigation Preview */}
+      <Separator />
           <YStack gap="$4">
-            <H3>New Navigation Design ({theme} theme)</H3>
+            <H3>Enhanced Navigation Design ({theme} theme)</H3>
             <View
               backgroundColor={themeColors.backgroundSecondary}
               borderRadius="$4"
@@ -301,7 +297,6 @@ export function NavigationTesting() {
               </YStack>
             </View>
           </YStack>
-        </> : null}
       
       <Separator />
       

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { YStack, XStack, Text, H2, H3, H4, Button, Separator, View, Switch } from '@my/ui'
-import { useFeatureFlags, useFeatureFlag } from '@my/app/features/feature-flags'
+import { useFeatureFlags } from '@my/app/features/feature-flags'
 import { FEATURE_FLAGS, featureFlagConfigs } from '@my/app/features/feature-flags/feature-flags'
 import { ComponentShowcase } from './component-showcase'
 
