@@ -1,4 +1,5 @@
 // Feature flag definitions
+// New flags should be added here AND seeded to DynamoDB via the admin UI
 export const FEATURE_FLAGS = {
   // Multi-tenant system
   MULTI_TENANT_INIT: 'multi_tenant_init',
@@ -16,7 +17,12 @@ export interface FeatureFlagConfig {
   userOverrides?: Record<string, boolean>
 }
 
-export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
+/**
+ * Default configs used to seed DynamoDB on first load.
+ * Runtime source of truth is DynamoDB (via featureFlagRepository).
+ * @deprecated For seeding only — do not read from this at runtime.
+ */
+export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
   [FEATURE_FLAGS.MULTI_TENANT_INIT]: {
     enabled: true,
     rolloutPercentage: 0,
@@ -26,3 +32,8 @@ export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
     userOverrides: {},
   },
 }
+
+/**
+ * @deprecated Use DEFAULT_FEATURE_FLAG_CONFIGS — this alias is kept for backwards compatibility.
+ */
+export const featureFlagConfigs: Record<string, FeatureFlagConfig> = DEFAULT_FEATURE_FLAG_CONFIGS

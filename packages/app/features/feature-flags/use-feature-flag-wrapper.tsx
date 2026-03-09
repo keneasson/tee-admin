@@ -1,17 +1,25 @@
 'use client'
 
-import { featureFlagConfigs, type FeatureFlag } from './feature-flags'
+import { featureFlagConfigs, type FeatureFlag, type FeatureFlagConfig } from './feature-flags'
 import { AuthSession } from '@my/app/types'
 
 /**
- * Check if a feature flag is enabled for a given session
- * This is a pure function that can be used in any context
- * Session data must be provided by the caller
+ * Check if a feature flag is enabled for a given session.
+ * Pure function — works with any configs map (DynamoDB-backed or hardcoded fallback).
+ *
+ * @param flag - The flag name to check
+ * @param session - Current user session
+ * @param configs - Optional configs map. If omitted, falls back to hardcoded defaults.
  */
-export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null): boolean {
-  const config = featureFlagConfigs[flag]
+export function checkFeatureFlag(
+  flag: string,
+  session: AuthSession | null,
+  configs?: Record<string, FeatureFlagConfig>
+): boolean {
+  const allConfigs = configs || featureFlagConfigs
+  const config = allConfigs[flag]
 
-  if (!config.enabled) {
+  if (!config || !config.enabled) {
     return false
   }
 
@@ -40,13 +48,11 @@ export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null)
 
   // Check rollout percentage
   if (config.rolloutPercentage !== undefined && config.rolloutPercentage < 100) {
-    // Use email as user identifier if id is not available
     const userId = (session?.user as any)?.id || session?.user?.email
     if (!userId) {
       return false
     }
 
-    // Create a deterministic hash based on user ID and flag name
     const hash = simpleHash(`${userId}-${flag}`)
     const userPercentile = hash % 100
 
@@ -59,9 +65,26 @@ export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null)
 }
 
 /**
+ * Server-side async check that reads from DynamoDB cache.
+ * Use this in API routes and server components.
+ */
+export async function checkFeatureFlagFromDB(
+  flag: string,
+  session: AuthSession | null
+): Promise<boolean> {
+  try {
+    const { featureFlagRepository } = await import('@my/app/provider/dynamodb/repositories/feature-flag-repository')
+    const configs = await featureFlagRepository.getAllCached()
+    return checkFeatureFlag(flag, session, configs)
+  } catch (error) {
+    // Fallback to hardcoded defaults if DynamoDB is unavailable
+    console.error('Failed to load feature flags from DynamoDB, using defaults:', error)
+    return checkFeatureFlag(flag, session)
+  }
+}
+
+/**
  * @deprecated Use checkFeatureFlag instead with session passed as parameter
- * This hook is preserved for backward compatibility but should not be used
- * in shared packages as it creates platform dependencies
  */
 export function useFeatureFlag(flag: FeatureFlag, session: AuthSession | null): boolean {
   return checkFeatureFlag(flag, session)

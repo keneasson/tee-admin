@@ -8,5 +8,5 @@ export * from './brand-typography'
 export * from './component-showcase'
 export * from './components-showcase'
 export * from './navigation-testing'
-export * from './feature-playground'
+// feature-playground removed — replaced by packages/ui/src/admin/feature-flag-manager.tsx
 export * from '../navigation/navigation-showcase'

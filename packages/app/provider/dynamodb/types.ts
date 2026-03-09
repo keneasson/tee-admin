@@ -570,6 +570,25 @@ export type PersonQueryResult = {
   lastEvaluatedKey?: Record<string, any>
 }
 
+// ===== FEATURE FLAG SYSTEM =====
+
+export interface FeatureFlagRecord extends BaseRecord {
+  pkey: string           // FEATURE_FLAG#{flagName}
+  skey: string           // CONFIG
+  flagName: string
+  enabled: boolean
+  rolloutPercentage: number
+  userRoles?: string[]
+  description: string
+  environment?: 'development' | 'staging' | 'production' | 'all'
+  userOverrides?: Record<string, boolean>
+  createdAt: string
+}
+
+export function isFeatureFlagRecord(record: any): record is FeatureFlagRecord {
+  return record && record.pkey && record.pkey.startsWith('FEATURE_FLAG#') && record.skey === 'CONFIG'
+}
+
 // Type guards for Person records
 export function isPersonRecord(record: any): record is PersonRecord {
   return record && record.pkey && record.pkey.startsWith('PERSON#') && record.skey === 'PROFILE'
