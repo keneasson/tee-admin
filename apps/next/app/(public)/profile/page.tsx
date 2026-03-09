@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { UserProfile } from '@my/app/features/profile/user-profile'
 import { Section, Text, YStack, Spinner } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
@@ -8,6 +9,7 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 
 export default function ProfilePage() {
   const { data: session, status } = useSession()
+  const router = useRouter()
   const isHydrated = useHydrated()
 
   if (!isHydrated || status === 'loading') {
@@ -41,6 +43,7 @@ export default function ProfilePage() {
       userName={session.user.name || undefined}
       userRole={session.user.role || undefined}
       userEcclesia={(session.user as any).ecclesia || undefined}
+      onNavigateToPerson={(personId) => router.push(`/people/${encodeURIComponent(personId)}`)}
     />
   )
 }

@@ -30,8 +30,16 @@ export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null)
     }
   }
 
+  // Check user-specific overrides (before rollout percentage so overrides bypass 0% rollout)
+  if (config.userOverrides && session?.user?.email) {
+    const override = config.userOverrides[session.user.email]
+    if (override !== undefined) {
+      return override
+    }
+  }
+
   // Check rollout percentage
-  if (config.rolloutPercentage && config.rolloutPercentage < 100) {
+  if (config.rolloutPercentage !== undefined && config.rolloutPercentage < 100) {
     // Use email as user identifier if id is not available
     const userId = (session?.user as any)?.id || session?.user?.email
     if (!userId) {
@@ -44,14 +52,6 @@ export function checkFeatureFlag(flag: FeatureFlag, session: AuthSession | null)
 
     if (userPercentile >= config.rolloutPercentage) {
       return false
-    }
-  }
-
-  // Check user-specific overrides
-  if (config.userOverrides && session?.user?.email) {
-    const override = config.userOverrides[session.user.email]
-    if (override !== undefined) {
-      return override
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { YStack, XStack, Text, Input, Card, Spinner, RadioGroup, Label } from 'tamagui'
+import { YStack, XStack, Text, Input, Card, Spinner } from 'tamagui'
 import { Button } from '../Button'
-import { UserPlus, ThumbsUp, ChevronLeft, Shield, User, Pencil, Mail, Clock } from '@tamagui/lucide-icons'
+import { UserPlus, ThumbsUp, Shield, User, Pencil, Clock, RefreshCw } from '@tamagui/lucide-icons'
 import { PersonAutocomplete } from '../form/person-autocomplete'
 import type { Nomination, DirectoryAuthProps } from './types'
 
@@ -29,8 +29,8 @@ interface RecordingBrotherManagerProps {
   onDirectSet?: (nomineeEmail: string, nomineeName: string, emailPreference: 'personal' | 'ecclesia', rbEcclesiaEmail?: string) => Promise<void>
   /** Save RB directly via PATCH (admin editing from detail view) */
   onSaveRb?: (email: string, name: string) => Promise<boolean>
-  /** Whether a confirmation email has been sent and we're awaiting response */
-  awaitingConfirmation?: boolean
+  /** Resend confirmation email for a nomination */
+  onResend?: (nominationId: string) => Promise<void>
 }
 
 export function RecordingBrotherManager({
@@ -44,11 +44,16 @@ export function RecordingBrotherManager({
   onSecond,
   onDirectSet,
   onSaveRb,
-  awaitingConfirmation = false,
+  onResend,
 }: RecordingBrotherManagerProps) {
   const hasRb = !!(recordingBrotherName || recordingBrotherEmail)
   const isViewerEcclesia = authProps.viewerEcclesia === ecclesiaName
   const canEditRb = authProps.isAdminOrOwner || (authProps.isRecorderOrHigher && isViewerEcclesia)
+
+  // Derive active nominations from data
+  const confirmedNominations = nominations.filter(n => n.status === 'confirmed')
+  const openNominations = nominations.filter(n => n.status === 'open')
+  const hasActiveNomination = confirmedNominations.length > 0 || openNominations.length > 0
 
   // Edit RB state (for admin direct editing)
   const [editingRb, setEditingRb] = useState(false)
@@ -61,12 +66,10 @@ export function RecordingBrotherManager({
   const [showDirectSetForm, setShowDirectSetForm] = useState(false)
   const [nomineeEmail, setNomineeEmail] = useState('')
   const [nomineeName, setNomineeName] = useState('')
+  const [autocompleteValue, setAutocompleteValue] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [secondingId, setSecondingId] = useState<string | null>(null)
-  const [selectedMember, setSelectedMember] = useState<MemberWithEmails | null>(null)
-  const [emailPreference, setEmailPreference] = useState<'personal' | 'ecclesia'>('personal')
-  const [rbEcclesiaEmail, setRbEcclesiaEmail] = useState('')
-  const [confirmationSent, setConfirmationSent] = useState(awaitingConfirmation)
+  const [resendingId, setResendingId] = useState<string | null>(null)
 
   const startEditingRb = () => {
     setEditRbName(recordingBrotherName || '')
@@ -93,46 +96,25 @@ export function RecordingBrotherManager({
     }
   }
 
-  const handleSelectMember = (member: MemberWithEmails) => {
-    const memberEmails = member.emails || []
-    if (memberEmails.length <= 1) {
-      setNomineeEmail(member.email)
-      setNomineeName(member.name)
-      setSelectedMember(null)
-    } else {
-      setSelectedMember(member)
-      setNomineeName(member.name)
-      setNomineeEmail('')
-    }
+  const handleAutocompleteSelect = (person: { name: string; email: string }) => {
+    setNomineeName(person.name)
+    setNomineeEmail(person.email)
+    setAutocompleteValue(person.name)
   }
 
-  const handleSelectEmail = (email: string) => {
-    setNomineeEmail(email)
-  }
-
-  const handleBackToMembers = () => {
-    setSelectedMember(null)
+  const resetNomineeState = () => {
     setNomineeEmail('')
     setNomineeName('')
+    setAutocompleteValue('')
   }
 
   const handleNominate = async () => {
     if (!nomineeEmail.trim() || !nomineeName.trim()) return
-    if (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim()) return
     setIsSubmitting(true)
     try {
-      await onNominate(
-        nomineeEmail.trim(),
-        nomineeName.trim(),
-        emailPreference,
-        emailPreference === 'ecclesia' ? rbEcclesiaEmail.trim() : undefined
-      )
+      await onNominate(nomineeEmail.trim(), nomineeName.trim(), 'personal')
       setShowNominateForm(false)
-      setNomineeEmail('')
-      setNomineeName('')
-      setSelectedMember(null)
-      setEmailPreference('personal')
-      setRbEcclesiaEmail('')
+      resetNomineeState()
     } finally {
       setIsSubmitting(false)
     }
@@ -140,24 +122,23 @@ export function RecordingBrotherManager({
 
   const handleDirectSet = async () => {
     if (!nomineeEmail.trim() || !nomineeName.trim() || !onDirectSet) return
-    if (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim()) return
     setIsSubmitting(true)
     try {
-      await onDirectSet(
-        nomineeEmail.trim(),
-        nomineeName.trim(),
-        emailPreference,
-        emailPreference === 'ecclesia' ? rbEcclesiaEmail.trim() : undefined
-      )
+      await onDirectSet(nomineeEmail.trim(), nomineeName.trim(), 'personal')
       setShowDirectSetForm(false)
-      setNomineeEmail('')
-      setNomineeName('')
-      setSelectedMember(null)
-      setEmailPreference('personal')
-      setRbEcclesiaEmail('')
-      setConfirmationSent(true)
+      resetNomineeState()
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleResend = async (nominationId: string) => {
+    if (!onResend) return
+    setResendingId(nominationId)
+    try {
+      await onResend(nominationId)
+    } finally {
+      setResendingId(null)
     }
   }
 
@@ -179,12 +160,18 @@ export function RecordingBrotherManager({
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString('en-CA', {
-        month: 'short',
+        year: 'numeric',
+        month: 'long',
         day: 'numeric',
       })
     } catch {
       return dateStr
     }
+  }
+
+  const daysSince = (dateStr?: string): number => {
+    if (!dateStr) return Infinity
+    return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
   }
 
   // --- State: Has RB ---
@@ -303,26 +290,46 @@ export function RecordingBrotherManager({
           {ecclesiaName} does not have a Recording Brother. Nominate a member — two other members must second the nomination to confirm.
         </Text>
 
-        {/* Confirmation pending banner */}
-        {confirmationSent ? (
-          <Card bordered padding="$3" backgroundColor="$blue2" borderColor="$blue6">
-            <XStack gap="$2" alignItems="center">
-              <Clock size={16} color="$blue10" />
-              <Text fontSize="$3" color="$blue11" fontWeight="600">
-                Awaiting confirmation from nominee
+        {/* Confirmed nominations — verification sent, awaiting acceptance */}
+        {confirmedNominations.map((nom) => (
+          <Card key={nom.nominationId} bordered padding="$3" backgroundColor="$blue2" borderColor="$blue6">
+            <YStack gap="$2">
+              <XStack gap="$2" alignItems="center">
+                <Clock size={16} color="$blue10" />
+                <Text fontSize="$3" color="$blue11" fontWeight="600">
+                  Recording Brother Verification Sent
+                </Text>
+              </XStack>
+              <Text fontSize="$3">{nom.nomineeName}</Text>
+              <Text fontSize="$2" color="$textSecondary">
+                Sent {nom.confirmationSentAt ? formatDate(nom.confirmationSentAt) : formatDate(nom.createdAt)}
+                {nom.directSet ? ' (admin direct set)' : ` — nominated by ${nom.nominatedByName}`}
               </Text>
-            </XStack>
-            <Text fontSize="$2" color="$textSecondary" paddingTop="$1">
-              A confirmation email has been sent. The nominee must click the link to accept the Recording Brother designation.
-            </Text>
+              <Text fontSize="$2" color="$textSecondary">
+                Awaiting confirmation from nominee.
+              </Text>
+              {authProps.isAdminOrOwner && onResend && daysSince(nom.confirmationSentAt) >= 7 ? (
+                <XStack justifyContent="flex-end">
+                  <Button
+                    size="$3"
+                    theme="blue"
+                    icon={resendingId === nom.nominationId ? <Spinner size="small" width={16} height={16} /> : RefreshCw}
+                    onPress={() => handleResend(nom.nominationId)}
+                    disabled={resendingId !== null}
+                  >
+                    {resendingId === nom.nominationId ? 'Resending...' : 'Resend Verification'}
+                  </Button>
+                </XStack>
+              ) : null}
+            </YStack>
           </Card>
-        ) : null}
+        ))}
 
-        {/* Open nominations */}
-        {nominations.length > 0 ? (
+        {/* Open nominations — needs seconders */}
+        {openNominations.length > 0 ? (
           <YStack gap="$2">
-            <Text fontWeight="600" fontSize="$3">Open Nominations</Text>
-            {nominations.map((nom) => (
+            <Text fontWeight="600" fontSize="$3">Nominations Awaiting Seconds</Text>
+            {openNominations.map((nom) => (
               <Card key={nom.nominationId} bordered padding="$3" backgroundColor="$background">
                 <YStack gap="$2">
                   <XStack justifyContent="space-between" alignItems="center">
@@ -339,7 +346,7 @@ export function RecordingBrotherManager({
                       paddingVertical="$1"
                     >
                       <Text fontSize="$2" fontWeight="600" color="$orange11">
-                        {nom.seconds.length} / {nom.secondsNeeded} seconds
+                        Needs {nom.secondsNeeded - nom.seconds.length} more second{nom.secondsNeeded - nom.seconds.length !== 1 ? 's' : ''}
                       </Text>
                     </XStack>
                   </XStack>
@@ -369,8 +376,8 @@ export function RecordingBrotherManager({
           </YStack>
         ) : null}
 
-        {/* Admin/Owner direct set */}
-        {authProps.isAdminOrOwner && onDirectSet ? (
+        {/* Admin/Owner direct set — hidden when active nomination exists */}
+        {authProps.isAdminOrOwner && onDirectSet && !hasActiveNomination ? (
           showDirectSetForm ? (
             <Card bordered padding="$3" backgroundColor="$blue2" borderColor="$blue6">
               <YStack gap="$3">
@@ -382,121 +389,25 @@ export function RecordingBrotherManager({
                   Admin override — bypasses nomination and seconder process.
                 </Text>
 
-                {members.length > 0 && !selectedMember ? (
-                  <YStack gap="$2">
-                    <Text fontSize="$3" color="$textSecondary">
-                      Select a member of {ecclesiaName}:
-                    </Text>
-                    {members.map((m) => (
-                      <Button
-                        key={m.email}
-                        size="$3"
-                        variant="outlined"
-                        onPress={() => handleSelectMember(m)}
-                        theme={nomineeEmail === m.email ? 'blue' : undefined}
-                        borderWidth={nomineeEmail === m.email ? 2 : 1}
-                      >
-                        {m.name}
-                      </Button>
-                    ))}
-                  </YStack>
-                ) : selectedMember ? (
-                  <YStack gap="$2">
-                    <XStack gap="$2" alignItems="center">
-                      <Button
-                        size="$2"
-                        icon={ChevronLeft}
-                        chromeless
-                        onPress={handleBackToMembers}
-                      />
-                      <Text fontSize="$3" fontWeight="600">
-                        {selectedMember.name}
-                      </Text>
-                    </XStack>
-                    <Text fontSize="$3" color="$textSecondary">
-                      Select the RB email:
-                    </Text>
-                    {(selectedMember.emails || []).map((emailRecord) => (
-                      <Button
-                        key={emailRecord.email}
-                        size="$3"
-                        variant="outlined"
-                        onPress={() => handleSelectEmail(emailRecord.email)}
-                        theme={nomineeEmail === emailRecord.email ? 'blue' : undefined}
-                        borderWidth={nomineeEmail === emailRecord.email ? 2 : 1}
-                      >
-                        <YStack alignItems="flex-start">
-                          <Text fontSize="$3">{emailRecord.email}</Text>
-                          <Text fontSize="$2" color="$textSecondary">
-                            {emailRecord.emailType}
-                          </Text>
-                        </YStack>
-                      </Button>
-                    ))}
-                  </YStack>
-                ) : (
-                  <YStack gap="$2">
-                    <Input
-                      placeholder="Member's name"
-                      value={nomineeName}
-                      onChangeText={setNomineeName}
-                      borderWidth={1}
-                      borderColor="$gray6"
-                    />
-                    <Input
-                      placeholder="Member's email"
-                      value={nomineeEmail}
-                      onChangeText={setNomineeEmail}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      borderWidth={1}
-                      borderColor="$gray6"
-                    />
-                  </YStack>
-                )}
+                <PersonAutocomplete
+                  ecclesia={ecclesiaName}
+                  value={autocompleteValue}
+                  onChangeText={(text) => {
+                    setAutocompleteValue(text)
+                    if (!text) resetNomineeState()
+                  }}
+                  onSelect={handleAutocompleteSelect}
+                  label="Search member by name"
+                  placeholder="Type a name to search..."
+                  showAllEmails
+                />
 
-                {/* Email preference selection */}
-                {nomineeEmail.trim() ? (
-                  <YStack gap="$2" paddingTop="$2">
-                    <Text fontSize="$3" fontWeight="600">Email Preference</Text>
-                    <Text fontSize="$2" color="$textSecondary">
-                      Which email should be used for inter-ecclesia communications?
+                {nomineeEmail ? (
+                  <Card padding="$2" backgroundColor="$green2" borderWidth={1} borderColor="$green8">
+                    <Text fontSize="$2" color="$green11">
+                      Selected: {nomineeName} ({nomineeEmail})
                     </Text>
-                    <RadioGroup
-                      value={emailPreference}
-                      onValueChange={(val) => setEmailPreference(val as 'personal' | 'ecclesia')}
-                    >
-                      <XStack gap="$3" flexWrap="wrap">
-                        <XStack gap="$2" alignItems="center">
-                          <RadioGroup.Item value="personal" id="pref-personal-ds">
-                            <RadioGroup.Indicator />
-                          </RadioGroup.Item>
-                          <Label htmlFor="pref-personal-ds" fontSize="$3">
-                            Nominee's personal email
-                          </Label>
-                        </XStack>
-                        <XStack gap="$2" alignItems="center">
-                          <RadioGroup.Item value="ecclesia" id="pref-ecclesia-ds">
-                            <RadioGroup.Indicator />
-                          </RadioGroup.Item>
-                          <Label htmlFor="pref-ecclesia-ds" fontSize="$3">
-                            Ecclesia RB email
-                          </Label>
-                        </XStack>
-                      </XStack>
-                    </RadioGroup>
-                    {emailPreference === 'ecclesia' ? (
-                      <Input
-                        placeholder="Ecclesia RB email address"
-                        value={rbEcclesiaEmail}
-                        onChangeText={setRbEcclesiaEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        borderWidth={1}
-                        borderColor="$gray6"
-                      />
-                    ) : null}
-                  </YStack>
+                  </Card>
                 ) : null}
 
                 <XStack gap="$2" justifyContent="flex-end">
@@ -505,11 +416,7 @@ export function RecordingBrotherManager({
                     variant="outlined"
                     onPress={() => {
                       setShowDirectSetForm(false)
-                      setNomineeEmail('')
-                      setNomineeName('')
-                      setSelectedMember(null)
-                      setEmailPreference('personal')
-                      setRbEcclesiaEmail('')
+                      resetNomineeState()
                     }}
                     disabled={isSubmitting}
                   >
@@ -519,8 +426,8 @@ export function RecordingBrotherManager({
                     size="$3"
                     theme="blue"
                     onPress={handleDirectSet}
-                    disabled={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting || (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim())}
-                    opacity={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting || (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim()) ? 0.5 : 1}
+                    disabled={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting}
+                    opacity={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting ? 0.5 : 1}
                   >
                     {isSubmitting ? 'Sending...' : 'Send Confirmation Email'}
                   </Button>
@@ -543,127 +450,31 @@ export function RecordingBrotherManager({
           )
         ) : null}
 
-        {/* Nominate button / form */}
-        {showNominateForm ? (
+        {/* Nominate button / form — hidden when active nomination exists */}
+        {hasActiveNomination ? null : showNominateForm ? (
           <Card bordered padding="$3" backgroundColor="$background">
             <YStack gap="$3">
               <Text fontWeight="600" fontSize="$3">Nominate a Recording Brother</Text>
 
-              {members.length > 0 && !selectedMember ? (
-                <YStack gap="$2">
-                  <Text fontSize="$3" color="$textSecondary">
-                    Select a member of {ecclesiaName}:
-                  </Text>
-                  {members.map((m) => (
-                    <Button
-                      key={m.email}
-                      size="$3"
-                      variant="outlined"
-                      onPress={() => handleSelectMember(m)}
-                      theme={nomineeEmail === m.email ? 'blue' : undefined}
-                      borderWidth={nomineeEmail === m.email ? 2 : 1}
-                    >
-                      {m.name}
-                    </Button>
-                  ))}
-                </YStack>
-              ) : selectedMember ? (
-                <YStack gap="$2">
-                  <XStack gap="$2" alignItems="center">
-                    <Button
-                      size="$2"
-                      icon={ChevronLeft}
-                      chromeless
-                      onPress={handleBackToMembers}
-                    />
-                    <Text fontSize="$3" fontWeight="600">
-                      {selectedMember.name}
-                    </Text>
-                  </XStack>
-                  <Text fontSize="$3" color="$textSecondary">
-                    Select the RB email for this nomination:
-                  </Text>
-                  {(selectedMember.emails || []).map((emailRecord) => (
-                    <Button
-                      key={emailRecord.email}
-                      size="$3"
-                      variant="outlined"
-                      onPress={() => handleSelectEmail(emailRecord.email)}
-                      theme={nomineeEmail === emailRecord.email ? 'blue' : undefined}
-                      borderWidth={nomineeEmail === emailRecord.email ? 2 : 1}
-                    >
-                      <YStack alignItems="flex-start">
-                        <Text fontSize="$3">{emailRecord.email}</Text>
-                        <Text fontSize="$2" color="$textSecondary">
-                          {emailRecord.emailType}
-                        </Text>
-                      </YStack>
-                    </Button>
-                  ))}
-                </YStack>
-              ) : (
-                <YStack gap="$2">
-                  <Input
-                    placeholder="Nominee's name"
-                    value={nomineeName}
-                    onChangeText={setNomineeName}
-                    borderWidth={1}
-                    borderColor="$gray6"
-                  />
-                  <Input
-                    placeholder="Nominee's email"
-                    value={nomineeEmail}
-                    onChangeText={setNomineeEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    borderWidth={1}
-                    borderColor="$gray6"
-                  />
-                </YStack>
-              )}
+              <PersonAutocomplete
+                ecclesia={ecclesiaName}
+                value={autocompleteValue}
+                onChangeText={(text) => {
+                  setAutocompleteValue(text)
+                  if (!text) resetNomineeState()
+                }}
+                onSelect={handleAutocompleteSelect}
+                label="Search member by name"
+                placeholder="Type a name to search..."
+                showAllEmails
+              />
 
-              {/* Email preference selection */}
-              {nomineeEmail.trim() ? (
-                <YStack gap="$2" paddingTop="$2">
-                  <Text fontSize="$3" fontWeight="600">Email Preference</Text>
-                  <Text fontSize="$2" color="$textSecondary">
-                    Which email should be used for inter-ecclesia communications?
+              {nomineeEmail ? (
+                <Card padding="$2" backgroundColor="$green2" borderWidth={1} borderColor="$green8">
+                  <Text fontSize="$2" color="$green11">
+                    Selected: {nomineeName} ({nomineeEmail})
                   </Text>
-                  <RadioGroup
-                    value={emailPreference}
-                    onValueChange={(val) => setEmailPreference(val as 'personal' | 'ecclesia')}
-                  >
-                    <XStack gap="$3" flexWrap="wrap">
-                      <XStack gap="$2" alignItems="center">
-                        <RadioGroup.Item value="personal" id="pref-personal-nom">
-                          <RadioGroup.Indicator />
-                        </RadioGroup.Item>
-                        <Label htmlFor="pref-personal-nom" fontSize="$3">
-                          Nominee's personal email
-                        </Label>
-                      </XStack>
-                      <XStack gap="$2" alignItems="center">
-                        <RadioGroup.Item value="ecclesia" id="pref-ecclesia-nom">
-                          <RadioGroup.Indicator />
-                        </RadioGroup.Item>
-                        <Label htmlFor="pref-ecclesia-nom" fontSize="$3">
-                          Ecclesia RB email
-                        </Label>
-                      </XStack>
-                    </XStack>
-                  </RadioGroup>
-                  {emailPreference === 'ecclesia' ? (
-                    <Input
-                      placeholder="Ecclesia RB email address"
-                      value={rbEcclesiaEmail}
-                      onChangeText={setRbEcclesiaEmail}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      borderWidth={1}
-                      borderColor="$gray6"
-                    />
-                  ) : null}
-                </YStack>
+                </Card>
               ) : null}
 
               <XStack gap="$2" justifyContent="flex-end">
@@ -672,11 +483,7 @@ export function RecordingBrotherManager({
                   variant="outlined"
                   onPress={() => {
                     setShowNominateForm(false)
-                    setNomineeEmail('')
-                    setNomineeName('')
-                    setSelectedMember(null)
-                    setEmailPreference('personal')
-                    setRbEcclesiaEmail('')
+                    resetNomineeState()
                   }}
                   disabled={isSubmitting}
                 >
@@ -686,8 +493,8 @@ export function RecordingBrotherManager({
                   size="$3"
                   theme="blue"
                   onPress={handleNominate}
-                  disabled={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting || (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim())}
-                  opacity={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting || (emailPreference === 'ecclesia' && !rbEcclesiaEmail.trim()) ? 0.5 : 1}
+                  disabled={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting}
+                  opacity={!nomineeEmail.trim() || !nomineeName.trim() || isSubmitting ? 0.5 : 1}
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Nomination'}
                 </Button>

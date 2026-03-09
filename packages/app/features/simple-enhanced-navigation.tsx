@@ -51,6 +51,7 @@ const systemAdminPages: MainPageType[] = [
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
   { path: '/admin/metrics', label: 'Metrics' },
+  { path: '/admin/email-tester', label: 'Email Tester' },
 ]
 
 // Community pages visible to all authenticated users (member+)
@@ -138,7 +139,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           color={colors.textSecondary}
           textTransform="uppercase"
         >
-          Main Menu
+          News & Schedule
         </Text>
         {pages.map((page) => (
           <Button

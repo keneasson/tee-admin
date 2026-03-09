@@ -110,6 +110,13 @@ export default function DirectoryAddMemberPage() {
           </Button>
         </XStack>
 
+        <YStack gap="$1">
+          <Heading size="$7" fontWeight="700">Christadelphian Directory</Heading>
+          <Text fontSize="$2" color="$gray11" fontStyle="italic">
+            Malachi 3:16 Then those who feared the Lord spoke with one another. The Lord paid attention and heard them, and a book of remembrance was written before him of those who feared the Lord and esteemed his name.
+          </Text>
+        </YStack>
+
         <YStack gap="$2">
           <Heading size="$8">Add New Member</Heading>
           <Text color="$textSecondary">

@@ -502,6 +502,9 @@ export interface PersonRecord extends BaseRecord {
   googleId?: string       // Google user ID for account linking
   image?: string          // Profile picture URL from OAuth provider
 
+  // Regional admin (only meaningful when role === 'admin')
+  adminRegion?: string
+
   createdAt: string
 }
 
@@ -687,6 +690,8 @@ export interface RBNominationRecord extends BaseRecord {
   status: RBNominationStatus
   emailPreference?: 'personal' | 'ecclesia'  // Which email to use for inter-ecclesia
   rbEcclesiaEmail?: string                    // Ecclesia-specific RB email (only when preference is 'ecclesia')
+  directSet?: boolean                         // True when set directly by admin (bypasses nomination)
+  confirmationSentAt?: string                 // ISO timestamp when confirmation email was last sent
   createdAt: string
 }
 

@@ -8,7 +8,7 @@ import { useUserRole } from '@/hooks/use-user-role'
 import { DirectoryTabs } from '@my/ui/src/directory/directory-tabs'
 import { PersonList } from '@my/ui/src/directory/person-list'
 import { DraftReviewPanel } from '@my/ui/src/people/draft-review-panel'
-import type { DirectoryMember, DraftMember } from '@my/ui/src/directory/types'
+import type { DirectoryMember, DraftMember, EcclesiaListItem } from '@my/ui/src/directory/types'
 
 const ECCLESIA_SESSION_KEY = 'directory-selected-ecclesia'
 
@@ -34,6 +34,9 @@ export default function DirectoryPeoplePage() {
 
   // Guest count for tab badge
   const [guestCount, setGuestCount] = useState(0)
+
+  // Ecclesia metadata for location filters
+  const [ecclesiaDetails, setEcclesiaDetails] = useState<EcclesiaListItem[]>([])
 
   const canReviewDrafts = isRecorderOrHigher
 
@@ -102,6 +105,24 @@ export default function DirectoryPeoplePage() {
   useEffect(() => {
     fetchDrafts()
   }, [fetchDrafts])
+
+  // Fetch ecclesia metadata for location filters
+  useEffect(() => {
+    async function fetchEcclesiaDetails() {
+      try {
+        const res = await fetch('/api/admin/ecclesias')
+        if (res.ok) {
+          const data = await res.json()
+          setEcclesiaDetails(data.ecclesias || [])
+        }
+      } catch (error) {
+        console.error('Error fetching ecclesia details:', error)
+      }
+    }
+    if (isMemberOrHigher) {
+      fetchEcclesiaDetails()
+    }
+  }, [isMemberOrHigher])
 
   const handleEcclesiaChange = useCallback((ecclesia: string | null) => {
     setSelectedEcclesia(ecclesia)
@@ -193,6 +214,7 @@ export default function DirectoryPeoplePage() {
         pendingDraftCount={drafts.length}
         onShowDrafts={() => setShowDraftPanel(!showDraftPanel)}
         canReviewDrafts={canReviewDrafts}
+        ecclesiaDetails={ecclesiaDetails}
       />
     </YStack>
   )

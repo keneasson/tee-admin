@@ -5,10 +5,12 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { YStack, XStack, Text, Spinner, Card, Input, ScrollView } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { useUserRole } from '@/hooks/use-user-role'
+import { checkFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { EcclesiaDetail } from '@my/ui/src/directory/ecclesia-detail'
 import type { EcclesiaDetailData } from '@my/ui/src/ecclesia/ecclesia-detail-view'
 import type { DirectoryMember, Nomination, DirectoryAuthProps, EcclesiaListItem } from '@my/ui/src/directory/types'
-import { Button } from '@my/ui'
+import { Button, Heading } from '@my/ui'
 import { ArrowLeft, ArrowRightLeft, Search, Users } from '@tamagui/lucide-icons'
 import { Dialog } from 'tamagui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
@@ -17,9 +19,10 @@ export default function DirectoryEcclesiaDetailPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isMemberOrHigher, isRecorderOrHigher, isAdminOrOwner, isLoading: authLoading, status } = useUserRole()
+  const { isMemberOrHigher, isRecorderOrHigher, isAdminOrOwner, isLoading: authLoading, status, session } = useUserRole()
   const isHydrated = useHydrated()
   const initialEdit = searchParams?.get('edit') === 'true'
+  const showMultiTenant = checkFeatureFlag(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
 
   const [ecclesia, setEcclesia] = useState<EcclesiaDetailData | null>(null)
   const [canEdit, setCanEdit] = useState(false)
@@ -213,6 +216,17 @@ export default function DirectoryEcclesiaDetailPage() {
     }
   }
 
+  const handleResend = async (nominationId: string) => {
+    const res = await fetch(`/api/people/rb-nomination/${nominationId}/resend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ecclesia: ecclesiaName }),
+    })
+    if (res.ok) {
+      fetchNominations()
+    }
+  }
+
   // Fetch all ecclesias for transfer target picker
   const fetchAllEcclesias = useCallback(async () => {
     try {
@@ -347,6 +361,12 @@ export default function DirectoryEcclesiaDetailPage() {
 
   return (
     <>
+      <YStack padding="$4" paddingBottom={0} gap="$1">
+        <Heading size="$7" fontWeight="700">Christadelphian Directory</Heading>
+        <Text fontSize="$2" color="$gray11" fontStyle="italic">
+          Malachi 3:16 Then those who feared the Lord spoke with one another. The Lord paid attention and heard them, and a book of remembrance was written before him of those who feared the Lord and esteemed his name.
+        </Text>
+      </YStack>
       <EcclesiaDetail
         ecclesia={ecclesia}
         canEdit={canEdit}
@@ -362,8 +382,10 @@ export default function DirectoryEcclesiaDetailPage() {
         onNominate={handleNominate}
         onSecond={handleSecond}
         onDirectSet={isAdminOrOwner ? handleDirectSetRB : undefined}
+        onResend={isAdminOrOwner ? handleResend : undefined}
         onDelete={isAdminOrOwner ? handleDeleteClick : undefined}
         isDeleting={isDeleting || isTransferring}
+        showExternalLinks={showMultiTenant}
       />
 
       {/* Delete Confirmation Dialog (0 members) */}

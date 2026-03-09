@@ -61,6 +61,7 @@ interface MemberProfile {
   family?: Array<{
     email: string
     name?: string
+    personId?: string
     relationshipType: string
   }>
   privacy?: {
@@ -247,10 +248,27 @@ export async function GET(
     // Family members (privacy gated)
     if (permissions.canViewFamily) {
       const familyRecords = await relationshipRepository.getFamilyMembers(targetPerson.primaryEmail)
-      profile.family = familyRecords.map(rel => ({
-        email: rel.targetEmail,
-        relationshipType: rel.relationshipType,
-      }))
+      // Resolve names from person records — never expose raw emails
+      const familyWithNames = await Promise.all(
+        familyRecords.map(async (rel) => {
+          let name: string | undefined
+          let personId: string | undefined
+          try {
+            const person = await personRepository.getByEmail(rel.targetEmail)
+            if (person) {
+              name = person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim() || undefined
+              personId = person.personId
+            }
+          } catch { /* person not found */ }
+          return {
+            email: rel.targetEmail,
+            name,
+            personId,
+            relationshipType: rel.relationshipType,
+          }
+        })
+      )
+      profile.family = familyWithNames
     }
 
     // Admin data for Owner/Admin viewers

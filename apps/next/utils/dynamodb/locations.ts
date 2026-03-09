@@ -31,6 +31,13 @@ export interface EcclesiaService {
   location?: string
 }
 
+export interface EcclesiaExternalLinks {
+  newsletterUrl?: string
+  youtube?: string
+  facebook?: string
+  otherLinks?: Array<{ label: string; url: string }>
+}
+
 export interface EcclesiaData {
   name: string
   country: string
@@ -45,6 +52,10 @@ export interface EcclesiaData {
   recordingBrotherName?: string
   recordingBrotherPersonId?: string  // Hard link to PersonRecord
   services?: EcclesiaService[]
+  website?: string
+  externalLinks?: EcclesiaExternalLinks
+  region?: string
+  newsletterEnabled?: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -149,6 +160,10 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
     recordingBrotherName: item.recordingBrotherName,
     recordingBrotherPersonId: item.recordingBrotherPersonId,
     services: item.services,
+    website: item.website,
+    externalLinks: item.externalLinks,
+    region: item.region,
+    newsletterEnabled: item.newsletterEnabled,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }
@@ -471,6 +486,10 @@ export async function updateEcclesiaFields(
     venue?: string
     postalCode?: string
     services?: EcclesiaService[]
+    website?: string
+    externalLinks?: EcclesiaExternalLinks
+    region?: string
+    newsletterEnabled?: boolean
   }
 ): Promise<EcclesiaData | null> {
   try {
@@ -493,6 +512,10 @@ export async function updateEcclesiaFields(
       { key: 'venue', attr: ':venue' },
       { key: 'postalCode', attr: ':postalCode' },
       { key: 'services', attr: ':services' },
+      { key: 'website', attr: ':website' },
+      { key: 'externalLinks', attr: ':externalLinks' },
+      { key: 'region', attr: ':region' },
+      { key: 'newsletterEnabled', attr: ':newsletterEnabled' },
     ]
 
     for (const { key, attr } of fieldMap) {

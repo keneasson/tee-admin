@@ -37,9 +37,13 @@ interface EcclesiaDetailProps {
   onNominate: (nomineeEmail: string, nomineeName: string) => Promise<void>
   onSecond: (nominationId: string) => Promise<void>
   onDirectSet?: (nomineeEmail: string, nomineeName: string) => Promise<void>
+  /** Resend confirmation email for a nomination */
+  onResend?: (nominationId: string) => Promise<void>
   /** Delete ecclesia callback (admin/owner only) */
   onDelete?: () => void
   isDeleting?: boolean
+  /** Show external links card (gated behind multi-tenant feature flag) */
+  showExternalLinks?: boolean
 }
 
 export function EcclesiaDetail({
@@ -57,8 +61,10 @@ export function EcclesiaDetail({
   onNominate,
   onSecond,
   onDirectSet,
+  onResend,
   onDelete,
   isDeleting = false,
+  showExternalLinks = false,
 }: EcclesiaDetailProps) {
   const handleSaveRb = async (email: string, name: string): Promise<boolean> => {
     if (!onUpdate) return false
@@ -85,6 +91,7 @@ export function EcclesiaDetail({
           canEdit={canEdit}
           onUpdate={onUpdate}
           initialEdit={initialEdit}
+          showExternalLinks={showExternalLinks}
         />
 
         {/* Recording Brother Manager (replaces the simple RB card in EcclesiaDetailView) */}
@@ -98,6 +105,7 @@ export function EcclesiaDetail({
           onNominate={onNominate}
           onSecond={onSecond}
           onDirectSet={onDirectSet}
+          onResend={onResend}
           onSaveRb={canEdit ? handleSaveRb : undefined}
         />
 

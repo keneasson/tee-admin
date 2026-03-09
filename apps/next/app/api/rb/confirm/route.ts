@@ -27,6 +27,7 @@ const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token = searchParams.get('token')
+  const action = searchParams.get('action')
 
   if (!token) {
     return htmlResponse('Missing Token', 'No confirmation token was provided.', false)
@@ -49,12 +50,12 @@ export async function GET(request: NextRequest) {
 
     // Check expiry
     if (new Date(tokenData.expiresAt) < new Date()) {
-      return htmlResponse('Link Expired', 'This confirmation link has expired. Please request a new nomination.', false)
+      return htmlResponse('Link Expired', 'This confirmation link has expired. Please request a new verification.', false)
     }
 
     // Check if already used
     if (tokenData.used) {
-      return htmlResponse('Already Confirmed', 'This Recording Brother confirmation has already been processed.', false)
+      return htmlResponse('Already Processed', 'This verification link has already been used.', false)
     }
 
     // Mark token as used
@@ -71,7 +72,29 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Activate RB designation
+    // Handle deny action
+    if (action === 'deny') {
+      // Mark nomination as withdrawn if exists
+      if (tokenData.nominationId) {
+        try {
+          await rbNominationRepository.update(
+            `RB_NOM#${tokenData.ecclesiaName}`,
+            `NOMINATION#${tokenData.nominationId}`,
+            { status: 'withdrawn' } as any
+          )
+        } catch (e) {
+          console.error('Failed to update nomination status:', e)
+        }
+      }
+
+      return htmlResponse(
+        'Declined',
+        `You have declined the Recording Brother designation for ${tokenData.ecclesiaName}. You can close this page.`,
+        false
+      )
+    }
+
+    // Activate RB designation (confirm action)
     await setRecordingBrother({
       ecclesiaName: tokenData.ecclesiaName,
       newPersonId: tokenData.personId,
@@ -101,7 +124,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('RB confirmation error:', error)
-    return htmlResponse('Error', 'An error occurred while processing your confirmation. Please try again.', false)
+    return htmlResponse('Error', 'An error occurred while processing your request. Please try again.', false)
   }
 }
 

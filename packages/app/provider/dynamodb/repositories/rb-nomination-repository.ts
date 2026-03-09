@@ -10,6 +10,9 @@ export interface CreateNominationInput {
   nominatedByName: string
   emailPreference?: 'personal' | 'ecclesia'
   rbEcclesiaEmail?: string
+  directSet?: boolean
+  status?: RBNominationStatus
+  confirmationSentAt?: string
 }
 
 /**
@@ -44,9 +47,11 @@ export class RBNominationRepository extends BaseRepository<RBNominationRecord> {
       nominatedByName: input.nominatedByName,
       seconds: [],
       secondsNeeded: 2,
-      status: 'open',
+      status: input.status || 'open',
       emailPreference: input.emailPreference,
       rbEcclesiaEmail: input.rbEcclesiaEmail,
+      directSet: input.directSet,
+      confirmationSentAt: input.confirmationSentAt,
       createdAt: now,
       lastUpdated: now,
       version: 0,
@@ -65,6 +70,21 @@ export class RBNominationRepository extends BaseRepository<RBNominationRecord> {
       { ':pk': `RB_NOM#${ecclesia}`, ':status': 'open' },
       {
         filterExpression: '#status = :status',
+        expressionAttributeNames: { '#status': 'status' },
+      }
+    )
+    return result.items
+  }
+
+  /**
+   * Get active nominations (open or confirmed) for an ecclesia
+   */
+  async getActiveByEcclesia(ecclesia: string): Promise<RBNominationRecord[]> {
+    const result = await this.query(
+      'pkey = :pk',
+      { ':pk': `RB_NOM#${ecclesia}`, ':open': 'open', ':confirmed': 'confirmed' },
+      {
+        filterExpression: '#status = :open OR #status = :confirmed',
         expressionAttributeNames: { '#status': 'status' },
       }
     )

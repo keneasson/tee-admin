@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getEcclesiaByName, updateEcclesiaFields } from '@/utils/dynamodb/locations'
-import type { EcclesiaService } from '@/utils/dynamodb/locations'
+import type { EcclesiaService, EcclesiaExternalLinks } from '@/utils/dynamodb/locations'
 import { checkEcclesiaEditPermission, checkRecordingBrotherPermission } from '@/utils/ecclesia-permissions'
 import { setRecordingBrother, clearRecordingBrother } from '@/utils/rb-service'
 import { sendRBConfirmationEmail } from '@/utils/email/send-rb-confirmation'
@@ -90,6 +90,8 @@ export async function PATCH(
       recordingBrotherEmail,
       recordingBrotherName,
       services,
+      website,
+      externalLinks,
     } = body as {
       address?: string
       venue?: string
@@ -99,6 +101,8 @@ export async function PATCH(
       recordingBrotherEmail?: string
       recordingBrotherName?: string
       services?: EcclesiaService[]
+      website?: string
+      externalLinks?: EcclesiaExternalLinks
     }
 
     const updates: Record<string, any> = {}
@@ -108,6 +112,8 @@ export async function PATCH(
     if (phone !== undefined) updates.phone = phone.trim()
     if (contactEmail !== undefined) updates.contactEmail = contactEmail.trim()
     if (services !== undefined) updates.services = services
+    if (website !== undefined) updates.website = website.trim()
+    if (externalLinks !== undefined) updates.externalLinks = externalLinks
 
     // Recording Brother fields require elevated permission and use RB service
     let rbTransferred = false

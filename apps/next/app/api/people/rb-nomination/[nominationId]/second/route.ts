@@ -67,6 +67,13 @@ export async function POST(
           nominationId: nomination.nominationId,
           personId: nominee.personId,
         })
+
+        // Track when confirmation email was sent
+        await rbNominationRepository.update(
+          `RB_NOM#${ecclesia.trim()}`,
+          `NOMINATION#${nominationId}`,
+          { confirmationSentAt: new Date().toISOString() } as any
+        )
       }
     }
 

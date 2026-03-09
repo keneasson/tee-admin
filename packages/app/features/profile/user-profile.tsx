@@ -18,6 +18,7 @@ interface UserProfileProps {
   userName?: string
   userRole?: string
   userEcclesia?: string
+  onNavigateToPerson?: (personId: string) => void
 }
 
 interface Address {
@@ -38,6 +39,7 @@ interface Address {
 interface FamilyMember {
   email: string
   name?: string
+  personId?: string
   relationshipType: RelationshipType
   status?: string
   createdAt?: string
@@ -75,6 +77,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   userName,
   userRole,
   userEcclesia,
+  onNavigateToPerson,
 }) => {
   const [loading, setLoading] = useState(true)
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -291,16 +294,21 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
-  const handleLookupEmail = async (email: string): Promise<{ found: boolean; firstName?: string; lastName?: string } | null> => {
+  const handleSearchPeople = async (query: string): Promise<Array<{ id: string; name: string; email: string; ecclesia?: string }>> => {
     try {
-      const res = await fetch(`/api/user/lookup?email=${encodeURIComponent(email)}`)
+      const res = await fetch(`/api/people?search=${encodeURIComponent(query)}`)
       if (res.ok) {
         const data = await res.json()
-        return data
+        return (data.members || []).map((m: { id: string; name: string; email: string; ecclesia?: string }) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          ecclesia: m.ecclesia,
+        }))
       }
-      return { found: false }
+      return []
     } catch {
-      return { found: false }
+      return []
     }
   }
 
@@ -775,7 +783,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   editable
                   onAdd={handleAddFamilyMember}
                   onRemove={handleRemoveFamilyMember}
-                  onLookupEmail={handleLookupEmail}
+                  onSearchPeople={handleSearchPeople}
+                  onMemberClick={onNavigateToPerson}
                 />
               </YStack>
             </Tabs.Content>

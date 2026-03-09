@@ -48,6 +48,7 @@ export function useUserRole() {
   const normalizedRole = userRole ? (userRole as string).toUpperCase() : undefined
 
   return {
+    session,
     role: userRole,
     status, // 'loading' | 'authenticated' | 'unauthenticated'
     isLoading: status === 'loading',

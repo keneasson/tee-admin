@@ -64,6 +64,7 @@ interface MemberProfile {
   family?: Array<{
     email: string
     name?: string
+    personId?: string
     relationshipType: string
   }>
   privacy?: {
@@ -259,9 +260,6 @@ export default function MemberProfilePage() {
     }
   }
 
-  const handleFamilyMemberClick = (email: string) => {
-    router.push(`/people/${encodeURIComponent(email)}`)
-  }
 
   const handleEmailClick = (email: string) => {
     window.location.href = `mailto:${email}`
@@ -1263,13 +1261,13 @@ export default function MemberProfilePage() {
                     padding="$3"
                     backgroundColor="$backgroundHover"
                     pressStyle={{ opacity: 0.8 }}
-                    onPress={() => handleFamilyMemberClick(member.email)}
+                    onPress={() => router.push(`/people/${encodeURIComponent(member.personId || member.email)}`)}
                     cursor="pointer"
                   >
                     <XStack justifyContent="space-between" alignItems="center">
                       <YStack>
                         <Text fontSize="$4" fontWeight="500">
-                          {member.name || member.email}
+                          {member.name || 'Family Member'}
                         </Text>
                         <Text fontSize="$2" theme="alt2" textTransform="capitalize">
                           {member.relationshipType.replace('_', ' ')}

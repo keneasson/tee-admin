@@ -35,10 +35,12 @@ export async function GET() {
     const relationshipsWithNames = await Promise.all(
       familyMembers.map(async (rel) => {
         let name: string | undefined
+        let personId: string | undefined
         try {
           const person = await personRepository.getByEmail(rel.targetEmail)
           if (person) {
             name = person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim()
+            personId = person.personId
           }
         } catch {
           // If lookup fails, just use email
@@ -46,6 +48,7 @@ export async function GET() {
         return {
           email: rel.targetEmail,
           name,
+          personId,
           relationshipType: rel.relationshipType,
           status: rel.status,
           createdAt: rel.createdAt,

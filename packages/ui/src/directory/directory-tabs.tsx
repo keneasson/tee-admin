@@ -1,4 +1,4 @@
-import { XStack, Text } from 'tamagui'
+import { YStack, XStack, Text, Heading } from 'tamagui'
 import { Button } from '../Button'
 import { brandColors } from '../branding/brand-colors'
 
@@ -14,7 +14,14 @@ interface DirectoryTabsProps {
 
 export function DirectoryTabs({ activeTab, onTabChange, pendingDraftCount = 0, guestCount = 0, showGuestTab = false }: DirectoryTabsProps) {
   return (
-    <XStack gap="$2" flexWrap="wrap">
+    <YStack gap="$3">
+      <YStack gap="$1">
+        <Heading size="$7" fontWeight="700">Christadelphian Directory</Heading>
+        <Text fontSize="$2" color="$gray11" fontStyle="italic">
+          Malachi 3:16 Then those who feared the Lord spoke with one another. The Lord paid attention and heard them, and a book of remembrance was written before him of those who feared the Lord and esteemed his name.
+        </Text>
+      </YStack>
+      <XStack gap="$2" flexWrap="wrap">
       <Button
         size="$4"
         backgroundColor={activeTab === 'ecclesias' ? brandColors.light.primary : 'transparent'}
@@ -98,5 +105,6 @@ export function DirectoryTabs({ activeTab, onTabChange, pendingDraftCount = 0, g
         </Button>
       ) : null}
     </XStack>
+    </YStack>
   )
 }

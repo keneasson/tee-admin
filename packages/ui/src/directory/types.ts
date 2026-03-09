@@ -49,6 +49,8 @@ export interface Nomination {
   status: string
   emailPreference?: 'personal' | 'ecclesia'
   rbEcclesiaEmail?: string
+  directSet?: boolean
+  confirmationSentAt?: string
   createdAt: string
 }
 
@@ -59,6 +61,13 @@ export interface EcclesiaService {
   day?: string
   time?: string
   location?: string
+}
+
+export interface EcclesiaExternalLinks {
+  newsletterUrl?: string
+  youtube?: string
+  facebook?: string
+  otherLinks?: Array<{ label: string; url: string }>
 }
 
 export interface EcclesiaListItem {
@@ -87,6 +96,7 @@ export interface EcclesiaListItem {
   contactEmail?: string
   contactPhone?: string
   website?: string
+  externalLinks?: EcclesiaExternalLinks
   memberCount?: number
 }
 

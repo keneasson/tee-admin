@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useMemo, useCallback } from 'react'
 import { YStack, XStack, Text, Card, Input, Select, Spinner, Label } from 'tamagui'
 import { Button } from '../Button'
-import { Plus, Trash2, Users, Heart, User } from '@tamagui/lucide-icons'
+import { Plus, Trash2, Users, Heart, User, Search, X, UserPlus, Link2, Link2Off } from '@tamagui/lucide-icons'
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
 
 interface FamilyMember {
@@ -18,12 +18,21 @@ export interface AddFamilyMemberData {
   relationshipType: RelationshipType
 }
 
+interface PersonSearchResult {
+  id: string
+  name: string
+  email: string
+  ecclesia?: string
+}
+
 interface FamilyMembersProps {
   members: FamilyMember[]
   editable?: boolean
   onAdd?: (data: AddFamilyMemberData) => Promise<void>
   onRemove?: (targetEmail: string, relationshipType: RelationshipType) => Promise<void>
   onMemberClick?: (email: string) => void
+  onSearchPeople?: (query: string) => Promise<PersonSearchResult[]>
+  /** @deprecated Use onSearchPeople instead */
   onLookupEmail?: (email: string) => Promise<{ found: boolean; firstName?: string; lastName?: string } | null>
 }
 
@@ -71,17 +80,24 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
   onAdd,
   onRemove,
   onMemberClick,
-  onLookupEmail,
+  onSearchPeople,
 }) => {
   const [isAdding, setIsAdding] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [newEmail, setNewEmail] = useState('')
+  const [selectedEmail, setSelectedEmail] = useState('')
   const [newType, setNewType] = useState<RelationshipType | ''>('')
   const [loading, setLoading] = useState(false)
-  const [lookingUp, setLookingUp] = useState(false)
-  const [personFound, setPersonFound] = useState<boolean | null>(null)
-  const [showNameFields, setShowNameFields] = useState(false)
+  const [manualEntry, setManualEntry] = useState(false)
+  const [selectedPerson, setSelectedPerson] = useState<PersonSearchResult | null>(null)
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<PersonSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Check if spouse already exists
   const hasSpouse = members.some(m => m.relationshipType === 'spouse')
@@ -91,48 +107,66 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
     ([value]) => !(value === 'spouse' && hasSpouse)
   )
 
+  // Existing family member emails to exclude from search results
+  const existingEmails = useMemo(() => new Set(members.map(m => m.email.toLowerCase())), [members])
+
   const resetForm = () => {
     setFirstName('')
     setLastName('')
-    setNewEmail('')
+    setSelectedEmail('')
     setNewType('')
     setIsAdding(false)
-    setPersonFound(null)
-    setShowNameFields(false)
+    setManualEntry(false)
+    setSelectedPerson(null)
+    setSearchQuery('')
+    setSearchResults([])
+    setShowDropdown(false)
   }
 
-  const handleEmailBlur = async () => {
-    if (!newEmail || !newEmail.includes('@') || !onLookupEmail) {
-      // No valid email, show name fields for manual entry
-      if (newEmail && !newEmail.includes('@')) return // Invalid email, wait for correction
-      setShowNameFields(true)
-      setPersonFound(null)
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query)
+    setSelectedPerson(null)
+
+    if (!query || query.length < 2 || !onSearchPeople) {
+      setSearchResults([])
+      setShowDropdown(false)
       return
     }
 
-    setLookingUp(true)
-    try {
-      const result = await onLookupEmail(newEmail)
-      if (result?.found) {
-        setFirstName(result.firstName || '')
-        setLastName(result.lastName || '')
-        setPersonFound(true)
-        setShowNameFields(false)
-      } else {
-        setPersonFound(false)
-        setShowNameFields(true)
+    // Debounce search
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const results = await onSearchPeople(query)
+        // Filter out people already in family list
+        const filtered = results.filter(r => !existingEmails.has(r.email.toLowerCase()))
+        setSearchResults(filtered)
+        setShowDropdown(true)
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearching(false)
       }
-    } catch {
-      setPersonFound(false)
-      setShowNameFields(true)
-    } finally {
-      setLookingUp(false)
-    }
+    }, 300)
+  }, [onSearchPeople, existingEmails])
+
+  const handleSelectPerson = (person: PersonSearchResult) => {
+    setSelectedPerson(person)
+    setSearchQuery(person.name)
+    const nameParts = person.name.split(' ')
+    setFirstName(nameParts[0] || '')
+    setLastName(nameParts.slice(1).join(' ') || '')
+    setSelectedEmail(person.email)
+    setShowDropdown(false)
   }
 
-  const handleSkipEmail = () => {
-    setShowNameFields(true)
-    setPersonFound(null)
+  const handleSearchBlur = () => {
+    setTimeout(() => {
+      if (!containerRef.current?.contains(document.activeElement)) {
+        setShowDropdown(false)
+      }
+    }, 200)
   }
 
   const handleAdd = async () => {
@@ -142,7 +176,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
       await onAdd({
         firstName,
         lastName,
-        email: newEmail || undefined,
+        email: selectedEmail || undefined,
         relationshipType: newType,
       })
       resetForm()
@@ -185,103 +219,222 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
       {isAdding ? (
         <Card padding="$3" backgroundColor="$background">
           <YStack gap="$3">
-            {/* Step 1: Email lookup */}
+            {/* Step 1: Relationship type */}
             <YStack gap="$1">
-              <Label htmlFor="email" fontSize="$2">Email Address</Label>
-              <XStack gap="$2" alignItems="center">
-                <Input
-                  id="email"
-                  flex={1}
-                  placeholder="Enter email to find existing member"
-                  value={newEmail}
-                  onChangeText={(text: string) => {
-                    setNewEmail(text)
-                    setPersonFound(null)
-                    if (!text) setShowNameFields(false)
-                  }}
-                  onBlur={handleEmailBlur}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  disabled={lookingUp}
-                />
-                {lookingUp ? <Spinner size="small" /> : null}
-              </XStack>
-              {personFound === true ? (
-                <Text fontSize="$2" color="$green10">
-                  Found: {firstName} {lastName}
+              <Label fontSize="$2">Relationship *</Label>
+              <Select
+                value={newType}
+                onValueChange={(val) => setNewType(val as RelationshipType)}
+              >
+                <Select.Trigger>
+                  <Select.Value placeholder="Select relationship..." />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.ScrollUpButton />
+                  <Select.Viewport>
+                    {availableRelationshipTypes.map(([value, label], index) => (
+                      <Select.Item key={value} value={value} index={index}>
+                        <Select.ItemText>{label}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                  <Select.ScrollDownButton />
+                </Select.Content>
+              </Select>
+              {hasSpouse ? (
+                <Text fontSize="$1" theme="alt2">
+                  Spouse already added
                 </Text>
-              ) : null}
-              {personFound === false ? (
-                <Text fontSize="$2" color="$orange10">
-                  Not found - enter name below to create new record
-                </Text>
-              ) : null}
-              {!showNameFields && !personFound ? (
-                <Button
-                  size="$2"
-                  marginTop="$2"
-                  onPress={handleSkipEmail}
-                >
-                  Add without email (child/newborn)
-                </Button>
               ) : null}
             </YStack>
 
-            {/* Step 2: Name fields (shown if email not found or skipped) */}
-            {showNameFields || personFound === false ? (
-              <XStack gap="$2">
-                <YStack flex={1} gap="$1">
-                  <Label htmlFor="firstName" fontSize="$2">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    placeholder="First name"
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    autoCapitalize="words"
-                  />
+            {/* Step 2: Search for person (shown once relationship is selected) */}
+            {newType ? (
+              manualEntry ? (
+                // Manual entry mode for people not in the system
+                <YStack gap="$2">
+                  <XStack gap="$2" alignItems="center">
+                    <UserPlus size={14} color="$blue10" />
+                    <Text fontSize="$2" fontWeight="600" color="$blue10">
+                      New person (not in directory)
+                    </Text>
+                  </XStack>
+                  <XStack gap="$2">
+                    <YStack flex={1} gap="$1">
+                      <Label htmlFor="firstName" fontSize="$2">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        placeholder="First name"
+                        value={firstName}
+                        onChangeText={setFirstName}
+                        autoCapitalize="words"
+                      />
+                    </YStack>
+                    <YStack flex={1} gap="$1">
+                      <Label htmlFor="lastName" fontSize="$2">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        placeholder="Last name"
+                        value={lastName}
+                        onChangeText={setLastName}
+                        autoCapitalize="words"
+                      />
+                    </YStack>
+                  </XStack>
+                  <Button
+                    size="$2"
+                    icon={Search}
+                    alignSelf="flex-start"
+                    onPress={() => {
+                      setManualEntry(false)
+                      setFirstName('')
+                      setLastName('')
+                      setSearchQuery('')
+                      setSelectedPerson(null)
+                    }}
+                  >
+                    Back to search
+                  </Button>
                 </YStack>
-                <YStack flex={1} gap="$1">
-                  <Label htmlFor="lastName" fontSize="$2">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    placeholder="Last name"
-                    value={lastName}
-                    onChangeText={setLastName}
-                    autoCapitalize="words"
-                  />
-                </YStack>
-              </XStack>
-            ) : null}
+              ) : (
+                // Search mode
+                <YStack gap="$1" position="relative" ref={containerRef}>
+                  <Label fontSize="$2">
+                    Search for {relationshipTypeLabels[newType as RelationshipType] || 'person'}
+                  </Label>
+                  <YStack position="relative">
+                    <Input
+                      placeholder="Type a name or email to search..."
+                      value={searchQuery}
+                      onChangeText={handleSearch}
+                      onBlur={handleSearchBlur}
+                      onFocus={() => {
+                        if (searchResults.length > 0 && !selectedPerson) setShowDropdown(true)
+                      }}
+                      autoCapitalize="none"
+                      autoComplete="off"
+                      autoCorrect={false}
+                      paddingRight={searchQuery ? '$8' : '$6'}
+                    />
+                    <XStack
+                      position="absolute"
+                      right="$2"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      gap="$1"
+                    >
+                      {searchQuery ? (
+                        <Button
+                          size="$2"
+                          circular
+                          icon={X}
+                          chromeless
+                          onPress={() => {
+                            setSearchQuery('')
+                            setSelectedPerson(null)
+                            setSearchResults([])
+                            setShowDropdown(false)
+                          }}
+                          hoverStyle={{ backgroundColor: '$gray3' }}
+                        />
+                      ) : null}
+                      {searching ? (
+                        <Spinner size="small" color="$gray11" />
+                      ) : (
+                        <Search size={14} color="$gray11" style={{ pointerEvents: 'none' }} />
+                      )}
+                    </XStack>
 
-            {/* Step 3: Relationship type (shown once we have a name) */}
-            {(firstName || personFound) ? (
-              <YStack gap="$1">
-                <Label fontSize="$2">Relationship *</Label>
-                <Select
-                  value={newType}
-                  onValueChange={(val) => setNewType(val as RelationshipType)}
-                >
-                  <Select.Trigger>
-                    <Select.Value placeholder="Select relationship..." />
-                  </Select.Trigger>
-                  <Select.Content>
-                    <Select.ScrollUpButton />
-                    <Select.Viewport>
-                      {availableRelationshipTypes.map(([value, label], index) => (
-                        <Select.Item key={value} value={value} index={index}>
-                          <Select.ItemText>{label}</Select.ItemText>
-                        </Select.Item>
-                      ))}
-                    </Select.Viewport>
-                    <Select.ScrollDownButton />
-                  </Select.Content>
-                </Select>
-                {hasSpouse ? (
-                  <Text fontSize="$1" theme="alt2">
-                    Spouse already added
-                  </Text>
-                ) : null}
-              </YStack>
+                    {showDropdown && searchResults.length > 0 ? (
+                      <YStack
+                        position="absolute"
+                        top="100%"
+                        left={0}
+                        right={0}
+                        marginTop="$1"
+                        backgroundColor="$background"
+                        borderWidth={2}
+                        borderColor="$textTertiary"
+                        borderRadius="$3"
+                        maxHeight={200}
+                        overflow="hidden"
+                        zIndex={99999}
+                        elevation={5}
+                        shadowColor="$shadowColor"
+                        shadowOffset={{ width: 0, height: 4 }}
+                        shadowOpacity={0.1}
+                        shadowRadius={8}
+                      >
+                        {searchResults.map((person, index) => (
+                          <Button
+                            key={person.id}
+                            chromeless
+                            justifyContent="flex-start"
+                            paddingHorizontal="$3"
+                            paddingVertical="$2.5"
+                            borderRadius={0}
+                            backgroundColor="transparent"
+                            hoverStyle={{ backgroundColor: '$blue2' }}
+                            pressStyle={{ backgroundColor: '$blue3' }}
+                            onPress={() => handleSelectPerson(person)}
+                            borderBottomWidth={index < searchResults.length - 1 ? 1 : 0}
+                            borderBottomColor="$borderColor"
+                          >
+                            <YStack alignItems="flex-start" width="100%" gap="$0.5">
+                              <Text fontSize="$3" fontWeight="600" color="$textPrimary">
+                                {person.name}
+                              </Text>
+                              {person.ecclesia ? (
+                                <Text fontSize="$2" color="$gray11">{person.ecclesia}</Text>
+                              ) : null}
+                            </YStack>
+                          </Button>
+                        ))}
+                      </YStack>
+                    ) : null}
+
+                    {showDropdown && searchQuery.length >= 2 && searchResults.length === 0 && !searching ? (
+                      <YStack
+                        position="absolute"
+                        top="100%"
+                        left={0}
+                        right={0}
+                        marginTop="$1"
+                        backgroundColor="$background"
+                        borderWidth={2}
+                        borderColor="$textTertiary"
+                        borderRadius="$3"
+                        padding="$3"
+                        zIndex={99999}
+                        elevation={5}
+                      >
+                        <Text fontSize="$3" theme="alt2" textAlign="center">
+                          No matching people found
+                        </Text>
+                      </YStack>
+                    ) : null}
+                  </YStack>
+
+                  {selectedPerson ? (
+                    <Card padding="$2" backgroundColor="$green2" borderWidth={1} borderColor="$green8" marginTop="$1">
+                      <Text fontSize="$2" color="$green11">
+                        Selected: {selectedPerson.name}
+                        {selectedPerson.ecclesia ? ` (${selectedPerson.ecclesia})` : ''}
+                      </Text>
+                    </Card>
+                  ) : null}
+
+                  <Button
+                    size="$2"
+                    icon={UserPlus}
+                    alignSelf="flex-start"
+                    marginTop="$1"
+                    onPress={() => setManualEntry(true)}
+                  >
+                    Add person not in directory
+                  </Button>
+                </YStack>
+              )
             ) : null}
 
             {/* Actions */}
@@ -300,7 +453,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
                 disabled={!canSubmit}
                 icon={loading ? <Spinner /> : undefined}
               >
-                Add Family Member
+                Add {newType ? relationshipTypeLabels[newType as RelationshipType] : 'Family Member'}
               </Button>
             </XStack>
           </YStack>
@@ -323,24 +476,32 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
               {typeMembers.length > 1 ? relationshipTypePlurals[type] : relationshipTypeLabels[type]}
             </Text>
           </XStack>
-          {typeMembers.map((member) => (
+          {typeMembers.map((member) => {
+            const hasListing = !!member.personId
+            return (
             <Card
               key={`${member.email}-${member.relationshipType}`}
               padding="$3"
               backgroundColor="$backgroundHover"
-              pressStyle={onMemberClick ? { opacity: 0.8 } : undefined}
-              onPress={onMemberClick ? () => onMemberClick(member.email) : undefined}
-              cursor={onMemberClick ? 'pointer' : undefined}
             >
               <XStack justifyContent="space-between" alignItems="center">
-                <YStack>
+                <XStack gap="$2" alignItems="center" flex={1}>
+                  {hasListing && onMemberClick ? (
+                    <Button
+                      size="$2"
+                      circular
+                      chromeless
+                      icon={<Link2 size={16} color="$blue10" />}
+                      onPress={() => onMemberClick(member.personId!)}
+                      hoverStyle={{ backgroundColor: '$blue2' }}
+                    />
+                  ) : (
+                    <Link2Off size={16} color="$gray8" style={{ marginLeft: 8, marginRight: 8 }} />
+                  )}
                   <Text fontSize="$4" fontWeight="500">
-                    {member.name || member.email}
+                    {member.name || 'Family Member'}
                   </Text>
-                  {member.name ? (
-                    <Text fontSize="$2" theme="alt2">{member.email}</Text>
-                  ) : null}
-                </YStack>
+                </XStack>
                 {editable ? (
                   <Button
                     size="$2"
@@ -354,7 +515,8 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
                 ) : null}
               </XStack>
             </Card>
-          ))}
+            )
+          })}
         </YStack>
           )
         })}

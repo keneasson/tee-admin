@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const ecclesiaRecord = await getEcclesiaByName(ecclesia)
     const hasRecordingBrother = !!ecclesiaRecord?.recordingBrotherEmail
 
-    const nominations = await rbNominationRepository.getOpenByEcclesia(ecclesia)
+    const nominations = await rbNominationRepository.getActiveByEcclesia(ecclesia)
 
     return NextResponse.json({
       success: true,
@@ -110,6 +110,22 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      const now = new Date().toISOString()
+
+      // Create a nomination record so the UI can track status persistently
+      const nomination = await rbNominationRepository.create({
+        ecclesia: ecclesia.trim(),
+        nomineeEmail: nomineeEmail.trim(),
+        nomineeName: nomineeName.trim(),
+        nominatedBy: viewerEmail,
+        nominatedByName: (session.user as any).name || viewerEmail,
+        emailPreference: resolvedPreference,
+        rbEcclesiaEmail: rbEcclesiaEmail?.trim(),
+        directSet: true,
+        status: 'confirmed',
+        confirmationSentAt: now,
+      })
+
       // Send confirmation email to nominee
       await sendRBConfirmationEmail({
         recipientEmail: nomineeEmail.trim(),
@@ -118,10 +134,11 @@ export async function POST(request: NextRequest) {
         emailPreference: resolvedPreference,
         rbEcclesiaEmail: rbEcclesiaEmail?.trim(),
         nominatorName: (session.user as any).name || viewerEmail,
+        nominationId: nomination.nominationId,
         personId: nominee.personId,
       })
 
-      return NextResponse.json({ success: true, directSet: true, awaitingConfirmation: true })
+      return NextResponse.json({ success: true, directSet: true, nomination })
     }
 
     // Standard nomination flow

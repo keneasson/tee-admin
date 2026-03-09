@@ -17,6 +17,9 @@ export const FEATURE_FLAGS = {
   // Development features
   COMPONENT_PLAYGROUND: 'component_playground',
   BRAND_SYSTEM_ACCESS: 'brand_system_access',
+
+  // Multi-tenant system
+  MULTI_TENANT_INIT: 'multi_tenant_init',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -28,6 +31,7 @@ export interface FeatureFlagConfig {
   userRoles?: string[]
   description: string
   environment?: 'development' | 'staging' | 'production' | 'all'
+  userOverrides?: Record<string, boolean>
 }
 
 export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
@@ -109,5 +113,14 @@ export const featureFlagConfigs: Record<FeatureFlag, FeatureFlagConfig> = {
     userRoles: ['admin', 'owner'],
     description: 'Access to brand system routes',
     environment: 'all'
+  },
+
+  [FEATURE_FLAGS.MULTI_TENANT_INIT]: {
+    enabled: true,
+    rolloutPercentage: 0,
+    userRoles: ['owner'],
+    description: 'Multi-tenant foundation: ecclesia external links and regional data model',
+    environment: 'all',
+    userOverrides: {},
   },
 }

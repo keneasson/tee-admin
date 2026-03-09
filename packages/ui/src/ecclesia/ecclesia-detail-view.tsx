@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { YStack, XStack, Text, Card, Button, Heading, Input, Separator, Spinner } from '@my/ui'
-import { Church, MapPin, Phone, Mail, User, Pencil, Save, X } from '@tamagui/lucide-icons'
+import { Church, MapPin, Phone, Mail, Pencil, Save, X } from '@tamagui/lucide-icons'
 import { PersonAutocomplete } from '../form/person-autocomplete'
 import { ServiceList } from './service-list'
 import { ServiceFormModal } from './service-form-modal'
 import type { EcclesiaService, ServiceType } from './service-list'
+import { ExternalLinksCard } from './external-links-card'
+import type { ExternalLinksData } from './external-links-card'
 
 export interface EcclesiaDetailData {
   name: string
@@ -19,6 +21,13 @@ export interface EcclesiaDetailData {
   recordingBrotherEmail?: string
   recordingBrotherName?: string
   services?: EcclesiaService[]
+  website?: string
+  externalLinks?: {
+    newsletterUrl?: string
+    youtube?: string
+    facebook?: string
+    otherLinks?: Array<{ label: string; url: string }>
+  }
 }
 
 interface EcclesiaDetailViewProps {
@@ -27,9 +36,10 @@ interface EcclesiaDetailViewProps {
   onUpdate?: (updates: Partial<EcclesiaDetailData>) => Promise<boolean>
   onBack?: () => void
   initialEdit?: boolean
+  showExternalLinks?: boolean
 }
 
-export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false }: EcclesiaDetailViewProps) {
+export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false, showExternalLinks = false }: EcclesiaDetailViewProps) {
   const [editing, setEditing] = useState(canEdit && initialEdit)
   const [saving, setSaving] = useState(false)
 
@@ -267,30 +277,6 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
         </YStack>
       </Card>
 
-      {/* Recording Brother Card (read-only display when not editing) */}
-      {!editing ? (
-        <Card padding="$4" borderWidth={1} borderColor="$borderColor">
-          <YStack gap="$2">
-            <XStack gap="$2" alignItems="center">
-              <User size={16} color="$blue10" />
-              <Text fontSize="$4" fontWeight="600">Recording Brother</Text>
-            </XStack>
-            {(ecclesia.recordingBrotherName || ecclesia.recordingBrotherEmail) ? (
-              <YStack gap="$1">
-                {ecclesia.recordingBrotherName ? (
-                  <Text fontSize="$3">{ecclesia.recordingBrotherName}</Text>
-                ) : null}
-                {ecclesia.recordingBrotherEmail ? (
-                  <Text fontSize="$3" theme="alt2">{ecclesia.recordingBrotherEmail}</Text>
-                ) : null}
-              </YStack>
-            ) : (
-              <Text fontSize="$3" theme="alt2">No recording brother assigned.</Text>
-            )}
-          </YStack>
-        </Card>
-      ) : null}
-
       {/* Worship Services Card */}
       <Card padding="$4" borderWidth={1} borderColor="$borderColor">
         <ServiceList
@@ -301,6 +287,23 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
           onDelete={handleDeleteService}
         />
       </Card>
+
+      {/* External Links Card (gated behind multi-tenant feature flag via prop) */}
+      {showExternalLinks ? (
+        <ExternalLinksCard
+          data={{
+            website: ecclesia.website,
+            externalLinks: ecclesia.externalLinks,
+          }}
+          canEdit={canEdit}
+          onSave={onUpdate ? async (updates: ExternalLinksData) => {
+            return onUpdate({
+              website: updates.website,
+              externalLinks: updates.externalLinks,
+            } as Partial<EcclesiaDetailData>)
+          } : undefined}
+        />
+      ) : null}
 
       {/* Service Form Modal */}
       <ServiceFormModal
