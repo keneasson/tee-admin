@@ -4,6 +4,8 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getEcclesiaByName, updateEcclesiaFields } from '@/utils/dynamodb/locations'
 import type { EcclesiaService, EcclesiaExternalLinks } from '@/utils/dynamodb/locations'
 import { checkEcclesiaEditPermission, checkRecordingBrotherPermission } from '@/utils/ecclesia-permissions'
+import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { setRecordingBrother, clearRecordingBrother } from '@/utils/rb-service'
 import { sendRBConfirmationEmail } from '@/utils/email/send-rb-confirmation'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
@@ -40,11 +42,13 @@ export async function GET(
     const userRole = (session.user as any).role || ROLES.GUEST
 
     const canEdit = await checkEcclesiaEditPermission(userEmail, userRole, ecclesiaName)
+    const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
 
     return NextResponse.json({
       success: true,
       ecclesia,
       canEdit,
+      showMultiTenant,
     })
   } catch (error) {
     console.error('Error fetching ecclesia:', error)

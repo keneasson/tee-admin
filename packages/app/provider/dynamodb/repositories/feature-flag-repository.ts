@@ -42,12 +42,9 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
     const configs: Record<string, FeatureFlagConfig> = {}
     for (const record of records) {
       configs[record.flagName] = {
-        enabled: record.enabled,
-        rolloutPercentage: record.rolloutPercentage,
-        userRoles: record.userRoles,
-        description: record.description,
-        environment: record.environment,
-        userOverrides: record.userOverrides,
+        description: record.description || '',
+        visibleTo: record.visibleTo || 'owner',
+        users: record.users || [],
       }
     }
     return configs
@@ -65,7 +62,6 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
 
     let configs = await this.getAllAsConfigs()
 
-    // Seed from defaults if empty
     if (Object.keys(configs).length === 0) {
       await this.seedFromDefaults()
       configs = await this.getAllAsConfigs()
@@ -80,12 +76,9 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
       pkey: this.pk(flagName),
       skey: 'CONFIG',
       flagName,
-      enabled: config.enabled,
-      rolloutPercentage: config.rolloutPercentage,
-      userRoles: config.userRoles,
       description: config.description,
-      environment: config.environment,
-      userOverrides: config.userOverrides,
+      visibleTo: config.visibleTo,
+      users: config.users || [],
       createdAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
       version: 0,
@@ -111,7 +104,6 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
   }
 
   private async seedFromDefaults(): Promise<void> {
-    // Dynamic import to avoid circular dependency
     const { DEFAULT_FEATURE_FLAG_CONFIGS } = await import('@my/app/features/feature-flags/feature-flags')
 
     for (const [flagName, config] of Object.entries(DEFAULT_FEATURE_FLAG_CONFIGS)) {

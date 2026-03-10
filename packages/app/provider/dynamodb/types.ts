@@ -576,12 +576,9 @@ export interface FeatureFlagRecord extends BaseRecord {
   pkey: string           // FEATURE_FLAG#{flagName}
   skey: string           // CONFIG
   flagName: string
-  enabled: boolean
-  rolloutPercentage: number
-  userRoles?: string[]
   description: string
-  environment?: 'development' | 'staging' | 'production' | 'all'
-  userOverrides?: Record<string, boolean>
+  visibleTo: 'owner' | 'admin' | 'everyone'
+  users: string[]        // emails that can see this feature regardless of role
   createdAt: string
 }
 

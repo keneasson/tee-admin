@@ -5,8 +5,6 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { YStack, XStack, Text, Spinner, Card, Input, ScrollView } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { useUserRole } from '@/hooks/use-user-role'
-import { checkFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
-import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { EcclesiaDetail } from '@my/ui/src/directory/ecclesia-detail'
 import type { EcclesiaDetailData } from '@my/ui/src/ecclesia/ecclesia-detail-view'
 import type { DirectoryMember, Nomination, DirectoryAuthProps, EcclesiaListItem } from '@my/ui/src/directory/types'
@@ -19,10 +17,10 @@ export default function DirectoryEcclesiaDetailPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isMemberOrHigher, isRecorderOrHigher, isAdminOrOwner, isLoading: authLoading, status, session } = useUserRole()
+  const { isMemberOrHigher, isRecorderOrHigher, isAdminOrOwner, isLoading: authLoading, status } = useUserRole()
   const isHydrated = useHydrated()
   const initialEdit = searchParams?.get('edit') === 'true'
-  const showMultiTenant = checkFeatureFlag(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
+  const [showMultiTenant, setShowMultiTenant] = useState(false)
 
   const [ecclesia, setEcclesia] = useState<EcclesiaDetailData | null>(null)
   const [canEdit, setCanEdit] = useState(false)
@@ -60,6 +58,7 @@ export default function DirectoryEcclesiaDetailPage() {
         const data = await res.json()
         setEcclesia(data.ecclesia)
         setCanEdit(data.canEdit || false)
+        setShowMultiTenant(data.showMultiTenant || false)
       } else if (res.status === 404) {
         setError('Ecclesia not found')
       } else {

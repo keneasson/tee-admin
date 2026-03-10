@@ -1,67 +1,51 @@
-'use client'
-
-import { featureFlagConfigs, type FeatureFlag, type FeatureFlagConfig } from './feature-flags'
+import { type FeatureFlagConfig } from './feature-flags'
 import { AuthSession } from '@my/app/types'
 
+const OWNER_ROLE = 'owner'
+const ADMIN_ROLE = 'admin'
+
 /**
- * Check if a feature flag is enabled for a given session.
- * Pure function — works with any configs map (DynamoDB-backed or hardcoded fallback).
+ * Check if a feature flag is visible to the given user.
  *
- * @param flag - The flag name to check
- * @param session - Current user session
- * @param configs - Optional configs map. If omitted, falls back to hardcoded defaults.
+ * Logic:
+ * 1. User email in `users` list → yes
+ * 2. `visibleTo` === 'everyone' → yes
+ * 3. `visibleTo` === 'admin' and user is admin or owner → yes
+ * 4. User is owner → yes
+ * 5. Otherwise → no
  */
 export function checkFeatureFlag(
   flag: string,
   session: AuthSession | null,
   configs?: Record<string, FeatureFlagConfig>
 ): boolean {
-  const allConfigs = configs || featureFlagConfigs
-  const config = allConfigs[flag]
+  const config = configs?.[flag]
+  if (!config) return false
 
-  if (!config || !config.enabled) {
-    return false
+  const userEmail = session?.user?.email?.toLowerCase()
+  const userRole = session?.user?.role?.toLowerCase()
+
+  // 1. User in explicit users list
+  if (userEmail && config.users.some((u) => u.toLowerCase() === userEmail)) {
+    return true
   }
 
-  // Check environment
-  if (config.environment && config.environment !== 'all') {
-    const currentEnv = process.env.NODE_ENV as 'development' | 'staging' | 'production'
-    if (config.environment !== currentEnv) {
-      return false
-    }
+  // 2. Released to everyone
+  if (config.visibleTo === 'everyone') {
+    return true
   }
 
-  // Check user role
-  if (config.userRoles && config.userRoles.length > 0 && session?.user?.role) {
-    if (!config.userRoles.includes(session.user.role)) {
-      return false
-    }
+  // 3. Visible to admins
+  if (config.visibleTo === 'admin' && (userRole === ADMIN_ROLE || userRole === OWNER_ROLE)) {
+    return true
   }
 
-  // Check user-specific overrides (before rollout percentage so overrides bypass 0% rollout)
-  if (config.userOverrides && session?.user?.email) {
-    const override = config.userOverrides[session.user.email]
-    if (override !== undefined) {
-      return override
-    }
+  // 4. Owner always sees
+  if (userRole === OWNER_ROLE) {
+    return true
   }
 
-  // Check rollout percentage
-  if (config.rolloutPercentage !== undefined && config.rolloutPercentage < 100) {
-    const userId = (session?.user as any)?.id || session?.user?.email
-    if (!userId) {
-      return false
-    }
-
-    const hash = simpleHash(`${userId}-${flag}`)
-    const userPercentile = hash % 100
-
-    if (userPercentile >= config.rolloutPercentage) {
-      return false
-    }
-  }
-
-  return true
+  return false
 }
 
 /**
@@ -77,26 +61,7 @@ export async function checkFeatureFlagFromDB(
     const configs = await featureFlagRepository.getAllCached()
     return checkFeatureFlag(flag, session, configs)
   } catch (error) {
-    // Fallback to hardcoded defaults if DynamoDB is unavailable
-    console.error('Failed to load feature flags from DynamoDB, using defaults:', error)
-    return checkFeatureFlag(flag, session)
+    console.error('Failed to load feature flags from DynamoDB:', error)
+    return false
   }
-}
-
-/**
- * @deprecated Use checkFeatureFlag instead with session passed as parameter
- */
-export function useFeatureFlag(flag: FeatureFlag, session: AuthSession | null): boolean {
-  return checkFeatureFlag(flag, session)
-}
-
-// Simple hash function for rollout percentage calculation
-function simpleHash(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash // Convert to 32-bit integer
-  }
-  return Math.abs(hash)
 }

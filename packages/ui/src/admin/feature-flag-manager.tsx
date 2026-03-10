@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { YStack, XStack, Text, Card, Input, Separator, Spinner, H2, Switch, ScrollView } from '@my/ui'
+import { YStack, XStack, Text, Card, Input, Separator, Spinner, H2, ScrollView } from '@my/ui'
 import { Button } from '../Button'
 import {
   Flag,
@@ -8,14 +8,12 @@ import {
   Save,
   X,
   RefreshCw,
-  Shield,
-  Users,
-  Globe,
-  Percent,
-  UserCheck,
+  UserPlus,
+  Eye,
+  EyeOff,
   AlertTriangle,
 } from '@tamagui/lucide-icons'
-import type { FeatureFlagConfig } from '@my/app/features/feature-flags/feature-flags'
+import type { FeatureFlagConfig, FlagVisibility } from '@my/app/features/feature-flags/feature-flags'
 
 interface FeatureFlagManagerProps {
   userEmail: string
@@ -25,44 +23,37 @@ interface FeatureFlagManagerProps {
 type FlagEntry = {
   name: string
   config: FeatureFlagConfig
-  isActiveForUser?: boolean
+  isActiveForUser: boolean
 }
 
-const ENVIRONMENT_OPTIONS = ['all', 'development', 'staging', 'production'] as const
-const ROLE_OPTIONS = ['owner', 'admin', 'recorder', 'rep', 'member', 'guest'] as const
+const VISIBILITY_OPTIONS: { value: FlagVisibility; label: string; description: string }[] = [
+  { value: 'owner', label: 'Owner only', description: 'Only you and users on the list' },
+  { value: 'admin', label: 'Admins', description: 'All admins + users on the list' },
+  { value: 'everyone', label: 'Everyone', description: 'Released — ready to remove flag from code' },
+]
 
 export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerProps) {
   const [flags, setFlags] = useState<FlagEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [editingFlag, setEditingFlag] = useState<string | null>(null)
   const [editState, setEditState] = useState<FeatureFlagConfig | null>(null)
-  const [saving, setSaving] = useState(false)
   const [showNewForm, setShowNewForm] = useState(false)
   const [newFlagName, setNewFlagName] = useState('')
-  const [newFlagConfig, setNewFlagConfig] = useState<FeatureFlagConfig>({
-    enabled: false,
-    rolloutPercentage: 0,
-    userRoles: [],
-    description: '',
-    environment: 'all',
-    userOverrides: {},
-  })
+  const [newFlagDescription, setNewFlagDescription] = useState('')
 
   const fetchFlags = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/feature-flags?evaluated=true')
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to load')
-      }
+      const res = await fetch('/api/admin/feature-flags')
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to load')
       const data = await res.json()
       const entries: FlagEntry[] = Object.entries(data.flags).map(([name, config]) => ({
         name,
         config: config as FeatureFlagConfig,
-        isActiveForUser: data.evaluated?.[name],
+        isActiveForUser: data.evaluated?.[name] ?? false,
       }))
       entries.sort((a, b) => a.name.localeCompare(b.name))
       setFlags(entries)
@@ -73,13 +64,11 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
     }
   }, [])
 
-  useEffect(() => {
-    fetchFlags()
-  }, [fetchFlags])
+  useEffect(() => { fetchFlags() }, [fetchFlags])
 
   const startEditing = (flag: FlagEntry) => {
     setEditingFlag(flag.name)
-    setEditState({ ...flag.config })
+    setEditState({ ...flag.config, users: [...flag.config.users] })
   }
 
   const cancelEditing = () => {
@@ -96,12 +85,8 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editState),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Save failed')
-      }
-      setEditingFlag(null)
-      setEditState(null)
+      if (!res.ok) throw new Error((await res.json()).error || 'Save failed')
+      cancelEditing()
       await fetchFlags()
     } catch (err: any) {
       setError(err.message)
@@ -114,10 +99,7 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
     setSaving(true)
     try {
       const res = await fetch(`/api/admin/feature-flags/${flagName}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Delete failed')
-      }
+      if (!res.ok) throw new Error((await res.json()).error || 'Delete failed')
       await fetchFlags()
     } catch (err: any) {
       setError(err.message)
@@ -133,43 +115,22 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
       const res = await fetch('/api/admin/feature-flags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flagName: newFlagName.trim(), config: newFlagConfig }),
+        body: JSON.stringify({
+          flagName: newFlagName.trim(),
+          config: {
+            description: newFlagDescription.trim() || newFlagName.trim(),
+            visibleTo: 'owner',
+            users: [],
+          },
+        }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Create failed')
-      }
+      if (!res.ok) throw new Error((await res.json()).error || 'Create failed')
       setShowNewForm(false)
       setNewFlagName('')
-      setNewFlagConfig({
-        enabled: false,
-        rolloutPercentage: 0,
-        userRoles: [],
-        description: '',
-        environment: 'all',
-        userOverrides: {},
-      })
+      setNewFlagDescription('')
       await fetchFlags()
     } catch (err: any) {
       setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const toggleQuickEnable = async (flagName: string, currentEnabled: boolean) => {
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/admin/feature-flags/${flagName}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !currentEnabled }),
-      })
-      if (res.ok) {
-        await fetchFlags()
-      }
-    } catch {
-      // Silently fail — user can retry
     } finally {
       setSaving(false)
     }
@@ -184,9 +145,11 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
     )
   }
 
+  const isOwner = userRole === 'owner'
+
   return (
     <ScrollView>
-      <YStack padding="$4" gap="$4" maxWidth={900} marginHorizontal="auto">
+      <YStack padding="$4" gap="$4" maxWidth={800} marginHorizontal="auto">
         {/* Header */}
         <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
           <YStack gap="$1">
@@ -195,14 +158,14 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
               <H2>Feature Flags</H2>
             </XStack>
             <Text theme="alt2" fontSize="$3">
-              DynamoDB-backed feature flag management. Changes take effect within 60 seconds.
+              Each flag gates an unreleased feature. Add users to let them see it. Delete the flag when released.
             </Text>
           </YStack>
           <XStack gap="$2">
             <Button size="$3" icon={RefreshCw} variant="outlined" onPress={fetchFlags} disabled={saving}>
               Refresh
             </Button>
-            {userRole === 'owner' ? (
+            {isOwner ? (
               <Button size="$3" icon={Plus} theme="blue" onPress={() => setShowNewForm(true)} disabled={saving}>
                 New Flag
               </Button>
@@ -210,27 +173,14 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
           </XStack>
         </XStack>
 
-        {/* Current user context */}
-        <Card padding="$3" backgroundColor="$blue2" borderWidth={1} borderColor="$blue6">
-          <XStack gap="$3" alignItems="center" flexWrap="wrap">
-            <XStack gap="$1" alignItems="center">
-              <UserCheck size={14} color="$blue10" />
-              <Text fontSize="$2" fontWeight="600">You:</Text>
-              <Text fontSize="$2">{userEmail}</Text>
-            </XStack>
-            <XStack gap="$1" alignItems="center">
-              <Shield size={14} color="$blue10" />
-              <Text fontSize="$2" fontWeight="600">Role:</Text>
-              <Text fontSize="$2">{userRole}</Text>
-            </XStack>
-          </XStack>
-        </Card>
-
         {error ? (
           <Card padding="$3" backgroundColor="$red2" borderWidth={1} borderColor="$red6">
             <XStack gap="$2" alignItems="center">
               <AlertTriangle size={16} color="$red10" />
               <Text color="$red10" fontSize="$3">{error}</Text>
+              <Button size="$2" variant="outlined" onPress={() => setError(null)} marginLeft="auto">
+                Dismiss
+              </Button>
             </XStack>
           </Card>
         ) : null}
@@ -239,20 +189,32 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
         {showNewForm ? (
           <Card padding="$4" borderWidth={2} borderColor="$blue8" backgroundColor="$blue1">
             <YStack gap="$3">
-              <Text fontSize="$5" fontWeight="600">Create New Flag</Text>
-              <FlagConfigForm
-                flagName={newFlagName}
-                onFlagNameChange={setNewFlagName}
-                config={newFlagConfig}
-                onConfigChange={setNewFlagConfig}
-                showNameField
-              />
+              <Text fontSize="$5" fontWeight="600">New Feature Flag</Text>
+              <YStack gap="$1">
+                <Text fontSize="$3" fontWeight="600">Flag Name</Text>
+                <Input
+                  value={newFlagName}
+                  onChangeText={setNewFlagName}
+                  placeholder="my_new_feature"
+                  autoCapitalize="none"
+                  fontFamily="$mono"
+                />
+                <Text fontSize="$2" theme="alt2">Lowercase, underscores. e.g. multi_tenant_newsletter</Text>
+              </YStack>
+              <YStack gap="$1">
+                <Text fontSize="$3" fontWeight="600">Description</Text>
+                <Input
+                  value={newFlagDescription}
+                  onChangeText={setNewFlagDescription}
+                  placeholder="What does this feature do?"
+                />
+              </YStack>
               <XStack gap="$2" justifyContent="flex-end">
-                <Button icon={X} onPress={() => setShowNewForm(false)} disabled={saving}>
+                <Button icon={X} onPress={() => { setShowNewForm(false); setNewFlagName(''); setNewFlagDescription('') }} disabled={saving}>
                   Cancel
                 </Button>
                 <Button icon={saving ? undefined : Save} theme="blue" onPress={createFlag} disabled={saving || !newFlagName.trim()}>
-                  {saving ? 'Creating...' : 'Create Flag'}
+                  {saving ? 'Creating...' : 'Create'}
                 </Button>
               </XStack>
             </YStack>
@@ -262,101 +224,64 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
         {/* Flag List */}
         {flags.length === 0 ? (
           <Card padding="$4" borderWidth={1} borderColor="$borderColor">
-            <Text theme="alt2" textAlign="center">
-              No feature flags configured. Create one to get started.
-            </Text>
+            <Text theme="alt2" textAlign="center">No feature flags. Create one to start gating a new feature.</Text>
           </Card>
         ) : null}
 
         {flags.map((flag) => {
           const isEditing = editingFlag === flag.name
+          const visibilityInfo = VISIBILITY_OPTIONS.find((v) => v.value === flag.config.visibleTo)
 
           return (
-            <Card key={flag.name} padding="$4" borderWidth={1} borderColor={flag.config.enabled ? '$green6' : '$borderColor'}>
+            <Card key={flag.name} padding="$4" borderWidth={1} borderColor="$borderColor">
               <YStack gap="$3">
-                {/* Flag header */}
+                {/* Header row */}
                 <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
                   <YStack gap="$1" flex={1}>
                     <XStack gap="$2" alignItems="center">
-                      <Text fontSize="$5" fontWeight="700" fontFamily="$mono">
-                        {flag.name}
-                      </Text>
-                      <StatusBadge enabled={flag.config.enabled} />
-                      {flag.isActiveForUser !== undefined ? (
-                        <XStack
-                          backgroundColor={flag.isActiveForUser ? '$green3' : '$gray3'}
-                          paddingHorizontal="$2"
-                          paddingVertical="$1"
-                          borderRadius="$2"
-                        >
-                          <Text fontSize="$1" fontWeight="600" color={flag.isActiveForUser ? '$green11' : '$gray11'}>
-                            {flag.isActiveForUser ? 'ACTIVE FOR YOU' : 'INACTIVE FOR YOU'}
-                          </Text>
-                        </XStack>
-                      ) : null}
+                      <Text fontSize="$5" fontWeight="700" fontFamily="$mono">{flag.name}</Text>
+                      <VisibilityBadge visibleTo={flag.config.visibleTo} />
                     </XStack>
                     <Text fontSize="$3" theme="alt2">{flag.config.description}</Text>
                   </YStack>
-                  <XStack gap="$2" alignItems="center">
-                    <Switch
-                      size="$3"
-                      checked={flag.config.enabled}
-                      onCheckedChange={() => toggleQuickEnable(flag.name, flag.config.enabled)}
-                      disabled={saving || userRole !== 'owner'}
-                    >
-                      <Switch.Thumb animation="quick" />
-                    </Switch>
+                  <XStack
+                    backgroundColor={flag.isActiveForUser ? '$green2' : '$gray3'}
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
+                    borderRadius="$2"
+                    gap="$1"
+                    alignItems="center"
+                  >
+                    {flag.isActiveForUser ? <Eye size={12} color="$green11" /> : <EyeOff size={12} color="$gray11" />}
+                    <Text fontSize="$2" fontWeight="600" color={flag.isActiveForUser ? '$green11' : '$gray11'}>
+                      {flag.isActiveForUser ? 'You can see this' : 'Hidden from you'}
+                    </Text>
                   </XStack>
                 </XStack>
 
-                {/* Config summary (non-editing) */}
+                {/* Non-editing view */}
                 {!isEditing ? (
                   <YStack gap="$2">
-                    <XStack gap="$4" flexWrap="wrap">
-                      <ConfigChip icon={<Percent size={12} />} label="Rollout" value={`${flag.config.rolloutPercentage}%`} />
-                      <ConfigChip icon={<Globe size={12} />} label="Env" value={flag.config.environment || 'all'} />
-                      <ConfigChip
-                        icon={<Users size={12} />}
-                        label="Roles"
-                        value={flag.config.userRoles?.length ? flag.config.userRoles.join(', ') : 'all'}
-                      />
-                    </XStack>
-                    {flag.config.userOverrides && Object.keys(flag.config.userOverrides).length > 0 ? (
+                    {/* Users list */}
+                    {flag.config.users.length > 0 ? (
                       <YStack gap="$1">
-                        <Text fontSize="$2" fontWeight="600" theme="alt2">User Overrides:</Text>
-                        <XStack gap="$2" flexWrap="wrap">
-                          {Object.entries(flag.config.userOverrides).map(([email, enabled]) => (
-                            <XStack
-                              key={email}
-                              backgroundColor={enabled ? '$green2' : '$red2'}
-                              paddingHorizontal="$2"
-                              paddingVertical="$1"
-                              borderRadius="$2"
-                              gap="$1"
-                            >
+                        <Text fontSize="$2" fontWeight="600" theme="alt2">Users with access:</Text>
+                        <XStack gap="$1" flexWrap="wrap">
+                          {flag.config.users.map((email) => (
+                            <XStack key={email} backgroundColor="$blue2" paddingHorizontal="$2" paddingVertical="$1" borderRadius="$2">
                               <Text fontSize="$2">{email}</Text>
-                              <Text fontSize="$2" fontWeight="600" color={enabled ? '$green10' : '$red10'}>
-                                {enabled ? 'ON' : 'OFF'}
-                              </Text>
                             </XStack>
                           ))}
                         </XStack>
                       </YStack>
                     ) : null}
 
-                    {userRole === 'owner' ? (
-                      <XStack gap="$2" marginTop="$2">
+                    {isOwner ? (
+                      <XStack gap="$2" marginTop="$1">
                         <Button size="$2" variant="outlined" onPress={() => startEditing(flag)}>
                           Edit
                         </Button>
-                        <Button
-                          size="$2"
-                          icon={Trash}
-                          theme="red"
-                          variant="outlined"
-                          onPress={() => deleteFlag(flag.name)}
-                          disabled={saving}
-                        >
+                        <Button size="$2" icon={Trash} theme="red" variant="outlined" onPress={() => deleteFlag(flag.name)} disabled={saving}>
                           Delete
                         </Button>
                       </XStack>
@@ -366,21 +291,13 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
 
                 {/* Editing form */}
                 {isEditing && editState ? (
-                  <YStack gap="$3">
-                    <Separator />
-                    <FlagConfigForm
-                      config={editState}
-                      onConfigChange={setEditState}
-                    />
-                    <XStack gap="$2" justifyContent="flex-end">
-                      <Button icon={X} onPress={cancelEditing} disabled={saving}>
-                        Cancel
-                      </Button>
-                      <Button icon={saving ? undefined : Save} theme="blue" onPress={() => saveFlag(flag.name)} disabled={saving}>
-                        {saving ? 'Saving...' : 'Save'}
-                      </Button>
-                    </XStack>
-                  </YStack>
+                  <EditForm
+                    config={editState}
+                    onChange={setEditState}
+                    onSave={() => saveFlag(flag.name)}
+                    onCancel={cancelEditing}
+                    saving={saving}
+                  />
                 ) : null}
               </YStack>
             </Card>
@@ -393,195 +310,120 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
 
 // --- Sub-components ---
 
-function StatusBadge({ enabled }: { enabled: boolean }) {
+function VisibilityBadge({ visibleTo }: { visibleTo: FlagVisibility }) {
+  const colors = {
+    owner: { bg: '$purple2', text: '$purple11', label: 'Owner' },
+    admin: { bg: '$orange2', text: '$orange11', label: 'Admins' },
+    everyone: { bg: '$green2', text: '$green11', label: 'Everyone' },
+  }
+  const c = colors[visibleTo] || colors.owner
   return (
-    <XStack
-      backgroundColor={enabled ? '$green3' : '$red3'}
-      paddingHorizontal="$2"
-      paddingVertical="$1"
-      borderRadius="$2"
-    >
-      <Text fontSize="$1" fontWeight="700" color={enabled ? '$green11' : '$red11'}>
-        {enabled ? 'ENABLED' : 'DISABLED'}
-      </Text>
+    <XStack backgroundColor={c.bg} paddingHorizontal="$2" paddingVertical="$1" borderRadius="$2">
+      <Text fontSize="$1" fontWeight="700" color={c.text}>{c.label}</Text>
     </XStack>
   )
 }
 
-function ConfigChip({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <XStack gap="$1" alignItems="center">
-      {icon}
-      <Text fontSize="$2" fontWeight="600" theme="alt2">{label}:</Text>
-      <Text fontSize="$2">{value}</Text>
-    </XStack>
-  )
-}
-
-interface FlagConfigFormProps {
-  flagName?: string
-  onFlagNameChange?: (name: string) => void
+interface EditFormProps {
   config: FeatureFlagConfig
-  onConfigChange: (config: FeatureFlagConfig) => void
-  showNameField?: boolean
+  onChange: (config: FeatureFlagConfig) => void
+  onSave: () => void
+  onCancel: () => void
+  saving: boolean
 }
 
-function FlagConfigForm({ flagName, onFlagNameChange, config, onConfigChange, showNameField }: FlagConfigFormProps) {
-  const [overrideEmail, setOverrideEmail] = useState('')
+function EditForm({ config, onChange, onSave, onCancel, saving }: EditFormProps) {
+  const [newEmail, setNewEmail] = useState('')
 
   const update = (partial: Partial<FeatureFlagConfig>) => {
-    onConfigChange({ ...config, ...partial })
+    onChange({ ...config, ...partial })
   }
 
-  const toggleRole = (role: string) => {
-    const current = config.userRoles || []
-    const updated = current.includes(role)
-      ? current.filter((r) => r !== role)
-      : [...current, role]
-    update({ userRoles: updated })
+  const addUser = () => {
+    const email = newEmail.trim().toLowerCase()
+    if (!email) return
+    if (config.users.includes(email)) return
+    update({ users: [...config.users, email] })
+    setNewEmail('')
   }
 
-  const addOverride = (enabled: boolean) => {
-    if (!overrideEmail.trim()) return
-    const overrides = { ...(config.userOverrides || {}), [overrideEmail.trim().toLowerCase()]: enabled }
-    update({ userOverrides: overrides })
-    setOverrideEmail('')
-  }
-
-  const removeOverride = (email: string) => {
-    const overrides = { ...(config.userOverrides || {}) }
-    delete overrides[email]
-    update({ userOverrides: overrides })
+  const removeUser = (email: string) => {
+    update({ users: config.users.filter((u) => u !== email) })
   }
 
   return (
     <YStack gap="$3">
-      {showNameField ? (
-        <YStack gap="$1">
-          <Text fontSize="$3" fontWeight="600">Flag Name</Text>
-          <Input
-            value={flagName}
-            onChangeText={onFlagNameChange}
-            placeholder="my_feature_flag"
-            autoCapitalize="none"
-            fontFamily="$mono"
-          />
-          <Text fontSize="$2" theme="alt2">Lowercase, alphanumeric, underscores only</Text>
-        </YStack>
-      ) : null}
+      <Separator />
 
       <YStack gap="$1">
         <Text fontSize="$3" fontWeight="600">Description</Text>
         <Input
           value={config.description}
           onChangeText={(v: string) => update({ description: v })}
-          placeholder="What does this flag control?"
+          placeholder="What does this feature do?"
         />
       </YStack>
 
-      <XStack gap="$4" flexWrap="wrap">
-        <YStack gap="$1" minWidth={120}>
-          <Text fontSize="$3" fontWeight="600">Rollout %</Text>
-          <Input
-            value={String(config.rolloutPercentage)}
-            onChangeText={(v: string) => {
-              const num = parseInt(v, 10)
-              if (!isNaN(num) && num >= 0 && num <= 100) {
-                update({ rolloutPercentage: num })
-              } else if (v === '') {
-                update({ rolloutPercentage: 0 })
-              }
-            }}
-            keyboardType="numeric"
-            maxWidth={100}
-          />
-        </YStack>
-
-        <YStack gap="$1" minWidth={150}>
-          <Text fontSize="$3" fontWeight="600">Environment</Text>
-          <XStack gap="$1" flexWrap="wrap">
-            {ENVIRONMENT_OPTIONS.map((env) => (
-              <Button
-                key={env}
-                size="$2"
-                variant={config.environment === env ? undefined : 'outlined'}
-                theme={config.environment === env ? 'blue' : undefined}
-                onPress={() => update({ environment: env })}
-              >
-                {env}
-              </Button>
-            ))}
-          </XStack>
-        </YStack>
-      </XStack>
-
       <YStack gap="$1">
-        <Text fontSize="$3" fontWeight="600">Allowed Roles</Text>
-        <Text fontSize="$2" theme="alt2">Empty = all roles. Selected = only these roles.</Text>
-        <XStack gap="$1" flexWrap="wrap">
-          {ROLE_OPTIONS.map((role) => {
-            const isSelected = config.userRoles?.includes(role)
-            return (
-              <Button
-                key={role}
-                size="$2"
-                variant={isSelected ? undefined : 'outlined'}
-                theme={isSelected ? 'blue' : undefined}
-                onPress={() => toggleRole(role)}
-              >
-                {role}
-              </Button>
-            )
-          })}
+        <Text fontSize="$3" fontWeight="600">Visible to</Text>
+        <XStack gap="$2" flexWrap="wrap">
+          {VISIBILITY_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              size="$3"
+              variant={config.visibleTo === opt.value ? undefined : 'outlined'}
+              theme={config.visibleTo === opt.value ? 'blue' : undefined}
+              onPress={() => update({ visibleTo: opt.value })}
+            >
+              <YStack alignItems="center">
+                <Text fontSize="$3" fontWeight="600">{opt.label}</Text>
+                <Text fontSize="$1" theme="alt2">{opt.description}</Text>
+              </YStack>
+            </Button>
+          ))}
         </XStack>
       </YStack>
 
-      <Separator />
-
       <YStack gap="$2">
-        <Text fontSize="$3" fontWeight="600">User Overrides</Text>
+        <Text fontSize="$3" fontWeight="600">Users with access</Text>
         <Text fontSize="$2" theme="alt2">
-          Override the flag for specific users. Overrides bypass rollout percentage.
+          These users can see the feature regardless of their role.
         </Text>
         <XStack gap="$2" alignItems="center">
           <Input
             flex={1}
-            value={overrideEmail}
-            onChangeText={setOverrideEmail}
+            value={newEmail}
+            onChangeText={setNewEmail}
             placeholder="user@example.com"
             autoCapitalize="none"
+            onSubmitEditing={addUser}
           />
-          <Button size="$2" theme="green" onPress={() => addOverride(true)} disabled={!overrideEmail.trim()}>
-            + Enable
-          </Button>
-          <Button size="$2" theme="red" onPress={() => addOverride(false)} disabled={!overrideEmail.trim()}>
-            + Disable
+          <Button size="$3" icon={UserPlus} theme="blue" onPress={addUser} disabled={!newEmail.trim()}>
+            Add
           </Button>
         </XStack>
-        {config.userOverrides && Object.keys(config.userOverrides).length > 0 ? (
+        {config.users.length > 0 ? (
           <YStack gap="$1">
-            {Object.entries(config.userOverrides).map(([email, enabled]) => (
+            {config.users.map((email) => (
               <XStack key={email} gap="$2" alignItems="center">
-                <XStack
-                  flex={1}
-                  backgroundColor={enabled ? '$green2' : '$red2'}
-                  paddingHorizontal="$2"
-                  paddingVertical="$1"
-                  borderRadius="$2"
-                  gap="$2"
-                  alignItems="center"
-                >
-                  <Text fontSize="$3" flex={1}>{email}</Text>
-                  <Text fontSize="$2" fontWeight="600" color={enabled ? '$green10' : '$red10'}>
-                    {enabled ? 'ENABLED' : 'DISABLED'}
-                  </Text>
+                <XStack flex={1} backgroundColor="$blue2" paddingHorizontal="$2" paddingVertical="$1" borderRadius="$2">
+                  <Text fontSize="$3">{email}</Text>
                 </XStack>
-                <Button size="$2" icon={X} variant="outlined" onPress={() => removeOverride(email)} />
+                <Button size="$2" icon={X} variant="outlined" onPress={() => removeUser(email)} />
               </XStack>
             ))}
           </YStack>
-        ) : null}
+        ) : (
+          <Text fontSize="$2" theme="alt2" fontStyle="italic">No specific users added.</Text>
+        )}
       </YStack>
+
+      <XStack gap="$2" justifyContent="flex-end">
+        <Button icon={X} onPress={onCancel} disabled={saving}>Cancel</Button>
+        <Button icon={saving ? undefined : Save} theme="blue" onPress={onSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+      </XStack>
     </YStack>
   )
 }

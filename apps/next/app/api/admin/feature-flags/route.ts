@@ -7,10 +7,9 @@ import type { FeatureFlagConfig } from '@my/app/features/feature-flags/feature-f
 
 /**
  * GET /api/admin/feature-flags
- * Returns all flags with configs. Admin/owner only.
- * If ?evaluated=true, also includes whether each flag is active for the current user.
+ * Returns all flags with configs and whether each is active for the current user.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -24,20 +23,12 @@ export async function GET(request: NextRequest) {
 
     const configs = await featureFlagRepository.getAllCached()
 
-    const evaluated = request.nextUrl.searchParams.get('evaluated') === 'true'
-    let evaluatedFlags: Record<string, boolean> | undefined
-    if (evaluated) {
-      evaluatedFlags = {}
-      for (const flagName of Object.keys(configs)) {
-        evaluatedFlags[flagName] = checkFeatureFlag(flagName, session as any, configs)
-      }
+    const evaluated: Record<string, boolean> = {}
+    for (const flagName of Object.keys(configs)) {
+      evaluated[flagName] = checkFeatureFlag(flagName, session as any, configs)
     }
 
-    return NextResponse.json({
-      success: true,
-      flags: configs,
-      ...(evaluatedFlags ? { evaluated: evaluatedFlags } : {}),
-    })
+    return NextResponse.json({ success: true, flags: configs, evaluated })
   } catch (error) {
     console.error('Error fetching feature flags:', error)
     return NextResponse.json({ error: 'Failed to fetch feature flags' }, { status: 500 })
@@ -64,10 +55,9 @@ export async function POST(request: NextRequest) {
     const { flagName, config } = body as { flagName: string; config: FeatureFlagConfig }
 
     if (!flagName || !config) {
-      return NextResponse.json({ error: 'flagName and config are required' }, { status: 400 })
+      return NextResponse.json({ error: `flagName and config are required. Got flagName=${flagName}, config=${JSON.stringify(config)}` }, { status: 400 })
     }
 
-    // Validate flagName format
     if (!/^[a-z][a-z0-9_]*$/.test(flagName)) {
       return NextResponse.json(
         { error: 'Flag name must be lowercase alphanumeric with underscores, starting with a letter' },
@@ -75,7 +65,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check for duplicates
     const existing = await featureFlagRepository.getByName(flagName)
     if (existing) {
       return NextResponse.json({ error: `Flag "${flagName}" already exists` }, { status: 409 })

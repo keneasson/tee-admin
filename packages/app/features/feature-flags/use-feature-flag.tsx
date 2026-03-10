@@ -1,25 +1,18 @@
-import { featureFlagConfigs, type FeatureFlag } from './feature-flags'
+import { DEFAULT_FEATURE_FLAG_CONFIGS, type FeatureFlag } from './feature-flags'
 
-// Server-safe feature flag hook - just check config during build
+/**
+ * Build-time feature flag check for shared packages.
+ * Returns true if the flag exists in defaults (feature is being developed).
+ * For runtime session-aware checks, use checkFeatureFlag from use-feature-flag-wrapper.
+ */
 export function useFeatureFlag(flag: FeatureFlag): boolean {
-  const config = featureFlagConfigs[flag]
-  
-  if (!config.enabled) {
-    return false
-  }
-  
-  // For build-time, just return enabled state
-  // Runtime checks will be handled by the components that use this
-  return true
+  return flag in DEFAULT_FEATURE_FLAG_CONFIGS
 }
 
 export function useFeatureFlags(): Record<FeatureFlag, boolean> {
-  const flags = Object.keys(featureFlagConfigs) as FeatureFlag[]
-  
-  const flagStates = flags.reduce((acc, flag) => {
-    acc[flag] = useFeatureFlag(flag)
+  const flags = Object.keys(DEFAULT_FEATURE_FLAG_CONFIGS) as FeatureFlag[]
+  return flags.reduce((acc, flag) => {
+    acc[flag] = true
     return acc
   }, {} as Record<FeatureFlag, boolean>)
-  
-  return flagStates
 }
