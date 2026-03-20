@@ -191,13 +191,14 @@ export function EcclesiaSearchInput<T extends FieldValues>({
     setShowDropdown(false)
   }
 
-  // Check if we should show the add option
+  // Check if we should show the add option — never while still searching
   const showAddOption = useMemo(() => {
     return (
+      !isSearching &&
       searchQuery.length >= 3 &&
       !suggestions.find((s) => s.name.toLowerCase() === searchQuery.toLowerCase())
     )
-  }, [searchQuery, suggestions])
+  }, [searchQuery, suggestions, isSearching])
 
   return (
     <YStack gap="$2" position="relative" ref={containerRef}>
@@ -251,7 +252,7 @@ export function EcclesiaSearchInput<T extends FieldValues>({
         </XStack>
 
         {/* Dropdown */}
-        {showDropdown && (suggestions.length > 0 || showAddOption) ? <YStack
+        {showDropdown && (suggestions.length > 0 || showAddOption || isSearching) ? <YStack
             position="absolute"
             top="100%"
             left={0}
@@ -270,6 +271,17 @@ export function EcclesiaSearchInput<T extends FieldValues>({
             shadowOpacity={0.1}
             shadowRadius={8}
           >
+            {/* Loading indicator */}
+            {isSearching ? <XStack
+                paddingHorizontal="$4"
+                paddingVertical="$3"
+                gap="$3"
+                alignItems="center"
+              >
+                <Spinner size="small" width={16} height={16} color="$gray11" />
+                <Text fontSize="$3" color="$gray11">Searching ecclesias...</Text>
+              </XStack> : null}
+
             {/* Existing ecclesias */}
             {suggestions.map((suggestion, index) => (
               <Button

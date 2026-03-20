@@ -39,8 +39,8 @@ export class ScheduleService {
   }
 
   /**
-   * Get schedule data for a specific sheet type
-   * Replaces: get_google_sheet() for schedule types
+   * Get schedule data for a specific sheet type.
+   * STABLE — used by newsletter and all existing features. Do NOT modify.
    */
   async getScheduleData(sheetType: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc'): Promise<GoogleSheetData | null> {
     try {
@@ -52,8 +52,7 @@ export class ScheduleService {
         ExpressionAttributeValues: {
           ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
         },
-        ScanIndexForward: true, // Chronological order
-        // No limit to get all records
+        ScanIndexForward: true,
       }))
 
       if (!response.Items || response.Items.length === 0) {
@@ -88,9 +87,8 @@ export class ScheduleService {
   }
 
   /**
-   * Get upcoming program events from all schedule types (optimized for newsletter)
-   * Returns events from 2 hours ago to 2 weeks from now
-   * Replaces: get_upcoming_program()
+   * Get upcoming program events from all schedule types (optimized for newsletter).
+   * STABLE — used by newsletter and existing features. Do NOT modify.
    */
   async getUpcomingProgram(orderOfKeys: ProgramTypeKeys[] = ['sundaySchool', 'memorial', 'bibleClass']): Promise<Array<{
     type: ProgramTypeKeys
@@ -98,15 +96,94 @@ export class ScheduleService {
     date: Date
     details: Record<string, any>
   }>> {
+    return this._fetchUpcomingEvents(orderOfKeys)
+  }
+
+  /**
+   * MULTI-TENANT: Get upcoming program events filtered by ecclesia.
+   * Uses GSI1 for per-ecclesia queries. Only called from feature-flagged code paths.
+   */
+  async getUpcomingProgramByEcclesia(orderOfKeys: ProgramTypeKeys[], ecclesia: string): Promise<Array<{
+    type: ProgramTypeKeys
+    title: string
+    date: Date
+    details: Record<string, any>
+  }>> {
+    return this._fetchUpcomingEvents(orderOfKeys, ecclesia)
+  }
+
+  /**
+   * MULTI-TENANT: Get schedule data filtered by ecclesia.
+   * Uses GSI1 index with PK fallback. Only called from feature-flagged code paths.
+   */
+  async getScheduleDataByEcclesia(sheetType: 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc', ecclesia: string): Promise<GoogleSheetData | null> {
     try {
-      console.log('📅 Fetching upcoming program events from DynamoDB (newsletter optimized)')
+      console.log(`📊 Fetching ${sheetType} schedule from DynamoDB for ${ecclesia}`)
 
-      // Newsletter time range: today (00:00:00) to 2 weeks from now
+      // Try efficient per-ecclesia query via GSI1
+      let response = await this.client.send(new QueryCommand({
+        TableName: tableNames.schedules,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :ecclesia',
+        FilterExpression: '#t = :sheetType',
+        ExpressionAttributeValues: {
+          ':ecclesia': `ECCLESIA#${ecclesia}`,
+          ':sheetType': sheetType,
+        },
+        ExpressionAttributeNames: {
+          '#t': 'type',
+        },
+        ScanIndexForward: true,
+      }))
+
+      // Fallback: if GSI1 returned nothing (records may not have GSI1 keys yet),
+      // fall back to the stable PK query (returns all ecclesias for this type)
+      if (!response.Items || response.Items.length === 0) {
+        console.log(`📊 GSI1 returned no results for ${ecclesia}/${sheetType}, falling back to PK query`)
+        response = await this.client.send(new QueryCommand({
+          TableName: tableNames.schedules,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': `SCHEDULE#${sheetType.toUpperCase()}`,
+          },
+          ScanIndexForward: true,
+        }))
+      }
+
+      if (!response.Items || response.Items.length === 0) {
+        return null
+      }
+
+      const scheduleRecords = response.Items as ScheduleRecord[]
+      const sortedRecords = scheduleRecords.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      const content = sortedRecords.map((record: ScheduleRecord) => record.data)
+
+      return {
+        title: this.getSheetTitle(sheetType),
+        type: sheetType,
+        content,
+        lastUpdated: scheduleRecords[0]?.lastUpdated || new Date().toISOString(),
+        version: scheduleRecords[0]?.version || '1',
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching ${sheetType} schedule for ${ecclesia}:`, error)
+      throw new Error(`Failed to fetch ${sheetType} schedule data for ${ecclesia}`)
+    }
+  }
+
+  /** Shared implementation for fetching upcoming events */
+  private async _fetchUpcomingEvents(orderOfKeys: ProgramTypeKeys[], ecclesia?: string): Promise<Array<{
+    type: ProgramTypeKeys
+    title: string
+    date: Date
+    details: Record<string, any>
+  }>> {
+    try {
+      console.log(`📅 Fetching upcoming program events from DynamoDB${ecclesia ? ` for ${ecclesia}` : ''}`)
+
       const now = new Date()
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Today at 00:00:00
-      const twoWeeksFromNow = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)) // 2 weeks from now
-
-      console.log(`📅 Date range: ${todayStart.toISOString()} to ${twoWeeksFromNow.toISOString()}`)
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const twoWeeksFromNow = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000))
 
       const upcomingEvents: Array<{
         type: ProgramTypeKeys
@@ -115,55 +192,35 @@ export class ScheduleService {
         details: Record<string, any>
       }> = []
 
-      // Fetch events for each schedule type using the working getScheduleData method
       for (const sheetType of orderOfKeys) {
         try {
-          console.log(`🔄 Fetching ${sheetType} events for upcoming program`)
-          
-          // Get full schedule data using the working method
-          const scheduleData = await this.getScheduleData(sheetType)
-          
-          if (!scheduleData || !scheduleData.content) {
-            console.log(`📅 No ${sheetType} schedule data found`)
-            continue
-          }
+          // Use per-ecclesia query only when ecclesia is explicitly provided
+          const scheduleData = ecclesia
+            ? await this.getScheduleDataByEcclesia(sheetType, ecclesia)
+            : await this.getScheduleData(sheetType)
 
-          // Filter events within the time range
+          if (!scheduleData || !scheduleData.content) continue
+
           const filteredEvents = scheduleData.content.filter((event: any) => {
             const eventDate = new Date(event.Date || event.date)
-            if (isNaN(eventDate.getTime())) {
-              console.warn(`⚠️ Invalid date found in ${sheetType}:`, event.Date || event.date)
-              return false
-            }
+            if (isNaN(eventDate.getTime())) return false
             return eventDate >= todayStart && eventDate <= twoWeeksFromNow
           })
 
-          // Convert to the expected format
           filteredEvents.forEach((event: any) => {
-            const eventDate = new Date(event.Date || event.date)
-            
             upcomingEvents.push({
               type: sheetType as ProgramTypeKeys,
               title: this.getSheetTitle(sheetType),
-              date: eventDate,
-              details: event // The full event object
+              date: new Date(event.Date || event.date),
+              details: event,
             })
           })
-
-          console.log(`📅 Found ${filteredEvents.length} upcoming events for ${sheetType}`)
-          
         } catch (error) {
           console.warn(`⚠️ Failed to get upcoming events for ${sheetType}:`, error)
-          // Continue with other sheet types
         }
       }
 
-      // Sort all events by date and return
-      const sortedEvents = upcomingEvents.sort((a, b) => a.date.getTime() - b.date.getTime())
-      
-      console.log(`✅ Found ${sortedEvents.length} upcoming events from DynamoDB in date range`)
-      return sortedEvents
-
+      return upcomingEvents.sort((a, b) => a.date.getTime() - b.date.getTime())
     } catch (error) {
       console.error('❌ Error fetching upcoming program from DynamoDB:', error)
       throw new Error('Failed to fetch upcoming program data')

@@ -2,7 +2,7 @@
 
 import { Card, YStack, XStack, Text, H3, Square } from 'tamagui'
 import { Calendar, MapPin, Users } from '@tamagui/lucide-icons'
-import { Event } from '@my/app/types/events'
+import { Event, getPlatformDisplayName } from '@my/app/types/events'
 import { formatDate, formatLocation } from './event-utils'
 import {
   formatDateInTimezone,
@@ -148,6 +148,14 @@ export function EventSummaryCard({
                 day: 'numeric',
                 year: 'numeric'
               })
+              const timeStr = date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+              })
+              // Include time if not midnight (midnight indicates date-only)
+              if (date.getHours() !== 0 || date.getMinutes() !== 0) {
+                dateText += ` at ${timeStr}`
+              }
             }
             // For engagements - skip in newsletter mode (date shown inline with announcement)
             else if (event.type === 'engagement' && (event as any).engagementDate && !isNewsletter) {
@@ -353,7 +361,7 @@ export function EventSummaryCard({
             // Handle object location with mode
             const mode = location.mode || 'in-person'
             const locationName = location.name || location.placeName
-            const platform = location.onlineMeeting?.platform
+            const platform = getPlatformDisplayName(location.onlineMeeting?.platform)
 
             if (mode === 'in-person' && locationName) {
               return (
@@ -477,6 +485,38 @@ export function EventSummaryCard({
               </Text>
             )
           })() : null}
+
+          {/* Online Meeting / Streaming Link - spelled out for print/sharing */}
+          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.onlineMeeting?.link ? (
+            <Text fontSize="$3" color="$gray11">
+              Streaming:{' '}
+              <Text
+                fontSize="$3"
+                color="$blue10"
+                textDecorationLine="underline"
+                cursor="pointer"
+                onPress={() => window.open((event as any).location.onlineMeeting.link, '_blank')}
+              >
+                {(event as any).location.onlineMeeting.link}
+              </Text>
+            </Text>
+          ) : null}
+
+          {/* Registration Link - spelled out for print/sharing */}
+          {(event as any).registration?.registrationUrl ? (
+            <Text fontSize="$3" color="$gray11">
+              Registration:{' '}
+              <Text
+                fontSize="$3"
+                color="$blue10"
+                textDecorationLine="underline"
+                cursor="pointer"
+                onPress={() => window.open((event as any).registration.registrationUrl, '_blank')}
+              >
+                {(event as any).registration.registrationUrl}
+              </Text>
+            </Text>
+          ) : null}
 
           {/* Multi-section badge - shown when event has sections */}
           {(event as any).sections && (event as any).sections.length > 0 ? (

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { firstName, lastName, email, ecclesia } = body
+    const { firstName, lastName, email, ecclesia, role: requestedRole } = body
 
     if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !ecclesia?.trim()) {
       return NextResponse.json(
@@ -63,6 +63,13 @@ export async function POST(request: NextRequest) {
     const isSameEcclesia = viewerEcclesia === ecclesia
     const canDirectAdd = isAdminOrOwner || (isRecorderOrRep && isSameEcclesia)
 
+    // Determine role: use requested role if provided and valid, otherwise default based on ecclesia
+    const ALLOWED_ROLES = ['member', 'guest', 'suspicious']
+    const effectiveRole = requestedRole && ALLOWED_ROLES.includes(requestedRole)
+      ? requestedRole
+      : (ecclesia?.trim() ? 'member' : 'guest')
+    const effectiveMemberStatus = effectiveRole === 'member' ? 'member' : 'visitor'
+
     if (canDirectAdd) {
       // Direct add — create real PersonRecord
       const person = await personRepository.create({
@@ -70,8 +77,8 @@ export async function POST(request: NextRequest) {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         ecclesia: ecclesia.trim(),
-        memberStatus: 'member',
-        role: 'guest',
+        memberStatus: effectiveMemberStatus,
+        role: effectiveRole,
       })
 
       invalidatePeopleCache()

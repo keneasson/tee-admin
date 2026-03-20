@@ -22,6 +22,11 @@ export function checkFeatureFlag(
   const config = configs?.[flag]
   if (!config) return false
 
+  // 0. Off — disabled for everyone, including owner
+  if (config.visibleTo === 'off') {
+    return false
+  }
+
   const userEmail = session?.user?.email?.toLowerCase()
   const userRole = session?.user?.role?.toLowerCase()
 

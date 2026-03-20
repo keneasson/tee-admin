@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext, PathValue, Path } from 'react-hook-form'
 import { formatEcclesiaToLocation, createLocationFieldUpdates } from './location-utils'
 import { LocationFieldsContainer } from './location-components'
@@ -112,6 +113,31 @@ export function LocationSection<T extends FieldValues>({
     name: `${namePrefix}._atTheHall` as FieldPath<T>
   }) as boolean | undefined
 
+  // Default "At the Hall" to checked when showAtTheHallOption is enabled
+  const didDefaultRef = useRef(false)
+  useEffect(() => {
+    if (showAtTheHallOption && hostingEcclesia && setValue && !didDefaultRef.current && atTheHall === undefined) {
+      didDefaultRef.current = true
+      setValue(`${namePrefix}._atTheHall` as any, true)
+      // Populate location fields from hosting ecclesia (handles both string and object)
+      const locationData = formatEcclesiaToLocation(hostingEcclesia)
+      if (typeof hostingEcclesia !== 'string') {
+        locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      }
+      const updates = createLocationFieldUpdates(locationData, namePrefix)
+      updates.forEach(({ field, value }) => {
+        const fieldName = field.includes('.parking') ? field.replace('.parking', '.parkingInfo') : field
+        setValue(fieldName as any, value)
+      })
+    }
+  }, [showAtTheHallOption, hostingEcclesia, setValue, namePrefix, atTheHall])
+
+  // Watch selected platform for conditional field display
+  const selectedPlatform = useWatch({
+    control,
+    name: `${namePrefix}.onlineMeeting.platform` as FieldPath<T>
+  }) as string | undefined
+
   // Watch address and name for autocomplete integration
   const addressValue = useWatch({
     control,
@@ -137,10 +163,12 @@ export function LocationSection<T extends FieldValues>({
     }
 
     if (checked && hostingEcclesia) {
-      // Transform data using pure function
+      // Transform data using pure function (handles both string and object)
       const locationData = formatEcclesiaToLocation(hostingEcclesia)
-      // Handle parkingInfo vs parking field name
-      locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      // Handle parkingInfo vs parking field name (only for object values)
+      if (typeof hostingEcclesia !== 'string') {
+        locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      }
 
       // Get field updates and apply them
       const updates = createLocationFieldUpdates(locationData, namePrefix)
@@ -196,49 +224,55 @@ export function LocationSection<T extends FieldValues>({
                 </Text>
               </XStack>
 
-              {/* At the Hall convenience option */}
+              {/* At the hosting ecclesia's location */}
               {showAtTheHallOption && hostingEcclesia ? <CheckboxWithCheck
                   control={control}
                   name={`${namePrefix}._atTheHall` as any}
-                  label={`At the Hall - Use ${hostingEcclesia.name}'s hall location`}
+                  label={typeof hostingEcclesia === 'string' ? hostingEcclesia : (hostingEcclesia.name || 'Hosting Ecclesia')}
                   onCheckChange={handleAtTheHallChange}
                 /> : null}
 
               {/* Show read-only location when "At the Hall" is checked */}
-              {atTheHall && hostingEcclesia ? (
-                <Card padding="$3" backgroundColor="$gray2" borderRadius="$3">
-                  <YStack gap="$2">
-                    <Text fontSize="$4" fontWeight="600" color="$gray12">
-                      {hostingEcclesia.hall?.name || hostingEcclesia.name}
-                    </Text>
-                    {(hostingEcclesia.hall?.address || hostingEcclesia.address) ? (
-                      <Text fontSize="$3" color="$gray11">
-                        {hostingEcclesia.hall?.address || hostingEcclesia.address}
+              {atTheHall && hostingEcclesia ? (() => {
+                // Normalize: hostingEcclesia can be a string or object
+                const he = typeof hostingEcclesia === 'string'
+                  ? { name: hostingEcclesia } as Record<string, any>
+                  : hostingEcclesia
+                const hallName = he.hall?.name || he.name
+                const hallAddress = he.hall?.address || he.address
+                const cityLine = [
+                  he.hall?.city || he.city,
+                  he.hall?.province || he.province,
+                  he.hall?.postalCode || he.postalCode
+                ].filter(Boolean).join(', ')
+                const country = he.hall?.country || he.country
+                const parking = he.hall?.parkingInfo || he.parkingInfo
+
+                return (
+                  <Card padding="$3" backgroundColor="$gray2" borderRadius="$3">
+                    <YStack gap="$2">
+                      <Text fontSize="$4" fontWeight="600" color="$gray12">
+                        {hallName}
                       </Text>
-                    ) : null}
-                    <Text fontSize="$3" color="$gray11">
-                      {[
-                        hostingEcclesia.hall?.city || hostingEcclesia.city,
-                        hostingEcclesia.hall?.province || hostingEcclesia.province,
-                        hostingEcclesia.hall?.postalCode || hostingEcclesia.postalCode
-                      ].filter(Boolean).join(', ')}
-                    </Text>
-                    {(hostingEcclesia.hall?.country || hostingEcclesia.country) ? (
-                      <Text fontSize="$3" color="$gray11">
-                        {hostingEcclesia.hall?.country || hostingEcclesia.country}
-                      </Text>
-                    ) : null}
-                    {(hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo) ? (
-                      <YStack marginTop="$2">
-                        <Text fontSize="$2" fontWeight="600" color="$gray10">Parking</Text>
-                        <Text fontSize="$3" color="$gray11">
-                          {hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo}
-                        </Text>
-                      </YStack>
-                    ) : null}
-                  </YStack>
-                </Card>
-              ) : (
+                      {hallAddress ? (
+                        <Text fontSize="$3" color="$gray11">{hallAddress}</Text>
+                      ) : null}
+                      {cityLine ? (
+                        <Text fontSize="$3" color="$gray11">{cityLine}</Text>
+                      ) : null}
+                      {country ? (
+                        <Text fontSize="$3" color="$gray11">{country}</Text>
+                      ) : null}
+                      {parking ? (
+                        <YStack marginTop="$2">
+                          <Text fontSize="$2" fontWeight="600" color="$gray10">Parking</Text>
+                          <Text fontSize="$3" color="$gray11">{parking}</Text>
+                        </YStack>
+                      ) : null}
+                    </YStack>
+                  </Card>
+                )
+              })() : (
                 /* Show editable fields when "At the Hall" is NOT checked */
                 <>
                   <EventFormInput
@@ -362,41 +396,45 @@ export function LocationSection<T extends FieldValues>({
                 label="Platform (Optional)"
                 placeholder="Select platform"
                 options={[
+                  { value: '', label: '— None —' },
                   { value: 'zoom', label: 'Zoom' },
                   { value: 'google-meet', label: 'Google Meet' },
                   { value: 'teams', label: 'Microsoft Teams' },
                   { value: 'webex', label: 'Webex' },
-                  { value: 'other', label: 'Other' }
+                  { value: 'custom-stream', label: 'Video Stream' },
                 ]}
               />
 
-              <XStack space="$2">
-                <YStack flex={1}>
-                  <EventFormInput
-                    control={control}
-                    name={`${namePrefix}.onlineMeeting.meetingId` as any}
-                    label="Meeting ID (Optional)"
-                    placeholder="e.g., 123 456 789"
-                  />
-                </YStack>
+              {/* Platform-specific fields — hidden for Custom Stream (just a link) */}
+              {selectedPlatform !== 'custom-stream' ? <>
+                <XStack space="$2">
+                  <YStack flex={1}>
+                    <EventFormInput
+                      control={control}
+                      name={`${namePrefix}.onlineMeeting.meetingId` as any}
+                      label={selectedPlatform === 'webex' ? 'Meeting Number (Optional)' : 'Meeting ID (Optional)'}
+                      placeholder={selectedPlatform === 'webex' ? 'e.g., 2631 234 5678' : 'e.g., 123 456 789'}
+                    />
+                  </YStack>
 
-                <YStack flex={1}>
-                  <EventFormInput
-                    control={control}
-                    name={`${namePrefix}.onlineMeeting.password` as any}
-                    label="Passcode (Optional)"
-                    placeholder="Meeting passcode"
-                  />
-                </YStack>
-              </XStack>
+                  <YStack flex={1}>
+                    <EventFormInput
+                      control={control}
+                      name={`${namePrefix}.onlineMeeting.password` as any}
+                      label="Passcode (Optional)"
+                      placeholder="Meeting passcode"
+                    />
+                  </YStack>
+                </XStack>
 
-              <EventFormInput
-                control={control}
-                name={`${namePrefix}.onlineMeeting.dialInNumber` as any}
-                label="Dial-In Number (Optional)"
-                placeholder="+1 234 567 8900"
-                type="tel"
-              />
+                <EventFormInput
+                  control={control}
+                  name={`${namePrefix}.onlineMeeting.dialInNumber` as any}
+                  label="Dial-In Number (Optional)"
+                  placeholder="+1 234 567 8900"
+                  type="tel"
+                />
+              </> : null}
 
               <OptimizedTextarea
                 control={control}

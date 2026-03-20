@@ -97,7 +97,15 @@ export interface EcclesiaListItem {
   contactPhone?: string
   website?: string
   externalLinks?: EcclesiaExternalLinks
+  logoUrl?: string
   memberCount?: number
+  // Multi-tenant fields
+  timezone?: string
+  latitude?: number
+  longitude?: number
+  sharingPreference?: 'open' | 'subscribers-only' | 'private'
+  sharingRadiusKm?: number
+  nearbyEcclesias?: string[]
 }
 
 export interface GuestUser {

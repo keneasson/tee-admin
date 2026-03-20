@@ -10,10 +10,13 @@ import { useState, useEffect } from 'react'
 // Remove direct service imports - we'll use API routes instead
 import { Event } from '@my/app/types/events'
 import { List, Plus } from '@tamagui/lucide-icons'
+import { useFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 export default function AdminEventsPage() {
   const isHydrated = useHydrated()
   const { hasAccess, isLoading } = useAdminAccess()
+  const multiTenantEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_TENANT_INIT)
   const [isCreating, setIsCreating] = useState(false)
   const [events, setEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
@@ -245,6 +248,7 @@ export default function AdminEventsPage() {
                 isLoading={isCreating}
                 skipTypeSelection={!!selectedEvent}
                 selectedType={selectedEvent?.type}
+                showSharingScope={multiTenantEnabled}
               />
             </YStack>
           </Card>

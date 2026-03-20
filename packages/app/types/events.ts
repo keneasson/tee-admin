@@ -6,6 +6,8 @@ export type EventStatus = 'draft' | 'ready' | 'published' | 'archived'
 
 export type LocationMode = 'in-person' | 'online' | 'hybrid'
 
+export type EventSharingScope = 'own' | 'region' | 'global'
+
 export type DocumentType = 'upload' | 'google-doc'
 
 export interface DocumentAttachment {
@@ -27,9 +29,25 @@ export interface OnlineMeetingInfo {
   link: string // Required for online/hybrid events
   meetingId?: string // Optional meeting ID
   password?: string // Optional password/passcode
-  platform?: string // e.g., Zoom, Google Meet, Teams
+  platform?: string // e.g., 'zoom', 'google-meet', 'teams', 'webex', 'custom-stream'
   dialInNumber?: string // Optional phone dial-in
   additionalInfo?: string // Any other relevant info
+}
+
+/** Map platform value → human-readable display name */
+export const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  'zoom': 'Zoom',
+  'google-meet': 'Google Meet',
+  'teams': 'Microsoft Teams',
+  'webex': 'Webex',
+  'custom-stream': 'Video Stream',
+  'other': 'Video Stream', // Legacy value migration
+}
+
+/** Get display name for a platform, falling back to the raw value */
+export const getPlatformDisplayName = (platform: string | undefined): string => {
+  if (!platform) return ''
+  return PLATFORM_DISPLAY_NAMES[platform] || platform
 }
 
 // Location information for events
@@ -141,15 +159,52 @@ export interface BaseEvent {
   createdAt: Date
   updatedAt: Date
 
-  // Simplified event lifecycle:
-  // - active: Is the event visible in newsletter/emails? Simple toggle.
-  // - publishDate: When was it activated? Controls duration rules (e.g., "3 weeks from publish").
-  active: boolean
+  // ── Event Lifecycle ──────────────────────────────────────────────────
+  //
+  // `publishDate` is the SINGLE SOURCE OF TRUTH for event visibility:
+  //
+  //   null / undefined → Inactive (never activated, or deactivated)
+  //   Past or now      → Active — visible to public, duration rules start from this date
+  //   Future           → Scheduled — not visible yet, becomes active when date arrives
+  //
+  // UI actions:
+  //   "Activate"     → set publishDate = new Date()
+  //   "Deactivate"   → set publishDate = null
+  //   "Schedule for" → set publishDate = futureDate
+  //
+  // All visibility checks go through `isEventActive(event)`.
+  // ────────────────────────────────────────────────────────────────────
+
   publishDate?: Date
 
-  // DEPRECATED: Replaced by `active`. Kept for backward compatibility during migration.
-  // Will be removed in a future version. Use `active` instead.
+  /**
+   * @deprecated Since March 2026. Use `publishDate` instead.
+   *
+   * Was a boolean toggle for visibility. Now derived from `publishDate`:
+   *   publishDate <= now  → active = true
+   *   publishDate is null → active = false
+   *   publishDate > now   → active = false (scheduled)
+   *
+   * `isEventActive()` handles backward compat: if `publishDate` is not set,
+   * falls back to checking `active`, then legacy `status`/`published`.
+   *
+   * CLEANUP: Safe to remove once all DynamoDB EVENT# records have been
+   * backfilled with `publishDate`. Run a one-time migration script that sets
+   * `publishDate = updatedAt` for records where `active === true` and
+   * `publishDate` is missing, then remove this field and the legacy fallback
+   * in `isEventActive()`.
+   */
+  active: boolean
+
+  /**
+   * @deprecated Since July 2025. Replaced by `active`, which is itself
+   * deprecated in favor of `publishDate`. Legacy chain:
+   *   status === 'published' | 'ready' → active = true → publishDate = <date>
+   *
+   * CLEANUP: Same migration as `active` above. Remove alongside `active`.
+   */
   published?: boolean
+  /** @deprecated See `published` above. */
   status?: EventStatus
 
   description?: string
@@ -291,6 +346,9 @@ export interface Event extends BaseEvent {
 
   // Registration details (for events that require registration)
   registration?: RegistrationInfo
+
+  // Multi-tenant event sharing
+  sharingScope?: EventSharingScope
 }
 
 // Type-specific event aliases for use in type-narrowed contexts
@@ -411,42 +469,123 @@ export function isElectionCycleEvent(event: Event): boolean {
 }
 
 /**
- * Check if an event is active/visible for newsletter and email display.
- * Handles backward compatibility with legacy `status` and `published` fields.
+ * Check if an event is currently active/visible.
  *
- * New model: active = true
- * Legacy model: status === 'published' || status === 'ready'
+ * Source of truth: `publishDate`
+ *   - null/undefined → Inactive
+ *   - Past or now    → Active (visible to public)
+ *   - Future         → Scheduled (not visible yet)
+ *
+ * Backward compatibility fallback chain (for records without publishDate):
+ *   1. `active === true` → treat as active (deprecated boolean)
+ *   2. `status === 'published' | 'ready'` → treat as active (legacy)
+ *
+ * @deprecated fallback logic — once all EVENT# records are backfilled with
+ * `publishDate`, remove the `active` and `status` fallbacks. See BaseEvent
+ * type for migration instructions.
  */
 export function isEventActive(event: Partial<Event>): boolean {
-  // New model: use `active` directly
+  // PRIMARY: publishDate is the source of truth
+  if (event.publishDate) {
+    const publishTime = new Date(event.publishDate).getTime()
+    if (!isNaN(publishTime)) {
+      return publishTime <= Date.now()
+    }
+  }
+
+  // FALLBACK 1: deprecated `active` boolean (records not yet migrated)
   if (typeof event.active === 'boolean') {
     return event.active
   }
 
-  // Legacy fallback: check status
+  // FALLBACK 2: legacy `status` field (oldest records)
   if (event.status) {
     return event.status === 'published' || event.status === 'ready'
   }
 
-  // Default: not active
   return false
 }
 
 /**
- * Normalize an event for the new lifecycle model.
- * Converts legacy status/published fields to the new `active` field.
+ * Check if an event is scheduled for future activation.
+ * Returns true if publishDate is set and in the future.
+ */
+export function isEventScheduled(event: Partial<Event>): boolean {
+  if (!event.publishDate) return false
+  const publishTime = new Date(event.publishDate).getTime()
+  return !isNaN(publishTime) && publishTime > Date.now()
+}
+
+/**
+ * Get the effective activation date of an event.
+ * Returns the publishDate if set, or falls back to createdAt/updatedAt
+ * for legacy records that were active but had no publishDate.
+ *
+ * Used by newsletter duration rules (e.g., "show for 3 weeks from activation").
+ */
+export function getEventActivationDate(event: Partial<Event>): Date | null {
+  if (event.publishDate) {
+    const d = new Date(event.publishDate)
+    if (!isNaN(d.getTime())) return d
+  }
+
+  // Legacy fallback: if event was active, use updatedAt or createdAt
+  if (event.active === true || event.status === 'published' || event.status === 'ready') {
+    if (event.updatedAt) {
+      const d = new Date(event.updatedAt)
+      if (!isNaN(d.getTime())) return d
+    }
+    if (event.createdAt) {
+      const d = new Date(event.createdAt)
+      if (!isNaN(d.getTime())) return d
+    }
+  }
+
+  return null
+}
+
+/**
+ * @deprecated Since March 2026. No longer needed — `publishDate` replaces `active`.
+ *
+ * Was used to convert legacy status/published fields to the `active` boolean.
+ * Now that `publishDate` is the source of truth, normalization should set
+ * `publishDate` instead. See `normalizeToPublishDate()`.
+ *
+ * CLEANUP: Remove once all callers are updated to use `normalizeToPublishDate()`.
  */
 export function normalizeEventActiveState(event: Partial<Event>): Partial<Event> {
-  // If already has `active`, return as-is
   if (typeof event.active === 'boolean') {
     return event
   }
-
-  // Convert from legacy status
   const active = event.status === 'published' || event.status === 'ready'
+  return { ...event, active }
+}
 
+/**
+ * Normalize a legacy event to use `publishDate` as source of truth.
+ *
+ * For records that have `active: true` or `status: 'published'/'ready'`
+ * but no `publishDate`, sets `publishDate` to `updatedAt` or `createdAt`.
+ *
+ * Use this in a one-time migration script to backfill all EVENT# records,
+ * after which the `active`, `published`, and `status` fields can be removed.
+ */
+export function normalizeToPublishDate(event: Partial<Event>): Partial<Event> {
+  // Already has publishDate — nothing to do
+  if (event.publishDate) return event
+
+  // Check if event was active under old model
+  const wasActive =
+    event.active === true ||
+    event.status === 'published' ||
+    event.status === 'ready'
+
+  if (!wasActive) return event
+
+  // Set publishDate from best available timestamp
+  const fallbackDate = event.updatedAt || event.createdAt || new Date()
   return {
     ...event,
-    active
+    publishDate: new Date(fallbackDate),
   }
 }

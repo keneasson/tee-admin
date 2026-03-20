@@ -175,12 +175,15 @@ export const getEmailContent = async (
         console.log(`📺 YouTube fallback sync for recap: ${recapSyncResult.updated} URLs synced`)
       }
 
-      const memorialEvents = await get_upcoming_program(['memorial', 'sundaySchool'])
+      const [memorialEvents, recapUpcomingEvents] = await Promise.all([
+        get_upcoming_program(['memorial', 'sundaySchool']),
+        fetchEvents(),
+      ])
       console.log('memorialEvents', memorialEvents)
       const mergeEvents = mergeSundayEvents(memorialEvents)
       console.log('mergeEvents', mergeEvents)
-      const MemorialHtmlContent = await render(<MemorialService events={mergeEvents} note={note} />)
-      const MemorialTextContent = await render(<MemorialService events={mergeEvents} note={note} />, {
+      const MemorialHtmlContent = await render(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />)
+      const MemorialTextContent = await render(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />, {
         plainText: true,
       })
       return [MemorialHtmlContent, MemorialTextContent]
@@ -378,6 +381,15 @@ export const getEmailContent = async (
           }
         }
         const baptismLocation = formatBaptismLocation(event.location)
+        const baptismOnlineMeeting = event.location?.onlineMeeting
+
+        console.log('[BaptismEmail] Location data:', JSON.stringify({
+          locationMode: event.location?.mode,
+          hasOnlineMeeting: !!baptismOnlineMeeting,
+          onlineMeetingLink: baptismOnlineMeeting?.link,
+          onlineMeetingPlatform: baptismOnlineMeeting?.platform,
+          fullLocation: event.location,
+        }, null, 2))
 
         const baptismHtml = await render(
           <BaptismEmail
@@ -388,7 +400,9 @@ export const getEmailContent = async (
             baptismDate={event.baptismDate}
             baptismTime={(event as any).baptismTime}
             location={baptismLocation}
+            onlineMeeting={baptismOnlineMeeting}
             hostingEcclesia={event.hostingEcclesia}
+            description={event.description}
             note={note}
             eventUrl={eventUrl}
           />
@@ -402,7 +416,9 @@ export const getEmailContent = async (
             baptismDate={event.baptismDate}
             baptismTime={(event as any).baptismTime}
             location={baptismLocation}
+            onlineMeeting={baptismOnlineMeeting}
             hostingEcclesia={event.hostingEcclesia}
+            description={event.description}
             note={note}
             eventUrl={eventUrl}
           />,
@@ -514,6 +530,7 @@ export const getEmailContent = async (
         }
 
         const baptismLocation = formatBaptismLocation(interEcclesiaEvent.location)
+        const interBaptismOnlineMeeting = interEcclesiaEvent.location?.onlineMeeting
 
         // Render baptism template to get inner HTML
         const baptismFullHtml = await render(
@@ -525,7 +542,9 @@ export const getEmailContent = async (
             baptismDate={interEcclesiaEvent.baptismDate}
             baptismTime={(interEcclesiaEvent as any).baptismTime}
             location={baptismLocation}
+            onlineMeeting={interBaptismOnlineMeeting}
             hostingEcclesia={interEcclesiaEvent.hostingEcclesia}
+            description={interEcclesiaEvent.description}
             note={note}
             eventUrl={interEcclesiaEventUrl}
           />

@@ -15,6 +15,7 @@ interface GuestCountEntry {
 
 interface CachedMembers {
   members: MemberListItem[]
+  guests: MemberListItem[]
   ecclesias: string[]
   /** Per-ecclesia guest counts for recorder filtering, plus a total for admin/owner */
   guestCounts: GuestCountEntry[]

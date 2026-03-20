@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import { auth } from '../../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
+import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../../cache'
+import { sendEmailChangeNotification, sendAdminAddedEmailVerification } from '../../../../../utils/email/send-email-change-notification'
 import type { AddressType, PhoneType, RelationshipType } from '@my/app/provider/dynamodb/types'
 
 /**
@@ -46,14 +49,23 @@ async function checkPermission(session: any, targetPerson: any) {
   }
 
   // Recorder/Rep/RB: same-ecclesia only
+  let viewerPerson = null
   if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
-    const viewerPerson = await personRepository.getByEmail(viewerEmail)
+    viewerPerson = await personRepository.getByEmail(viewerEmail)
     if (!viewerPerson || viewerPerson.ecclesia !== targetPerson.ecclesia) {
       return { allowed: false as const, response: NextResponse.json({ error: 'You can only edit members of your own ecclesia' }, { status: 403 }) }
     }
   }
 
-  return { allowed: true as const, viewerRole }
+  // Resolve viewer name for email notifications
+  if (!viewerPerson) {
+    viewerPerson = await personRepository.getByEmail(viewerEmail)
+  }
+  const viewerName = viewerPerson?.displayName
+    || [viewerPerson?.firstName, viewerPerson?.lastName].filter(Boolean).join(' ')
+    || 'An administrator'
+
+  return { allowed: true as const, viewerRole, viewerName }
 }
 
 /**
@@ -99,6 +111,55 @@ export async function POST(
           sesStatus: 'active',
         })
         invalidatePeopleCache()
+
+        // Resolve target person's display name for email templates
+        const personName = targetPerson.displayName
+          || [targetPerson.firstName, targetPerson.lastName].filter(Boolean).join(' ')
+          || 'Member'
+
+        // Send verification email to the NEW email address
+        try {
+          const token = randomBytes(32).toString('hex')
+          const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+          // Store verification token on the USER# email record (legacy system)
+          // so the existing /api/user/emails/verify?token=xxx callback can find it
+          await userRepository.addEmail(targetPerson.primaryEmail, {
+            emailId: record.emailId,
+            email: email.toLowerCase().trim(),
+            verified: false,
+            order: existingEmails.length,
+            verificationToken: token,
+            verificationTokenExpiry: expiry,
+            verificationSentAt: new Date().toISOString(),
+          })
+
+          await sendAdminAddedEmailVerification({
+            newEmail: email.toLowerCase().trim(),
+            personName,
+            verificationToken: token,
+            addedByName: permResult.viewerName,
+          })
+        } catch (verifyError) {
+          console.error('Failed to send verification to new email:', verifyError)
+          // Don't fail the add — the email was added successfully, verification can be retried
+        }
+
+        // Send change notification to ALL existing email addresses
+        for (const existingEmail of existingEmails) {
+          try {
+            await sendEmailChangeNotification({
+              oldEmail: existingEmail.email,
+              newEmail: email.toLowerCase().trim(),
+              personName,
+              changedByName: permResult.viewerName,
+            })
+          } catch (notifyError) {
+            console.error(`Failed to send change notification to ${existingEmail.email}:`, notifyError)
+            // Best-effort — don't fail the request
+          }
+        }
+
         return NextResponse.json({ success: true, record: { email: record.email, emailType: record.emailType, emailId: record.emailId } })
       }
 

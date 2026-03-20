@@ -1,21 +1,11 @@
 import { NextResponse } from 'next/server'
 import { auth } from '../../../../../utils/auth'
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
 import { getSesClient } from '../../../../../utils/email/sesClient'
 import { inputTemplate } from '../../../../../utils/email/contact-lists'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
-
-// DynamoDB client
-const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'ca-central-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-})
-const docClient = DynamoDBDocumentClient.from(dynamoClient)
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 /**
  * POST: Sync all TEE members from DynamoDB Directory to SES Members list
@@ -31,56 +21,48 @@ export async function POST() {
 
     console.log('🔄 Starting sync of TEE members to SES Members list...')
 
-    // 1. Fetch all directory members from DynamoDB
-    const queryCommand = new QueryCommand({
-      TableName: 'tee-schedules',
-      KeyConditionExpression: 'PK = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS',
-      },
-    })
+    // 1. Fetch all PersonRecords (source of truth)
+    const allPersons = []
+    let lastKey: Record<string, any> | undefined
 
-    const directoryResponse = await docClient.send(queryCommand)
+    do {
+      const result = await personRepository.listAll({ lastEvaluatedKey: lastKey })
+      allPersons.push(...result.items)
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
 
-    if (!directoryResponse.Items) {
+    if (allPersons.length === 0) {
       return NextResponse.json(
-        {
-          error: 'No directory members found',
-        },
+        { error: 'No directory members found' },
         { status: 404 }
       )
     }
 
-    // 2. Filter for TEE members and extract their emails
+    // 2. Filter for home ecclesia members and extract their emails
     const teeMembers: {
       email: string
       firstName: string
       lastName: string
-      sk: string
+      personId: string
     }[] = []
 
-    directoryResponse.Items.forEach((item: any) => {
-      // Check if member has home ecclesia
-      if (HOME_ECCLESIA.isHomeEcclesia(item.ecclesia)) {
-        const emailField = item.email || ''
+    for (const person of allPersons) {
+      // Skip placeholders, suspicious, deceased
+      if (person.primaryEmail?.startsWith('unknown-')) continue
+      if (person.role === ROLES.SUSPICIOUS || person.role === ROLES.DECEASED) continue
 
-        // Split multiple emails (semicolon, comma, pipe, or space separated)
-        const emails = emailField
-          .split(/[;,|\s]/)
-          .map((e: string) => e.trim())
-          .filter((e: string) => e.length > 0)
-
-        // Add each email
-        emails.forEach((email: string) => {
+      // Only sync members of the home ecclesia
+      if (HOME_ECCLESIA.isHomeEcclesia(person.ecclesia)) {
+        if (person.primaryEmail) {
           teeMembers.push({
-            email,
-            firstName: item.firstName || '',
-            lastName: item.lastName || '',
-            sk: item.SK || '',
+            email: person.primaryEmail,
+            firstName: person.firstName || '',
+            lastName: person.lastName || '',
+            personId: person.personId,
           })
-        })
+        }
       }
-    })
+    }
 
     console.log(`📧 Found ${teeMembers.length} TEE member email addresses`)
 
@@ -150,7 +132,7 @@ export async function POST() {
             member.firstName && member.lastName
               ? `${member.firstName} ${member.lastName}`.trim()
               : '',
-          dynamodbSK: member.sk, // Store the DynamoDB SK for linking
+          personId: member.personId, // Link back to PersonRecord
           ecclesia: HOME_ECCLESIA.canonicalName, // All members being synced here are home ecclesia members
           isMember: true, // All members being synced here are members
         }

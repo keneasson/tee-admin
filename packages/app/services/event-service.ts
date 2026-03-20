@@ -19,18 +19,11 @@ import { v4 as uuidv4 } from 'uuid'
 // Helper functions for event data transformation
 
 const extractHostingEcclesia = (event: Event): string => {
-  switch (event.type) {
-    case 'study-weekend':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'wedding':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'baptism':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'general':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    default:
-      return 'Unknown Ecclesia'
-  }
+  // Handle hostingEcclesia being either a string or { name: string } object
+  const he = event.hostingEcclesia
+  if (!he) return 'Unknown Ecclesia'
+  if (typeof he === 'string') return he
+  return he.name || 'Unknown Ecclesia'
 }
 
 const extractEventDate = (event: Event): string => {
@@ -404,14 +397,25 @@ export const createEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'u
     processedEventData.registration.deadline = new Date(processedEventData.registration.deadline)
   }
   
+  // Derive publishDate from active state for backward compat:
+  // If caller passes active=true but no publishDate, set publishDate=now (immediate activation)
+  // If caller passes publishDate, use it directly
+  let publishDate = processedEventData.publishDate
+    ? new Date(processedEventData.publishDate)
+    : undefined
+  if (!publishDate && processedEventData.active) {
+    publishDate = now
+  }
+
   const event: Event = {
     ...processedEventData,
     id: eventId,
     createdAt: now,
     updatedAt: now,
-    active: processedEventData.active ?? false, // Default to inactive for progressive creation
-    status: processedEventData.status || 'draft', // Legacy: kept for backward compatibility
-    published: processedEventData.published ?? false, // Legacy: kept for backward compatibility
+    publishDate,
+    active: processedEventData.active ?? false, // @deprecated — kept for legacy readers
+    status: processedEventData.status || 'draft', // @deprecated — kept for legacy readers
+    published: processedEventData.published ?? false, // @deprecated — kept for legacy readers
   } as Event
 
   // Convert Event to ScheduleRecord format with all the rich data
@@ -453,12 +457,14 @@ export const saveEventDraft = async (eventData: Partial<Event> & { id?: string }
   } else {
     console.log('[saveEventDraft] Creating new draft event')
     // Create new draft event with minimal data
+    // Drafts have no publishDate (inactive by definition)
     const minimalEvent = {
       title: eventData.title || 'Untitled Event',
       type: eventData.type || 'general',
       createdBy: eventData.createdBy || 'system',
-      active: false, // New events start inactive
-      status: 'draft', // Legacy: kept for backward compatibility
+      publishDate: undefined, // Drafts are not active
+      active: false, // @deprecated — kept for legacy readers
+      status: 'draft', // @deprecated — kept for legacy readers
       ...eventData,
     } as Omit<Event, 'id' | 'createdAt' | 'updatedAt'>
     

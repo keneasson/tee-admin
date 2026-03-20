@@ -32,9 +32,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Require at least member role — guests must not see the contact list
+    // Require at least member role — guests, deceased, and suspicious must not see the contact list
     const callerRole = (session.user as any).role as string || ROLES.GUEST
-    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED || callerRole === ROLES.SUSPICIOUS) {
       return NextResponse.json(
         { error: 'Member access required' },
         { status: 403 }
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     const now = Date.now()
     const cached = getCachedMembers()
     let allMembers: MemberListItem[]
+    let allGuests: MemberListItem[]
     let ecclesias: string[]
     let guestTotal: number
     let guestCounts: Array<{ ecclesia: string | undefined; count: number }>
@@ -73,6 +74,7 @@ export async function GET(request: NextRequest) {
 
     if (!noCache && cached && (now - cached.timestamp) < CACHE_TTL_MS) {
       allMembers = cached.members
+      allGuests = cached.guests || []
       ecclesias = cached.ecclesias
       guestTotal = cached.guestTotal
       guestCounts = cached.guestCounts
@@ -89,8 +91,9 @@ export async function GET(request: NextRequest) {
       } while (lastKey)
 
       // Build member list - each person appears exactly once
-      // Exclude guests from contact list; count them separately per ecclesia
+      // Guests go into a separate list; suspicious users are hidden entirely
       allMembers = []
+      allGuests = []
       const ecclesiaSet = new Set<string>()
       const guestByEcclesia = new Map<string | undefined, number>()
       guestTotal = 0
@@ -99,43 +102,51 @@ export async function GET(request: NextRequest) {
         // Skip placeholder/unknown records
         if (person.primaryEmail?.startsWith('unknown-')) continue
 
-        // Count guests but exclude them from contact list
-        if (person.role === ROLES.GUEST) {
-          guestTotal++
-          const ecc = person.ecclesia || undefined
-          guestByEcclesia.set(ecc, (guestByEcclesia.get(ecc) || 0) + 1)
-          continue
-        }
+        // Suspicious users are hidden from normal views
+        if (person.role === ROLES.SUSPICIOUS) continue
 
         const firstName = person.firstName || ''
         const lastName = person.lastName || ''
         const name = person.displayName || [firstName, lastName].filter(Boolean).join(' ') || person.primaryEmail
 
-        if (person.ecclesia) {
-          ecclesiaSet.add(person.ecclesia)
-        }
-
-        allMembers.push({
+        const item: MemberListItem = {
           id: person.personId,
           email: person.primaryEmail,
           name,
           lastName: lastName.toLowerCase(),
           ecclesia: person.ecclesia || undefined,
-        })
+        }
+
+        // Guests go to a separate list
+        if (person.role === ROLES.GUEST) {
+          guestTotal++
+          const ecc = person.ecclesia || undefined
+          guestByEcclesia.set(ecc, (guestByEcclesia.get(ecc) || 0) + 1)
+          allGuests.push(item)
+          continue
+        }
+
+        if (person.ecclesia) {
+          ecclesiaSet.add(person.ecclesia)
+        }
+
+        allMembers.push(item)
       }
 
       // Sort by last name, then first name
-      allMembers.sort((a, b) => {
+      const sortByName = (a: MemberListItem, b: MemberListItem) => {
         const lastNameCompare = a.lastName.localeCompare(b.lastName)
         if (lastNameCompare !== 0) return lastNameCompare
         return a.name.localeCompare(b.name)
-      })
+      }
+      allMembers.sort(sortByName)
+      allGuests.sort(sortByName)
 
       ecclesias = [...ecclesiaSet].sort()
       guestCounts = Array.from(guestByEcclesia.entries()).map(([ecclesia, count]) => ({ ecclesia, count }))
 
       // Update cache
-      setCachedMembers({ members: allMembers, ecclesias, guestTotal, guestCounts, timestamp: now })
+      setCachedMembers({ members: allMembers, guests: allGuests, ecclesias, guestTotal, guestCounts, timestamp: now })
     }
 
     // Compute viewer-specific guest count
@@ -147,6 +158,11 @@ export async function GET(request: NextRequest) {
 
     // Apply filters for response
     const filtered = applyFilters(allMembers, viewerEmail, searchQuery, ecclesiaFilter)
+
+    // Filter guests the same way (only for admin/owner/recorder)
+    const filteredGuests = (isAdminOrOwner || isRecorderOrRep)
+      ? applyFilters(allGuests, viewerEmail, searchQuery, ecclesiaFilter).map(({ lastName, ...rest }) => rest)
+      : []
 
     // For admin/owner, enrich with privacy settings for all members
     // For recorder/rep, enrich with privacy settings for same-ecclesia members only
@@ -195,6 +211,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       members: membersResponse,
+      guests: filteredGuests,
       ecclesias,
       viewerEcclesia,
       viewerRole,

@@ -18,6 +18,7 @@ export default function DirectoryPeoplePage() {
   const isHydrated = useHydrated()
 
   const [members, setMembers] = useState<DirectoryMember[]>([])
+  const [guests, setGuests] = useState<DirectoryMember[]>([])
   const [ecclesias, setEcclesias] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,6 +56,7 @@ export default function DirectoryPeoplePage() {
       if (res.ok) {
         const data = await res.json()
         setMembers(data.members || [])
+        setGuests(data.guests || [])
         setEcclesias(data.ecclesias || [])
         if (data.guestCount !== undefined) {
           setGuestCount(data.guestCount)
@@ -201,6 +203,7 @@ export default function DirectoryPeoplePage() {
 
       <PersonList
         members={members}
+        guests={guests}
         ecclesias={ecclesias}
         loading={loading}
         defaultEcclesia={selectedEcclesia}

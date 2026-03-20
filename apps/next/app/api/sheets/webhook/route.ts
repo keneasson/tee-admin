@@ -16,9 +16,10 @@ const syncService = new WebhookSyncService()
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse the webhook payload
-    const payload: SheetWebhookPayload = await request.json()
-    
+    // Read the raw body text for signature validation (must match what the sender signed)
+    const rawBody = await request.text()
+    const payload: SheetWebhookPayload = JSON.parse(rawBody)
+
     console.log('📥 Webhook received:', {
       sheetId: payload.sheetId,
       eventType: payload.eventType,
@@ -34,9 +35,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Security validation
+    // Security validation — use rawBody to match the exact string the sender signed
     const signature = request.headers.get('x-webhook-signature') || payload.signature || null
-    if (!WebhookSecurity.validateSignature(JSON.stringify(payload), signature)) {
+    if (!WebhookSecurity.validateSignature(rawBody, signature)) {
       console.warn('⚠️ Invalid webhook signature for sheet:', payload.sheetId)
       return NextResponse.json(
         { error: 'Invalid signature' },

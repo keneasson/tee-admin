@@ -33,9 +33,14 @@ export interface EcclesiaData {
  * Transform ecclesia data into location format
  * Pure function - no side effects
  */
-export const formatEcclesiaToLocation = (ecclesia: EcclesiaData | null): LocationData => {
+export const formatEcclesiaToLocation = (ecclesia: EcclesiaData | string | null): LocationData => {
   if (!ecclesia) {
     return {}
+  }
+
+  // Handle string input (just an ecclesia name)
+  if (typeof ecclesia === 'string') {
+    return { name: `${ecclesia} Hall` }
   }
 
   return {

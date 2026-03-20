@@ -9,14 +9,14 @@ const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
 
 const scheduleService = new ScheduleService()
 
-// Create a cached version of the upcoming program fetcher
+// STABLE cached fetcher — no ecclesia filtering (matches deployed production behavior)
 const getCachedUpcomingProgram = unstable_cache(
   async (orderOfKeys: ProgramTypeKeys[]) => {
     console.log('🔄 Cache miss - fetching fresh data from DynamoDB')
     return await scheduleService.getUpcomingProgram(orderOfKeys)
   },
-  ['upcoming-program'], // cache key
-  { 
+  ['upcoming-program'],
+  {
     tags: [
       CACHE_TAGS.UPCOMING_PROGRAM,
       CACHE_TAGS.ALL_SCHEDULE_DATA,
@@ -24,7 +24,7 @@ const getCachedUpcomingProgram = unstable_cache(
       CACHE_TAGS.SCHEDULES_BIBLE_CLASS,
       CACHE_TAGS.SCHEDULES_SUNDAY_SCHOOL
     ],
-    revalidate: CACHE_DURATION || 3600, // Default to 1 hour if no cache duration
+    revalidate: CACHE_DURATION || 3600,
   }
 )
 
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     console.log('📅 API request for upcoming program events')
 
-    // Fetch from DynamoDB with caching (no fallback)
+    // STABLE: fetch all schedules without ecclesia filtering
     const upcomingEvents = await getCachedUpcomingProgram(orderOfKeys)
     
     console.log(`✅ Served upcoming program from DynamoDB cache (${upcomingEvents.length} events)`)

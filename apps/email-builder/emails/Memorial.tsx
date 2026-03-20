@@ -26,8 +26,10 @@ import {
 import React from 'react'
 import type { MemorialServiceType, NextMemorialServiceProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
+import type { Event } from '@my/app/types/events'
 import { Footer } from '../components/Footer'
 import { AutoLinkText } from '../components/AutoLinkText'
+import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
   const dayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(
@@ -124,7 +126,7 @@ function formatEventDate(dateStr: string | Date | undefined): string {
   return formatDateToronto(dateStr)
 }
 
-const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) => {
+const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upcomingEvents }) => {
   const sundayEvents = events || mockEvents
 
   // Use the actual dates from the events data instead of calculating them
@@ -178,57 +180,72 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
         )}
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          {sundayEvents[0] !== undefined && (
-            <>
-              <Section style={program}>
-                <Heading style={defaultText}>Sunday School at 9:30am</Heading>
-                {sundayEvents[0].Refreshments ? (
-                  <Text style={defaultText}>
-                    {'Refreshments: '}
-                    <strong>{sundayEvents[0].Refreshments}</strong>
-                  </Text>
-                ) : (
-                  <Text style={defaultText}>{'No Sunday school this week!'}</Text>
-                )}
-              </Section>
-              <hr />
-            </>
-          )}
-          {sundayEvents[0] && (
-            <Section style={program}>
-              <Heading style={defaultText}>Memorial Service at 11:00am</Heading>
-              <Row>
-                <Column>
-                  <Row align="left" width={'49%'} className="deviceWidth">
-                    <Column style={columnAlignTop}>
-                      {MemorialServiceProgram(sundayEvents[0])}
-                    </Column>
-                  </Row>
+          {sundayEvents[0] !== undefined && (() => {
+            // Check if this Sunday has a replacement event (no service at hall + event title in Lunch)
+            const hasReplacementEvent = !sundayEvents[0].Exhort && !sundayEvents[0].Preside &&
+              sundayEvents[0].Lunch?.trim() &&
+              findReplacementEvent(upcomingEvents || [], sundayEvents[0].Lunch.trim())
 
-                  <Row align="left" width={'49%'} className="deviceWidth">
-                    <Column style={columnAlignTop}>
-                      <Text style={defaultText}>
-                        <strong>Hymns</strong>
-                        <br />
-                        {'Opening: '}
-                        <strong>{sundayEvents[0]['Hymn-opening']}</strong>
-                        <br />
-                        {'Exhortation: '}
-                        <strong>{sundayEvents[0]['Hymn-exhortation']}</strong>
-                        <br />
-                        {'Memorial: '}
-                        <strong>{sundayEvents[0]['Hymn-memorial']}</strong>
-                        <br />
-                        {'Closing: '}
-                        <strong>{sundayEvents[0]['Hymn-closing']}</strong>
-                        <br />
-                      </Text>
+            if (hasReplacementEvent) {
+              // Replacement event: skip Sunday School and Memorial headers, just show the event card
+              return (
+                <Section style={program}>
+                  {MemorialServiceProgram(sundayEvents[0], upcomingEvents)}
+                </Section>
+              )
+            }
+
+            // Normal rendering: Sunday School + Memorial Service
+            return (
+              <>
+                <Section style={program}>
+                  <Heading style={defaultText}>Sunday School at 9:30am</Heading>
+                  {sundayEvents[0].Refreshments ? (
+                    <Text style={defaultText}>
+                      {'Refreshments: '}
+                      <strong>{sundayEvents[0].Refreshments}</strong>
+                    </Text>
+                  ) : (
+                    <Text style={defaultText}>{'No Sunday school this week!'}</Text>
+                  )}
+                </Section>
+                <hr />
+                <Section style={program}>
+                  <Heading style={defaultText}>Memorial Service at 11:00am</Heading>
+                  <Row>
+                    <Column>
+                      <Row align="left" width={'49%'} className="deviceWidth">
+                        <Column style={columnAlignTop}>
+                          {MemorialServiceProgram(sundayEvents[0], upcomingEvents)}
+                        </Column>
+                      </Row>
+
+                      <Row align="left" width={'49%'} className="deviceWidth">
+                        <Column style={columnAlignTop}>
+                          <Text style={defaultText}>
+                            <strong>Hymns</strong>
+                            <br />
+                            {'Opening: '}
+                            <strong>{sundayEvents[0]['Hymn-opening']}</strong>
+                            <br />
+                            {'Exhortation: '}
+                            <strong>{sundayEvents[0]['Hymn-exhortation']}</strong>
+                            <br />
+                            {'Memorial: '}
+                            <strong>{sundayEvents[0]['Hymn-memorial']}</strong>
+                            <br />
+                            {'Closing: '}
+                            <strong>{sundayEvents[0]['Hymn-closing']}</strong>
+                            <br />
+                          </Text>
+                        </Column>
+                      </Row>
                     </Column>
                   </Row>
-                </Column>
-              </Row>
-            </Section>
-          )}
+                </Section>
+              </>
+            )
+          })()}
           <hr />
         </Container>
         <Container style={container} className="container zoom-info">
@@ -279,7 +296,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note }) =
           <Container style={container} className="container youtube-info">
             <Heading style={defaultText}>Arrangements for {secondSundayDateString}</Heading>
             <Row>
-              <Column style={columnAlignTop}>{MemorialServiceProgram(sundayEvents[1])}</Column>
+              <Column style={columnAlignTop}>{MemorialServiceProgram(sundayEvents[1], upcomingEvents)}</Column>
             </Row>
           </Container>
         )}
@@ -324,13 +341,21 @@ const Parking = () => {
   )
 }
 
-const MemorialServiceProgram = (event: SundayEvents) => {
+const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) => {
   // No service at hall: Both Exhort AND Preside are blank
   const noServiceAtHall = !event.Exhort && !event.Preside
 
   if (noServiceAtHall) {
-    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    // If Lunch contains an event title, find the matching event and render it inline
+    const eventTitle = event.Lunch?.trim()
+    const replacementEvent = eventTitle ? findReplacementEvent(upcomingEvents || [], eventTitle) : undefined
     const explanation = event.Activities || event['Holidays and Special Events']
+
+    if (replacementEvent) {
+      return <ReplacementEventCard event={replacementEvent} explanation={explanation} />
+    }
+
+    // Fallback: no matching event found, show simple "no service" message
     return (
       <Text style={defaultText}>
         <strong>There will be no service at our hall.</strong>

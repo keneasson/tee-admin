@@ -62,6 +62,9 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     const record: ScheduleRecord = {
       PK: this.buildSchedulePK(eventType),
       SK: this.buildScheduleSK(date, index),
+      // GSI1 keys for per-ecclesia queries (multi-tenant schedule support)
+      GSI1PK: this.buildEcclesiaGSI1PK(ecclesia),
+      GSI1SK: this.buildEcclesiaGSI1SK(date, eventType, time),
       ecclesia, // Required field
       type: eventType, // Required field
       sheetType: eventType,
@@ -373,6 +376,9 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       const record: ScheduleRecord = {
         PK: pk,
         SK: sk,
+        // GSI1 keys for per-ecclesia queries (multi-tenant schedule support)
+        GSI1PK: this.buildEcclesiaGSI1PK(schedule.ecclesia),
+        GSI1SK: this.buildEcclesiaGSI1SK(schedule.date, schedule.type, schedule.time || '09:00'),
         ecclesia: schedule.ecclesia, // Required field
         type: schedule.type, // Required field
         sheetType: schedule.type,

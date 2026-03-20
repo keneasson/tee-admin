@@ -38,6 +38,28 @@ export interface EcclesiaExternalLinks {
   otherLinks?: Array<{ label: string; url: string }>
 }
 
+/**
+ * Per-ecclesia schedule configuration.
+ * Controls which schedule types (tabs) are enabled and which fields are
+ * visible/labeled for each type.  Stored as a JSON attribute on the
+ * ECCLESIA# record so it round-trips with every ecclesia read/write.
+ */
+export type ScheduleTypeKey = 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc'
+
+export interface ScheduleFieldConfig {
+  key: string            // DB field name — consistent across all ecclesias
+  label: string          // Display label — customizable per ecclesia
+  enabled: boolean       // Whether to show this field
+}
+
+export interface ScheduleTypeConfig {
+  enabled: boolean                // Show this tab?
+  label: string                   // Tab display name (e.g. "Breaking of Bread" vs "Memorial Service")
+  fields: ScheduleFieldConfig[]   // Ordered list of fields for this schedule type
+}
+
+export type EcclesiaScheduleConfig = Record<ScheduleTypeKey, ScheduleTypeConfig>
+
 export interface EcclesiaData {
   name: string
   country: string
@@ -56,6 +78,18 @@ export interface EcclesiaData {
   externalLinks?: EcclesiaExternalLinks
   region?: string
   newsletterEnabled?: boolean
+  logoUrl?: string
+  scheduleConfig?: EcclesiaScheduleConfig
+  // Multi-tenant event sharing
+  timezone?: string
+  latitude?: number
+  longitude?: number
+  locationSource?: 'address' | 'city' | 'manual'
+  sharingPreference?: 'open' | 'subscribers-only' | 'private'
+  excludedEcclesias?: string[]
+  rbAlertPreference?: 'all' | 'major' | 'none'
+  sharingRadiusKm?: number  // 100–1000 in 100km steps, or omit for default (300km)
+  nearbyEcclesias?: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -164,6 +198,17 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
     externalLinks: item.externalLinks,
     region: item.region,
     newsletterEnabled: item.newsletterEnabled,
+    logoUrl: item.logoUrl,
+    scheduleConfig: item.scheduleConfig,
+    timezone: item.timezone,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    locationSource: item.locationSource,
+    sharingPreference: item.sharingPreference,
+    excludedEcclesias: item.excludedEcclesias,
+    rbAlertPreference: item.rbAlertPreference,
+    sharingRadiusKm: item.sharingRadiusKm,
+    nearbyEcclesias: item.nearbyEcclesias,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }
@@ -202,6 +247,7 @@ export async function createEcclesia(data: {
       ConditionExpression: 'attribute_not_exists(gsi1pk)', // Prevent duplicate names
     })
 
+    invalidateEcclesiaCache()
     return ecclesia
   } catch (error: any) {
     if (error.name === 'ConditionalCheckFailedException') {
@@ -249,44 +295,63 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
   }
 }
 
+// Server-side cache for ecclesia list (avoids full table scan on every search)
+let ecclesiaCacheData: EcclesiaData[] | null = null
+let ecclesiaCacheExpiry = 0
+const ECCLESIA_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+async function getAllEcclesiasWithCache(): Promise<EcclesiaData[]> {
+  const now = Date.now()
+  if (ecclesiaCacheData && now < ecclesiaCacheExpiry) {
+    return ecclesiaCacheData
+  }
+
+  const result = await client.scan({
+    TableName: TABLE_NAME,
+    IndexName: 'gsi1',
+    FilterExpression: 'begins_with(gsi1pk, :prefix)',
+    ExpressionAttributeValues: {
+      ':prefix': 'ECCLESIA#',
+    },
+  })
+
+  ecclesiaCacheData = (result.Items || []).map(mapItemToEcclesia)
+  ecclesiaCacheExpiry = now + ECCLESIA_CACHE_TTL_MS
+  return ecclesiaCacheData
+}
+
+/** Invalidate the ecclesia search cache (call after add/update/delete) */
+export function invalidateEcclesiaCache() {
+  ecclesiaCacheData = null
+  ecclesiaCacheExpiry = 0
+}
+
 export async function searchEcclesia(query: string, limit: number = 5): Promise<EcclesiaData[]> {
   try {
-    // For partial name matching, we need to scan all ECCLESIA records
-    // and do case-insensitive matching in JavaScript since DynamoDB doesn't support it
-    const result = await client.scan({
-      TableName: TABLE_NAME,
-      IndexName: 'gsi1',
-      FilterExpression: 'begins_with(gsi1pk, :prefix)',
-      ExpressionAttributeValues: {
-        ':prefix': 'ECCLESIA#',  // Get all ECCLESIA records
-      },
-    })
-
-    if (!result.Items) return []
+    const allEcclesias = await getAllEcclesiasWithCache()
 
     // Filter items by query (case-insensitive)
     const queryLower = query.toLowerCase()
-    const filteredItems = result.Items
+    const filteredItems = allEcclesias
       .filter(item => item.name && item.name.toLowerCase().includes(queryLower))
-      .map(mapItemToEcclesia)
-    
+
     // Sort results: exact matches first, then prefix matches, then contains
     filteredItems.sort((a, b) => {
       const aLower = a.name.toLowerCase()
       const bLower = b.name.toLowerCase()
-      
+
       // Exact match
       if (aLower === queryLower) return -1
       if (bLower === queryLower) return 1
-      
+
       // Starts with query
       if (aLower.startsWith(queryLower) && !bLower.startsWith(queryLower)) return -1
       if (bLower.startsWith(queryLower) && !aLower.startsWith(queryLower)) return 1
-      
+
       // Default to alphabetical
       return a.name.localeCompare(b.name)
     })
-    
+
     return filteredItems.slice(0, limit)
   } catch (error) {
     console.error('Error searching ecclesia:', error)
@@ -460,6 +525,7 @@ export async function updateEcclesia(
         },
       })
 
+      invalidateEcclesiaCache()
       return {
         ...original,
         address: data.address,
@@ -490,6 +556,17 @@ export async function updateEcclesiaFields(
     externalLinks?: EcclesiaExternalLinks
     region?: string
     newsletterEnabled?: boolean
+    logoUrl?: string
+    scheduleConfig?: EcclesiaScheduleConfig
+    timezone?: string
+    latitude?: number
+    longitude?: number
+    locationSource?: 'address' | 'city' | 'manual'
+    sharingPreference?: 'open' | 'subscribers-only' | 'private'
+    excludedEcclesias?: string[]
+    rbAlertPreference?: 'all' | 'major' | 'none'
+    sharingRadiusKm?: number
+    nearbyEcclesias?: string[]
   }
 ): Promise<EcclesiaData | null> {
   try {
@@ -516,6 +593,17 @@ export async function updateEcclesiaFields(
       { key: 'externalLinks', attr: ':externalLinks' },
       { key: 'region', attr: ':region' },
       { key: 'newsletterEnabled', attr: ':newsletterEnabled' },
+      { key: 'logoUrl', attr: ':logoUrl' },
+      { key: 'scheduleConfig', attr: ':scheduleConfig' },
+      { key: 'timezone', attr: ':timezone' },
+      { key: 'latitude', attr: ':latitude' },
+      { key: 'longitude', attr: ':longitude' },
+      { key: 'locationSource', attr: ':locationSource' },
+      { key: 'sharingPreference', attr: ':sharingPreference' },
+      { key: 'excludedEcclesias', attr: ':excludedEcclesias' },
+      { key: 'rbAlertPreference', attr: ':rbAlertPreference' },
+      { key: 'sharingRadiusKm', attr: ':sharingRadiusKm' },
+      { key: 'nearbyEcclesias', attr: ':nearbyEcclesias' },
     ]
 
     for (const { key, attr } of fieldMap) {
@@ -536,6 +624,7 @@ export async function updateEcclesiaFields(
       ...(Object.keys(names).length > 0 ? { ExpressionAttributeNames: names } : {}),
     })
 
+    invalidateEcclesiaCache()
     return {
       ...ecclesia,
       ...updates,

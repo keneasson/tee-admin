@@ -2,11 +2,14 @@ import { useState, useMemo } from 'react'
 import { YStack, XStack, Text, Label, Input, Select, View, Separator } from 'tamagui'
 import { Button } from '../Button'
 
+export type AddMemberRole = 'member' | 'guest' | 'suspicious'
+
 export interface AddMemberFormData {
   firstName: string
   lastName: string
   email: string
   ecclesia: string
+  role: AddMemberRole
   phone?: string
   address?: string
 }
@@ -33,13 +36,21 @@ export function AddMemberForm({
     lastName: '',
     email: '',
     ecclesia: defaultEcclesia || '',
+    role: defaultEcclesia ? 'member' : 'guest',
     phone: '',
     address: '',
   })
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
 
   const updateField = (field: keyof AddMemberFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value }
+      // When ecclesia is set, default role to 'member' (if currently 'guest')
+      if (field === 'ecclesia' && value.trim() && prev.role === 'guest') {
+        updated.role = 'member' as AddMemberRole
+      }
+      return updated
+    })
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
     }
@@ -75,6 +86,7 @@ export function AddMemberForm({
       lastName: formData.lastName.trim(),
       email: formData.email.trim().toLowerCase(),
       ecclesia: formData.ecclesia.trim(),
+      role: formData.role,
       phone: formData.phone?.trim() || undefined,
       address: formData.address?.trim() || undefined,
     })
@@ -196,6 +208,34 @@ export function AddMemberForm({
           </Select>
         </View>
         {errors.ecclesia ? <Text color="$red11" fontSize="$3">{errors.ecclesia}</Text> : null}
+      </YStack>
+
+      {/* Role */}
+      <YStack gap="$2">
+        <Label fontSize="$4" fontWeight="600">Role</Label>
+        <XStack gap="$2" flexWrap="wrap">
+          {([
+            { value: 'member' as const, label: 'Member', color: '$green' },
+            { value: 'guest' as const, label: 'Guest', color: '$blue' },
+            { value: 'suspicious' as const, label: 'Suspicious', color: '$red' },
+          ]).map((opt) => (
+            <Button
+              key={opt.value}
+              size="$3"
+              variant={formData.role === opt.value ? undefined : 'outlined'}
+              theme={formData.role === opt.value ? opt.color.replace('$', '') as any : undefined}
+              onPress={() => setFormData(prev => ({ ...prev, role: opt.value }))}
+              disabled={isLoading}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </XStack>
+        <Text fontSize="$2" color="$textSecondary">
+          {formData.role === 'member' ? 'Full ecclesia member — visible in directory' :
+           formData.role === 'guest' ? 'Visitor or contact — shown in guest section' :
+           'Flagged account — hidden from normal views'}
+        </Text>
       </YStack>
 
       <Separator marginVertical="$2" />

@@ -27,6 +27,7 @@ type FlagEntry = {
 }
 
 const VISIBILITY_OPTIONS: { value: FlagVisibility; label: string; description: string }[] = [
+  { value: 'off', label: 'Off', description: 'Disabled for everyone, including owner' },
   { value: 'owner', label: 'Owner only', description: 'Only you and users on the list' },
   { value: 'admin', label: 'Admins', description: 'All admins + users on the list' },
   { value: 'everyone', label: 'Everyone', description: 'Released — ready to remove flag from code' },
@@ -312,6 +313,7 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
 
 function VisibilityBadge({ visibleTo }: { visibleTo: FlagVisibility }) {
   const colors = {
+    off: { bg: '$gray3', text: '$gray11', label: 'Off' },
     owner: { bg: '$purple2', text: '$purple11', label: 'Owner' },
     admin: { bg: '$orange2', text: '$orange11', label: 'Admins' },
     everyone: { bg: '$green2', text: '$green11', label: 'Everyone' },

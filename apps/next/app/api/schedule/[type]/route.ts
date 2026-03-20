@@ -8,10 +8,10 @@ const scheduleService = new ScheduleService()
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { type: string } }
+  { params }: { params: Promise<{ type: string }> }
 ) {
   try {
-    const { type } = params
+    const { type } = await params
     
     // Validate schedule type
     const validTypes = ['memorial', 'bibleClass', 'sundaySchool', 'cyc']
@@ -72,7 +72,7 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error(`❌ Error serving ${params.type} schedule:`, error)
+    console.error(`❌ Error serving schedule:`, error)
     
     return NextResponse.json(
       { 

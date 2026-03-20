@@ -1,4 +1,4 @@
-import { Event, isEventActive } from '@my/app/types/events'
+import { Event, isEventActive, isEventScheduled } from '@my/app/types/events'
 import { getEventValidationStatus } from '@my/app/services/event-service'
 import { EventValidator } from '@my/app/utils/event-validation'
 import {
@@ -7,7 +7,8 @@ import {
   AlertCircle,
   XCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  CalendarClock
 } from '@tamagui/lucide-icons'
 import { XStack, YStack, Text, Circle } from 'tamagui'
 
@@ -17,16 +18,16 @@ interface EventStatusIndicatorProps {
   size?: 'small' | 'medium' | 'large'
 }
 
-export function EventStatusIndicator({ 
-  event, 
-  showDetails = false, 
-  size = 'medium' 
+export function EventStatusIndicator({
+  event,
+  showDetails = false,
+  size = 'medium'
 }: EventStatusIndicatorProps) {
   const validationStatus = getEventValidationStatus(event)
-  
+
   const getStatusConfig = () => {
-    // Check if event is active (uses new active field with legacy fallback)
     const active = isEventActive(event)
+    const scheduled = isEventScheduled(event)
 
     if (active) {
       return {
@@ -38,14 +39,28 @@ export function EventStatusIndicator({
       }
     }
 
+    if (scheduled) {
+      const publishDate = event.publishDate ? new Date(event.publishDate) : null
+      const dateStr = publishDate
+        ? publishDate.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+        : ''
+      return {
+        icon: CalendarClock,
+        color: '$blue10',
+        bgColor: '$blue2',
+        text: `Scheduled${dateStr ? ` — ${dateStr}` : ''}`,
+        description: 'Will become active on the scheduled date'
+      }
+    }
+
     switch (validationStatus.status) {
       case 'publish-ready':
         return {
           icon: CheckCircle,
           color: '$green10',
           bgColor: '$green2',
-          text: 'Ready to Publish',
-          description: 'All required fields complete'
+          text: 'Ready',
+          description: 'All required fields complete — ready to activate'
         }
       case 'draft-ready':
         return {
@@ -53,7 +68,7 @@ export function EventStatusIndicator({
           color: '$blue10',
           bgColor: '$blue2',
           text: 'Draft',
-          description: 'Saved but needs more details to publish'
+          description: 'Saved but needs more details to activate'
         }
       case 'incomplete':
         return {
@@ -75,7 +90,6 @@ export function EventStatusIndicator({
   }
 
   const getArchiveConfig = () => {
-    // Show archived state if status is 'archived' OR if inactive with past event
     if (event.status === 'archived') {
       return {
         icon: EyeOff,
@@ -85,8 +99,8 @@ export function EventStatusIndicator({
         description: 'Event is archived and hidden'
       }
     }
-    // For inactive events (new model), show "Inactive" instead
-    if (event.active === false && !isEventActive(event)) {
+    // Inactive: no publishDate and not scheduled
+    if (!isEventActive(event) && !isEventScheduled(event) && (event.publishDate === null || event.publishDate === undefined) && event.active === false) {
       return {
         icon: EyeOff,
         color: '$gray10',
@@ -108,8 +122,8 @@ export function EventStatusIndicator({
   if (archiveConfig) {
     return (
       <XStack space="$2" alignItems="center">
-        <Circle 
-          size={iconSize} 
+        <Circle
+          size={iconSize}
           backgroundColor={archiveConfig.bgColor}
           padding="$1"
           alignItems="center"
@@ -117,11 +131,11 @@ export function EventStatusIndicator({
         >
           <IconComponent size={iconSize} color={archiveConfig.color} />
         </Circle>
-        
+
         <Text fontSize={textSize} color={archiveConfig.color} fontWeight="500">
           {archiveConfig.text}
         </Text>
-        
+
         {showDetails ? <Text fontSize="$2" color="$gray11">
             ({archiveConfig.description})
           </Text> : null}
@@ -131,8 +145,8 @@ export function EventStatusIndicator({
 
   return (
     <XStack space="$2" alignItems="center">
-      <Circle 
-        size={iconSize} 
+      <Circle
+        size={iconSize}
         backgroundColor={statusConfig.bgColor}
         padding="$1"
         alignItems="center"
@@ -140,11 +154,11 @@ export function EventStatusIndicator({
       >
         <IconComponent size={iconSize} color={statusConfig.color} />
       </Circle>
-      
+
       <Text fontSize={textSize} color={statusConfig.color} fontWeight="500">
         {statusConfig.text}
       </Text>
-      
+
       {showDetails ? <Text fontSize="$2" color="$gray11">
           ({statusConfig.description})
         </Text> : null}
@@ -157,20 +171,33 @@ interface EventValidationSummaryProps {
   showWarnings?: boolean
 }
 
-export function EventValidationSummary({ 
-  event, 
-  showWarnings = false 
+export function EventValidationSummary({
+  event,
+  showWarnings = false
 }: EventValidationSummaryProps) {
   const validationStatus = getEventValidationStatus(event)
-  
-  // Get detailed validation errors for publishing
   const publishValidation = EventValidator.canPublish(event)
-  
-  // Check if event is active
-  const active = isEventActive(event)
 
-  if (validationStatus.status === 'publish-ready' && active) {
-    return null // No need to show summary for active, complete events
+  const active = isEventActive(event)
+  const scheduled = isEventScheduled(event)
+
+  if (active && validationStatus.status === 'publish-ready') {
+    return null
+  }
+
+  if (scheduled) {
+    const publishDate = event.publishDate ? new Date(event.publishDate) : null
+    const dateStr = publishDate
+      ? publishDate.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      : ''
+    return (
+      <XStack space="$3" alignItems="center" padding="$3" backgroundColor="$blue1" borderRadius="$3" borderWidth={1} borderColor="$blue6">
+        <CalendarClock size="$1" color="$blue10" />
+        <Text flex={1} fontSize="$3" color="$blue11" fontWeight="600">
+          Scheduled to go live {dateStr}
+        </Text>
+      </XStack>
+    )
   }
 
   if (validationStatus.canPublish && !active) {
@@ -178,7 +205,7 @@ export function EventValidationSummary({
       <XStack space="$3" alignItems="center" padding="$3" backgroundColor="$green1" borderRadius="$3" borderWidth={1} borderColor="$green6">
         <CheckCircle size="$1" color="$green10" />
         <Text flex={1} fontSize="$3" color="$green11" fontWeight="600">
-          ✅ Ready to activate! Click "Activate" to make it live.
+          Ready to activate
         </Text>
       </XStack>
     )
@@ -190,7 +217,7 @@ export function EventValidationSummary({
         <XStack space="$2" alignItems="center">
           <Clock size="$1" color="$orange10" />
           <Text fontSize="$3" color="$orange11" fontWeight="600">
-            📝 Draft Mode - Missing fields to publish:
+            Draft — missing fields:
           </Text>
         </XStack>
         <YStack space="$1" paddingLeft="$4">
@@ -200,9 +227,6 @@ export function EventValidationSummary({
             </Text>
           ))}
         </YStack>
-        <Text fontSize="$2" color="$gray11" fontStyle="italic">
-          Fill these in to automatically publish when you save
-        </Text>
       </YStack>
     )
   }

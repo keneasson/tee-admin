@@ -1,38 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { getContacts } from '../../../../utils/email/contact'
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-
-// DynamoDB client
-const dynamoClient = new DynamoDBClient({
-  region: process.env.AWS_REGION || 'ca-central-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-})
-const docClient = DynamoDBDocumentClient.from(dynamoClient)
-
-type DirectoryRecord = {
-  PK: string
-  SK: string
-  firstName?: string
-  lastName?: string
-  email?: string
-  address?: string
-  phone?: string
-  ecclesia?: string
-  children?: string
-}
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 
 type DirectoryMember = {
+  personId: string
+  // pkey/skey maintained for UI backward compat (keyed by skey)
   pkey: string
   skey: string
   firstName: string
   lastName: string
   email: string
   ecclesia: string
+  role: string
 }
 
 /**
@@ -46,54 +27,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('📋 Fetching directory and SES data for email sync')
+    console.log('📋 Fetching directory (PersonRecords) and SES data for email sync')
 
-    // Fetch directory data directly from DynamoDB
-    const queryCommand = new QueryCommand({
-      TableName: 'tee-schedules',
-      KeyConditionExpression: 'PK = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'DIRECTORY#MEMBERS',
-      },
-    })
+    // Fetch all PersonRecords (source of truth for people data)
+    const allPersons = []
+    let lastKey: Record<string, any> | undefined
 
-    const directoryResponse = await docClient.send(queryCommand)
+    do {
+      const result = await personRepository.listAll({ lastEvaluatedKey: lastKey })
+      allPersons.push(...result.items)
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
+
     const directoryMembers: DirectoryMember[] = []
 
-    if (directoryResponse.Items) {
-      directoryResponse.Items.forEach((record: any) => {
-        const item = record as DirectoryRecord
-        const emailField = item.email || ''
+    for (const person of allPersons) {
+      // Skip placeholder records, suspicious, and deceased
+      if (person.primaryEmail?.startsWith('unknown-')) continue
+      if (person.role === ROLES.SUSPICIOUS || person.role === ROLES.DECEASED) continue
 
-        // Split multiple emails (semicolon, comma, pipe, or space separated)
-        const emails = emailField
-          .split(/[;,|\s]/)
-          .map((e) => e.trim())
-          .filter((e) => e.length > 0)
-
-        if (emails.length === 0) {
-          // No email - add single entry with empty email
-          directoryMembers.push({
-            pkey: item.PK,
-            skey: item.SK,
-            firstName: item.firstName || '',
-            lastName: item.lastName || '',
-            email: '',
-            ecclesia: item.ecclesia || '',
-          })
-        } else {
-          // Add one entry per email
-          emails.forEach((email, index) => {
-            directoryMembers.push({
-              pkey: item.PK,
-              skey: index === 0 ? item.SK : `${item.SK}#EMAIL${index}`,
-              firstName: item.firstName || '',
-              lastName: item.lastName || '',
-              email: email,
-              ecclesia: item.ecclesia || '',
-            })
-          })
-        }
+      directoryMembers.push({
+        personId: person.personId,
+        pkey: `PERSON#${person.personId}`,
+        skey: `PROFILE`,
+        firstName: person.firstName || '',
+        lastName: person.lastName || '',
+        email: person.primaryEmail || '',
+        ecclesia: person.ecclesia || '',
+        role: person.role || 'guest',
       })
     }
 
@@ -164,7 +125,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PATCH: Update a directory member's email address
+ * PATCH: Update a directory member's email address via PersonRecord
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -175,36 +136,29 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { pkey, skey, email } = body
+    const { pkey, email } = body
 
-    if (!pkey || !skey || typeof email !== 'string') {
+    if (!pkey || typeof email !== 'string') {
       return NextResponse.json(
-        { error: 'Missing required fields: pkey, skey, email' },
+        { error: 'Missing required fields: pkey, email' },
         { status: 400 }
       )
     }
 
-    console.log(`📧 Updating directory email for ${skey} to ${email}`)
+    // Extract personId from pkey (format: PERSON#<uuid>)
+    const personId = pkey.replace('PERSON#', '')
 
-    // Update the directory member's email in DynamoDB
-    const updateCommand = new UpdateCommand({
-      TableName: 'tee-schedules',
-      Key: { PK: pkey, SK: skey },
-      UpdateExpression: 'SET email = :email, lastUpdated = :lastUpdated',
-      ExpressionAttributeValues: {
-        ':email': email,
-        ':lastUpdated': new Date().toISOString(),
-      },
-      ReturnValues: 'ALL_NEW',
+    console.log(`📧 Updating email for person ${personId} to ${email}`)
+
+    const updated = await personRepository.updatePerson(personId, {
+      primaryEmail: email.trim().toLowerCase(),
     })
 
-    const result = await docClient.send(updateCommand)
-
-    console.log(`✅ Updated email for ${skey}`)
+    console.log(`✅ Updated email for person ${personId}`)
 
     return NextResponse.json({
       success: true,
-      updated: result.Attributes,
+      updated,
     })
   } catch (error) {
     console.error('❌ Error updating directory email:', error)

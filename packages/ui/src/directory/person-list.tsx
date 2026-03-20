@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react'
 import { YStack, XStack, Text, Input, Select, Spinner, ScrollView, View, Card } from 'tamagui'
 import { Button } from '../Button'
-import { Search, Filter, Plus, FileText, Globe } from '@tamagui/lucide-icons'
+import { Search, Filter, Plus, FileText, Globe, UserX } from '@tamagui/lucide-icons'
 import { PersonCard } from './person-card'
 import type { DirectoryMember, EcclesiaListItem } from './types'
 
 interface PersonListProps {
   members: DirectoryMember[]
+  guests?: DirectoryMember[]
   ecclesias: string[]
   loading?: boolean
   defaultEcclesia?: string | null
@@ -25,6 +26,7 @@ interface PersonListProps {
 
 export const PersonList: React.FC<PersonListProps> = ({
   members,
+  guests = [],
   ecclesias,
   loading = false,
   defaultEcclesia,
@@ -133,34 +135,36 @@ export const PersonList: React.FC<PersonListProps> = ({
     }
   }
 
-  // Client-side filtering
-  const filteredMembers = members.filter((member) => {
+  // Shared filter function for members and guests
+  const filterPerson = (person: DirectoryMember) => {
     const matchesSearch = !searchQuery ||
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.ecclesia?.toLowerCase().includes(searchQuery.toLowerCase())
+      person.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      person.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      person.ecclesia?.toLowerCase().includes(searchQuery.toLowerCase())
 
     // Location filtering via ecclesia metadata
     let matchesLocation = true
     if (!isGlobalSearch && (selectedCountry || selectedProvince)) {
-      if (member.ecclesia) {
-        const meta = ecclesiaMetaMap.get(member.ecclesia)
+      if (person.ecclesia) {
+        const meta = ecclesiaMetaMap.get(person.ecclesia)
         if (meta) {
           if (selectedCountry && meta.country !== selectedCountry) matchesLocation = false
           if (selectedProvince && meta.province !== selectedProvince) matchesLocation = false
         } else {
-          // No metadata for this ecclesia — exclude if filters are active
           matchesLocation = false
         }
       } else {
-        // No ecclesia on member — exclude if location filters are active
         matchesLocation = false
       }
     }
 
-    const matchesEcclesia = isGlobalSearch || !selectedEcclesia || member.ecclesia === selectedEcclesia
+    const matchesEcclesia = isGlobalSearch || !selectedEcclesia || person.ecclesia === selectedEcclesia
     return matchesSearch && matchesLocation && matchesEcclesia
-  })
+  }
+
+  // Client-side filtering
+  const filteredMembers = members.filter(filterPerson)
+  const filteredGuests = guests.filter(filterPerson)
 
   const showCountryFilter = ecclesiaDetails && availableCountries.length >= 2
   const showProvinceFilter = ecclesiaDetails && availableProvinces.length >= 2
@@ -319,13 +323,39 @@ export const PersonList: React.FC<PersonListProps> = ({
       ) : null}
 
       {/* Empty State */}
-      {!loading && filteredMembers.length === 0 ? (
+      {!loading && filteredMembers.length === 0 && filteredGuests.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" padding="$6">
           <Text fontSize="$4" theme="alt2">
             {searchQuery || selectedEcclesia || selectedCountry || selectedProvince
               ? 'No members match your search'
               : 'No members found'}
           </Text>
+        </YStack>
+      ) : null}
+
+      {/* Guests Section — shown at top when there are guests */}
+      {!loading && filteredGuests.length > 0 ? (
+        <YStack gap="$2">
+          <XStack gap="$2" alignItems="center">
+            <UserX size={16} color="$orange10" />
+            <Text fontSize="$4" fontWeight="600" color="$orange11">
+              Guests ({filteredGuests.length})
+            </Text>
+          </XStack>
+          <Card padding="$3" borderWidth={1} borderColor="$orange6" backgroundColor="$orange2">
+            <XStack flexWrap="wrap" gap="$2">
+              {filteredGuests.map((guest) => (
+                <View key={guest.id} width={280} minWidth={200} flexGrow={1} maxWidth={400}>
+                  <PersonCard
+                    name={guest.name}
+                    ecclesia={guest.ecclesia}
+                    hideEcclesia={!!selectedEcclesia && !isGlobalSearch}
+                    onPress={onMemberClick ? () => onMemberClick(guest.id) : undefined}
+                  />
+                </View>
+              ))}
+            </XStack>
+          </Card>
         </YStack>
       ) : null}
 

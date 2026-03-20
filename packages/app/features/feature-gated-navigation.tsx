@@ -15,12 +15,25 @@ type FeatureGatedNavigationProps = {
   user?: UserSession | null
   /** Sign out function passed from platform-specific auth */
   onSignOut?: () => void
+  /** Unread notification count (feature-flagged) */
+  notificationCount?: number
+  /** Handler when bell icon is pressed */
+  onNotificationPress?: () => void
 }
 
 /**
  * Navigation wrapper. Previously feature-gated between legacy and enhanced navigation;
  * enhanced navigation is now the permanent choice (flag removed after 100% rollout).
  */
-export const FeatureGatedNavigation: React.FC<FeatureGatedNavigationProps> = ({ children, user, onSignOut }) => {
-  return <SimpleEnhancedNavigation user={user} onSignOut={onSignOut}>{children}</SimpleEnhancedNavigation>
+export const FeatureGatedNavigation: React.FC<FeatureGatedNavigationProps> = ({ children, user, onSignOut, notificationCount, onNotificationPress }) => {
+  return (
+    <SimpleEnhancedNavigation
+      user={user}
+      onSignOut={onSignOut}
+      notificationCount={notificationCount}
+      onNotificationPress={onNotificationPress}
+    >
+      {children}
+    </SimpleEnhancedNavigation>
+  )
 }

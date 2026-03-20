@@ -7,6 +7,11 @@ import { ServiceFormModal } from './service-form-modal'
 import type { EcclesiaService, ServiceType } from './service-list'
 import { ExternalLinksCard } from './external-links-card'
 import type { ExternalLinksData } from './external-links-card'
+import { SubscriptionManager } from './subscription-manager'
+import { SharingSettingsCard } from './sharing-settings-card'
+import { ScheduleEditor } from './schedule-editor'
+import { ScheduleViewer } from './schedule-viewer'
+import { ScheduleConfigEditor } from './schedule-config-editor'
 
 export interface EcclesiaDetailData {
   name: string
@@ -28,6 +33,18 @@ export interface EcclesiaDetailData {
     facebook?: string
     otherLinks?: Array<{ label: string; url: string }>
   }
+  logoUrl?: string
+  scheduleConfig?: Record<string, any>
+  // Multi-tenant fields
+  timezone?: string
+  latitude?: number
+  longitude?: number
+  locationSource?: 'address' | 'city' | 'manual'
+  sharingPreference?: 'open' | 'subscribers-only' | 'private'
+  excludedEcclesias?: string[]
+  rbAlertPreference?: 'all' | 'major' | 'none'
+  sharingRadiusKm?: number
+  nearbyEcclesias?: string[]
 }
 
 interface EcclesiaDetailViewProps {
@@ -294,14 +311,63 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
           data={{
             website: ecclesia.website,
             externalLinks: ecclesia.externalLinks,
+            logoUrl: ecclesia.logoUrl,
           }}
           canEdit={canEdit}
           onSave={onUpdate ? async (updates: ExternalLinksData) => {
             return onUpdate({
               website: updates.website,
               externalLinks: updates.externalLinks,
+              logoUrl: updates.logoUrl,
             } as Partial<EcclesiaDetailData>)
           } : undefined}
+        />
+      ) : null}
+
+      {/* Schedule Viewer — config-driven table (gated behind multi-tenant feature flag) */}
+      {showExternalLinks ? (
+        <ScheduleViewer
+          ecclesiaName={ecclesia.name}
+          scheduleConfig={ecclesia.scheduleConfig}
+        />
+      ) : null}
+
+      {/* Schedule Data Editor — for manually entering schedule entries */}
+      {showExternalLinks && canEdit ? (
+        <ScheduleEditor
+          ecclesiaName={ecclesia.name}
+          canEdit={canEdit}
+        />
+      ) : null}
+
+      {/* Schedule Config Editor — choose tabs, fields, labels (admin only) */}
+      {showExternalLinks && canEdit && onUpdate ? (
+        <ScheduleConfigEditor
+          scheduleConfig={ecclesia.scheduleConfig}
+          onSave={async (config) => {
+            return onUpdate({ scheduleConfig: config } as Partial<EcclesiaDetailData>)
+          }}
+        />
+      ) : null}
+
+      {/* Event Sharing Settings (gated behind multi-tenant feature flag via prop) */}
+      {showExternalLinks ? (
+        <SharingSettingsCard
+          sharingPreference={ecclesia.sharingPreference}
+          sharingRadiusKm={ecclesia.sharingRadiusKm}
+          excludedEcclesias={ecclesia.excludedEcclesias}
+          canEdit={canEdit}
+          onSave={onUpdate ? async (updates) => {
+            return onUpdate(updates as Partial<EcclesiaDetailData>)
+          } : undefined}
+        />
+      ) : null}
+
+      {/* Event Subscriptions (gated behind multi-tenant feature flag via prop) */}
+      {showExternalLinks ? (
+        <SubscriptionManager
+          ecclesiaName={ecclesia.name}
+          canManage={canEdit}
         />
       ) : null}
 

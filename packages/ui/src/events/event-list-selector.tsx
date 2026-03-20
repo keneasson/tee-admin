@@ -37,8 +37,13 @@ function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event
         break
       case 'wedding':
         return event.ceremonyDate ? new Date(event.ceremonyDate).toLocaleDateString() : 'Date TBD'
-      case 'baptism':
-        return event.baptismDate ? new Date(event.baptismDate).toLocaleDateString() : 'Date TBD'
+      case 'baptism': {
+        if (!event.baptismDate) return 'Date TBD'
+        const d = new Date(event.baptismDate)
+        const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        if (d.getHours() === 0 && d.getMinutes() === 0) return date
+        return `${date} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+      }
       case 'funeral':
         return event.serviceDate ? new Date(event.serviceDate).toLocaleDateString() : 'Date TBD'
       case 'general':

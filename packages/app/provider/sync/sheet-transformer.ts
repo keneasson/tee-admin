@@ -300,9 +300,8 @@ export class SheetTransformer {
   }
 
   private extractEcclesia(sheetId: string, headers: string[], rows: any[][]): string {
-    // Try to extract ecclesia from sheet title or data
-    // This could be configured or detected from sheet metadata
-    return 'Toronto East' // Default for now - should be configurable
+    // Use the canonical home ecclesia name for consistency with multi-tenant queries
+    return 'Toronto East Ecclesia' // Default for now - should be configurable per sheet
   }
 
   private extractDate(row: any[], headers: string[], rowIndex: number): string | null {

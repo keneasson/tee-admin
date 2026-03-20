@@ -128,8 +128,9 @@ export const StudyWeekendContent: React.FC<StudyWeekendContentProps> = ({
 
       {registration?.url ? (
         <Text style={{ ...defaultText, margin: '8px 0' }}>
+          Registration:{' '}
           <Link href={registration.url} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
-            Register Here
+            {registration.url}
           </Link>
         </Text>
       ) : null}

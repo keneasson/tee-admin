@@ -1,7 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { SessionProvider, useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { config } from '@my/ui'
 import { ThemeProvider, ThemeAwareProvider } from '@my/ui'
@@ -10,9 +11,15 @@ if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css')
 }
 
+// Polling interval for notification count (60 seconds)
+const NOTIFICATION_POLL_INTERVAL = 60_000
+
 // Inner component that can use useSession (inside SessionProvider)
 function NavigationWithAuth({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
+  const router = useRouter()
+  const [notificationCount, setNotificationCount] = useState<number | undefined>(undefined)
+  const [featureEnabled, setFeatureEnabled] = useState(false)
 
   const user = session?.user
     ? {
@@ -26,8 +33,49 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
     signOut({ callbackUrl: '/' })
   }
 
+  // Check feature flag and poll notification count
+  const fetchNotificationCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications/count')
+      if (res.ok) {
+        const data = await res.json()
+        setNotificationCount(data.unreadCount)
+        setFeatureEnabled(true)
+      } else if (res.status === 401) {
+        // Not logged in — disable
+        setFeatureEnabled(false)
+      }
+    } catch {
+      // Notification failures must not block anything
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setFeatureEnabled(false)
+      setNotificationCount(undefined)
+      return
+    }
+
+    // Initial fetch
+    fetchNotificationCount()
+
+    // Poll every 60 seconds
+    const interval = setInterval(fetchNotificationCount, NOTIFICATION_POLL_INTERVAL)
+    return () => clearInterval(interval)
+  }, [user, fetchNotificationCount])
+
+  const handleNotificationPress = () => {
+    router.push('/notifications')
+  }
+
   return (
-    <FeatureGatedNavigation user={user} onSignOut={handleSignOut}>
+    <FeatureGatedNavigation
+      user={user}
+      onSignOut={handleSignOut}
+      notificationCount={featureEnabled ? notificationCount : undefined}
+      onNotificationPress={featureEnabled ? handleNotificationPress : undefined}
+    >
       {children}
     </FeatureGatedNavigation>
   )

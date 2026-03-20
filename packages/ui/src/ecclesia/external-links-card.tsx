@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { YStack, XStack, Text, Card, Input, Separator } from '@my/ui'
+import { Image } from 'tamagui'
 import { Button } from '../Button'
 import { Globe, Youtube, Pencil, Save, X, Plus, Trash, ExternalLink, Newspaper } from '@tamagui/lucide-icons'
+import { ImageUpload } from '../form/image-upload'
 
 export interface ExternalLinksData {
   website?: string
@@ -11,6 +13,7 @@ export interface ExternalLinksData {
     facebook?: string
     otherLinks?: Array<{ label: string; url: string }>
   }
+  logoUrl?: string
 }
 
 interface ExternalLinksCardProps {
@@ -37,12 +40,15 @@ export function ExternalLinksCard({ data, canEdit, onSave }: ExternalLinksCardPr
     setEditYoutube(data.externalLinks?.youtube || '')
     setEditFacebook(data.externalLinks?.facebook || '')
     setEditOtherLinks([...(data.externalLinks?.otherLinks || [])])
+    setEditLogoUrl(data.logoUrl || '')
     setEditing(true)
   }
 
   const cancelEditing = () => {
     setEditing(false)
   }
+
+  const [editLogoUrl, setEditLogoUrl] = useState(data.logoUrl || '')
 
   const handleSave = async () => {
     if (!onSave) return
@@ -56,6 +62,7 @@ export function ExternalLinksCard({ data, canEdit, onSave }: ExternalLinksCardPr
           facebook: editFacebook.trim() || undefined,
           otherLinks: editOtherLinks.filter((l) => l.label.trim() && l.url.trim()),
         },
+        logoUrl: editLogoUrl.trim() || undefined,
       }
       const success = await onSave(updates)
       if (success) {
@@ -87,7 +94,9 @@ export function ExternalLinksCard({ data, canEdit, onSave }: ExternalLinksCardPr
     data.externalLinks?.facebook ||
     (data.externalLinks?.otherLinks && data.externalLinks.otherLinks.length > 0)
 
-  if (!hasLinks && !canEdit) {
+  const hasContent = hasLinks || data.logoUrl
+
+  if (!hasContent && !canEdit) {
     return null
   }
 
@@ -146,6 +155,23 @@ export function ExternalLinksCard({ data, canEdit, onSave }: ExternalLinksCardPr
             </YStack>
 
             <Separator />
+            <YStack gap="$1">
+              <Text fontSize="$3" fontWeight="600">Ecclesia Logo</Text>
+              <ImageUpload
+                value={editLogoUrl ? {
+                  url: editLogoUrl,
+                  fileName: 'logo',
+                  originalName: 'Ecclesia Logo',
+                  uploadedAt: new Date(),
+                } : undefined}
+                onChange={(img) => setEditLogoUrl(img?.url || '')}
+                label=""
+                placeholder="Upload your ecclesia logo"
+                maxSizeBytes={5 * 1024 * 1024}
+              />
+            </YStack>
+
+            <Separator />
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize="$4" fontWeight="600">Other Links</Text>
               <Button size="$2" icon={Plus} variant="outlined" onPress={addOtherLink}>
@@ -192,6 +218,18 @@ export function ExternalLinksCard({ data, canEdit, onSave }: ExternalLinksCardPr
           </YStack>
         ) : (
           <YStack gap="$2">
+            {data.logoUrl ? (
+              <YStack alignItems="center" paddingVertical="$2">
+                <Image
+                  source={{ uri: data.logoUrl }}
+                  width={120}
+                  height={120}
+                  style={{ width: 120, height: 120 }}
+                  resizeMode="contain"
+                  borderRadius={8}
+                />
+              </YStack>
+            ) : null}
             {data.website ? (
               <LinkRow icon={<Globe size={14} color="$blue10" />} label="Website" url={data.website} />
             ) : null}

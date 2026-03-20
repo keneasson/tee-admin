@@ -3,7 +3,7 @@
 import { YStack, XStack, Text, H2, H4, Separator, Card, Image } from 'tamagui'
 import { Button } from '../Button'
 import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
-import { Event, EventSection } from '@my/app/types/events'
+import { Event, EventSection, getPlatformDisplayName } from '@my/app/types/events'
 import {
   formatDateInTimezone,
   formatTimeInTimezone,
@@ -503,11 +503,11 @@ export function EventDetailView({
                     </Text>
                     {location.onlineMeeting.platform ? (
                       <Text fontSize="$4" color="$gray11">
-                        Platform: {location.onlineMeeting.platform}
+                        Platform: {getPlatformDisplayName(location.onlineMeeting.platform)}
                       </Text>
                     ) : null}
                     {location.onlineMeeting.link ? (
-                      <XStack gap="$2" alignItems="center">
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
                         <ExternalLink size={16} color="$blue10" />
                         <Text
                           fontSize="$4"
@@ -516,7 +516,7 @@ export function EventDetailView({
                           cursor="pointer"
                           onPress={() => window.open(location.onlineMeeting.link, '_blank')}
                         >
-                          Join Meeting
+                          {location.onlineMeeting.link}
                         </Text>
                       </XStack>
                     ) : null}
@@ -787,7 +787,7 @@ export function EventDetailView({
               <YStack gap="$1" marginTop="$2">
                 {primaryLocation.onlineMeeting.platform ? (
                   <Text fontSize="$4" fontWeight="500" color="$gray12">
-                    {primaryLocation.onlineMeeting.platform}
+                    {getPlatformDisplayName(primaryLocation.onlineMeeting.platform)}
                   </Text>
                 ) : null}
                 {primaryLocation.onlineMeeting.link ? (
@@ -1109,22 +1109,30 @@ export function EventDetailView({
             ) : null}
 
             {reg.registrationUrl ? (
-              <XStack gap="$2" alignItems="center">
-                <ExternalLink size={16} color="$blue10" />
-                <Text
-                  fontSize="$4"
-                  color="$blue10"
-                  textDecorationLine="underline"
-                  cursor="pointer"
-                  onPress={() => window.open(reg.registrationUrl, '_blank')}
-                >
-                  Register Online
+              <YStack gap="$1">
+                <Text fontSize="$4" color="$gray11" fontWeight="600">
+                  Registration:
                 </Text>
-              </XStack>
+                <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                  <ExternalLink size={16} color="$blue10" />
+                  <Text
+                    fontSize="$4"
+                    color="$blue10"
+                    textDecorationLine="underline"
+                    cursor="pointer"
+                    onPress={() => window.open(reg.registrationUrl, '_blank')}
+                  >
+                    {reg.registrationUrl}
+                  </Text>
+                </XStack>
+              </YStack>
             ) : null}
 
             {(reg.contactEmail || reg.contactPhone) ? (
               <YStack gap="$1">
+                <Text fontSize="$4" color="$gray11" fontWeight="600">
+                  For more information:
+                </Text>
                 {reg.contactEmail ? (
                   <Text fontSize="$4" color="$gray11">
                     Email: <Text color="$blue10" textDecorationLine="underline" onPress={() => window.open(`mailto:${reg.contactEmail}`, '_blank')} cursor="pointer">{reg.contactEmail}</Text>

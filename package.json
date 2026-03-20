@@ -48,7 +48,9 @@
     "test-api-migration:upcoming": "cd apps/next && tsx ../../scripts/test-api-migration.ts upcoming",
     "populate-dynamodb": "tsx scripts/populate-dynamodb.ts",
     "validate-data": "cd apps/next && tsx ../../scripts/validate-data.ts",
-    "test-newsletter-timing": "cd apps/next && tsx ../../scripts/test-newsletter-timing.ts"
+    "test-newsletter-timing": "cd apps/next && tsx ../../scripts/test-newsletter-timing.ts",
+    "predeploy": "bash scripts/pre-deploy-check.sh",
+    "deploy": "yarn predeploy && cd apps/next && vercel deploy --prod"
   },
   "resolutions": {
     "react": "19.1.0",

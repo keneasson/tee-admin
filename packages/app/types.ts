@@ -203,6 +203,7 @@ export type SundayEvents = MemorialServiceType &
 export type NextMemorialServiceProps = {
   events: SundayEvents[]
   note?: string
+  upcomingEvents?: import('@my/app/types/events').Event[]
 }
 
 export type NextSundaySchoolProps = {

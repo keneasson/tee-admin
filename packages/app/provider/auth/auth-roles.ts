@@ -8,4 +8,6 @@ export const ROLES = {
     MEMBER: 'member',
     GUEST: 'guest',
     DECEASED: 'deceased',
+    /** Registered users flagged as not part of our community — hidden from normal views, retained for audit */
+    SUSPICIOUS: 'suspicious',
   }

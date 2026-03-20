@@ -17,6 +17,7 @@ import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } 
 import { Event } from '@my/app/types/events'
 import { Footer } from '../components/Footer'
 import { AutoLinkText } from '../components/AutoLinkText'
+import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
 type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
@@ -456,8 +457,8 @@ const TextWithLineBreaks: React.FC<{ text: string }> = ({ text }) => {
     <>
       {lines.map((line, index) => (
         <React.Fragment key={index}>
-          {line}
-          {index < lines.length - 1 && <br />}
+          <AutoLinkText text={line} />
+          {index < lines.length - 1 ? <br /> : null}
         </React.Fragment>
       ))}
     </>
@@ -699,6 +700,17 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
     groupedByDate[eventDateStr].push(event)
   })
 
+  // Collect IDs of events used as replacements in the Sunday schedule section
+  // so they aren't duplicated in Special Announcements
+  const replacementEventIds = new Set<string>()
+  Object.values(groupedByDate).forEach((events) => {
+    const memorialEvent = events.find((e: any) => e.Key === 'memorial') as any
+    if (memorialEvent && !memorialEvent.Exhort && !memorialEvent.Preside && memorialEvent.Lunch?.trim()) {
+      const match = findReplacementEvent(allUpcomingEvents, memorialEvent.Lunch.trim())
+      if (match) replacementEventIds.add(match.id)
+    }
+  })
+
   // Group upcoming events by type (exclude special events that have their own sections)
   const groupedEvents: { [key: string]: Event[] } = {}
 
@@ -856,6 +868,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
           const bibleClassEvents = events.filter((e: any) => e.Key === 'bibleClass')
 
+          // Check if this date has a replacement event (no service + event title in Lunch)
+          const memorialEvent = sundayEvents.find((e: any) => e.Key === 'memorial') as any
+          const hasReplacementEvent = memorialEvent && !memorialEvent.Exhort && !memorialEvent.Preside &&
+            memorialEvent.Lunch?.trim() &&
+            findReplacementEvent(allUpcomingEvents, memorialEvent.Lunch.trim())
+
           return (
             <React.Fragment key={date}>
               {/* Sunday Services Container */}
@@ -869,8 +887,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
                   <Heading style={defaultText}>Arrangements for {date}</Heading>
 
-                  {/* Sunday Services */}
-                  {sundayEvents.map((event: any, index: number) => {
+                  {/* Replacement event: skip Sunday School + Memorial headers, show event card */}
+                  {hasReplacementEvent ? (
+                    <Section style={program}>
+                      {MemorialServiceProgram(memorialEvent, allUpcomingEvents)}
+                    </Section>
+                  ) : (
+                  /* Normal Sunday Services */
+                  sundayEvents.map((event: any, index: number) => {
                     if (event.Key === 'sundaySchool') {
                       // Only show full Sunday School section when there's class (has Refreshments)
                       const hasSundaySchool = !!event.Refreshments
@@ -918,7 +942,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 <>
                                   <Row align="left" width={'49%'} className="deviceWidth">
                                     <Column style={columnAlignTop}>
-                                      {MemorialServiceProgram(event)}
+                                      {MemorialServiceProgram(event, allUpcomingEvents)}
                                     </Column>
                                   </Row>
                                   <Row align="left" width={'49%'} className="deviceWidth">
@@ -929,7 +953,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 // Single column layout when no hymns
                                 <Row>
                                   <Column style={columnAlignTop}>
-                                    {MemorialServiceProgram(event)}
+                                    {MemorialServiceProgram(event, allUpcomingEvents)}
                                   </Column>
                                 </Row>
                               )}
@@ -940,7 +964,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                       )
                     }
                     return null
-                  })}
+                  })
+                  )}
                 </Container>
               )}
 
@@ -1154,10 +1179,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
           const specialEvents = allUpcomingEvents
             .filter(
               (event) =>
-                event.type === 'baptism' ||
+                (event.type === 'baptism' ||
                 event.type === 'wedding' ||
                 event.type === 'engagement' ||
-                event.type === 'funeral'
+                event.type === 'funeral') &&
+                !replacementEventIds.has(event.id) // Skip events already shown inline in Sunday section
             )
             .sort((a, b) => {
               // Get the relevant date for each event type
@@ -1866,11 +1892,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               {(event as any).location.onlineMeeting.link && (
                                 <>
                                   <br />
+                                  Streaming:{' '}
                                   <Link
                                     href={(event as any).location.onlineMeeting.link}
                                     style={{ color: '#0066cc', textDecoration: 'underline' }}
                                   >
-                                    Join Meeting
+                                    {(event as any).location.onlineMeeting.link}
                                   </Link>
                                 </>
                               )}
@@ -1892,6 +1919,24 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                   Dial-in: {(event as any).location.onlineMeeting.dialInNumber}
                                 </>
                               )}
+                            </>
+                          )}
+
+                          {/* Registration info */}
+                          {(event as any).registration?.registrationUrl && (
+                            <>
+                              <br />
+                              <br />
+                              {(event as any).registration.required && (event as any).registration.required !== 'false'
+                                ? <strong>Registration required:</strong>
+                                : <strong>Registration:</strong>}
+                              <br />
+                              <Link
+                                href={(event as any).registration.registrationUrl}
+                                style={{ color: '#0066cc', textDecoration: 'underline' }}
+                              >
+                                {(event as any).registration.registrationUrl}
+                              </Link>
                             </>
                           )}
 
@@ -2006,6 +2051,23 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               <br />
                               <br />
                               <TextWithLineBreaks text={event.description} />
+                            </>
+                          )}
+                          {/* Registration info */}
+                          {(event as any).registration?.registrationUrl && (
+                            <>
+                              <br />
+                              <br />
+                              {(event as any).registration.required && (event as any).registration.required !== 'false'
+                                ? <strong>Registration required:</strong>
+                                : <strong>Registration:</strong>}
+                              <br />
+                              <Link
+                                href={(event as any).registration.registrationUrl}
+                                style={{ color: '#0066cc', textDecoration: 'underline' }}
+                              >
+                                {(event as any).registration.registrationUrl}
+                              </Link>
                             </>
                           )}
                           <br />
@@ -2192,13 +2254,21 @@ const Lunch = ({ lunch }: { lunch: string }) => {
   )
 }
 
-const MemorialServiceProgram = (event: SundayEvents) => {
+const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) => {
   // No service at hall: Both Exhort AND Preside are blank
   const noServiceAtHall = !event.Exhort && !event.Preside
 
   if (noServiceAtHall) {
-    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    // If Lunch contains an event title, find the matching event and render it inline
+    const eventTitle = event.Lunch?.trim()
+    const replacementEvent = eventTitle ? findReplacementEvent(upcomingEvents || [], eventTitle) : undefined
     const explanation = event.Activities || event['Holidays and Special Events']
+
+    if (replacementEvent) {
+      return <ReplacementEventCard event={replacementEvent} explanation={explanation} />
+    }
+
+    // Fallback: no matching event found, show simple "no service" message
     return (
       <Text style={defaultText}>
         <strong>There will be no service at our hall.</strong>

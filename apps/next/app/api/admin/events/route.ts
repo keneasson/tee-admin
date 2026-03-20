@@ -10,6 +10,7 @@ import {
 } from '@my/app/services/event-service'
 import { isEventActive } from '@my/app/types/events'
 import { invalidateEventsCache } from '@/utils/cache'
+import { notifyRBsOfSharedEvent } from '@/utils/notify-rbs-of-shared-event'
 
 // Helper functions to extract date/time for sorting
 const extractEventDate = (event: any): string => {
@@ -158,6 +159,8 @@ export async function POST(request: NextRequest) {
     if (isEventActive(event)) {
       console.log('📰 Invalidating events cache after creating active event')
       await invalidateEventsCache()
+      // Notify RBs of shared event (fire-and-forget)
+      notifyRBsOfSharedEvent(event).catch(() => {})
     }
 
     return NextResponse.json(event, { status: 201 })
@@ -190,6 +193,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Event ID required for update' }, { status: 400 })
     }
 
+    // Fetch old event to detect activation transitions
+    const oldEvent = await getEventById(eventData.id)
+    const wasActive = oldEvent ? isEventActive(oldEvent) : false
+
     // Update uses saveEventDraft which handles both draft and published updates
     const event = await saveEventDraft(eventData)
 
@@ -197,6 +204,10 @@ export async function PUT(request: NextRequest) {
     if (isEventActive(event)) {
       console.log('📰 Invalidating events cache after updating active event')
       await invalidateEventsCache()
+      // Notify RBs only on activation transition (inactive → active)
+      if (!wasActive) {
+        notifyRBsOfSharedEvent(event).catch(() => {})
+      }
     }
 
     return NextResponse.json(event)

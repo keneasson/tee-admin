@@ -1,63 +1,132 @@
 // Region constants for multi-tenant ecclesia grouping
 // Used by regional admin permission checks and ecclesia directory filtering
+// Designed to be flexible — regions can be split further as the community grows
 
 export const REGIONS = {
-  ONTARIO_EAST: 'ontario_east',
-  ONTARIO_WEST: 'ontario_west',
-  QUEBEC: 'quebec',
-  PRAIRIES: 'prairies',
-  BRITISH_COLUMBIA: 'british_columbia',
-  ATLANTIC: 'atlantic',
-  NORTHEAST_US: 'northeast_us',
-  SOUTHEAST_US: 'southeast_us',
-  MIDWEST_US: 'midwest_us',
-  WEST_US: 'west_us',
+  // Canada
+  CANADA_EAST: 'canada_east',
+  CANADA_WEST: 'canada_west',
+
+  // United States
+  US_NORTHEAST: 'us_northeast',
+  US_SOUTHEAST: 'us_southeast',
+  US_MIDWEST_WEST: 'us_midwest_west',
+
+  // Americas (non-US/CA)
+  CARIBBEAN: 'caribbean',
+  CENTRAL_AMERICA: 'central_america',
+  SOUTH_AMERICA: 'south_america',
+
+  // Europe
   UK: 'uk',
-  AUSTRALIA: 'australia',
-  OTHER: 'other',
+  EU: 'eu',
+  REST_OF_EUROPE: 'rest_of_europe',
+
+  // Middle East & Africa
+  MIDDLE_EAST: 'middle_east',
+  AFRICA: 'africa',
+
+  // Asia
+  SOUTH_ASIA: 'south_asia',
+  EAST_ASIA: 'east_asia',
+  SOUTHEAST_ASIA_PACIFIC: 'southeast_asia_pacific',
+
+  // Oceania
+  AUSTRALIA_NZ: 'australia_nz',
 } as const
 
 export type Region = typeof REGIONS[keyof typeof REGIONS]
 
+export const REGION_LABELS: Record<Region, string> = {
+  [REGIONS.CANADA_EAST]: 'Canada East',
+  [REGIONS.CANADA_WEST]: 'Canada West',
+  [REGIONS.US_NORTHEAST]: 'US Northeast',
+  [REGIONS.US_SOUTHEAST]: 'US Southeast',
+  [REGIONS.US_MIDWEST_WEST]: 'US Midwest & West',
+  [REGIONS.CARIBBEAN]: 'Caribbean',
+  [REGIONS.CENTRAL_AMERICA]: 'Central America',
+  [REGIONS.SOUTH_AMERICA]: 'South America',
+  [REGIONS.UK]: 'United Kingdom',
+  [REGIONS.EU]: 'EU',
+  [REGIONS.REST_OF_EUROPE]: 'Rest of Europe',
+  [REGIONS.MIDDLE_EAST]: 'Middle East',
+  [REGIONS.AFRICA]: 'Africa',
+  [REGIONS.SOUTH_ASIA]: 'South Asia',
+  [REGIONS.EAST_ASIA]: 'East Asia',
+  [REGIONS.SOUTHEAST_ASIA_PACIFIC]: 'Southeast Asia & Pacific',
+  [REGIONS.AUSTRALIA_NZ]: 'Australia & New Zealand',
+}
+
 // Map Canadian provinces to regions
 export const PROVINCE_TO_REGION: Record<string, Region> = {
-  ON: REGIONS.ONTARIO_EAST, // Default; individual ecclesias can override
-  QC: REGIONS.QUEBEC,
-  BC: REGIONS.BRITISH_COLUMBIA,
-  AB: REGIONS.PRAIRIES,
-  SK: REGIONS.PRAIRIES,
-  MB: REGIONS.PRAIRIES,
-  NB: REGIONS.ATLANTIC,
-  NS: REGIONS.ATLANTIC,
-  PE: REGIONS.ATLANTIC,
-  NL: REGIONS.ATLANTIC,
-  NT: REGIONS.PRAIRIES,
-  NU: REGIONS.PRAIRIES,
-  YT: REGIONS.BRITISH_COLUMBIA,
+  ON: REGIONS.CANADA_EAST,
+  QC: REGIONS.CANADA_EAST,
+  NB: REGIONS.CANADA_EAST,
+  NS: REGIONS.CANADA_EAST,
+  PE: REGIONS.CANADA_EAST,
+  NL: REGIONS.CANADA_EAST,
+  MB: REGIONS.CANADA_WEST,
+  SK: REGIONS.CANADA_WEST,
+  AB: REGIONS.CANADA_WEST,
+  BC: REGIONS.CANADA_WEST,
+  NT: REGIONS.CANADA_WEST,
+  NU: REGIONS.CANADA_WEST,
+  YT: REGIONS.CANADA_WEST,
 }
 
-// Map countries to default regions (for non-Canadian ecclesias)
+// Map countries to default regions (ecclesias can override with explicit region field)
 export const COUNTRY_TO_REGION: Record<string, Region> = {
-  CA: REGIONS.ONTARIO_EAST, // Default; overridden by province mapping
-  US: REGIONS.NORTHEAST_US,
+  CA: REGIONS.CANADA_EAST,
+  US: REGIONS.US_NORTHEAST,
   GB: REGIONS.UK,
-  AU: REGIONS.AUSTRALIA,
-}
-
-export const REGION_LABELS: Record<Region, string> = {
-  [REGIONS.ONTARIO_EAST]: 'Ontario East',
-  [REGIONS.ONTARIO_WEST]: 'Ontario West',
-  [REGIONS.QUEBEC]: 'Quebec',
-  [REGIONS.PRAIRIES]: 'Prairies',
-  [REGIONS.BRITISH_COLUMBIA]: 'British Columbia',
-  [REGIONS.ATLANTIC]: 'Atlantic',
-  [REGIONS.NORTHEAST_US]: 'Northeast US',
-  [REGIONS.SOUTHEAST_US]: 'Southeast US',
-  [REGIONS.MIDWEST_US]: 'Midwest US',
-  [REGIONS.WEST_US]: 'West US',
-  [REGIONS.UK]: 'United Kingdom',
-  [REGIONS.AUSTRALIA]: 'Australia',
-  [REGIONS.OTHER]: 'Other',
+  AU: REGIONS.AUSTRALIA_NZ,
+  NZ: REGIONS.AUSTRALIA_NZ,
+  IL: REGIONS.MIDDLE_EAST,
+  IN: REGIONS.SOUTH_ASIA,
+  LK: REGIONS.SOUTH_ASIA,
+  PH: REGIONS.SOUTHEAST_ASIA_PACIFIC,
+  MY: REGIONS.SOUTHEAST_ASIA_PACIFIC,
+  JP: REGIONS.EAST_ASIA,
+  KR: REGIONS.EAST_ASIA,
+  CN: REGIONS.EAST_ASIA,
+  ZA: REGIONS.AFRICA,
+  KE: REGIONS.AFRICA,
+  NG: REGIONS.AFRICA,
+  GH: REGIONS.AFRICA,
+  MW: REGIONS.AFRICA,
+  MZ: REGIONS.AFRICA,
+  TZ: REGIONS.AFRICA,
+  JM: REGIONS.CARIBBEAN,
+  TT: REGIONS.CARIBBEAN,
+  BB: REGIONS.CARIBBEAN,
+  GY: REGIONS.CARIBBEAN,
+  MX: REGIONS.CENTRAL_AMERICA,
+  GT: REGIONS.CENTRAL_AMERICA,
+  SV: REGIONS.CENTRAL_AMERICA,
+  HN: REGIONS.CENTRAL_AMERICA,
+  PA: REGIONS.CENTRAL_AMERICA,
+  CR: REGIONS.CENTRAL_AMERICA,
+  AR: REGIONS.SOUTH_AMERICA,
+  BR: REGIONS.SOUTH_AMERICA,
+  CL: REGIONS.SOUTH_AMERICA,
+  CO: REGIONS.SOUTH_AMERICA,
+  PE: REGIONS.SOUTH_AMERICA,
+  DE: REGIONS.EU,
+  FR: REGIONS.EU,
+  NL: REGIONS.EU,
+  BE: REGIONS.EU,
+  IT: REGIONS.EU,
+  ES: REGIONS.EU,
+  PT: REGIONS.EU,
+  AT: REGIONS.EU,
+  DK: REGIONS.EU,
+  SE: REGIONS.EU,
+  FI: REGIONS.EU,
+  IE: REGIONS.EU,
+  RO: REGIONS.REST_OF_EUROPE,
+  UA: REGIONS.REST_OF_EUROPE,
+  RU: REGIONS.REST_OF_EUROPE,
+  RS: REGIONS.REST_OF_EUROPE,
 }
 
 /**
@@ -68,5 +137,5 @@ export function getDefaultRegion(country: string, province?: string): Region {
   if (country === 'CA' && province && PROVINCE_TO_REGION[province]) {
     return PROVINCE_TO_REGION[province]
   }
-  return COUNTRY_TO_REGION[country] || REGIONS.OTHER
+  return COUNTRY_TO_REGION[country] || REGIONS.CANADA_EAST
 }

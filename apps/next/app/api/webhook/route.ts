@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { WebhookSyncService } from '@my/app/provider/sync/webhook-sync-service'
+import { WebhookSecurity } from '@my/app/provider/sync/webhook-security'
 import { googleSheetsConfig } from '@my/app/config/google-sheets'
 
 // Webhook handler — requires WEBHOOK_SECRET for authentication
@@ -7,14 +8,28 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
   try {
-    // Validate webhook secret
+    // Read raw body for HMAC signature validation
+    const rawBody = await request.text()
+
+    // Validate webhook secret — supports multiple auth methods:
+    // 1. Authorization: Bearer <secret> or x-webhook-secret: <secret> (direct secret)
+    // 2. x-webhook-signature: sha256=<hmac> (HMAC signature from Google Apps Script)
     const webhookSecret = process.env.WEBHOOK_SECRET
     const authHeader = request.headers.get('authorization') || request.headers.get('x-webhook-secret')
-    if (webhookSecret && authHeader !== `Bearer ${webhookSecret}` && authHeader !== webhookSecret) {
+    const signatureHeader = request.headers.get('x-webhook-signature')
+
+    let authenticated = false
+    if (authHeader && webhookSecret) {
+      authenticated = authHeader === `Bearer ${webhookSecret}` || authHeader === webhookSecret
+    }
+    if (!authenticated && signatureHeader) {
+      authenticated = WebhookSecurity.validateSignature(rawBody, signatureHeader)
+    }
+    if (webhookSecret && !authenticated) {
       return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 })
     }
 
-    const payload = await request.json()
+    const payload = JSON.parse(rawBody)
 
     // Extract sheet ID from payload
     const sheetId = payload.sheetId || payload.spreadsheetId

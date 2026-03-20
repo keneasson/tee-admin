@@ -503,7 +503,8 @@ export interface PersonRecord extends BaseRecord {
   image?: string          // Profile picture URL from OAuth provider
 
   // Regional admin (only meaningful when role === 'admin')
-  adminRegion?: string
+  adminRegion?: string              // @deprecated — use managedRegions instead
+  managedRegions?: string[]         // Regions this admin oversees (e.g., ['canada_east', 'caribbean'])
 
   createdAt: string
 }
@@ -577,7 +578,7 @@ export interface FeatureFlagRecord extends BaseRecord {
   skey: string           // CONFIG
   flagName: string
   description: string
-  visibleTo: 'owner' | 'admin' | 'everyone'
+  visibleTo: 'off' | 'owner' | 'admin' | 'everyone'
   users: string[]        // emails that can see this feature regardless of role
   createdAt: string
 }
@@ -713,4 +714,65 @@ export interface RBNominationRecord extends BaseRecord {
 
 export function isRBNominationRecord(record: any): record is RBNominationRecord {
   return record && record.pkey && record.pkey.startsWith('RB_NOM#') && record.skey?.startsWith('NOMINATION#')
+}
+
+// ===== ECCLESIA SUBSCRIPTION SYSTEM =====
+// Allows ecclesias to subscribe to each other's events for cross-ecclesia feeds
+
+export type NotificationPreference = 'all' | 'major' | 'none'
+
+// Subscription Record - Stored in tee-admin table
+// PK: SUBSCRIPTION#{subscriberEcclesia}, SK: {publisherEcclesia}
+export interface SubscriptionRecord extends BaseRecord {
+  pkey: string              // SUBSCRIPTION#{subscriberEcclesia}
+  skey: string              // {publisherEcclesia}
+  subscriberEcclesia: string
+  publisherEcclesia: string
+  subscribedBy: string      // email of person who created subscription
+  notificationPref: NotificationPreference
+  createdAt: string
+}
+
+export function isSubscriptionRecord(record: any): record is SubscriptionRecord {
+  return record && record.pkey && record.pkey.startsWith('SUBSCRIPTION#')
+}
+
+// ===== IN-APP NOTIFICATION SYSTEM =====
+
+export type NotificationType =
+  | 'event_shared'
+  | 'contact_request'
+  | 'edit_request'
+  | 'rb_nomination'
+  | 'system'
+
+export type NotificationStatus = 'unread' | 'read'
+
+// Notification Record - Stored in tee-admin table
+// pkey: USER#{recipientEmail}, skey: NOTIFICATION#{notificationId}
+export interface NotificationRecord extends BaseRecord {
+  pkey: string              // USER#{recipientEmail}
+  skey: string              // NOTIFICATION#{notificationId}
+  notificationId: string    // {Date.now()}-{random7}
+  recipientEmail: string
+  type: NotificationType
+  status: NotificationStatus
+  title: string
+  body: string
+  actionUrl?: string        // Relative path to navigate to (e.g., /events/evt-123)
+  sourceId?: string         // Originating record ID
+  sourceType?: string       // 'event', 'contact_request', etc.
+  senderEmail?: string      // Who triggered this
+  createdAt: string         // ISO 8601
+  readAt?: string           // ISO 8601, set when marked read
+  ttl: number               // Unix epoch seconds (createdAt + 30 days) — DynamoDB auto-deletes
+}
+
+export type NotificationQueryResult = {
+  items: NotificationRecord[]
+  lastEvaluatedKey?: Record<string, any>
+}
+
+export function isNotificationRecord(record: any): record is NotificationRecord {
+  return record && record.pkey && record.pkey.startsWith('USER#') && record.skey?.startsWith('NOTIFICATION#')
 }

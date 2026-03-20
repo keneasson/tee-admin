@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getEcclesiaByName, updateEcclesiaFields } from '@/utils/dynamodb/locations'
-import type { EcclesiaService, EcclesiaExternalLinks } from '@/utils/dynamodb/locations'
+import type { EcclesiaService, EcclesiaExternalLinks, EcclesiaScheduleConfig } from '@/utils/dynamodb/locations'
 import { checkEcclesiaEditPermission, checkRecordingBrotherPermission } from '@/utils/ecclesia-permissions'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { setRecordingBrother, clearRecordingBrother } from '@/utils/rb-service'
 import { sendRBConfirmationEmail } from '@/utils/email/send-rb-confirmation'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { geocodeAndUpdateEcclesia } from '@/utils/geocode-ecclesia'
 
 /**
  * GET /api/ecclesia/[name] - Fetch a single ecclesia by name
@@ -96,6 +97,11 @@ export async function PATCH(
       services,
       website,
       externalLinks,
+      logoUrl,
+      scheduleConfig,
+      sharingPreference,
+      sharingRadiusKm,
+      excludedEcclesias,
     } = body as {
       address?: string
       venue?: string
@@ -107,6 +113,11 @@ export async function PATCH(
       services?: EcclesiaService[]
       website?: string
       externalLinks?: EcclesiaExternalLinks
+      logoUrl?: string
+      scheduleConfig?: EcclesiaScheduleConfig
+      sharingPreference?: 'open' | 'subscribers-only' | 'private'
+      sharingRadiusKm?: number
+      excludedEcclesias?: string[]
     }
 
     const updates: Record<string, any> = {}
@@ -118,6 +129,11 @@ export async function PATCH(
     if (services !== undefined) updates.services = services
     if (website !== undefined) updates.website = website.trim()
     if (externalLinks !== undefined) updates.externalLinks = externalLinks
+    if (logoUrl !== undefined) updates.logoUrl = logoUrl
+    if (scheduleConfig !== undefined) updates.scheduleConfig = scheduleConfig
+    if (sharingPreference !== undefined) updates.sharingPreference = sharingPreference
+    if (sharingRadiusKm !== undefined) updates.sharingRadiusKm = sharingRadiusKm
+    if (excludedEcclesias !== undefined) updates.excludedEcclesias = excludedEcclesias
 
     // Recording Brother fields require elevated permission and use RB service
     let rbTransferred = false
@@ -173,6 +189,13 @@ export async function PATCH(
     } else {
       // Only RB was changed; re-fetch to return current state
       updated = await getEcclesiaByName(ecclesiaName)
+    }
+
+    // Trigger geocoding if location-relevant fields changed (best-effort, non-blocking)
+    if (updated && address !== undefined) {
+      geocodeAndUpdateEcclesia(updated).catch((err) => {
+        console.warn(`⚠️ Background geocoding failed for ${ecclesiaName}:`, err)
+      })
     }
 
     return NextResponse.json({

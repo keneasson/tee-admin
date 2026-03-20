@@ -20,7 +20,7 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Check, Save, Users, UserPlus, Trash2, GripVertical } from '@tamagui/lucide-icons'
+import { Check, Save, Users, Link, Trash2, GripVertical, Search } from '@tamagui/lucide-icons'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable } from '@dnd-kit/core'
 import { DragMergeDialog } from '@my/ui/src/email/drag-merge-dialog'
 import type { PersonEntry as PersonEntryType } from '@my/ui/src/email/draggable-contact-card'
@@ -151,9 +151,12 @@ export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session,
   const [memberStatus, setMemberStatus] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [batchSaving, setBatchSaving] = useState(false)
-  const [editingNames, setEditingNames] = useState<Record<string, { firstName: string; lastName: string }>>({})
-  const [newEntryMemberStatus, setNewEntryMemberStatus] = useState<Record<string, boolean>>({})
-  const [nameInputs, setNameInputs] = useState<Record<string, { firstName: string; lastName: string }>>({})
+  // Link contact search state (for SES-only contacts)
+  const [linkSearchQuery, setLinkSearchQuery] = useState<Record<string, string>>({})
+  const [linkSearchResults, setLinkSearchResults] = useState<Record<string, Array<{ id: string; name: string; email: string; ecclesia?: string }>>>({})
+  const [linkSearchLoading, setLinkSearchLoading] = useState<Record<string, boolean>>({})
+  const [selectedLinkPerson, setSelectedLinkPerson] = useState<Record<string, { id: string; name: string; email: string; ecclesia?: string }>>({})
+  const [linking, setLinking] = useState<string | null>(null)
   const [addingSecondEmail, setAddingSecondEmail] = useState<string | null>(null)
   const [newSecondEmail, setNewSecondEmail] = useState('')
   const [syncingMembers, setSyncingMembers] = useState(false)
@@ -562,47 +565,63 @@ export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session,
     }
   }
 
-  const createDirectoryEntry = async (email: string) => {
-    const names = editingNames[email]
-    if (!names?.firstName || !names?.lastName) {
-      console.error('First and last name required')
+  const searchPeopleForLink = async (sesEmail: string, query: string) => {
+    setLinkSearchQuery((prev) => ({ ...prev, [sesEmail]: query }))
+
+    if (query.length < 2) {
+      setLinkSearchResults((prev) => ({ ...prev, [sesEmail]: [] }))
       return
     }
 
-    setSaving(`create-${email}`)
+    setLinkSearchLoading((prev) => ({ ...prev, [sesEmail]: true }))
     try {
-      const isMember = newEntryMemberStatus[email] || false
+      const response = await fetch(`/api/people?search=${encodeURIComponent(query)}&noCache=true`)
+      const data = await response.json()
+      if (data.success) {
+        setLinkSearchResults((prev) => ({
+          ...prev,
+          [sesEmail]: (data.members || []).slice(0, 10),
+        }))
+      }
+    } catch (error) {
+      console.error('Error searching people:', error)
+    } finally {
+      setLinkSearchLoading((prev) => ({ ...prev, [sesEmail]: false }))
+    }
+  }
 
-      const response = await fetch('/api/admin/directory-email-sync/create-entry', {
+  const linkContact = async (sesEmail: string) => {
+    const person = selectedLinkPerson[sesEmail]
+    if (!person) return
+
+    setLinking(sesEmail)
+    try {
+      const response = await fetch('/api/admin/directory-email-sync/link-contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
-          firstName: names.firstName,
-          lastName: names.lastName,
-          isMember
+          email: sesEmail,
+          personId: person.id,
         })
       })
 
+      const result = await response.json()
+
       if (response.ok) {
-        setEditingNames((prev) => {
-          const newState = { ...prev }
-          delete newState[email]
-          return newState
-        })
-        setNewEntryMemberStatus((prev) => {
-          const newState = { ...prev }
-          delete newState[email]
-          return newState
-        })
+        // Clear search state for this email
+        setLinkSearchQuery((prev) => { const s = { ...prev }; delete s[sesEmail]; return s })
+        setLinkSearchResults((prev) => { const s = { ...prev }; delete s[sesEmail]; return s })
+        setSelectedLinkPerson((prev) => { const s = { ...prev }; delete s[sesEmail]; return s })
+        alert(`Linked ${sesEmail} to ${result.linked.name}${result.linked.emailAdded ? ' (email added to their record)' : ''}`)
         await loadSyncData()
       } else {
-        console.error('Failed to create directory entry')
+        alert(`Error: ${result.error}`)
       }
     } catch (error) {
-      console.error('Error creating directory entry:', error)
+      console.error('Error linking contact:', error)
+      alert('Failed to link contact')
     } finally {
-      setSaving(null)
+      setLinking(null)
     }
   }
 
@@ -797,27 +816,10 @@ export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session,
                                   </Checkbox>
                                   <Text fontSize="$2" color="$gray11">Member</Text>
                                 </>
-                              ) : (
-                                editingNames[person.sesOnlyEmail!]?.firstName && editingNames[person.sesOnlyEmail!]?.lastName && (
-                                  <>
-                                    <Checkbox
-                                      checked={newEntryMemberStatus[person.sesOnlyEmail!] || false}
-                                      onCheckedChange={(checked) =>
-                                        setNewEntryMemberStatus((prev) => ({ ...prev, [person.sesOnlyEmail!]: !!checked }))
-                                      }
-                                      size="$3"
-                                    >
-                                      <Checkbox.Indicator>
-                                        <Check />
-                                      </Checkbox.Indicator>
-                                    </Checkbox>
-                                    <Text fontSize="$2" color="$gray11">Member</Text>
-                                  </>
-                                )
-                              )}
+                              ) : null}
                             </XStack>
 
-                            {/* Column 2: Name */}
+                            {/* Column 2: Name / Link Contact Search */}
                             <YStack flex={1} minWidth={180} justifyContent="center">
                               {isDirectory ? (
                                 <>
@@ -829,45 +831,97 @@ export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session,
                                   </Text>
                                 </>
                               ) : (
-                                <>
-                                  <XStack gap="$2" alignItems="center" marginBottom="$1">
-                                    <Input
-                                      placeholder="First Name"
-                                      size="$2"
-                                      defaultValue={editingNames[person.sesOnlyEmail!]?.firstName || ''}
-                                      onBlur={(e) => {
-                                        const text = (e.target as unknown as HTMLInputElement).value
-                                        setEditingNames((prev) => ({
-                                          ...prev,
-                                          [person.sesOnlyEmail!]: {
-                                            firstName: text,
-                                            lastName: prev[person.sesOnlyEmail!]?.lastName || ''
-                                          }
-                                        }))
-                                      }}
-                                    />
-                                    <Input
-                                      placeholder="Last Name"
-                                      size="$2"
-                                      defaultValue={editingNames[person.sesOnlyEmail!]?.lastName || ''}
-                                      onBlur={(e) => {
-                                        const text = (e.target as unknown as HTMLInputElement).value
-                                        setEditingNames((prev) => ({
-                                          ...prev,
-                                          [person.sesOnlyEmail!]: {
-                                            firstName: prev[person.sesOnlyEmail!]?.firstName || '',
-                                            lastName: text
-                                          }
-                                        }))
-                                      }}
-                                    />
-                                  </XStack>
-                                  <Text fontSize="$2" color="$gray11" fontStyle="italic">
-                                    {editingNames[person.sesOnlyEmail!]?.firstName && editingNames[person.sesOnlyEmail!]?.lastName
-                                      ? 'Ready to add to directory'
-                                      : 'SES Only - Add to directory'}
-                                  </Text>
-                                </>
+                                <YStack gap="$2">
+                                  {selectedLinkPerson[person.sesOnlyEmail!] ? (
+                                    <XStack gap="$2" alignItems="center">
+                                      <YStack flex={1}>
+                                        <Text fontWeight="600" fontSize="$4" color="$blue11">
+                                          {selectedLinkPerson[person.sesOnlyEmail!].name}
+                                        </Text>
+                                        <Text fontSize="$2" color="$gray11">
+                                          {selectedLinkPerson[person.sesOnlyEmail!].ecclesia || 'No ecclesia'} — {selectedLinkPerson[person.sesOnlyEmail!].email}
+                                        </Text>
+                                      </YStack>
+                                      <Button
+                                        size="$2"
+                                        variant="outlined"
+                                        onPress={() => {
+                                          setSelectedLinkPerson((prev) => { const s = { ...prev }; delete s[person.sesOnlyEmail!]; return s })
+                                        }}
+                                      >
+                                        Change
+                                      </Button>
+                                    </XStack>
+                                  ) : (
+                                    <>
+                                      <XStack gap="$2" alignItems="center">
+                                        <Search size={14} color="$gray10" />
+                                        <Input
+                                          flex={1}
+                                          placeholder="Search people by name or email..."
+                                          size="$2"
+                                          value={linkSearchQuery[person.sesOnlyEmail!] || ''}
+                                          onChangeText={(text) => searchPeopleForLink(person.sesOnlyEmail!, text)}
+                                        />
+                                      </XStack>
+                                      {linkSearchLoading[person.sesOnlyEmail!] ? (
+                                        <XStack gap="$2" alignItems="center" paddingLeft="$2">
+                                          <Spinner size="small" width={14} height={14} />
+                                          <Text fontSize="$2" color="$gray11">Searching...</Text>
+                                        </XStack>
+                                      ) : null}
+                                      {(linkSearchResults[person.sesOnlyEmail!]?.length || 0) > 0 ? (
+                                        <YStack
+                                          backgroundColor="$background"
+                                          borderWidth={1}
+                                          borderColor="$gray6"
+                                          borderRadius="$3"
+                                          maxHeight={150}
+                                          overflow="hidden"
+                                        >
+                                          <ScrollView maxHeight={150}>
+                                            {linkSearchResults[person.sesOnlyEmail!].map((result) => (
+                                              <XStack
+                                                key={result.id}
+                                                padding="$2"
+                                                paddingHorizontal="$3"
+                                                gap="$2"
+                                                alignItems="center"
+                                                hoverStyle={{ backgroundColor: '$blue3' }}
+                                                pressStyle={{ backgroundColor: '$blue4' }}
+                                                cursor="pointer"
+                                                onPress={() => {
+                                                  setSelectedLinkPerson((prev) => ({ ...prev, [person.sesOnlyEmail!]: result }))
+                                                  setLinkSearchResults((prev) => ({ ...prev, [person.sesOnlyEmail!]: [] }))
+                                                  setLinkSearchQuery((prev) => ({ ...prev, [person.sesOnlyEmail!]: '' }))
+                                                }}
+                                                borderBottomWidth={1}
+                                                borderBottomColor="$gray4"
+                                              >
+                                                <YStack flex={1}>
+                                                  <Text fontSize="$3" fontWeight="600">{result.name}</Text>
+                                                  <Text fontSize="$2" color="$gray11">{result.email} {result.ecclesia ? `— ${result.ecclesia}` : ''}</Text>
+                                                </YStack>
+                                              </XStack>
+                                            ))}
+                                          </ScrollView>
+                                        </YStack>
+                                      ) : null}
+                                      {(linkSearchQuery[person.sesOnlyEmail!]?.length || 0) >= 2 &&
+                                       !linkSearchLoading[person.sesOnlyEmail!] &&
+                                       (linkSearchResults[person.sesOnlyEmail!]?.length || 0) === 0 ? (
+                                        <Text fontSize="$2" color="$gray10" fontStyle="italic" paddingLeft="$2">
+                                          No matching people found
+                                        </Text>
+                                      ) : null}
+                                      {!linkSearchQuery[person.sesOnlyEmail!] ? (
+                                        <Text fontSize="$2" color="$gray11" fontStyle="italic" paddingLeft="$2">
+                                          SES Only — search to link to an existing person
+                                        </Text>
+                                      ) : null}
+                                    </>
+                                  )}
+                                </YStack>
                               )}
                             </YStack>
 
@@ -913,15 +967,17 @@ export const DirectoryEmailSync: React.FC<DirectoryEmailSyncProps> = ({ session,
                                         <Text flex={1} fontSize="$3">
                                           {emailRow.email}
                                         </Text>
-                                        {editingNames[person.sesOnlyEmail!]?.firstName && editingNames[person.sesOnlyEmail!]?.lastName && emailIndex === 0 ? <Button
+                                        {selectedLinkPerson[person.sesOnlyEmail!] && emailIndex === 0 ? (
+                                          <Button
                                             size="$3"
-                                            icon={saving === `create-${person.sesOnlyEmail}` ? Spinner : UserPlus}
-                                            onPress={() => createDirectoryEntry(person.sesOnlyEmail!)}
-                                            disabled={saving === `create-${person.sesOnlyEmail}`}
+                                            icon={linking === person.sesOnlyEmail ? Spinner : Link}
+                                            onPress={() => linkContact(person.sesOnlyEmail!)}
+                                            disabled={linking === person.sesOnlyEmail}
                                             theme="blue"
                                           >
-                                            Create Entry
-                                          </Button> : null}
+                                            {linking === person.sesOnlyEmail ? 'Linking...' : 'Link Contact'}
+                                          </Button>
+                                        ) : null}
                                       </>
                                     )}
                                   </XStack>

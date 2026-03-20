@@ -8,6 +8,7 @@ import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ThemeToggle } from './theme-toggle'
+import { NotificationBell } from '@my/ui/src/notifications/notification-bell'
 import { Menu, X } from '@tamagui/lucide-icons'
 
 type UserSession = {
@@ -22,6 +23,10 @@ type SimpleEnhancedNavigationProps = {
   user?: UserSession | null
   /** Sign out function passed from platform-specific auth */
   onSignOut?: () => void
+  /** Unread notification count (feature-flagged) */
+  notificationCount?: number
+  /** Handler when bell icon is pressed */
+  onNotificationPress?: () => void
 }
 
 type MainPageType = {
@@ -69,7 +74,7 @@ const brandAdminPages: MainPageType[] = [
   { path: '/admin/evolution/feature-flags', label: 'Feature Flags' },
 ]
 
-export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children, user, onSignOut }) => {
+export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> = ({ children, user, onSignOut, notificationCount, onNotificationPress }) => {
   const router = useRouter()
   const currentPath = usePathname()
   const themeName = useThemeName()
@@ -96,6 +101,12 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           TEE Portal
         </Text>
         <XStack gap="$2" alignItems="center">
+          {user && onNotificationPress && notificationCount !== undefined ? (
+            <NotificationBell
+              unreadCount={notificationCount}
+              onPress={onNotificationPress}
+            />
+          ) : null}
           <ThemeToggle onThemeChange={setTheme} />
           {/* Close button for mobile */}
           {media.sm ? <Button
@@ -356,13 +367,21 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
             TEE Portal
           </Text>
-          <Button
-            size="$3"
-            circular
-            icon={Menu}
-            onPress={() => setMobileMenuOpen(true)}
-            backgroundColor="transparent"
-          />
+          <XStack gap="$2" alignItems="center">
+            {user && onNotificationPress && notificationCount !== undefined ? (
+              <NotificationBell
+                unreadCount={notificationCount}
+                onPress={onNotificationPress}
+              />
+            ) : null}
+            <Button
+              size="$3"
+              circular
+              icon={Menu}
+              onPress={() => setMobileMenuOpen(true)}
+              backgroundColor="transparent"
+            />
+          </XStack>
         </XStack>
 
         {/* Mobile Menu Sheet */}

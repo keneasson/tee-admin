@@ -1,4 +1,4 @@
-import { Event, EventType, EventStatus, isEventActive } from '@my/app/types/events'
+import { Event, EventType, EventStatus, EventSharingScope } from '@my/app/types/events'
 import { EventValidator } from '@my/app/utils/event-validation'
 import { TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
@@ -19,7 +19,7 @@ import {
 } from '@tamagui/lucide-icons'
 import { useState, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Card, Circle, Separator, Switch, Text, XStack, YStack, AlertDialog } from 'tamagui'
+import { Card, Circle, Input, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
 import { Button } from '../Button'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
@@ -53,6 +53,7 @@ interface ProgressiveEventFormProps {
   selectedType?: EventType // Pre-select event type
   compact?: boolean // Streamlined UI for newsletter context
   onCancel?: () => void // Cancel callback
+  showSharingScope?: boolean // Show sharing scope dropdown (multi-tenant, admin/owner only)
 }
 
 interface ComponentButton {
@@ -199,45 +200,100 @@ function CollapsibleComponent({
   )
 }
 
-// Event status summary component
-function EventStatusSection({
+// Event activation control — unified publishDate-based lifecycle
+function EventActivationSection({
   formData,
   currentSelectedType,
-  isActive,
-  onActiveChange,
+  publishDate,
+  onActivate,
+  onDeactivate,
+  onSchedule,
 }: {
   formData: any
   currentSelectedType?: EventType
-  isActive: boolean
-  onActiveChange: (active: boolean) => void
+  publishDate?: Date | null
+  onActivate: () => void
+  onDeactivate: () => void
+  onSchedule: (date: Date) => void
 }) {
   if (!currentSelectedType) return null
 
   const eventData = {
     ...formData,
     type: currentSelectedType,
+    publishDate,
   }
+
+  const isActive = publishDate ? new Date(publishDate).getTime() <= Date.now() : false
+  const isScheduled = publishDate ? new Date(publishDate).getTime() > Date.now() : false
+  const [showScheduler, setShowScheduler] = useState(false)
+  const [scheduleInput, setScheduleInput] = useState('')
 
   return (
     <YStack gap="$3">
-      <XStack alignItems="center" justifyContent="space-between" paddingHorizontal="$2">
-        <XStack alignItems="center" gap="$3">
-          <Switch
-            size="$3"
-            checked={isActive}
-            onCheckedChange={onActiveChange}
-          >
-            <Switch.Thumb animation="quick" />
-          </Switch>
-          <Text
-            fontSize="$4"
-            fontWeight="600"
-            color={isActive ? '$green10' : '$gray10'}
-          >
-            {isActive ? 'Active (visible to public)' : 'Inactive (hidden)'}
-          </Text>
-        </XStack>
+      <XStack alignItems="center" justifyContent="space-between" paddingHorizontal="$2" flexWrap="wrap" gap="$2">
+        {isActive ? (
+          <XStack alignItems="center" gap="$3">
+            <Text fontSize="$4" fontWeight="600" color="$green10">
+              Active
+            </Text>
+            <Button size="$3" theme="red" variant="outlined" onPress={onDeactivate}>
+              Deactivate
+            </Button>
+          </XStack>
+        ) : isScheduled ? (
+          <XStack alignItems="center" gap="$3" flexWrap="wrap">
+            <Text fontSize="$4" fontWeight="600" color="$blue10">
+              Scheduled — {new Date(publishDate!).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </Text>
+            <Button size="$3" theme="green" onPress={onActivate}>
+              Activate Now
+            </Button>
+            <Button size="$3" theme="red" variant="outlined" onPress={onDeactivate}>
+              Cancel
+            </Button>
+          </XStack>
+        ) : (
+          <XStack alignItems="center" gap="$3" flexWrap="wrap">
+            <Text fontSize="$4" fontWeight="600" color="$gray10">
+              Inactive
+            </Text>
+            <Button size="$3" theme="green" onPress={onActivate}>
+              Activate Now
+            </Button>
+            <Button size="$3" variant="outlined" onPress={() => setShowScheduler(!showScheduler)}>
+              {showScheduler ? 'Cancel Schedule' : 'Schedule'}
+            </Button>
+          </XStack>
+        )}
       </XStack>
+
+      {showScheduler && !isActive && !isScheduled ? (
+        <XStack gap="$2" alignItems="center" paddingHorizontal="$2">
+          <Input
+            flex={1}
+            placeholder="YYYY-MM-DD"
+            value={scheduleInput}
+            onChangeText={setScheduleInput}
+          />
+          <Button
+            size="$3"
+            theme="blue"
+            disabled={!scheduleInput.trim()}
+            onPress={() => {
+              const d = new Date(scheduleInput.trim())
+              if (!isNaN(d.getTime()) && d.getTime() > Date.now()) {
+                onSchedule(d)
+                setShowScheduler(false)
+                setScheduleInput('')
+              }
+            }}
+          >
+            Set Date
+          </Button>
+        </XStack>
+      ) : null}
+
       <EventValidationSummary event={eventData} showWarnings />
     </YStack>
   )
@@ -524,6 +580,7 @@ export function ProgressiveEventForm({
   skipTypeSelection = false,
   selectedType,
   onCancel,
+  showSharingScope = false,
 }: ProgressiveEventFormProps) {
   const [selectedTypeState, setSelectedType] = useState<EventType | undefined>(
     selectedType || initialData?.type
@@ -572,6 +629,7 @@ export function ProgressiveEventForm({
     }
 
     if (currentSelectedType === 'baptism') {
+      if (hasLocationContent(initialData.location)) active.push('location')
       if (initialData.candidate) active.push('candidate')
       if (initialData.sponsors && initialData.sponsors.length > 0) active.push('sponsors')
     }
@@ -609,14 +667,23 @@ export function ProgressiveEventForm({
   }
 
   const [activeComponents, setActiveComponents] = useState<string[]>(getInitialActiveComponents())
-  // Active toggle state — initialized from saved data
-  const [eventActiveToggle, setEventActiveToggle] = useState<boolean>(
-    initialData ? isEventActive(initialData) : false
+  // Publish date state — source of truth for active/inactive/scheduled
+  // null = inactive, past/now = active, future = scheduled
+  const [eventPublishDate, setEventPublishDate] = useState<Date | null>(
+    initialData?.publishDate ? new Date(initialData.publishDate) : null
   )
   // Start at 'basic' step if we're skipping type selection (edit mode) and have a type
   const [step, setStep] = useState<'type' | 'basic' | 'components' | 'review'>(
     skipTypeSelection && initialData?.type ? 'basic' : 'type'
   )
+
+  // Normalize hostingEcclesia: ensure it's always an object { name, ... } not a plain string
+  const normalizeHostingEcclesia = (val: any): { name: string; [k: string]: any } => {
+    if (!val) return { name: HOME_ECCLESIA.canonicalName }
+    if (typeof val === 'string') return { name: val }
+    if (val.name) return val
+    return { name: HOME_ECCLESIA.canonicalName }
+  }
 
   const {
     control,
@@ -632,6 +699,7 @@ export function ProgressiveEventForm({
       description: initialData?.description || '',
       publishDate: initialData?.publishDate || undefined, // Only set explicitly — never auto-reset
       membersOnly: initialData?.membersOnly || false,
+      sharingScope: initialData?.sharingScope || 'own',
       // Type-specific defaults
       ...(currentSelectedType === 'study-weekend' && {
         dateRange: initialData?.dateRange || {
@@ -640,7 +708,7 @@ export function ProgressiveEventForm({
           hidesTimes: false,
         },
         eventTimezone: initialData?.eventTimezone || 'America/Toronto',
-        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
+        hostingEcclesia: normalizeHostingEcclesia(initialData?.hostingEcclesia),
         location: initialData?.location || {
           mode: 'in-person', // Default to in-person
           name: '',
@@ -698,7 +766,7 @@ export function ProgressiveEventForm({
       ...(currentSelectedType === 'wedding' && {
         ceremonyDate: initialData?.ceremonyDate || new Date(),
         eventTimezone: initialData?.eventTimezone || 'America/Toronto',
-        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
+        hostingEcclesia: normalizeHostingEcclesia(initialData?.hostingEcclesia),
         ceremonyLocation: initialData?.ceremonyLocation || {
           name: '',
           address: '',
@@ -730,14 +798,13 @@ export function ProgressiveEventForm({
         },
         aboutCandidate: initialData?.aboutCandidate || '',
         candidatePhoto: initialData?.candidatePhoto || undefined,
-        hostingEcclesia: initialData?.hostingEcclesia || HOME_ECCLESIA.canonicalName,
+        hostingEcclesia: normalizeHostingEcclesia(initialData?.hostingEcclesia),
         location: initialData?.location || {
           name: '',
           address: '',
           city: '',
           province: '',
         },
-        zoomLink: initialData?.zoomLink || '',
         documents: initialData?.documents || [],
       }),
       ...(currentSelectedType === 'general' && {
@@ -905,6 +972,8 @@ export function ProgressiveEventForm({
                 namePrefix="locations.service"
                 title="Service Location"
                 required
+                showAtTheHallOption={true}
+                hostingEcclesiaFieldName="hostingEcclesia"
               />
               {/* Only show visitation location if NOT same as service */}
               {!watch('visitationSameLocation') ? (
@@ -983,6 +1052,8 @@ export function ProgressiveEventForm({
               namePrefix="ceremonyLocation"
               title="Ceremony Location"
               required
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
             />
           ),
         },
@@ -1039,7 +1110,7 @@ export function ProgressiveEventForm({
           id: 'location',
           label: 'Event Location',
           icon: MapPin,
-          description: 'Specific location where baptism will take place (e.g., Lakefield College)',
+          description: 'Where the baptism will take place',
           required: true,
           component: (
             <LocationSection
@@ -1048,6 +1119,8 @@ export function ProgressiveEventForm({
               namePrefix="location"
               title="Event Location"
               required
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
             />
           ),
         },
@@ -1179,6 +1252,8 @@ export function ProgressiveEventForm({
               namePrefix="location"
               title="Event Location"
               required={false}
+              showAtTheHallOption={true}
+              hostingEcclesiaFieldName="hostingEcclesia"
             />
           ),
         },
@@ -1200,6 +1275,17 @@ export function ProgressiveEventForm({
   }
 
   const availableComponents = getAvailableComponents()
+
+  // Auto-activate required components (e.g., baptism location)
+  const requiredComponentIds = availableComponents.filter((c) => c.required).map((c) => c.id)
+  useEffect(() => {
+    const missing = requiredComponentIds.filter((id) => !activeComponents.includes(id))
+    if (missing.length > 0) {
+      setActiveComponents((prev) => [...new Set([...prev, ...missing])])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSelectedType])
+
   const activeComponentsData = availableComponents.filter((c) => activeComponents.includes(c.id))
 
   const handleTypeSelection = (type: EventType) => {
@@ -1214,6 +1300,10 @@ export function ProgressiveEventForm({
   }
 
   const removeComponent = (componentId: string) => {
+    // Don't allow removing required components
+    const comp = availableComponents.find((c) => c.id === componentId)
+    if (comp?.required) return
+
     setActiveComponents(activeComponents.filter((id) => id !== componentId))
 
     // Clear form data for removed component so it doesn't persist on save/reload
@@ -1236,6 +1326,8 @@ export function ProgressiveEventForm({
 
   // Strip fields for optional components that aren't active
   // This prevents form defaults from being saved when the user hasn't added the component
+  // Only strip if the component actually exists for this event type — fields rendered
+  // in the basic info step (not as toggleable components) must never be stripped.
   const stripInactiveComponentFields = (data: any) => {
     const optionalFieldMap: Record<string, string[]> = {
       hosting: ['hostingEcclesia'],
@@ -1243,9 +1335,13 @@ export function ProgressiveEventForm({
       locations: ['locations'],
       sections: ['sections'],
     }
+    const availableIds = new Set(availableComponents.map((c) => c.id))
     const cleaned = { ...data }
     for (const [componentId, fields] of Object.entries(optionalFieldMap)) {
-      if (!activeComponents.includes(componentId)) {
+      // Only strip if this component exists as a toggleable section for the current type
+      // AND the user hasn't activated it. If there's no such component, the field
+      // lives in the basic info step and must be preserved.
+      if (availableIds.has(componentId) && !activeComponents.includes(componentId)) {
         for (const field of fields) {
           delete cleaned[field]
         }
@@ -1265,7 +1361,8 @@ export function ProgressiveEventForm({
       ...cleanedData,
       type: currentSelectedType,
       id: persistentEventId,
-      active: eventActiveToggle,
+      publishDate: eventPublishDate || undefined,
+      active: eventPublishDate ? new Date(eventPublishDate).getTime() <= Date.now() : false, // @deprecated — derived from publishDate
       status, // Legacy: kept for backward compatibility
     }
     await onSave(eventData)
@@ -1308,7 +1405,8 @@ export function ProgressiveEventForm({
         ...stripInactiveComponentFields(currentFormData),
         type: currentSelectedType,
         id: persistentEventId,
-        active: eventActiveToggle,
+        publishDate: eventPublishDate || undefined,
+      active: eventPublishDate ? new Date(eventPublishDate).getTime() <= Date.now() : false, // @deprecated — derived from publishDate
       }
       const savedEvent = await onAutoSave(eventData)
 
@@ -1382,7 +1480,8 @@ export function ProgressiveEventForm({
               ...stripInactiveComponentFields(data),
               type: currentSelectedType,
               id: persistentEventId, // Use persistent ID for all saves
-              active: eventActiveToggle,
+              publishDate: eventPublishDate || undefined,
+      active: eventPublishDate ? new Date(eventPublishDate).getTime() <= Date.now() : false, // @deprecated — derived from publishDate
             }
             const savedEvent = await onAutoSave(eventData)
 
@@ -1484,7 +1583,14 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
+        <EventActivationSection
+          formData={currentFormData}
+          currentSelectedType={currentSelectedType}
+          publishDate={eventPublishDate}
+          onActivate={() => setEventPublishDate(new Date())}
+          onDeactivate={() => setEventPublishDate(null)}
+          onSchedule={(date) => setEventPublishDate(date)}
+        />
         <StepSummary
           step="basic"
           currentSelectedType={currentSelectedType}
@@ -1897,9 +2003,8 @@ export function ProgressiveEventForm({
                     <EventDatePicker
                       control={control}
                       name="baptismDate"
-                      label="Baptism Date"
+                      label="Baptism Date & Time"
                       includeTime
-                      allowHideTimes
                       required
                       onDateChange={handleFieldChange}
                     />
@@ -1919,14 +2024,6 @@ export function ProgressiveEventForm({
                   name="hostingEcclesia"
                   label="Hosting Ecclesia"
                   placeholder="Search for hosting ecclesia..."
-                />
-
-                <EventFormInput
-                  control={control}
-                  name="zoomLink"
-                  label="Zoom Link (Optional)"
-                  placeholder="https://zoom.us/j/..."
-                  type="url"
                 />
 
                 {/* Candidate Photo Upload */}
@@ -2267,13 +2364,21 @@ export function ProgressiveEventForm({
               />
             </YStack>
 
-            <EventDatePicker
-              control={control}
-              name="publishDate"
-              label="Publish Date"
-              includeTime
-              onDateChange={handleFieldChange}
-            />
+            {showSharingScope ? (
+              <YStack marginTop="$3">
+                <EventFormSelect
+                  control={control}
+                  name="sharingScope"
+                  label="Event Sharing"
+                  options={[
+                    { value: 'own', label: 'Own Ecclesia Only' },
+                    { value: 'region', label: 'Regional' },
+                    { value: 'global', label: 'Global' },
+                  ]}
+                />
+              </YStack>
+            ) : null}
+
           </YStack>
         </Card>
 
@@ -2314,7 +2419,14 @@ export function ProgressiveEventForm({
           maxAutoSaveRetries={maxAutoSaveRetries}
           isDirty={isDirty}
         />
-        <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
+        <EventActivationSection
+          formData={currentFormData}
+          currentSelectedType={currentSelectedType}
+          publishDate={eventPublishDate}
+          onActivate={() => setEventPublishDate(new Date())}
+          onDeactivate={() => setEventPublishDate(null)}
+          onSchedule={(date) => setEventPublishDate(date)}
+        />
         <StepSummary
           step="components"
           currentSelectedType={currentSelectedType}
@@ -2479,7 +2591,14 @@ export function ProgressiveEventForm({
         maxAutoSaveRetries={maxAutoSaveRetries}
         isDirty={isDirty}
       />
-      <EventStatusSection formData={currentFormData} currentSelectedType={currentSelectedType} isActive={eventActiveToggle} onActiveChange={setEventActiveToggle} />
+      <EventActivationSection
+        formData={currentFormData}
+        currentSelectedType={currentSelectedType}
+        publishDate={eventPublishDate}
+        onActivate={() => setEventPublishDate(new Date())}
+        onDeactivate={() => setEventPublishDate(null)}
+        onSchedule={(date) => setEventPublishDate(date)}
+      />
       <StepSummary
         step="review"
         currentSelectedType={currentSelectedType}
@@ -2532,7 +2651,14 @@ export function ProgressiveEventForm({
                       <Text fontWeight="600">Date:</Text>
                       <Text>
                         {currentFormData.baptismDate
-                          ? new Date(currentFormData.baptismDate).toLocaleDateString()
+                          ? new Date(currentFormData.baptismDate).toLocaleString('en-CA', {
+                              weekday: 'long',
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })
                           : 'Not set'}
                       </Text>
                     </XStack>
@@ -2654,16 +2780,6 @@ export function ProgressiveEventForm({
                 </YStack>
               </Card> : null}
 
-            {currentFormData.zoomLink ? <Card padding="$3" backgroundColor="$gray1">
-                <YStack space="$2">
-                  <Text fontSize="$5" fontWeight="600">
-                    Zoom Link
-                  </Text>
-                  <Text fontSize="$3" color="$blue11">
-                    {currentFormData.zoomLink}
-                  </Text>
-                </YStack>
-              </Card> : null}
 
             {currentFormData.candidate?.testimony ? <Card padding="$3" backgroundColor="$gray1">
                 <YStack space="$2">
