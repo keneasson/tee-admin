@@ -11,7 +11,7 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
-_No pending changes._
+_(none)_
 
 ## Completed
 
