@@ -5,7 +5,7 @@ import { getFileStorageService } from '@/utils/file-storage'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { fileKey: string } }
+  { params }: { params: Promise<{ fileKey: string }> }
 ) {
   try {
     // Check authentication
@@ -19,7 +19,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const { fileKey } = params
+    const { fileKey } = await params
 
     if (!fileKey) {
       return NextResponse.json({ error: 'File key is required' }, { status: 400 })
@@ -49,7 +49,7 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { fileKey: string } }
+  { params }: { params: Promise<{ fileKey: string }> }
 ) {
   try {
     // Check authentication
@@ -63,7 +63,7 @@ export async function GET(
       return NextResponse.json({ error: 'Member access required' }, { status: 403 })
     }
 
-    const { fileKey } = params
+    const { fileKey } = await params
 
     if (!fileKey) {
       return NextResponse.json({ error: 'File key is required' }, { status: 400 })

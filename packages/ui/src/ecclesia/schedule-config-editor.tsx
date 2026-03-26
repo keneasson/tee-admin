@@ -1,9 +1,19 @@
 import { useState } from 'react'
-import { YStack, XStack, Text, Card, Input, Separator, Switch } from '@my/ui'
+import { YStack, XStack, Text, Card, Input, Separator, Switch, Select, Adapt, Sheet } from '@my/ui'
 import { Button } from '../Button'
-import { Settings, Save, X } from '@tamagui/lucide-icons'
-import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { Settings, Save, X, Clock, MapPin } from '@tamagui/lucide-icons'
+import type { ScheduleTypeKey, ServiceTimeDef } from '@my/app/config/schedule-fields'
 import { SCHEDULE_TYPE_KEYS, mergeWithCatalogue } from '@my/app/config/schedule-fields'
+
+const DAY_OPTIONS = [
+  { value: '0', label: 'Sunday' },
+  { value: '1', label: 'Monday' },
+  { value: '2', label: 'Tuesday' },
+  { value: '3', label: 'Wednesday' },
+  { value: '4', label: 'Thursday' },
+  { value: '5', label: 'Friday' },
+  { value: '6', label: 'Saturday' },
+]
 
 interface FieldState {
   key: string
@@ -15,6 +25,7 @@ interface TypeState {
   enabled: boolean
   label: string
   fields: FieldState[]
+  serviceTime: ServiceTimeDef
 }
 
 type ConfigState = Record<ScheduleTypeKey, TypeState>
@@ -52,6 +63,17 @@ export function ScheduleConfigEditor({ scheduleConfig, onSave }: ScheduleConfigE
         fields: prev[typeKey].fields.map(f =>
           f.key === fieldKey ? { ...f, ...updates } : f
         ),
+      },
+    }))
+    setDirty(true)
+  }
+
+  const updateServiceTime = (typeKey: ScheduleTypeKey, updates: Partial<ServiceTimeDef>) => {
+    setConfig(prev => ({
+      ...prev,
+      [typeKey]: {
+        ...prev[typeKey],
+        serviceTime: { ...prev[typeKey].serviceTime, ...updates },
       },
     }))
     setDirty(true)
@@ -144,10 +166,72 @@ export function ScheduleConfigEditor({ scheduleConfig, onSave }: ScheduleConfigE
                   ) : null}
                 </XStack>
 
-                {/* Field config (expanded) */}
+                {/* Service time + field config (expanded) */}
                 {isExpanded && typeConfig.enabled ? (
                   <YStack gap="$2" paddingTop="$2">
                     <Separator />
+
+                    {/* Service Time Configuration */}
+                    <Text fontSize="$2" theme="alt2" fontWeight="600">
+                      <Clock size={12} /> Service Time & Location
+                    </Text>
+                    <XStack gap="$2" flexWrap="wrap">
+                      <YStack gap="$1" minWidth={120}>
+                        <Text fontSize="$1" theme="alt2">Day</Text>
+                        <Select
+                          value={String(typeConfig.serviceTime.expectedDayOfWeek)}
+                          onValueChange={(val: string) =>
+                            updateServiceTime(typeKey, { expectedDayOfWeek: parseInt(val, 10) })
+                          }
+                        >
+                          <Select.Trigger size="$3" width={140}>
+                            <Select.Value />
+                          </Select.Trigger>
+                          <Adapt when="sm" platform="touch">
+                            <Sheet modal dismissOnSnapToBottom snapPointsMode="fit">
+                              <Sheet.Frame>
+                                <Sheet.ScrollView>
+                                  <Adapt.Contents />
+                                </Sheet.ScrollView>
+                              </Sheet.Frame>
+                              <Sheet.Overlay />
+                            </Sheet>
+                          </Adapt>
+                          <Select.Content>
+                            <Select.Viewport>
+                              {DAY_OPTIONS.map((day, i) => (
+                                <Select.Item key={day.value} value={day.value} index={i}>
+                                  <Select.ItemText>{day.label}</Select.ItemText>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select>
+                      </YStack>
+                      <YStack gap="$1" minWidth={120}>
+                        <Text fontSize="$1" theme="alt2">Display Time</Text>
+                        <Input
+                          size="$3"
+                          value={typeConfig.serviceTime.displayTime}
+                          onChangeText={(v: string) => updateServiceTime(typeKey, { displayTime: v })}
+                          placeholder="11:00 AM"
+                          width={120}
+                        />
+                      </YStack>
+                      <YStack gap="$1" flex={1} minWidth={150}>
+                        <Text fontSize="$1" theme="alt2"><MapPin size={10} /> Location</Text>
+                        <Input
+                          size="$3"
+                          value={typeConfig.serviceTime.location}
+                          onChangeText={(v: string) => updateServiceTime(typeKey, { location: v })}
+                          placeholder="Main Hall"
+                        />
+                      </YStack>
+                    </XStack>
+
+                    <Separator marginTop="$2" />
+
+                    {/* Field Configuration */}
                     <Text fontSize="$2" theme="alt2" fontWeight="600">
                       Fields — toggle off fields you don't need, rename as needed
                     </Text>

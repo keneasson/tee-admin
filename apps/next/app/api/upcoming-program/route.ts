@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { ProgramTypeKeys } from '@my/app/types'
 import { CACHE_TAGS } from '../../../utils/cache'
+import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 
 // Cache for 15 minutes in production (shorter for faster updates when debugging)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -80,6 +81,35 @@ export async function GET(request: NextRequest) {
       
       return result
     })
+
+    // Resolve host ecclesia addresses for joint Bible classes
+    for (const event of responseData) {
+      if (event.Key === 'bibleClass' && event.Host && event.InPerson === 'Yes') {
+        try {
+          const ecclesia = await getEcclesiaByName(event.Host)
+          if (ecclesia) {
+            if (ecclesia.venue) event.resolvedVenue = ecclesia.venue
+            const addressIncludesCity = ecclesia.address && ecclesia.city &&
+              ecclesia.address.toLowerCase().includes(ecclesia.city.toLowerCase())
+            const parts = [
+              ecclesia.address,
+              addressIncludesCity ? null : ecclesia.city,
+              ecclesia.province,
+              ecclesia.postalCode,
+            ].filter(Boolean)
+            event.resolvedAddress = parts.join(', ')
+            if (event.resolvedAddress) {
+              event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.resolvedAddress)}`
+            }
+          }
+        } catch (err) {
+          console.warn(`⚠️ Failed to resolve address for "${event.Host}":`, err)
+        }
+      } else if (event.Key === 'bibleClass' && event.Host && event.InPerson && event.InPerson !== 'Yes') {
+        event.resolvedAddress = event.InPerson
+        event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.InPerson)}`
+      }
+    }
 
     return NextResponse.json(responseData, {
       headers: {

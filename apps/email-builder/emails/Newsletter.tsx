@@ -666,11 +666,22 @@ const formatReadingDate = (date: Date | string): string => {
   return `${dayName}, ${monthName} ${day}`
 }
 
+interface ServiceTimeDisplay {
+  displayTime: string
+  label: string
+}
+
 interface EmailNewsletterProps {
   scheduleEvents?: (MemorialServiceType | BibleClassType | SundaySchoolType)[]
   upcomingEvents?: Event[]
   readings?: any[]
   note?: string
+  /** Per-ecclesia service times — replaces hardcoded "9:30am" / "11:00am" */
+  serviceTimes?: {
+    sundaySchool?: ServiceTimeDisplay
+    memorial?: ServiceTimeDisplay
+    bibleClass?: ServiceTimeDisplay
+  }
 }
 
 const Newsletter: React.FC<EmailNewsletterProps> = ({
@@ -678,6 +689,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
   upcomingEvents = [],
   readings = [],
   note,
+  serviceTimes,
 }) => {
   const todaysDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -903,7 +915,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         <Section key={`ss-${index}`} style={program}>
                           {hasSundaySchool ? (
                             <>
-                              <Heading style={defaultText}>Sunday School at 9:30am</Heading>
+                              <Heading style={defaultText}>Sunday School at {serviceTimes?.sundaySchool?.displayTime || '9:30am'}</Heading>
                               <Text style={defaultText}>
                                 {'Refreshments: '}
                                 <strong>{event.Refreshments}</strong>
@@ -934,7 +946,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
 
                       return (
                         <Section key={`memorial-${index}`} style={program}>
-                          <Heading style={defaultText}>Memorial Service at 11:00am</Heading>
+                          <Heading style={defaultText}>Memorial Service at {serviceTimes?.memorial?.displayTime || '11:00am'}</Heading>
                           <Row>
                             <Column>
                               {hymnsContent ? (
@@ -1062,7 +1074,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 const hasInPerson = !!event.InPerson
                 const hasCustomZoom = !!(event.ZoomURL || event.MeetingID)
 
-                // Build heading
+                // Build heading — use MetaData as prominent title for joint classes
                 let bcHeading: string
                 if (!hasClass) {
                   bcHeading = event.Date as string
@@ -1085,37 +1097,119 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                     <Section style={program}>
                       {hasClass ? (
                         <>
-                          <Heading style={defaultText}>
-                            {bcHeading}
-                          </Heading>
+                          {/* Joint Bible Class — prominent banner with MetaData title */}
+                          {isJoint ? (
+                            <Section style={{
+                              backgroundColor: '#1565C0',
+                              padding: '16px 20px',
+                              borderRadius: '8px',
+                              marginBottom: '16px',
+                            }}>
+                              {event.MetaData ? (
+                                <Text style={{
+                                  ...defaultText,
+                                  color: '#ffffff',
+                                  fontSize: '11px',
+                                  textTransform: 'uppercase' as const,
+                                  letterSpacing: '1px',
+                                  fontWeight: 'bold',
+                                  margin: '0 0 4px 0',
+                                }}>
+                                  Special Notice
+                                </Text>
+                              ) : null}
+                              <Heading style={{
+                                ...defaultText,
+                                color: '#ffffff',
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                margin: '0 0 4px 0',
+                              }}>
+                                {event.MetaData || bcHeading}
+                              </Heading>
+                              <Text style={{
+                                ...defaultText,
+                                color: '#ffffffCC',
+                                fontSize: '14px',
+                                margin: '0',
+                              }}>
+                                {event.Date} at 7:30pm{hasInPerson ? ' — In Person & Zoom' : ' — on Zoom'}
+                              </Text>
+                            </Section>
+                          ) : (
+                            <Heading style={defaultText}>
+                              {bcHeading}
+                            </Heading>
+                          )}
                           <Row>
                             <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
                           </Row>
-                          {/* In-person details for joint Bible Class */}
+                          {/* In-person location for joint Bible Class */}
                           {hasInPerson ? (
-                            <Text style={{ ...defaultText, marginTop: '12px', padding: '8px 12px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
-                              <strong>In Person{event.Host ? ` at ${event.Host}` : ''}</strong>
-                              <br />
-                              {event.resolvedAddress || event.InPerson}
-                            </Text>
+                            <Section style={{
+                              backgroundColor: '#e8f5e9',
+                              padding: '12px 16px',
+                              borderRadius: '6px',
+                              marginTop: '12px',
+                              borderLeft: '4px solid #2e7d32',
+                            }}>
+                              <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '15px', margin: '0 0 4px 0' }}>
+                                📍 In Person{event.Host ? ` at ${event.Host}` : ''}
+                                {event.resolvedVenue ? ` — ${event.resolvedVenue}` : ''}
+                              </Text>
+                              <Text style={{ ...defaultText, margin: '0' }}>
+                                {event.resolvedAddress || event.InPerson}
+                              </Text>
+                              {event.resolvedMapUrl ? (
+                                <Text style={{ ...defaultText, margin: '8px 0 0 0' }}>
+                                  <Link href={event.resolvedMapUrl} style={{ ...link, fontWeight: '600' }}>
+                                    View on Google Maps →
+                                  </Link>
+                                </Text>
+                              ) : null}
+                            </Section>
                           ) : null}
-                          {/* Custom Zoom details for joint Bible Class */}
+                          {/* Custom Zoom details for joint Bible Class (Zoom-only) */}
                           {!hasInPerson && hasCustomZoom ? (
-                            <Text style={{ ...defaultText, marginTop: '12px' }}>
-                              <strong>Using {event.Host}&apos;s Zoom</strong>
-                              <br />
-                              {event.MeetingID ? <>Meeting ID: {event.MeetingID}<br /></> : null}
-                              {event.MeetingPwd ? <>Password: {event.MeetingPwd}<br /></> : null}
-                            </Text>
+                            <Section style={{
+                              backgroundColor: '#e3f2fd',
+                              padding: '12px 16px',
+                              borderRadius: '6px',
+                              marginTop: '12px',
+                              borderLeft: '4px solid #1565C0',
+                            }}>
+                              <Text style={{ ...defaultText, fontWeight: 'bold', margin: '0 0 4px 0' }}>
+                                Using {event.Host}&apos;s Zoom
+                              </Text>
+                              {event.ZoomURL ? (
+                                <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
+                                  <Link href={event.ZoomURL} style={{ ...link, fontWeight: '600' }}>Click to join Zoom</Link>
+                                </Text>
+                              ) : null}
+                              {event.MeetingID ? <Text style={{ ...defaultText, margin: '0' }}>Meeting ID: {event.MeetingID}</Text> : null}
+                              {event.MeetingPwd ? <Text style={{ ...defaultText, margin: '0' }}>Password: {event.MeetingPwd}</Text> : null}
+                            </Section>
                           ) : null}
                           {/* Hybrid: both in-person AND Zoom */}
                           {hasInPerson && hasCustomZoom ? (
-                            <Text style={{ ...defaultText, marginTop: '8px' }}>
-                              <strong>Also available on {event.Host}&apos;s Zoom</strong>
-                              <br />
-                              {event.MeetingID ? <>Meeting ID: {event.MeetingID}<br /></> : null}
-                              {event.MeetingPwd ? <>Password: {event.MeetingPwd}<br /></> : null}
-                            </Text>
+                            <Section style={{
+                              backgroundColor: '#e3f2fd',
+                              padding: '12px 16px',
+                              borderRadius: '6px',
+                              marginTop: '8px',
+                              borderLeft: '4px solid #1565C0',
+                            }}>
+                              <Text style={{ ...defaultText, fontWeight: 'bold', margin: '0 0 4px 0' }}>
+                                Also available on {event.Host}&apos;s Zoom
+                              </Text>
+                              {event.ZoomURL ? (
+                                <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
+                                  <Link href={event.ZoomURL} style={{ ...link, fontWeight: '600' }}>Click to join Zoom</Link>
+                                </Text>
+                              ) : null}
+                              {event.MeetingID ? <Text style={{ ...defaultText, margin: '0' }}>Meeting ID: {event.MeetingID}</Text> : null}
+                              {event.MeetingPwd ? <Text style={{ ...defaultText, margin: '0' }}>Password: {event.MeetingPwd}</Text> : null}
+                            </Section>
                           ) : null}
                         </>
                       ) : (
@@ -1928,8 +2022,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               <br />
                               <br />
                               {(event as any).registration.required && (event as any).registration.required !== 'false'
-                                ? <strong>Registration required:</strong>
-                                : <strong>Registration:</strong>}
+                                ? <><strong>Registration Required:</strong></>
+                                : <><strong>Registration:</strong></>}
                               <br />
                               <Link
                                 href={(event as any).registration.registrationUrl}
@@ -2059,8 +2153,8 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               <br />
                               <br />
                               {(event as any).registration.required && (event as any).registration.required !== 'false'
-                                ? <strong>Registration required:</strong>
-                                : <strong>Registration:</strong>}
+                                ? <><strong>Registration Required:</strong></>
+                                : <><strong>Registration:</strong></>}
                               <br />
                               <Link
                                 href={(event as any).registration.registrationUrl}

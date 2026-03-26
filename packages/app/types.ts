@@ -221,14 +221,16 @@ export type BibleClassType = {
   DateTime?: string        // Full ISO datetime in UTC: "2026-02-06T00:30:00.000Z" (7:30pm Toronto)
   ServiceTimezone?: string // IANA timezone: "America/Toronto"
   // Joint Bible Class fields (from Google Sheets)
-  Host?: string              // Host ecclesia name
-  ZoomURL?: string           // Override Zoom URL
-  MeetingID?: string         // Override Meeting ID
-  MeetingPwd?: string        // Override Meeting Password
-  InPerson?: string          // "Yes" or full address
-  // Resolved at email render time (not from Sheets)
-  resolvedAddress?: string   // Full address from ecclesia lookup
-  resolvedVenue?: string     // Venue name from ecclesia lookup
+  MetaData?: string            // Descriptive title e.g. "joint Bible Class at MWE and via Zoom"
+  Host?: string                // Host ecclesia name
+  ZoomURL?: string             // Override Zoom URL
+  MeetingID?: string           // Override Meeting ID
+  MeetingPwd?: string          // Override Meeting Password
+  InPerson?: string            // "Yes" or full address
+  // Resolved at render time (not from Sheets)
+  resolvedAddress?: string     // Full address from ecclesia lookup
+  resolvedVenue?: string       // Venue name from ecclesia lookup
+  resolvedMapUrl?: string      // Google Maps link for the host ecclesia
 }
 
 export type NextBibleClassProps = {

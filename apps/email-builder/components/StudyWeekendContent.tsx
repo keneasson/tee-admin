@@ -120,19 +120,19 @@ export const StudyWeekendContent: React.FC<StudyWeekendContentProps> = ({
       ) : null}
 
       {/* Registration */}
-      {registration?.required ? (
-        <Text style={{ ...defaultText, margin: '16px 0 8px 0', color: '#c53030' }}>
-          <strong>Registration Required</strong>
-        </Text>
-      ) : null}
-
       {registration?.url ? (
-        <Text style={{ ...defaultText, margin: '8px 0' }}>
-          Registration:{' '}
-          <Link href={registration.url} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
-            {registration.url}
-          </Link>
-        </Text>
+        <>
+          <Text style={{ ...defaultText, margin: '16px 0 4px 0' }}>
+            {registration.required
+              ? <strong>Registration Required:</strong>
+              : <strong>Registration:</strong>}
+          </Text>
+          <Text style={{ ...defaultText, margin: '0' }}>
+            <Link href={registration.url} style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+              {registration.url}
+            </Link>
+          </Text>
+        </>
       ) : null}
 
       {/* Event URL */}

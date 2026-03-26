@@ -1,21 +1,40 @@
 import { MemorialServiceType } from '@my/app/types'
+import type { Event } from '@my/app/types/events'
 import React from 'react'
-import { Accordion, ExtLink, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
+import { Accordion, Anchor, ExtLink, Paragraph, Separator, Square, Text, YStack } from '@my/ui'
 import { XStack } from 'tamagui'
-import { ChevronDown } from '@tamagui/lucide-icons'
+import { ChevronDown, MapPin } from '@tamagui/lucide-icons'
 import { Section } from '@my/app/features/newsletter/Section'
+
+/** Find an event by title (case-insensitive substring match) */
+function findReplacementEvent(
+  upcomingEvents: Event[],
+  eventTitle: string
+): Event | undefined {
+  if (!eventTitle || !upcomingEvents?.length) return undefined
+  const needle = eventTitle.trim().toLowerCase()
+  return upcomingEvents.find((e) => e.title?.toLowerCase().includes(needle))
+}
 
 type NextMemorialProps = {
   event: MemorialServiceType
   isSameDay: boolean
+  /** Upcoming events list — used to find replacement event when services are cancelled */
+  upcomingEvents?: Event[]
 }
-export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) => {
+export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, upcomingEvents }) => {
   // No service at hall: Both Exhort AND Preside are blank
   const noServiceAtHall = !event.Exhort && !event.Preside
 
   if (noServiceAtHall) {
-    // Use Activities field to explain why (e.g., "Please join us at the Toronto Fraternal Gathering")
+    // The Lunch field contains the event title to match (same convention as email template)
+    const eventTitle = (event as any).Lunch?.trim()
+    const replacementEvent = eventTitle && upcomingEvents
+      ? findReplacementEvent(upcomingEvents, eventTitle)
+      : undefined
+    // Use Activities field as fallback explanation
     const explanation = event.Activities
+
     return (
       <Section>
         <Paragraph size={'$5'} fontWeight={600}>
@@ -23,6 +42,69 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay }) 
         </Paragraph>
         <Paragraph fontWeight={600}>There will be no service at our hall.</Paragraph>
         {explanation ? <Paragraph>{explanation}</Paragraph> : null}
+
+        {/* Replacement event details */}
+        {replacementEvent ? (
+          <YStack gap="$2" marginTop="$3" padding="$3" backgroundColor="$backgroundHover" borderRadius="$3" borderLeftWidth={4} borderLeftColor="$blue9">
+            <Anchor href={`/events/${replacementEvent.id}`} textDecorationLine="none">
+              <Paragraph size="$6" fontWeight={700} color="$color">
+                {replacementEvent.title}
+              </Paragraph>
+            </Anchor>
+
+            {replacementEvent.hostingEcclesia?.name ? (
+              <Paragraph>
+                <Text fontWeight={600}>Hosted by:</Text> {replacementEvent.hostingEcclesia.name}
+                {replacementEvent.hostingEcclesia.city ? `, ${replacementEvent.hostingEcclesia.city}` : ''}
+              </Paragraph>
+            ) : null}
+
+            {replacementEvent.description ? (
+              <Paragraph color="$gray11">{replacementEvent.description}</Paragraph>
+            ) : null}
+
+            {replacementEvent.location ? (
+              <YStack gap="$1">
+                {replacementEvent.location.name ? (
+                  <XStack gap="$2" alignItems="center">
+                    <MapPin size={14} />
+                    <Paragraph fontWeight={600}>{replacementEvent.location.name}</Paragraph>
+                  </XStack>
+                ) : null}
+                {replacementEvent.location.address ? (
+                  <Paragraph paddingLeft="$4" color="$gray11">
+                    {[replacementEvent.location.address, replacementEvent.location.city, replacementEvent.location.province].filter(Boolean).join(', ')}
+                  </Paragraph>
+                ) : null}
+              </YStack>
+            ) : null}
+
+            {replacementEvent.registration?.registrationUrl ? (
+              <Paragraph>
+                <Text fontWeight={600}>
+                  {replacementEvent.registration.required && replacementEvent.registration.required !== 'false'
+                    ? 'Registration Required'
+                    : 'Registration'}
+                </Text>
+                {' — '}
+                <Text
+                  color="$blue10"
+                  textDecorationLine="underline"
+                  cursor="pointer"
+                  onPress={() => {
+                    if (typeof window !== 'undefined') window.open(replacementEvent.registration!.registrationUrl, '_blank')
+                  }}
+                >
+                  click here
+                </Text>
+              </Paragraph>
+            ) : null}
+
+            <Anchor href={`/events/${replacementEvent.id}`}>
+              <Text color="$blue10" fontWeight={600}>View full details →</Text>
+            </Anchor>
+          </YStack>
+        ) : null}
       </Section>
     )
   }

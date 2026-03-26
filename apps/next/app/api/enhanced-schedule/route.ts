@@ -4,19 +4,29 @@ import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import type { GoogleSheetTypes, GoogleSheetData, ProgramsTypes } from '@my/app/types'
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
-import { SERVICE_TIMES, getServiceTimeConfigByString } from '@my/app/config/schedule-times'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
+import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 
-// Helper to get schedule config from centralized SERVICE_TIMES
-function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>) {
-  const config = getServiceTimeConfigByString(type)
-  if (!config) {
+// Map Google Sheet type names to schedule type keys
+const SHEET_TO_SCHEDULE_KEY: Record<string, ScheduleTypeKey> = {
+  memorial: 'memorial',
+  bibleClass: 'bibleClass',
+  sundaySchool: 'sundaySchool',
+  cyc: 'cyc',
+}
+
+// Helper to get schedule config via unified resolver
+function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>, scheduleConfig?: Record<string, any>) {
+  const typeKey = SHEET_TO_SCHEDULE_KEY[type]
+  if (!typeKey) {
     return { name: type, defaultTime: '', location: '' }
   }
+  const resolved = resolveServiceTime(scheduleConfig, typeKey)
   return {
-    name: config.name,
-    defaultTime: config.displayTime,
-    location: config.location,
+    name: resolved.name,
+    defaultTime: resolved.displayTime,
+    location: resolved.location,
   }
 }
 
@@ -235,6 +245,7 @@ function addScheduleSpecificFields(event: any, row: any, scheduleType: Exclude<G
       event.Speaker = row.Speaker || ''
       event.Topic = row.Topic || row.topic || ''
       // Joint Bible Class fields (from Google Sheets)
+      if (row.MetaData) event.MetaData = row.MetaData
       if (row.Host) event.Host = row.Host
       if (row.ZoomURL) event.ZoomURL = row.ZoomURL
       if (row.MeetingID) event.MeetingID = String(row.MeetingID)
@@ -366,15 +377,27 @@ export async function GET(request: NextRequest) {
           try {
             const ecclesia = await getEcclesiaByName(event.Host)
             if (ecclesia) {
-              // Exclude venue from address to avoid duplicating the Host name
-              const parts = [ecclesia.address, ecclesia.city, ecclesia.province, ecclesia.postalCode].filter(Boolean)
+              if (ecclesia.venue) event.resolvedVenue = ecclesia.venue
+              // Avoid duplicating city if it's already in the address
+              const addressIncludesCity = ecclesia.address && ecclesia.city &&
+                ecclesia.address.toLowerCase().includes(ecclesia.city.toLowerCase())
+              const parts = [
+                ecclesia.address,
+                addressIncludesCity ? null : ecclesia.city,
+                ecclesia.province,
+                ecclesia.postalCode,
+              ].filter(Boolean)
               event.resolvedAddress = parts.join(', ')
+              if (event.resolvedAddress) {
+                event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.resolvedAddress)}`
+              }
             }
           } catch (err) {
             console.warn(`⚠️ Failed to resolve address for "${event.Host}":`, err)
           }
         } else if (event.Host && event.InPerson && event.InPerson !== 'Yes') {
           event.resolvedAddress = event.InPerson
+          event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.InPerson)}`
         }
       }
     }

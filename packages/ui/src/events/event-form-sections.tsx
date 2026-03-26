@@ -209,7 +209,7 @@ export function LocationSection<T extends FieldValues>({
             required
             options={[
               { value: 'in-person', label: 'In-Person Only' },
-              { value: 'online', label: 'Online Only' },
+              { value: 'online', label: 'Online' },
               { value: 'hybrid', label: 'Hybrid (In-Person & Online)' }
             ]}
           />

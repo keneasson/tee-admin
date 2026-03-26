@@ -6,7 +6,7 @@ import { ScheduleTabs, type ScheduleTab } from './schedule-tabs'
 import { type ColumnDef } from '@tanstack/react-table'
 import { YStack, Text, XStack, useThemeName } from 'tamagui'
 import { Button } from '../Button'
-import { Copy, ExternalLink } from '@tamagui/lucide-icons'
+import { Copy, ExternalLink, MapPin } from '@tamagui/lucide-icons'
 import { brandColors, type ColorMode } from '../branding/brand-colors'
 
 // Enhanced schedule event interface matching requirements
@@ -311,27 +311,68 @@ export function EnhancedScheduleResponsive({
       <YStack gap="$2">
         {/* Joint Bible Class details — rendered on info background */}
         {scheduleType === 'bibleClass' && event.Host ? <>
-            <Text fontSize="$3" fontWeight="700" color={colors.infoForeground}>
-              Host: {event.Host}
-            </Text>
-            {/* Meeting link — first, with Join Now + clipboard copy */}
+            {/* MetaData title — prominent banner */}
+            {event.MetaData ? (
+              <Text fontSize="$4" fontWeight="800" color={colors.primary}>
+                {event.MetaData}
+              </Text>
+            ) : (
+              <Text fontSize="$3" fontWeight="700" color={colors.textPrimary}>
+                Host: {event.Host}
+              </Text>
+            )}
+            {/* In-person location — prominent with map link */}
+            {event.InPerson ? <YStack
+                gap="$1"
+                backgroundColor={`${colors.info}10`}
+                padding="$2"
+                borderRadius="$2"
+              >
+                <XStack gap="$2" alignItems="center">
+                  <MapPin size={16} color={colors.primary} />
+                  <Text fontSize="$3" fontWeight="700" color={colors.primary}>
+                    In Person at {event.Host}
+                    {event.resolvedVenue ? ` — ${event.resolvedVenue}` : ''}
+                  </Text>
+                </XStack>
+                {event.resolvedAddress ? <Text fontSize="$3" color={colors.primary} paddingLeft="$4">
+                    {event.resolvedAddress}
+                  </Text> : null}
+                {event.resolvedMapUrl ? <Button
+                    size="$2"
+                    backgroundColor={colors.primary}
+                    color={colors.primaryForeground}
+                    hoverStyle={{ backgroundColor: colors.primaryHover }}
+                    icon={<MapPin size={14} color={colors.primaryForeground} />}
+                    marginLeft="$4"
+                    alignSelf="flex-start"
+                    onPress={() => {
+                      if (typeof window !== 'undefined') window.open(event.resolvedMapUrl, '_blank')
+                    }}
+                  >
+                    View Map
+                  </Button> : null}
+              </YStack> : null}
+            {/* Meeting link — Join Now + clipboard copy */}
             {event.ZoomURL ? <XStack gap="$2" alignItems="center">
                 <Button
                   size="$2"
-                  backgroundColor={colors.infoForeground}
-                  color={colors.info}
-                  icon={<ExternalLink size={14} color={colors.info} />}
+                  backgroundColor={colors.info}
+                  color={colors.infoForeground}
+                  hoverStyle={{ backgroundColor: colors.infoHover }}
+                  icon={<ExternalLink size={14} color={colors.infoForeground} />}
                   onPress={() => {
                     if (typeof window !== 'undefined') window.open(event.ZoomURL, '_blank')
                   }}
                 >
-                  Join Now
+                  Join Zoom
                 </Button>
                 <Button
                   size="$2"
                   variant="outlined"
-                  borderColor={colors.infoForeground}
-                  icon={<Copy size={14} color={colors.infoForeground} />}
+                  borderColor={colors.border}
+                  hoverStyle={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }}
+                  icon={<Copy size={14} color={colors.textSecondary} />}
                   onPress={() => {
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
                       navigator.clipboard.writeText(event.ZoomURL)
@@ -340,30 +381,21 @@ export function EnhancedScheduleResponsive({
                 />
               </XStack> : null}
             {event.MeetingID ? <XStack gap="$2" alignItems="center">
-                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
+                <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
                   Meeting ID:
                 </Text>
-                <Text fontSize="$3" color={colors.infoForeground} flex={1}>
+                <Text fontSize="$3" color={colors.textPrimary} flex={1}>
                   {event.MeetingID}
                 </Text>
               </XStack> : null}
             {event.MeetingPwd ? <XStack gap="$2" alignItems="center">
-                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
+                <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
                   Password:
                 </Text>
-                <Text fontSize="$3" color={colors.infoForeground} flex={1}>
+                <Text fontSize="$3" color={colors.textPrimary} flex={1}>
                   {event.MeetingPwd}
                 </Text>
               </XStack> : null}
-            {/* In-person address — deduplicated, just street address */}
-            {event.InPerson ? <YStack gap="$1">
-                <Text fontSize="$3" fontWeight="600" color={`${colors.infoForeground}B3`}>
-                  In Person
-                </Text>
-                {event.resolvedAddress ? <Text fontSize="$3" color={colors.infoForeground}>
-                    {event.resolvedAddress}
-                  </Text> : null}
-              </YStack> : null}
           </> : null}
 
         {scheduleType === 'memorial' ? <YStack gap="$1">

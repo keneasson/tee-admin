@@ -18,9 +18,24 @@ export interface ScheduleFieldDef {
   defaultLabel: string  // Sensible default label
 }
 
+/** Service time defaults for a worship service type */
+export interface ServiceTimeDef {
+  /** Default time in 24-hour format (HH:mm) */
+  defaultTime: string
+  /** Display time format (for emails and UI, e.g. "11:00 AM") */
+  displayTime: string
+  /** Expected day of week (0=Sunday, 1=Monday, ..., 6=Saturday) */
+  expectedDayOfWeek: number
+  /** IANA timezone identifier */
+  timezone: string
+  /** Default location for the service */
+  location: string
+}
+
 export interface ScheduleTypeDef {
   defaultLabel: string           // Default tab name
   fields: ScheduleFieldDef[]     // All possible fields in display order
+  serviceTime: ServiceTimeDef    // Default service time/location
 }
 
 /**
@@ -31,6 +46,13 @@ export interface ScheduleTypeDef {
 export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> = {
   memorial: {
     defaultLabel: 'Memorial Service',
+    serviceTime: {
+      defaultTime: '11:00',
+      displayTime: '11:00 AM',
+      expectedDayOfWeek: 0, // Sunday
+      timezone: 'America/Toronto',
+      location: 'Main Hall',
+    },
     fields: [
       { key: 'Exhort', defaultLabel: 'Exhort' },
       { key: 'Preside', defaultLabel: 'Preside' },
@@ -50,6 +72,13 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   },
   bibleClass: {
     defaultLabel: 'Bible Class',
+    serviceTime: {
+      defaultTime: '19:30',
+      displayTime: '7:30 PM',
+      expectedDayOfWeek: 3, // Wednesday
+      timezone: 'America/Toronto',
+      location: 'Fellowship Hall',
+    },
     fields: [
       { key: 'Presider', defaultLabel: 'Presider' },
       { key: 'Speaker', defaultLabel: 'Speaker' },
@@ -59,6 +88,13 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   },
   sundaySchool: {
     defaultLabel: 'Sunday School',
+    serviceTime: {
+      defaultTime: '09:30',
+      displayTime: '9:30 AM',
+      expectedDayOfWeek: 0, // Sunday
+      timezone: 'America/Toronto',
+      location: 'Classroom A',
+    },
     fields: [
       { key: 'Refreshments', defaultLabel: 'Refreshments' },
       { key: 'Holidays and Special Events', defaultLabel: 'Holidays & Special Events' },
@@ -66,6 +102,13 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   },
   cyc: {
     defaultLabel: 'CYC',
+    serviceTime: {
+      defaultTime: '18:30',
+      displayTime: '6:30 PM',
+      expectedDayOfWeek: 6, // Saturday (may vary)
+      timezone: 'America/Toronto',
+      location: 'Youth Room',
+    },
     fields: [
       { key: 'location', defaultLabel: 'Location' },
       { key: 'speaker', defaultLabel: 'Speaker' },
@@ -85,27 +128,28 @@ export const SCHEDULE_TYPE_KEYS: ScheduleTypeKey[] = ['memorial', 'bibleClass', 
  */
 const MVP_MEMORIAL_FIELDS = new Set(['Exhort'])
 
+/** The shape of a single schedule type's per-ecclesia config */
+export interface ScheduleTypeConfigState {
+  enabled: boolean
+  label: string
+  fields: Array<{ key: string; label: string; enabled: boolean }>
+  serviceTime: ServiceTimeDef
+}
+
 /**
  * Build a default config for an ecclesia with NO saved config.
  * MVP approach: only Memorial Service is enabled, with only Exhort on.
  * Everything else is available in the catalogue but turned off.
  */
-export function buildDefaultScheduleConfig(): Record<ScheduleTypeKey, {
-  enabled: boolean
-  label: string
-  fields: Array<{ key: string; label: string; enabled: boolean }>
-}> {
-  const config = {} as Record<ScheduleTypeKey, {
-    enabled: boolean
-    label: string
-    fields: Array<{ key: string; label: string; enabled: boolean }>
-  }>
+export function buildDefaultScheduleConfig(): Record<ScheduleTypeKey, ScheduleTypeConfigState> {
+  const config = {} as Record<ScheduleTypeKey, ScheduleTypeConfigState>
   for (const typeKey of SCHEDULE_TYPE_KEYS) {
     const typeDef = SCHEDULE_TYPE_CATALOGUE[typeKey]
     const isMemorial = typeKey === 'memorial'
     config[typeKey] = {
       enabled: isMemorial,  // Only Memorial enabled by default
       label: typeDef.defaultLabel,
+      serviceTime: { ...typeDef.serviceTime },
       fields: typeDef.fields.map(f => ({
         key: f.key,
         label: f.defaultLabel,
@@ -118,18 +162,15 @@ export function buildDefaultScheduleConfig(): Record<ScheduleTypeKey, {
 
 /**
  * Merge a saved ecclesia config with the master catalogue.
- * - Preserves saved labels and enabled state for all existing fields
+ * - Preserves saved labels, enabled state, and service times for all existing types
  * - Adds any new fields from the catalogue that aren't in the saved config
  *   (defaults to disabled — admin must opt in)
  * - Removes fields that are no longer in the catalogue
+ * - Falls back to catalogue service time defaults when not saved
  */
 export function mergeWithCatalogue(
   saved: Record<string, any> | undefined
-): Record<ScheduleTypeKey, {
-  enabled: boolean
-  label: string
-  fields: Array<{ key: string; label: string; enabled: boolean }>
-}> {
+): Record<ScheduleTypeKey, ScheduleTypeConfigState> {
   const defaults = buildDefaultScheduleConfig()
   if (!saved) return defaults
 
@@ -138,9 +179,23 @@ export function mergeWithCatalogue(
     const savedType = saved[typeKey]
     if (!savedType) continue
 
+    // Merge service time: use saved values over catalogue defaults
+    const catalogueServiceTime = SCHEDULE_TYPE_CATALOGUE[typeKey].serviceTime
+    const savedServiceTime = savedType.serviceTime
+    const serviceTime: ServiceTimeDef = savedServiceTime
+      ? {
+          defaultTime: savedServiceTime.defaultTime ?? catalogueServiceTime.defaultTime,
+          displayTime: savedServiceTime.displayTime ?? catalogueServiceTime.displayTime,
+          expectedDayOfWeek: savedServiceTime.expectedDayOfWeek ?? catalogueServiceTime.expectedDayOfWeek,
+          timezone: savedServiceTime.timezone ?? catalogueServiceTime.timezone,
+          location: savedServiceTime.location ?? catalogueServiceTime.location,
+        }
+      : { ...catalogueServiceTime }
+
     merged[typeKey] = {
       enabled: savedType.enabled ?? defaults[typeKey].enabled,
       label: savedType.label || defaults[typeKey].label,
+      serviceTime,
       fields: defaults[typeKey].fields.map(defaultField => {
         const savedField = savedType.fields?.find((f: any) => f.key === defaultField.key)
         if (savedField) {

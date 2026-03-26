@@ -11,19 +11,16 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+_No pending changes._
+
+## Completed
+
 ### DynamoDB — Enable TTL on tee-admin table
 - **Date**: 2026-03-17
 - **Code change**: Added `NotificationRecord` with `ttl` field to `packages/app/provider/dynamodb/types.ts`
-- **External action**: Enable TTL on the `tee-admin` table:
-  ```bash
-  aws dynamodb update-time-to-live \
-    --table-name tee-admin \
-    --time-to-live-specification "Enabled=true, AttributeName=ttl"
-  ```
-- **Status**: PENDING
-- **Impact if missed**: Expired notifications will not be auto-deleted, table will grow indefinitely
-
-## Completed
+- **External action**: Enabled TTL on the `tee-admin` table with attribute `ttl`
+- **Status**: DONE 2026-03-25
+- **Verified**: TTL active, 49 backlog expired items (TEST#, TOKEN#) pending auto-deletion
 
 ### Google Apps Script — webhook auth header
 - **Date**: 2026-03-13

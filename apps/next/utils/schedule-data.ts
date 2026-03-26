@@ -1,6 +1,7 @@
 import { unstable_cache } from 'next/cache'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
-import { SERVICE_TIMES, getServiceTimeConfigByString } from '@my/app/config/schedule-times'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
+import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import { getEcclesiaByName } from './dynamodb/locations'
 import type { GoogleSheetTypes, GoogleSheetData } from '@my/app/types'
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
@@ -8,10 +9,19 @@ import { CACHE_TAGS } from './cache'
 
 // ── Helpers ──
 
-function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>) {
-  const config = getServiceTimeConfigByString(type)
-  if (!config) return { name: type, defaultTime: '', location: '' }
-  return { name: config.name, defaultTime: config.displayTime, location: config.location }
+// Map Google Sheet type names to schedule type keys
+const SHEET_TO_SCHEDULE_KEY: Record<string, ScheduleTypeKey> = {
+  memorial: 'memorial',
+  bibleClass: 'bibleClass',
+  sundaySchool: 'sundaySchool',
+  cyc: 'cyc',
+}
+
+function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>, scheduleConfig?: Record<string, any>) {
+  const typeKey = SHEET_TO_SCHEDULE_KEY[type]
+  if (!typeKey) return { name: type, defaultTime: '', location: '' }
+  const resolved = resolveServiceTime(scheduleConfig, typeKey)
+  return { name: resolved.name, defaultTime: resolved.displayTime, location: resolved.location }
 }
 
 function isInvalidDate(date: Date): boolean {
@@ -36,6 +46,7 @@ function addScheduleSpecificFields(event: any, row: any, type: string): void {
       event.Presider = row.Presider || ''
       event.Speaker = row.Speaker || ''
       event.Topic = row.Topic || row.topic || ''
+      if (row.MetaData) event.MetaData = row.MetaData
       if (row.Host) event.Host = row.Host
       if (row.ZoomURL) event.ZoomURL = row.ZoomURL
       if (row.MeetingID) event.MeetingID = String(row.MeetingID)
@@ -127,14 +138,27 @@ async function fetchScheduleTab(tab: string): Promise<{
         try {
           const ecclesia = await getEcclesiaByName(event.Host)
           if (ecclesia) {
-            const parts = [ecclesia.address, ecclesia.city, ecclesia.province, ecclesia.postalCode].filter(Boolean)
+            if (ecclesia.venue) event.resolvedVenue = ecclesia.venue
+            // Avoid duplicating city if it's already in the address
+            const addressIncludesCity = ecclesia.address && ecclesia.city &&
+              ecclesia.address.toLowerCase().includes(ecclesia.city.toLowerCase())
+            const parts = [
+              ecclesia.address,
+              addressIncludesCity ? null : ecclesia.city,
+              ecclesia.province,
+              ecclesia.postalCode,
+            ].filter(Boolean)
             event.resolvedAddress = parts.join(', ')
+            if (event.resolvedAddress) {
+              event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.resolvedAddress)}`
+            }
           }
         } catch (err) {
           console.warn(`⚠️ Failed to resolve address for "${event.Host}":`, err)
         }
       } else if (event.Host && event.InPerson && event.InPerson !== 'Yes') {
         event.resolvedAddress = event.InPerson
+        event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.InPerson)}`
       }
     }
   }

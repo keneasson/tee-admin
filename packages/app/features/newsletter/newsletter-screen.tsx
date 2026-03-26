@@ -220,7 +220,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                                 <NextSundaySchool event={event} />
                                 {index < sundayEvents.length - 1 ? <Separator marginVertical="$2" /> : null}
                               </> : null}
-                            {event.Key === 'memorial' ? <NextMemorial event={event} isSameDay={checkSameDay} /> : null}
+                            {event.Key === 'memorial' ? <NextMemorial event={event} isSameDay={checkSameDay} upcomingEvents={upcomingEvents} /> : null}
                           </YStack>
                         )
                       })}

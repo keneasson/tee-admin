@@ -502,10 +502,15 @@ export function EventSummaryCard({
             </Text>
           ) : null}
 
-          {/* Registration Link - spelled out for print/sharing */}
+          {/* Registration Link */}
           {(event as any).registration?.registrationUrl ? (
             <Text fontSize="$3" color="$gray11">
-              Registration:{' '}
+              <Text fontSize="$3" fontWeight="600" color="$color">
+                {(event as any).registration?.required && (event as any).registration.required !== 'false'
+                  ? 'Registration Required'
+                  : 'Registration'}
+              </Text>
+              {' — '}
               <Text
                 fontSize="$3"
                 color="$blue10"
@@ -513,7 +518,7 @@ export function EventSummaryCard({
                 cursor="pointer"
                 onPress={() => window.open((event as any).registration.registrationUrl, '_blank')}
               >
-                {(event as any).registration.registrationUrl}
+                click here
               </Text>
             </Text>
           ) : null}

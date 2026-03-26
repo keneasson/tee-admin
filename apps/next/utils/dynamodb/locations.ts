@@ -22,6 +22,11 @@ export interface LocationData {
 
 export type ServiceType = 'memorial' | 'bible_class' | 'cyc' | 'sunday_school' | 'other'
 
+/**
+ * @deprecated Use scheduleConfig with ServiceTimeDef instead.
+ * Worship services are now derived from the schedule configuration system.
+ * This type will be removed in a future cleanup pass.
+ */
 export interface EcclesiaService {
   id: string
   name: string
@@ -56,6 +61,13 @@ export interface ScheduleTypeConfig {
   enabled: boolean                // Show this tab?
   label: string                   // Tab display name (e.g. "Breaking of Bread" vs "Memorial Service")
   fields: ScheduleFieldConfig[]   // Ordered list of fields for this schedule type
+  serviceTime?: {                 // When/where this service meets (per-ecclesia override)
+    defaultTime: string           // "11:00" (24h format)
+    displayTime: string           // "11:00 AM" (for emails and UI)
+    expectedDayOfWeek: number     // 0=Sunday, 1=Monday, ..., 6=Saturday
+    timezone: string              // IANA timezone, e.g. "America/Toronto"
+    location: string              // "Main Hall", "Fellowship Hall", etc.
+  }
 }
 
 export type EcclesiaScheduleConfig = Record<ScheduleTypeKey, ScheduleTypeConfig>
@@ -73,6 +85,7 @@ export interface EcclesiaData {
   recordingBrotherEmail?: string
   recordingBrotherName?: string
   recordingBrotherPersonId?: string  // Hard link to PersonRecord
+  /** @deprecated Use scheduleConfig instead — services are derived from schedule types */
   services?: EcclesiaService[]
   website?: string
   externalLinks?: EcclesiaExternalLinks

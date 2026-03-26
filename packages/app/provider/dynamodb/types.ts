@@ -776,3 +776,45 @@ export type NotificationQueryResult = {
 export function isNotificationRecord(record: any): record is NotificationRecord {
   return record && record.pkey && record.pkey.startsWith('USER#') && record.skey?.startsWith('NOTIFICATION#')
 }
+
+// ===== ORGANIZATION SYSTEM =====
+// Cross-ecclesia groups (fraternal gatherings, Bible schools, charities, youth groups)
+// composed of members from multiple ecclesias. Organizations can publish events
+// and ecclesias can subscribe to them using the existing subscription model.
+
+export type OrganizationType = 'fraternal_gathering' | 'bible_school' | 'charity' | 'youth_group' | 'other'
+
+// Organization Record - Stored in tee-admin table
+// pkey: ORGANIZATION#{country}|{province}, skey: {city}#{name}
+// GSI1: gsi1pk: ORGANIZATION#{name}, gsi1sk: {country}|{province}|{city}
+export interface OrganizationRecord extends BaseRecord {
+  pkey: string                   // ORGANIZATION#{country}|{province}
+  skey: string                   // {city}#{name}
+  gsi1pk: string                 // ORGANIZATION#{name}
+  gsi1sk: string                 // {country}|{province}|{city}
+  name: string
+  type: OrganizationType
+  description?: string
+  country: string
+  province: string
+  city: string
+  contactEmail?: string
+  website?: string
+  memberEcclesias: string[]      // Names of participating ecclesias
+  externalLinks?: {
+    newsletterUrl?: string
+    youtube?: string
+    facebook?: string
+    otherLinks?: Array<{ label: string; url: string }>
+  }
+  logoUrl?: string
+  timezone?: string
+  latitude?: number
+  longitude?: number
+  createdAt: string
+  lastUpdated: string
+}
+
+export function isOrganizationRecord(record: any): record is OrganizationRecord {
+  return record && record.pkey && record.pkey.startsWith('ORGANIZATION#')
+}

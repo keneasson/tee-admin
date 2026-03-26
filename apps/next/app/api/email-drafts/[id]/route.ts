@@ -16,7 +16,7 @@ const docClient = DynamoDBDocumentClient.from(client)
 const TABLE_NAME = 'tee-admin'
 
 // GET - Fetch a specific draft
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const userEmail = session.user.email
-    const draftId = params.id
+    const { id: draftId } = await params
 
     const command = new GetCommand({
       TableName: TABLE_NAME,
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT - Update a draft
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -70,7 +70,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const userEmail = session.user.email
-    const draftId = params.id
+    const { id: draftId } = await params
     const body: Partial<UpdateEmailDraftInput> = await request.json()
 
     const now = new Date().toISOString()

@@ -24,6 +24,9 @@ import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
 import type { DisplayDuration } from '@my/app/types/newsletter-rules'
 import { syncYouTubeUrlsForEmail } from '../youtube-sync-helper'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
+import { getEcclesiaByName } from '../dynamodb/locations'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // Event display duration rules - same as news-events.tsx
 const EVENT_DURATION_RULES: Record<string, { displayDuration: DisplayDuration; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
@@ -206,11 +209,12 @@ export const getEmailContent = async (
         console.log(`📺 YouTube fallback sync for newsletter: ${newsletterSyncResult.updated} URLs synced`)
       }
 
-      // Fetch all required data for newsletter
-      const [scheduleData, upcomingEvents, readingsData] = await Promise.all([
+      // Fetch all required data for newsletter (including per-ecclesia service times)
+      const [scheduleData, upcomingEvents, readingsData, homeEcclesia] = await Promise.all([
         get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
         fetchEvents(),
-        fetchBibleReadings()
+        fetchBibleReadings(),
+        getEcclesiaByName(HOME_ECCLESIA.canonicalName),
       ])
 
       console.log('Newsletter data fetched:', {
@@ -219,12 +223,30 @@ export const getEmailContent = async (
         readingsData: readingsData.length
       })
 
+      // Resolve per-ecclesia service times (falls back to catalogue defaults)
+      const ecclesiaConfig = homeEcclesia?.scheduleConfig
+      const newsletterServiceTimes = {
+        sundaySchool: {
+          displayTime: resolveServiceTime(ecclesiaConfig, 'sundaySchool').displayTime,
+          label: resolveServiceTime(ecclesiaConfig, 'sundaySchool').name,
+        },
+        memorial: {
+          displayTime: resolveServiceTime(ecclesiaConfig, 'memorial').displayTime,
+          label: resolveServiceTime(ecclesiaConfig, 'memorial').name,
+        },
+        bibleClass: {
+          displayTime: resolveServiceTime(ecclesiaConfig, 'bibleClass').displayTime,
+          label: resolveServiceTime(ecclesiaConfig, 'bibleClass').name,
+        },
+      }
+
       const newsletterHtmlContent = await render(
         <Newsletter
           scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
           upcomingEvents={upcomingEvents}
           readings={readingsData}
           note={note}
+          serviceTimes={newsletterServiceTimes}
         />
       )
       const newsletterTextContent = await render(
@@ -233,6 +255,7 @@ export const getEmailContent = async (
           upcomingEvents={upcomingEvents}
           readings={readingsData}
           note={note}
+          serviceTimes={newsletterServiceTimes}
         />,
         { plainText: true }
       )

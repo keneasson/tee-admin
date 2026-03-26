@@ -3,8 +3,6 @@ import { YStack, XStack, Text, Card, Button, Heading, Input, Separator, Spinner 
 import { Church, MapPin, Phone, Mail, Pencil, Save, X } from '@tamagui/lucide-icons'
 import { PersonAutocomplete } from '../form/person-autocomplete'
 import { ServiceList } from './service-list'
-import { ServiceFormModal } from './service-form-modal'
-import type { EcclesiaService, ServiceType } from './service-list'
 import { ExternalLinksCard } from './external-links-card'
 import type { ExternalLinksData } from './external-links-card'
 import { SubscriptionManager } from './subscription-manager'
@@ -25,7 +23,8 @@ export interface EcclesiaDetailData {
   contactEmail?: string
   recordingBrotherEmail?: string
   recordingBrotherName?: string
-  services?: EcclesiaService[]
+  /** @deprecated Use scheduleConfig instead */
+  services?: any[]
   website?: string
   externalLinks?: {
     newsletterUrl?: string
@@ -70,10 +69,6 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
   const [editRbName, setEditRbName] = useState(ecclesia.recordingBrotherName || '')
   const [editRbEmail, setEditRbEmail] = useState(ecclesia.recordingBrotherEmail || '')
 
-  // Service modal state
-  const [serviceModalOpen, setServiceModalOpen] = useState(false)
-  const [editingService, setEditingService] = useState<EcclesiaService | null>(null)
-
   const startEditing = () => {
     setEditName(ecclesia.name)
     setEditAddress(ecclesia.address || '')
@@ -110,42 +105,6 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleAddService = () => {
-    setEditingService(null)
-    setServiceModalOpen(true)
-  }
-
-  const handleEditService = (service: EcclesiaService) => {
-    setEditingService(service)
-    setServiceModalOpen(true)
-  }
-
-  const handleDeleteService = async (serviceId: string) => {
-    if (!onUpdate) return
-    const currentServices = ecclesia.services || []
-    const updatedServices = currentServices.filter((s) => s.id !== serviceId)
-    await onUpdate({ services: updatedServices })
-  }
-
-  const handleSaveService = async (serviceData: Omit<EcclesiaService, 'id'> & { id?: string }) => {
-    if (!onUpdate) return
-    const currentServices = [...(ecclesia.services || [])]
-
-    if (serviceData.id) {
-      // Editing existing service
-      const index = currentServices.findIndex((s) => s.id === serviceData.id)
-      if (index >= 0) {
-        currentServices[index] = { ...serviceData, id: serviceData.id } as EcclesiaService
-      }
-    } else {
-      // Adding new service - generate a simple ID
-      const id = `svc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-      currentServices.push({ ...serviceData, id } as EcclesiaService)
-    }
-
-    await onUpdate({ services: currentServices })
   }
 
   const locationParts = [ecclesia.city, ecclesia.province, ecclesia.country].filter(Boolean)
@@ -294,15 +253,9 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
         </YStack>
       </Card>
 
-      {/* Worship Services Card */}
+      {/* Worship Services — derived from schedule configuration */}
       <Card padding="$4" borderWidth={1} borderColor="$borderColor">
-        <ServiceList
-          services={ecclesia.services || []}
-          canEdit={canEdit}
-          onAdd={handleAddService}
-          onEdit={handleEditService}
-          onDelete={handleDeleteService}
-        />
+        <ServiceList scheduleConfig={ecclesia.scheduleConfig} />
       </Card>
 
       {/* External Links Card (gated behind multi-tenant feature flag via prop) */}
@@ -371,13 +324,6 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
         />
       ) : null}
 
-      {/* Service Form Modal */}
-      <ServiceFormModal
-        isOpen={serviceModalOpen}
-        onOpenChange={setServiceModalOpen}
-        service={editingService}
-        onSave={handleSaveService}
-      />
     </YStack>
   )
 }

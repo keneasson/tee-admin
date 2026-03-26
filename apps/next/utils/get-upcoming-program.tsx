@@ -86,9 +86,20 @@ export async function get_upcoming_program(
               try {
                 const ecclesia = await getEcclesiaByName(bc.Host)
                 if (ecclesia) {
-                  // Exclude venue from address to avoid duplicating the Host name
-                  const parts = [ecclesia.address, ecclesia.city, ecclesia.province, ecclesia.postalCode].filter(Boolean)
+                  if (ecclesia.venue) bc.resolvedVenue = ecclesia.venue
+                  // Avoid duplicating city if it's already in the address
+                  const addressIncludesCity = ecclesia.address && ecclesia.city &&
+                    ecclesia.address.toLowerCase().includes(ecclesia.city.toLowerCase())
+                  const parts = [
+                    ecclesia.address,
+                    addressIncludesCity ? null : ecclesia.city,
+                    ecclesia.province,
+                    ecclesia.postalCode,
+                  ].filter(Boolean)
                   bc.resolvedAddress = parts.join(', ')
+                  if (bc.resolvedAddress) {
+                    bc.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bc.resolvedAddress)}`
+                  }
                 } else {
                   console.warn(`⚠️ Ecclesia "${bc.Host}" not found for address resolution`)
                 }
@@ -98,6 +109,7 @@ export async function get_upcoming_program(
             } else if (bc.InPerson && bc.InPerson !== 'Yes') {
               // InPerson contains the full address directly
               bc.resolvedAddress = bc.InPerson
+              bc.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bc.InPerson)}`
             }
           }
         }

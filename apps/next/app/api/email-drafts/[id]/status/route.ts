@@ -15,7 +15,7 @@ const docClient = DynamoDBDocumentClient.from(client)
 const TABLE_NAME = 'tee-admin'
 
 // PATCH - Update draft status (after testing or sending)
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -23,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const userEmail = session.user.email
-    const draftId = params.id
+    const { id: draftId } = await params
     const body = await request.json()
     const { action } = body // 'tested' or 'sent'
 

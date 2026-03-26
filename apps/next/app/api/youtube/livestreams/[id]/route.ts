@@ -8,7 +8,7 @@ import { YouTubeService } from '@my/app/provider/youtube/youtube-service'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -23,7 +23,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     if (!id) {
       return NextResponse.json({ error: 'Livestream ID is required' }, { status: 400 })
@@ -46,7 +46,7 @@ export async function GET(
       stream: simplifiedStream,
     })
   } catch (error) {
-    console.error(`❌ Error in GET /api/youtube/livestreams/${params.id}:`, error)
+    console.error('❌ Error in GET /api/youtube/livestreams/[id]:', error)
     return NextResponse.json(
       {
         error: 'Failed to fetch livestream',
@@ -63,7 +63,7 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -78,7 +78,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     if (!id) {
       return NextResponse.json({ error: 'Livestream ID is required' }, { status: 400 })
@@ -130,7 +130,7 @@ export async function PATCH(
       message: 'Livestream updated successfully',
     })
   } catch (error) {
-    console.error(`❌ Error in PATCH /api/youtube/livestreams/${params.id}:`, error)
+    console.error('❌ Error in PATCH /api/youtube/livestreams/[id]:', error)
     return NextResponse.json(
       {
         error: 'Failed to update livestream',
@@ -147,7 +147,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -165,7 +165,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = params
+    const { id } = await params
 
     if (!id) {
       return NextResponse.json({ error: 'Livestream ID is required' }, { status: 400 })
@@ -185,7 +185,7 @@ export async function DELETE(
       message: 'Livestream deleted successfully',
     })
   } catch (error) {
-    console.error(`❌ Error in DELETE /api/youtube/livestreams/${params.id}:`, error)
+    console.error('❌ Error in DELETE /api/youtube/livestreams/[id]:', error)
     return NextResponse.json(
       {
         error: 'Failed to delete livestream',

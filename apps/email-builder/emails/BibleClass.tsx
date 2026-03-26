@@ -64,7 +64,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   const hideZoom = hasInPerson && !hasCustomZoom
 
   const headingText = isJoint
-    ? `Special Joint Bible Class with ${currentEvent.Host}`
+    ? (currentEvent.MetaData || `Special Joint Bible Class with ${currentEvent.Host}`)
     : 'Toronto East Bible Class'
 
   return (
@@ -72,11 +72,49 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>{hasNoClass ? 'No Bible Class Tonight' : 'Bible Class Tonight'}</Preview>
+      <Preview>{hasNoClass ? 'No Bible Class Tonight' : (isJoint ? headingText : 'Bible Class Tonight')}</Preview>
       <Body style={main}>
-        <Section style={header}>
-          <Heading>{headingText}</Heading>
-        </Section>
+        {/* Joint Bible Class — prominent banner header */}
+        {isJoint ? (
+          <Section style={{
+            backgroundColor: '#1565C0',
+            padding: '24px 20px',
+            textAlign: 'center' as const,
+          }}>
+            <Text style={{
+              color: '#ffffff',
+              fontSize: '11px',
+              textTransform: 'uppercase' as const,
+              letterSpacing: '1px',
+              fontWeight: 'bold',
+              margin: '0 0 8px 0',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}>
+              Special Notice
+            </Text>
+            <Heading style={{
+              color: '#ffffff',
+              fontSize: '22px',
+              fontWeight: 'bold',
+              margin: '0 0 8px 0',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}>
+              {headingText}
+            </Heading>
+            <Text style={{
+              color: '#ffffffCC',
+              fontSize: '14px',
+              margin: '0',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}>
+              {currentEvent.Date?.toString()} at 7:30pm{hasInPerson ? ' — In Person & Zoom' : ' — on Zoom'}
+            </Text>
+          </Section>
+        ) : (
+          <Section style={header}>
+            <Heading>{headingText}</Heading>
+          </Section>
+        )}
 
         {/* Optional Note Section */}
         {note && note.trim() ? (
@@ -156,15 +194,24 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
             <Section style={{
               backgroundColor: '#e8f5e9',
               padding: '16px',
-              borderRadius: '4px',
+              borderRadius: '6px',
               marginBottom: '8px',
+              borderLeft: '4px solid #2e7d32',
             }}>
-              <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '16px', margin: '0 0 8px 0' }}>
-                In Person{currentEvent.Host ? ` at ${currentEvent.Host}` : ''}
+              <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '16px', margin: '0 0 4px 0' }}>
+                📍 In Person{currentEvent.Host ? ` at ${currentEvent.Host}` : ''}
+                {currentEvent.resolvedVenue ? ` — ${currentEvent.resolvedVenue}` : ''}
               </Text>
               <Text style={{ ...defaultText, margin: '0' }}>
                 {currentEvent.resolvedAddress || currentEvent.InPerson}
               </Text>
+              {currentEvent.resolvedMapUrl ? (
+                <Text style={{ ...defaultText, margin: '8px 0 0 0' }}>
+                  <Link href={currentEvent.resolvedMapUrl} style={{ ...link, fontWeight: '600' }}>
+                    View on Google Maps →
+                  </Link>
+                </Text>
+              ) : null}
             </Section>
           </Container>
         ) : null}
@@ -173,19 +220,20 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
         {!hasNoClass && showHostZoom ? (
           <Container style={container} className="container zoom-info">
             <Section style={{
-              backgroundColor: '#fff3cd',
+              backgroundColor: '#e3f2fd',
               padding: '12px 16px',
-              borderRadius: '4px',
+              borderRadius: '6px',
               marginBottom: '12px',
+              borderLeft: '4px solid #1565C0',
             }}>
-              <Text style={{ ...defaultText, margin: '0', fontStyle: 'italic' }}>
-                Note: This week&apos;s Bible Class uses {currentEvent.Host}&apos;s Zoom meeting room.
+              <Text style={{ ...defaultText, margin: '0', fontWeight: 'bold' }}>
+                {hasInPerson ? 'Also available on' : 'Using'} {currentEvent.Host}&apos;s Zoom
               </Text>
             </Section>
             <Text style={defaultText}>
               {currentEvent.ZoomURL ? (
                 <>
-                  <Link href={currentEvent.ZoomURL} style={link}>
+                  <Link href={currentEvent.ZoomURL} style={{ ...link, fontWeight: '600' }}>
                     Click to join Zoom
                   </Link>
                   <br />

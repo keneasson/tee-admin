@@ -259,11 +259,11 @@ export function ResponsiveDataTable<TData>({
                 ))}
               </XStack>
 
-              {/* Expanded Secondary Row — match parent row style */}
+              {/* Expanded Secondary Row — always default background for readability */}
               {row.getIsExpanded() && renderSubComponent ? <XStack
-                  backgroundColor={rowStyle?.backgroundColor ?? (rowIndex % 2 === 0 ? colors.surface : colors.backgroundSecondary)}
+                  backgroundColor={colors.surface}
                   borderTopWidth={1}
-                  borderTopColor={rowStyle?.borderColor ?? (colors.border + '40')}
+                  borderTopColor={colors.border + '40'}
                   padding="$3"
                 >
                   <View width="100%">
