@@ -66,8 +66,17 @@ function addScheduleSpecificFields(event: any, row: any, type: string): void {
 
 function isValidRow(event: any, type: string): boolean {
   switch (type) {
-    case 'memorial':
-      return !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
+    case 'memorial': {
+      const hasAssignments = !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
+      if (hasAssignments) return true
+      // No assignments — only keep if there's Lunch or Activities content (indicates "no service" with explanation)
+      const hasContent = !!(event.Lunch?.trim() || event.Activities?.trim())
+      if (hasContent) {
+        event.noServiceAtHall = true
+        return true
+      }
+      return false
+    }
     case 'bibleClass':
       return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
     case 'sundaySchool':

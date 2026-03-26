@@ -272,8 +272,19 @@ export function EnhancedScheduleResponsive({
   const currentData = data[currentTab] || []
   const columns = React.useMemo(() => createEnhancedColumns(colors, currentUser, currentTab), [colors, currentUser, currentTab])
 
-  // Style override for joint Bible class rows — uses semantic "info" color
+  // Style override for special rows
   const getRowStyle = React.useCallback((row: any): RowStyleOverride | null => {
+    // "No service at hall" memorial rows
+    if (row.noServiceAtHall) {
+      return {
+        backgroundColor: `${colors.warning}15`,
+        backgroundColorHover: `${colors.warning}25`,
+        textColor: colors.textPrimary,
+        textColorSecondary: colors.textSecondary,
+        borderColor: `${colors.warning}40`,
+      }
+    }
+    // Joint Bible class rows
     if (!isJointBibleClass(row)) return null
     return {
       backgroundColor: colors.info,
@@ -292,7 +303,7 @@ export function EnhancedScheduleResponsive({
         // Expand only for joint Bible class details (Host, Zoom, InPerson)
         return !!(event.Host || event.ZoomURL || event.MeetingID || event.InPerson)
       case 'memorial':
-        return !!(event.Lunch || event.lunch || event.Activities || event.activities)
+        return !!(event.noServiceAtHall || event.Lunch || event.lunch || event.Activities || event.activities)
       case 'sundaySchool':
         return false // Sunday School doesn't use secondary rows currently
       case 'cyc':
@@ -398,23 +409,38 @@ export function EnhancedScheduleResponsive({
               </XStack> : null}
           </> : null}
 
-        {scheduleType === 'memorial' ? <YStack gap="$1">
-            {(event.Lunch || event.lunch) ? <XStack gap="$2" alignItems="center">
-                <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
-                  Lunch:
+        {scheduleType === 'memorial' ? <YStack gap="$2">
+            {event.noServiceAtHall ? (
+              <YStack gap="$1">
+                <Text fontSize="$4" fontWeight="700" color={colors.textPrimary}>
+                  There will be no service at our hall.
                 </Text>
-                <Text fontSize="$3" color={colors.textPrimary} flex={1}>
-                  {event.Lunch || event.lunch}
-                </Text>
-              </XStack> : null}
-            {(event.Activities || event.activities) ? <XStack gap="$2" alignItems="center">
-                <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
-                  Activities:
-                </Text>
-                <Text fontSize="$3" color={colors.textPrimary} flex={1}>
-                  {event.Activities || event.activities}
-                </Text>
-              </XStack> : null}
+                {(event.Activities || event.activities) ? (
+                  <Text fontSize="$3" color={colors.textPrimary}>
+                    {event.Activities || event.activities}
+                  </Text>
+                ) : null}
+              </YStack>
+            ) : (
+              <>
+                {(event.Lunch || event.lunch) ? <XStack gap="$2" alignItems="center">
+                    <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
+                      Lunch:
+                    </Text>
+                    <Text fontSize="$3" color={colors.textPrimary} flex={1}>
+                      {event.Lunch || event.lunch}
+                    </Text>
+                  </XStack> : null}
+                {(event.Activities || event.activities) ? <XStack gap="$2" alignItems="center">
+                    <Text fontSize="$3" fontWeight="600" color={colors.textSecondary}>
+                      Activities:
+                    </Text>
+                    <Text fontSize="$3" color={colors.textPrimary} flex={1}>
+                      {event.Activities || event.activities}
+                    </Text>
+                  </XStack> : null}
+              </>
+            )}
           </YStack> : null}
       </YStack>
     )

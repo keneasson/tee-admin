@@ -170,19 +170,28 @@ function transformScheduleData(
     const scheduleType = sheetData.type as Exclude<GoogleSheetTypes, 'directory'>
     
     switch (scheduleType) {
-      case 'memorial':
-        // Memorial must have at least one person assigned
-        return !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
-      
+      case 'memorial': {
+        // Memorial: keep rows with people assigned, OR rows that are "no service" with explanation
+        const hasAssignments = !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
+        if (hasAssignments) return true
+        // No assignments — only keep if Lunch or Activities has content (indicates "no service" with explanation)
+        const hasContent = !!(event.Lunch?.trim() || event.Activities?.trim())
+        if (hasContent) {
+          event.noServiceAtHall = true
+          return true
+        }
+        return false
+      }
+
       case 'bibleClass':
         // Bible class must have presider or speaker (with actual content, not just whitespace)
         // Joint classes with only Host data but no presider/speaker are also valid
         return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
-      
+
       case 'sundaySchool':
         // Sunday school must have refreshments assigned
         return !!(event.Refreshments)
-      
+
       case 'cyc':
         // CYC must have speaker or topic
         return !!(event.speaker || event.topic)
