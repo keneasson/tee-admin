@@ -50,7 +50,7 @@
     "validate-data": "cd apps/next && tsx ../../scripts/validate-data.ts",
     "test-newsletter-timing": "cd apps/next && tsx ../../scripts/test-newsletter-timing.ts",
     "predeploy": "bash scripts/pre-deploy-check.sh",
-    "deploy": "yarn predeploy && cd apps/next && vercel deploy --prod"
+    "deploy": "yarn predeploy && vercel deploy --prod"
   },
   "resolutions": {
     "react": "19.1.0",
