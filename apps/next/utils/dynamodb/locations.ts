@@ -62,11 +62,16 @@ export interface ScheduleTypeConfig {
   label: string                   // Tab display name (e.g. "Breaking of Bread" vs "Memorial Service")
   fields: ScheduleFieldConfig[]   // Ordered list of fields for this schedule type
   serviceTime?: {                 // When/where this service meets (per-ecclesia override)
-    defaultTime: string           // "11:00" (24h format)
-    displayTime: string           // "11:00 AM" (for emails and UI)
-    expectedDayOfWeek: number     // 0=Sunday, 1=Monday, ..., 6=Saturday
     timezone: string              // IANA timezone, e.g. "America/Toronto"
     location: string              // "Main Hall", "Fellowship Hall", etc.
+    schedule: Array<{             // Seasonal time periods (first = default, additional = overrides)
+      label?: string              // "Regular", "Summer Hours"
+      startMonth?: number         // 1=Jan, 12=Dec — omit for year-round default
+      endMonth?: number           // 1=Jan, 12=Dec — omit for year-round default
+      defaultTime: string         // "11:00" (24h format)
+      displayTime: string         // "11:00 AM"
+      expectedDayOfWeek: number   // 0=Sunday, 1=Monday, ..., 6=Saturday
+    }>
   }
 }
 

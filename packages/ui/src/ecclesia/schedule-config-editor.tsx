@@ -2,8 +2,17 @@ import { useState } from 'react'
 import { YStack, XStack, Text, Card, Input, Separator, Switch, Select, Adapt, Sheet } from '@my/ui'
 import { Button } from '../Button'
 import { Settings, Save, X, Clock, MapPin } from '@tamagui/lucide-icons'
-import type { ScheduleTypeKey, ServiceTimeDef } from '@my/app/config/schedule-fields'
+import type { ScheduleTypeKey, ServiceTimeDef, ServiceTimePeriod } from '@my/app/config/schedule-fields'
 import { SCHEDULE_TYPE_KEYS, mergeWithCatalogue } from '@my/app/config/schedule-fields'
+
+const MONTH_OPTIONS = [
+  { value: '1', label: 'January' }, { value: '2', label: 'February' },
+  { value: '3', label: 'March' }, { value: '4', label: 'April' },
+  { value: '5', label: 'May' }, { value: '6', label: 'June' },
+  { value: '7', label: 'July' }, { value: '8', label: 'August' },
+  { value: '9', label: 'September' }, { value: '10', label: 'October' },
+  { value: '11', label: 'November' }, { value: '12', label: 'December' },
+]
 
 const DAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -68,7 +77,7 @@ export function ScheduleConfigEditor({ scheduleConfig, onSave }: ScheduleConfigE
     setDirty(true)
   }
 
-  const updateServiceTime = (typeKey: ScheduleTypeKey, updates: Partial<ServiceTimeDef>) => {
+  const updateServiceTimeTop = (typeKey: ScheduleTypeKey, updates: Partial<Pick<ServiceTimeDef, 'timezone' | 'location'>>) => {
     setConfig(prev => ({
       ...prev,
       [typeKey]: {
@@ -76,6 +85,61 @@ export function ScheduleConfigEditor({ scheduleConfig, onSave }: ScheduleConfigE
         serviceTime: { ...prev[typeKey].serviceTime, ...updates },
       },
     }))
+    setDirty(true)
+  }
+
+  const updateSchedulePeriod = (typeKey: ScheduleTypeKey, periodIndex: number, updates: Partial<ServiceTimePeriod>) => {
+    setConfig(prev => {
+      const newSchedule = [...prev[typeKey].serviceTime.schedule]
+      newSchedule[periodIndex] = { ...newSchedule[periodIndex], ...updates }
+      return {
+        ...prev,
+        [typeKey]: {
+          ...prev[typeKey],
+          serviceTime: { ...prev[typeKey].serviceTime, schedule: newSchedule },
+        },
+      }
+    })
+    setDirty(true)
+  }
+
+  const addSeasonalPeriod = (typeKey: ScheduleTypeKey) => {
+    setConfig(prev => {
+      const defaultPeriod = prev[typeKey].serviceTime.schedule[0]
+      const newPeriod: ServiceTimePeriod = {
+        label: 'Summer Hours',
+        startMonth: 7,
+        endMonth: 8,
+        defaultTime: defaultPeriod?.defaultTime || '',
+        displayTime: defaultPeriod?.displayTime || '',
+        expectedDayOfWeek: defaultPeriod?.expectedDayOfWeek ?? 0,
+      }
+      return {
+        ...prev,
+        [typeKey]: {
+          ...prev[typeKey],
+          serviceTime: {
+            ...prev[typeKey].serviceTime,
+            schedule: [...prev[typeKey].serviceTime.schedule, newPeriod],
+          },
+        },
+      }
+    })
+    setDirty(true)
+  }
+
+  const removeSeasonalPeriod = (typeKey: ScheduleTypeKey, periodIndex: number) => {
+    if (periodIndex === 0) return // Can't remove default period
+    setConfig(prev => {
+      const newSchedule = prev[typeKey].serviceTime.schedule.filter((_: any, i: number) => i !== periodIndex)
+      return {
+        ...prev,
+        [typeKey]: {
+          ...prev[typeKey],
+          serviceTime: { ...prev[typeKey].serviceTime, schedule: newSchedule },
+        },
+      }
+    })
     setDirty(true)
   }
 
@@ -175,59 +239,84 @@ export function ScheduleConfigEditor({ scheduleConfig, onSave }: ScheduleConfigE
                     <Text fontSize="$2" theme="alt2" fontWeight="600">
                       <Clock size={12} /> Service Time & Location
                     </Text>
+
+                    {/* Location (shared across all periods) */}
                     <XStack gap="$2" flexWrap="wrap">
-                      <YStack gap="$1" minWidth={120}>
-                        <Text fontSize="$1" theme="alt2">Day</Text>
-                        <Select
-                          value={String(typeConfig.serviceTime.expectedDayOfWeek)}
-                          onValueChange={(val: string) =>
-                            updateServiceTime(typeKey, { expectedDayOfWeek: parseInt(val, 10) })
-                          }
-                        >
-                          <Select.Trigger size="$3" width={140}>
-                            <Select.Value />
-                          </Select.Trigger>
-                          <Adapt when="sm" platform="touch">
-                            <Sheet modal dismissOnSnapToBottom snapPointsMode="fit">
-                              <Sheet.Frame>
-                                <Sheet.ScrollView>
-                                  <Adapt.Contents />
-                                </Sheet.ScrollView>
-                              </Sheet.Frame>
-                              <Sheet.Overlay />
-                            </Sheet>
-                          </Adapt>
-                          <Select.Content>
-                            <Select.Viewport>
-                              {DAY_OPTIONS.map((day, i) => (
-                                <Select.Item key={day.value} value={day.value} index={i}>
-                                  <Select.ItemText>{day.label}</Select.ItemText>
-                                </Select.Item>
-                              ))}
-                            </Select.Viewport>
-                          </Select.Content>
-                        </Select>
-                      </YStack>
-                      <YStack gap="$1" minWidth={120}>
-                        <Text fontSize="$1" theme="alt2">Display Time</Text>
-                        <Input
-                          size="$3"
-                          value={typeConfig.serviceTime.displayTime}
-                          onChangeText={(v: string) => updateServiceTime(typeKey, { displayTime: v })}
-                          placeholder="11:00 AM"
-                          width={120}
-                        />
-                      </YStack>
                       <YStack gap="$1" flex={1} minWidth={150}>
                         <Text fontSize="$1" theme="alt2"><MapPin size={10} /> Location</Text>
                         <Input
                           size="$3"
                           value={typeConfig.serviceTime.location}
-                          onChangeText={(v: string) => updateServiceTime(typeKey, { location: v })}
+                          onChangeText={(v: string) => updateServiceTimeTop(typeKey, { location: v })}
                           placeholder="Main Hall"
                         />
                       </YStack>
                     </XStack>
+
+                    {/* Schedule periods */}
+                    {typeConfig.serviceTime.schedule.map((period: ServiceTimePeriod, periodIdx: number) => (
+                      <Card key={periodIdx} padding="$2" borderWidth={1} borderColor="$borderColor" borderRadius="$2">
+                        <YStack gap="$2">
+                          <XStack justifyContent="space-between" alignItems="center">
+                            <Text fontSize="$2" fontWeight="600">
+                              {periodIdx === 0 ? 'Regular Hours' : (period.label || `Period ${periodIdx + 1}`)}
+                            </Text>
+                            {periodIdx > 0 ? (
+                              <Button size="$2" chromeless icon={<X size={14} />} onPress={() => removeSeasonalPeriod(typeKey, periodIdx)} />
+                            ) : null}
+                          </XStack>
+
+                          {/* Label + month range for seasonal periods */}
+                          {periodIdx > 0 ? (
+                            <XStack gap="$2" flexWrap="wrap">
+                              <YStack gap="$1" minWidth={120}>
+                                <Text fontSize="$1" theme="alt2">Label</Text>
+                                <Input size="$3" value={period.label || ''} onChangeText={(v: string) => updateSchedulePeriod(typeKey, periodIdx, { label: v })} placeholder="Summer Hours" width={140} />
+                              </YStack>
+                              <YStack gap="$1" minWidth={100}>
+                                <Text fontSize="$1" theme="alt2">From</Text>
+                                <Select value={String(period.startMonth || 1)} onValueChange={(v: string) => updateSchedulePeriod(typeKey, periodIdx, { startMonth: parseInt(v, 10) })}>
+                                  <Select.Trigger size="$3" width={120}><Select.Value /></Select.Trigger>
+                                  <Adapt when="sm" platform="touch"><Sheet modal dismissOnSnapToBottom snapPointsMode="fit"><Sheet.Frame><Sheet.ScrollView><Adapt.Contents /></Sheet.ScrollView></Sheet.Frame><Sheet.Overlay /></Sheet></Adapt>
+                                  <Select.Content><Select.Viewport>{MONTH_OPTIONS.map((m, i) => (<Select.Item key={m.value} value={m.value} index={i}><Select.ItemText>{m.label}</Select.ItemText></Select.Item>))}</Select.Viewport></Select.Content>
+                                </Select>
+                              </YStack>
+                              <YStack gap="$1" minWidth={100}>
+                                <Text fontSize="$1" theme="alt2">To</Text>
+                                <Select value={String(period.endMonth || 12)} onValueChange={(v: string) => updateSchedulePeriod(typeKey, periodIdx, { endMonth: parseInt(v, 10) })}>
+                                  <Select.Trigger size="$3" width={120}><Select.Value /></Select.Trigger>
+                                  <Adapt when="sm" platform="touch"><Sheet modal dismissOnSnapToBottom snapPointsMode="fit"><Sheet.Frame><Sheet.ScrollView><Adapt.Contents /></Sheet.ScrollView></Sheet.Frame><Sheet.Overlay /></Sheet></Adapt>
+                                  <Select.Content><Select.Viewport>{MONTH_OPTIONS.map((m, i) => (<Select.Item key={m.value} value={m.value} index={i}><Select.ItemText>{m.label}</Select.ItemText></Select.Item>))}</Select.Viewport></Select.Content>
+                                </Select>
+                              </YStack>
+                            </XStack>
+                          ) : null}
+
+                          {/* Day + Time */}
+                          <XStack gap="$2" flexWrap="wrap">
+                            <YStack gap="$1" minWidth={120}>
+                              <Text fontSize="$1" theme="alt2">Day</Text>
+                              <Select
+                                value={String(period.expectedDayOfWeek)}
+                                onValueChange={(val: string) => updateSchedulePeriod(typeKey, periodIdx, { expectedDayOfWeek: parseInt(val, 10) })}
+                              >
+                                <Select.Trigger size="$3" width={140}><Select.Value /></Select.Trigger>
+                                <Adapt when="sm" platform="touch"><Sheet modal dismissOnSnapToBottom snapPointsMode="fit"><Sheet.Frame><Sheet.ScrollView><Adapt.Contents /></Sheet.ScrollView></Sheet.Frame><Sheet.Overlay /></Sheet></Adapt>
+                                <Select.Content><Select.Viewport>{DAY_OPTIONS.map((day, i) => (<Select.Item key={day.value} value={day.value} index={i}><Select.ItemText>{day.label}</Select.ItemText></Select.Item>))}</Select.Viewport></Select.Content>
+                              </Select>
+                            </YStack>
+                            <YStack gap="$1" minWidth={120}>
+                              <Text fontSize="$1" theme="alt2">Display Time</Text>
+                              <Input size="$3" value={period.displayTime} onChangeText={(v: string) => updateSchedulePeriod(typeKey, periodIdx, { displayTime: v })} placeholder="11:00 AM" width={120} />
+                            </YStack>
+                          </XStack>
+                        </YStack>
+                      </Card>
+                    ))}
+
+                    <Button size="$2" variant="outlined" onPress={() => addSeasonalPeriod(typeKey)} alignSelf="flex-start">
+                      + Add Seasonal Hours
+                    </Button>
 
                     <Separator marginTop="$2" />
 

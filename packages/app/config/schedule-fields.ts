@@ -18,18 +18,35 @@ export interface ScheduleFieldDef {
   defaultLabel: string  // Sensible default label
 }
 
-/** Service time defaults for a worship service type */
-export interface ServiceTimeDef {
-  /** Default time in 24-hour format (HH:mm) */
+/** A single time period for a worship service (supports seasonal schedules) */
+export interface ServiceTimePeriod {
+  /** Label for this period (e.g. "Regular", "Summer Hours") — optional, for admin display */
+  label?: string
+  /** Start month (1=January, 12=December). If omitted, this is the default/year-round schedule */
+  startMonth?: number
+  /** End month (1=January, 12=December). If omitted, this is the default/year-round schedule */
+  endMonth?: number
+  /** Service time in 24-hour format (HH:mm) */
   defaultTime: string
   /** Display time format (for emails and UI, e.g. "11:00 AM") */
   displayTime: string
   /** Expected day of week (0=Sunday, 1=Monday, ..., 6=Saturday) */
   expectedDayOfWeek: number
+}
+
+/** Service time configuration for a worship service type */
+export interface ServiceTimeDef {
   /** IANA timezone identifier */
   timezone: string
   /** Default location for the service */
   location: string
+  /**
+   * Time periods — supports seasonal schedules.
+   * The first entry without startMonth/endMonth is the default.
+   * Additional entries with month bounds override during that period.
+   * Example: [{ displayTime: "11:00 AM", ... }, { label: "Summer", startMonth: 7, endMonth: 8, displayTime: "10:00 AM", ... }]
+   */
+  schedule: ServiceTimePeriod[]
 }
 
 export interface ScheduleTypeDef {
@@ -47,11 +64,9 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   memorial: {
     defaultLabel: 'Memorial Service',
     serviceTime: {
-      defaultTime: '11:00',
-      displayTime: '11:00 AM',
-      expectedDayOfWeek: 0, // Sunday
       timezone: 'America/Toronto',
-      location: 'Main Hall',
+      location: '',
+      schedule: [{ defaultTime: '', displayTime: '', expectedDayOfWeek: 0 }],
     },
     fields: [
       { key: 'Exhort', defaultLabel: 'Exhort' },
@@ -73,11 +88,9 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   bibleClass: {
     defaultLabel: 'Bible Class',
     serviceTime: {
-      defaultTime: '19:30',
-      displayTime: '7:30 PM',
-      expectedDayOfWeek: 3, // Wednesday
       timezone: 'America/Toronto',
-      location: 'Fellowship Hall',
+      location: '',
+      schedule: [{ defaultTime: '', displayTime: '', expectedDayOfWeek: 3 }],
     },
     fields: [
       { key: 'Presider', defaultLabel: 'Presider' },
@@ -89,11 +102,9 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   sundaySchool: {
     defaultLabel: 'Sunday School',
     serviceTime: {
-      defaultTime: '09:30',
-      displayTime: '9:30 AM',
-      expectedDayOfWeek: 0, // Sunday
       timezone: 'America/Toronto',
-      location: 'Classroom A',
+      location: '',
+      schedule: [{ defaultTime: '', displayTime: '', expectedDayOfWeek: 0 }],
     },
     fields: [
       { key: 'Refreshments', defaultLabel: 'Refreshments' },
@@ -103,11 +114,9 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
   cyc: {
     defaultLabel: 'CYC',
     serviceTime: {
-      defaultTime: '18:30',
-      displayTime: '6:30 PM',
-      expectedDayOfWeek: 6, // Saturday (may vary)
       timezone: 'America/Toronto',
-      location: 'Youth Room',
+      location: '',
+      schedule: [{ defaultTime: '', displayTime: '', expectedDayOfWeek: 6 }],
     },
     fields: [
       { key: 'location', defaultLabel: 'Location' },
@@ -149,7 +158,7 @@ export function buildDefaultScheduleConfig(): Record<ScheduleTypeKey, ScheduleTy
     config[typeKey] = {
       enabled: isMemorial,  // Only Memorial enabled by default
       label: typeDef.defaultLabel,
-      serviceTime: { ...typeDef.serviceTime },
+      serviceTime: { ...typeDef.serviceTime, schedule: [...typeDef.serviceTime.schedule] },
       fields: typeDef.fields.map(f => ({
         key: f.key,
         label: f.defaultLabel,
@@ -182,15 +191,31 @@ export function mergeWithCatalogue(
     // Merge service time: use saved values over catalogue defaults
     const catalogueServiceTime = SCHEDULE_TYPE_CATALOGUE[typeKey].serviceTime
     const savedServiceTime = savedType.serviceTime
-    const serviceTime: ServiceTimeDef = savedServiceTime
-      ? {
-          defaultTime: savedServiceTime.defaultTime ?? catalogueServiceTime.defaultTime,
-          displayTime: savedServiceTime.displayTime ?? catalogueServiceTime.displayTime,
-          expectedDayOfWeek: savedServiceTime.expectedDayOfWeek ?? catalogueServiceTime.expectedDayOfWeek,
+    let serviceTime: ServiceTimeDef
+    if (savedServiceTime) {
+      // Backward compat: if saved config has old flat format (defaultTime at top level), migrate to schedule array
+      if (savedServiceTime.defaultTime && !savedServiceTime.schedule) {
+        serviceTime = {
           timezone: savedServiceTime.timezone ?? catalogueServiceTime.timezone,
           location: savedServiceTime.location ?? catalogueServiceTime.location,
+          schedule: [{
+            defaultTime: savedServiceTime.defaultTime,
+            displayTime: savedServiceTime.displayTime ?? '',
+            expectedDayOfWeek: savedServiceTime.expectedDayOfWeek ?? catalogueServiceTime.schedule[0].expectedDayOfWeek,
+          }],
         }
-      : { ...catalogueServiceTime }
+      } else {
+        serviceTime = {
+          timezone: savedServiceTime.timezone ?? catalogueServiceTime.timezone,
+          location: savedServiceTime.location ?? catalogueServiceTime.location,
+          schedule: savedServiceTime.schedule?.length
+            ? savedServiceTime.schedule
+            : catalogueServiceTime.schedule,
+        }
+      }
+    } else {
+      serviceTime = { ...catalogueServiceTime, schedule: [...catalogueServiceTime.schedule] }
+    }
 
     merged[typeKey] = {
       enabled: savedType.enabled ?? defaults[typeKey].enabled,

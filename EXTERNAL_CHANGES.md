@@ -11,7 +11,16 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
-_(none)_
+### DynamoDB — Seed service times for Toronto East
+- **Date**: 2026-03-27
+- **Code change**: Unified worship services system — service times moved from hardcoded `schedule-times.ts` to per-ecclesia `scheduleConfig` in DynamoDB (with seasonal schedule support)
+- **External action**: After deploying, run the migration script to seed Toronto East's service times:
+  ```bash
+  npx tsx scripts/seed-service-times.ts --dry-run   # Preview
+  npx tsx scripts/seed-service-times.ts --execute    # Apply
+  ```
+- **Status**: PENDING
+- **Impact if missed**: Service times will be blank in the directory and email templates will fall back to empty strings. The schedule page and newsletter are unaffected (they read from Google Sheets data, not the config).
 
 ## Completed
 
