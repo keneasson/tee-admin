@@ -70,18 +70,24 @@ export class EventDurationCalculator {
       }
     }
 
+    // For multi-day events, use the end date so the event remains visible
+    // through its last day (e.g., a Friday-Sunday fraternal gathering stays
+    // visible on Saturday when the recap email is sent)
+    const endDate = this.getEventEndDate(event)
+    const displayUntilDate = endDate || eventDate
+
     // Timezone-aware date comparison:
     // - currentDate uses user's local timezone (browser's new Date())
     // - eventDate uses UTC (stored as midnight UTC from "YYYY-MM-DD" strings)
     // This ensures events show until midnight in the user's timezone
-    const shouldInclude = this.isUserDateOnOrBefore(currentDate, eventDate)
+    const shouldInclude = this.isUserDateOnOrBefore(currentDate, displayUntilDate)
 
     return {
       shouldInclude,
-      displayUntilDate: eventDate,
+      displayUntilDate,
       reason: shouldInclude
-        ? `Event is scheduled for ${eventDate.toDateString()}`
-        : `Event date ${eventDate.toDateString()} has passed`
+        ? `Event is scheduled for ${eventDate.toDateString()}${endDate ? ` - ${endDate.toDateString()}` : ''}`
+        : `Event date ${eventDate.toDateString()}${endDate ? ` - ${endDate.toDateString()}` : ''} has passed`
     }
   }
 
@@ -417,6 +423,28 @@ export class EventDurationCalculator {
     ]
 
     for (const field of dateFields) {
+      const value = this.getNestedProperty(event, field)
+      if (value) {
+        const date = value instanceof Date ? value : new Date(value)
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Extract the end date for multi-day events (e.g., fraternal gatherings, study weekends)
+   */
+  private static getEventEndDate(event: any): Date | null {
+    const endFields = [
+      'endDate',
+      'dateRange.end',
+    ]
+
+    for (const field of endFields) {
       const value = this.getNestedProperty(event, field)
       if (value) {
         const date = value instanceof Date ? value : new Date(value)

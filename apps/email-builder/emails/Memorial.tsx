@@ -220,26 +220,28 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upc
                         </Column>
                       </Row>
 
-                      <Row align="left" width={'49%'} className="deviceWidth">
-                        <Column style={columnAlignTop}>
-                          <Text style={defaultText}>
-                            <strong>Hymns</strong>
-                            <br />
-                            {'Opening: '}
-                            <strong>{sundayEvents[0]['Hymn-opening']}</strong>
-                            <br />
-                            {'Exhortation: '}
-                            <strong>{sundayEvents[0]['Hymn-exhortation']}</strong>
-                            <br />
-                            {'Memorial: '}
-                            <strong>{sundayEvents[0]['Hymn-memorial']}</strong>
-                            <br />
-                            {'Closing: '}
-                            <strong>{sundayEvents[0]['Hymn-closing']}</strong>
-                            <br />
-                          </Text>
-                        </Column>
-                      </Row>
+                      {(sundayEvents[0]['Hymn-opening'] || sundayEvents[0]['Hymn-exhortation'] || sundayEvents[0]['Hymn-memorial'] || sundayEvents[0]['Hymn-closing']) ? (
+                        <Row align="left" width={'49%'} className="deviceWidth">
+                          <Column style={columnAlignTop}>
+                            <Text style={defaultText}>
+                              <strong>Hymns</strong>
+                              <br />
+                              {'Opening: '}
+                              <strong>{sundayEvents[0]['Hymn-opening'] || 'TBA'}</strong>
+                              <br />
+                              {'Exhortation: '}
+                              <strong>{sundayEvents[0]['Hymn-exhortation'] || 'TBA'}</strong>
+                              <br />
+                              {'Memorial: '}
+                              <strong>{sundayEvents[0]['Hymn-memorial'] || 'TBA'}</strong>
+                              <br />
+                              {'Closing: '}
+                              <strong>{sundayEvents[0]['Hymn-closing'] || 'TBA'}</strong>
+                              <br />
+                            </Text>
+                          </Column>
+                        </Row>
+                      ) : null}
                     </Column>
                   </Row>
                 </Section>
@@ -248,31 +250,34 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upc
           })()}
           <hr />
         </Container>
-        <Container style={container} className="container zoom-info">
-          <Heading style={defaultText}>Join us on Zoom</Heading>
-          <Text style={defaultText}>
-            <Link
-              href="https://us04web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09"
-              style={link}
-            >
-              Click to join Zoom
-            </Link>
-          </Text>
-          <Text style={defaultText}>
-            <br />
-            Meeting ID: 586 952 386
-            <br />
-            Password: 036110
-          </Text>
-          <Text style={defaultText}>
-            Join by phone
-            <br />
-            +1 647 374 4685 Canada (Toronto)
-            <br />
-            +1 647 558 0588 Canada (Toronto)
-          </Text>
-          <hr />
-        </Container>
+        {/* Only show default Zoom info when there's a normal service at the hall */}
+        {(sundayEvents[0]?.Exhort || sundayEvents[0]?.Preside) ? (
+          <Container style={container} className="container zoom-info">
+            <Heading style={defaultText}>Join us on Zoom</Heading>
+            <Text style={defaultText}>
+              <Link
+                href="https://us04web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09"
+                style={link}
+              >
+                Click to join Zoom
+              </Link>
+            </Text>
+            <Text style={defaultText}>
+              <br />
+              Meeting ID: 586 952 386
+              <br />
+              Password: 036110
+            </Text>
+            <Text style={defaultText}>
+              Join by phone
+              <br />
+              +1 647 374 4685 Canada (Toronto)
+              <br />
+              +1 647 558 0588 Canada (Toronto)
+            </Text>
+            <hr />
+          </Container>
+        ) : null}
         <Container style={container} className="container youtube-info">
           {sundayEvents[0]?.YouTube ? (
             <>
