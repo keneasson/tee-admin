@@ -139,3 +139,20 @@ export function getDefaultRegion(country: string, province?: string): Region {
   }
   return COUNTRY_TO_REGION[country] || REGIONS.CANADA_EAST
 }
+
+/**
+ * Returns all regions as { id, label } pairs for UI selection components.
+ * Sorted alphabetically by label for a predictable display order.
+ */
+export function getRegionOptions(): Array<{ id: Region; label: string }> {
+  return (Object.values(REGIONS) as Region[])
+    .map((id) => ({ id, label: REGION_LABELS[id] }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/**
+ * Returns true if the provided string is a valid, known region identifier.
+ */
+export function isValidRegion(value: string): value is Region {
+  return (Object.values(REGIONS) as string[]).includes(value)
+}
