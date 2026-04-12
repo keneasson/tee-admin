@@ -102,6 +102,7 @@ export async function PATCH(
       sharingPreference,
       sharingRadiusKm,
       excludedEcclesias,
+      rbAlertPreference,
     } = body as {
       address?: string
       venue?: string
@@ -118,6 +119,7 @@ export async function PATCH(
       sharingPreference?: 'open' | 'subscribers-only' | 'private'
       sharingRadiusKm?: number
       excludedEcclesias?: string[]
+      rbAlertPreference?: 'all' | 'major' | 'none'
     }
 
     const updates: Record<string, any> = {}
@@ -134,6 +136,7 @@ export async function PATCH(
     if (sharingPreference !== undefined) updates.sharingPreference = sharingPreference
     if (sharingRadiusKm !== undefined) updates.sharingRadiusKm = sharingRadiusKm
     if (excludedEcclesias !== undefined) updates.excludedEcclesias = excludedEcclesias
+    if (rbAlertPreference !== undefined) updates.rbAlertPreference = rbAlertPreference
 
     // Recording Brother fields require elevated permission and use RB service
     let rbTransferred = false
