@@ -40,7 +40,10 @@ export async function GET(
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, organization })
+    const canEdit = userRole === ROLES.ADMIN || userRole === ROLES.OWNER
+    const canDelete = userRole === ROLES.OWNER
+
+    return NextResponse.json({ success: true, organization, canEdit, canDelete })
   } catch (error) {
     console.error('Error fetching organization:', error)
     return NextResponse.json(
