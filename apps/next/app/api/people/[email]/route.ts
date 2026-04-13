@@ -31,6 +31,7 @@ interface MemberProfile {
   canEdit?: boolean
   availableContactMethods?: ContactRequestType[]
   role?: string
+  managedRegions?: string[]
   canSetRole?: boolean
   allowedRoles?: string[]
   emails?: Array<{
@@ -281,6 +282,7 @@ export async function GET(
       }
 
       profile.role = targetPerson.role || ROLES.GUEST
+      profile.managedRegions = targetPerson.managedRegions
       profile.canSetRole = !isOwnProfile
       if (viewerRole === ROLES.OWNER) {
         profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]

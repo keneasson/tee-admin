@@ -11,6 +11,10 @@ import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
 import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
+import { ManagedRegionsCard } from '@my/ui/src/admin/managed-regions-card'
+import { getRegionOptions } from '@my/app/config/regions'
+import { useFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 interface MemberProfile {
   email: string
@@ -34,6 +38,7 @@ interface MemberProfile {
   canEdit?: boolean
   availableContactMethods?: ContactRequestType[]
   role?: string
+  managedRegions?: string[]
   canSetRole?: boolean
   allowedRoles?: string[]
   emails?: Array<{
@@ -131,6 +136,7 @@ export default function MemberProfilePage() {
   const router = useRouter()
   const { data: session, status } = useSession()
   const isHydrated = useHydrated()
+  const multiTenantEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_TENANT_INIT)
   const [profile, setProfile] = useState<MemberProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -870,6 +876,27 @@ export default function MemberProfilePage() {
                 ) : null}
               </XStack>
             </Card>
+          ) : null}
+
+          {/* Managed Regions — for Owner viewing an Admin (multi-tenant only) */}
+          {multiTenantEnabled && profile.canSetRole && (profile.role === 'admin' || profile.role === 'owner') && !isOwnProfile ? (
+            <ManagedRegionsCard
+              person={{ managedRegions: profile.managedRegions, role: profile.role }}
+              regionOptions={getRegionOptions()}
+              canEdit={profile.allowedRoles?.includes('owner') || false}
+              onSave={async (managedRegions) => {
+                const res = await fetch(`/api/admin/people/${encodeURIComponent(profile.personId || '')}/managed-regions`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ managedRegions }),
+                })
+                if (!res.ok) {
+                  const data = await res.json()
+                  throw new Error(data.error || 'Failed to save')
+                }
+                setProfile((prev) => prev ? { ...prev, managedRegions } : null)
+              }}
+            />
           ) : null}
 
           {/* Email */}

@@ -20,15 +20,13 @@ import {
   Check as CheckIcon,
   Globe2,
 } from '@tamagui/lucide-icons'
-import type { PersonRecord } from '@my/app/provider/dynamodb/types'
-
 interface RegionOption {
   id: string
   label: string
 }
 
 interface ManagedRegionsCardProps {
-  person: PersonRecord
+  person: { managedRegions?: string[]; role?: string }
   regionOptions: RegionOption[]
   canEdit: boolean
   onSave: (managedRegions: string[]) => Promise<void>
