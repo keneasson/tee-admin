@@ -28,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let customList: string | undefined
   let eventId: string | undefined
   let eventType: string | undefined
+  let meetingId: string | undefined
 
   if (reason === 'custom' && req.method === 'POST') {
     const body = req.body
@@ -59,6 +60,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[event-announcement] Processing event:', { eventId, eventType })
   }
 
+  // For business-meeting emails, optionally read meetingId from request body
+  if (reason === 'business-meeting' && req.method === 'POST') {
+    const body = req.body
+    meetingId = body.meetingId
+  }
+
   // For inter-ecclesia announcements, we need eventId and eventType from request body
   if (reason === 'inter-ecclesia' && req.method === 'POST') {
     const body = req.body
@@ -76,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const [emailHtml, emailText, generatedSubject] = await getEmailContent(reason, note, customHtmlContent, customSubject, eventId, eventType)
+    const [emailHtml, emailText, generatedSubject] = await getEmailContent(reason, note, customHtmlContent, customSubject, eventId, eventType, meetingId)
     if (!(emailHtml && emailText)) {
       return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }

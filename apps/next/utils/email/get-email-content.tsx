@@ -27,6 +27,9 @@ import { syncYouTubeUrlsForEmail } from '../youtube-sync-helper'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { getEcclesiaByName } from '../dynamodb/locations'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
+import MeetingEmail from 'email-builder/emails/MeetingEmail'
+import { meetingRecordToEmailProps } from './meeting-email-helpers'
 
 // Event display duration rules - same as news-events.tsx
 const EVENT_DURATION_RULES: Record<string, { displayDuration: DisplayDuration; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
@@ -160,7 +163,8 @@ export const getEmailContent = async (
   customHtmlContent?: string,
   customSubject?: string,
   eventId?: string,
-  eventType?: string
+  eventType?: string,
+  meetingId?: string
 ): Promise<(string | undefined)[]> => {
   switch (reason) {
     case 'sunday-school':
@@ -261,6 +265,20 @@ export const getEmailContent = async (
       )
       return [newsletterHtmlContent, newsletterTextContent]
     case 'business-meeting':
+      // If meetingId is provided, use the new MeetingEmail template
+      if (meetingId) {
+        const meeting = await meetingRepository.getById(meetingId)
+        if (!meeting) {
+          throw new Error(`Meeting not found: ${meetingId}`)
+        }
+        const emailProps = meetingRecordToEmailProps(meeting)
+        const meetingHtmlContent = await render(<MeetingEmail {...emailProps} />)
+        const meetingTextContent = await render(<MeetingEmail {...emailProps} />, {
+          plainText: true,
+        })
+        return [meetingHtmlContent, meetingTextContent, meeting.title]
+      }
+      // Fallback to legacy BusinessMeeting template
       const businessMeetingHtmlContent = await render(<BusinessMeeting note={note} />)
       const businessMeetingTextContent = await render(<BusinessMeeting note={note} />, {
         plainText: true,

@@ -8,7 +8,7 @@ import type {
 } from '@my/app/types'
 
 // Base record interface
-interface BaseRecord {
+export interface BaseRecord {
   lastUpdated: string
   version: number
 }
