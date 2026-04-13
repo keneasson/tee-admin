@@ -7,6 +7,9 @@ import { ExternalLinksCard } from './external-links-card'
 import type { ExternalLinksData } from './external-links-card'
 import { SubscriptionManager } from './subscription-manager'
 import { SharingSettingsCard } from './sharing-settings-card'
+import { RbAlertSettingsCard } from './rb-alert-settings-card'
+import { NearbyEcclesiasCard } from './nearby-ecclesias-card'
+import type { NearbyEcclesiaItem } from './nearby-ecclesias-card'
 import { ScheduleEditor } from './schedule-editor'
 import { ScheduleViewer } from './schedule-viewer'
 import { ScheduleConfigEditor } from './schedule-config-editor'
@@ -53,9 +56,13 @@ interface EcclesiaDetailViewProps {
   onBack?: () => void
   initialEdit?: boolean
   showExternalLinks?: boolean
+  /** Enriched nearby ecclesias (with distance + metadata) from API */
+  nearbyEcclesiasData?: NearbyEcclesiaItem[]
+  nearbyLoading?: boolean
+  onEcclesiaClick?: (name: string) => void
 }
 
-export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false, showExternalLinks = false }: EcclesiaDetailViewProps) {
+export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false, showExternalLinks = false, nearbyEcclesiasData, nearbyLoading, onEcclesiaClick }: EcclesiaDetailViewProps) {
   const [editing, setEditing] = useState(canEdit && initialEdit)
   const [saving, setSaving] = useState(false)
 
@@ -313,6 +320,28 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
           onSave={onUpdate ? async (updates) => {
             return onUpdate(updates as Partial<EcclesiaDetailData>)
           } : undefined}
+        />
+      ) : null}
+
+      {/* RB Alert Preferences (gated behind multi-tenant feature flag via prop) */}
+      {showExternalLinks ? (
+        <RbAlertSettingsCard
+          rbAlertPreference={ecclesia.rbAlertPreference}
+          canEdit={canEdit}
+          onSave={onUpdate ? async (pref) => {
+            await onUpdate({ rbAlertPreference: pref } as Partial<EcclesiaDetailData>)
+          } : async () => {}}
+        />
+      ) : null}
+
+      {/* Nearby Ecclesias Discovery (gated behind multi-tenant feature flag via prop) */}
+      {showExternalLinks && nearbyEcclesiasData ? (
+        <NearbyEcclesiasCard
+          ecclesiaName={ecclesia.name}
+          nearbyEcclesias={nearbyEcclesiasData}
+          loading={nearbyLoading}
+          radiusKm={ecclesia.sharingRadiusKm ?? 300}
+          onEcclesiaClick={onEcclesiaClick}
         />
       ) : null}
 

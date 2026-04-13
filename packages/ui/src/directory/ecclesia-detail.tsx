@@ -44,6 +44,10 @@ interface EcclesiaDetailProps {
   isDeleting?: boolean
   /** Show external links card (gated behind multi-tenant feature flag) */
   showExternalLinks?: boolean
+  /** Enriched nearby ecclesias from API */
+  nearbyEcclesiasData?: Array<{ name: string; displayName?: string; distanceKm?: number; country?: string; province?: string }>
+  nearbyLoading?: boolean
+  onEcclesiaClick?: (name: string) => void
 }
 
 export function EcclesiaDetail({
@@ -65,6 +69,9 @@ export function EcclesiaDetail({
   onDelete,
   isDeleting = false,
   showExternalLinks = false,
+  nearbyEcclesiasData,
+  nearbyLoading,
+  onEcclesiaClick,
 }: EcclesiaDetailProps) {
   const handleSaveRb = async (email: string, name: string): Promise<boolean> => {
     if (!onUpdate) return false
@@ -92,6 +99,9 @@ export function EcclesiaDetail({
           onUpdate={onUpdate}
           initialEdit={initialEdit}
           showExternalLinks={showExternalLinks}
+          nearbyEcclesiasData={nearbyEcclesiasData}
+          nearbyLoading={nearbyLoading}
+          onEcclesiaClick={onEcclesiaClick}
         />
 
         {/* Recording Brother Manager (replaces the simple RB card in EcclesiaDetailView) */}

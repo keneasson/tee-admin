@@ -37,6 +37,10 @@ export default function DirectoryEcclesiaDetailPage() {
   const [viewerEcclesia, setViewerEcclesia] = useState<string | null>(null)
   const [memberEmails, setMemberEmails] = useState<Record<string, Array<{ email: string; emailType: string }>>>({})
 
+  // Nearby ecclesias (enriched from API)
+  const [nearbyEcclesias, setNearbyEcclesias] = useState<Array<{ name: string; displayName?: string; distanceKm?: number; country?: string; province?: string }>>([])
+  const [nearbyLoading, setNearbyLoading] = useState(false)
+
   // Delete/transfer state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -132,6 +136,19 @@ export default function DirectoryEcclesiaDetailPage() {
       fetchNominations()
     }
   }, [isMemberOrHigher, ecclesiaName, fetchEcclesia, fetchMembers, fetchNominations])
+
+  // Fetch nearby ecclesias (multi-tenant only)
+  useEffect(() => {
+    if (!showMultiTenant || !ecclesiaName) return
+    let cancelled = false
+    setNearbyLoading(true)
+    fetch(`/api/ecclesia/${encodeURIComponent(ecclesiaName)}/nearby`)
+      .then((r) => (r.ok ? r.json() : { nearbyEcclesias: [] }))
+      .then((d) => { if (!cancelled) setNearbyEcclesias(d.nearbyEcclesias || []) })
+      .catch(() => { if (!cancelled) setNearbyEcclesias([]) })
+      .finally(() => { if (!cancelled) setNearbyLoading(false) })
+    return () => { cancelled = true }
+  }, [showMultiTenant, ecclesiaName])
 
   const handleUpdate = async (updates: Partial<EcclesiaDetailData>): Promise<boolean> => {
     try {
@@ -385,6 +402,9 @@ export default function DirectoryEcclesiaDetailPage() {
         onDelete={isAdminOrOwner ? handleDeleteClick : undefined}
         isDeleting={isDeleting || isTransferring}
         showExternalLinks={showMultiTenant}
+        nearbyEcclesiasData={nearbyEcclesias}
+        nearbyLoading={nearbyLoading}
+        onEcclesiaClick={(name) => router.push(`/directory/ecclesias/${encodeURIComponent(name)}`)}
       />
 
       {/* Delete Confirmation Dialog (0 members) */}
