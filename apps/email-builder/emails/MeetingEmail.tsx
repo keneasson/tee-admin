@@ -62,18 +62,26 @@ const defaultProps: MeetingEmailProps = {
 }
 
 const MeetingEmail: React.FC<MeetingEmailProps> = (props) => {
-  const ownerName = props.ownerName || defaultProps.ownerName!
-  const title = props.title || defaultProps.title!
-  const date = props.date || defaultProps.date
-  const time = props.time || defaultProps.time
-  const zoomLink = props.zoomLink || defaultProps.zoomLink
-  const meetingId = props.meetingId || defaultProps.meetingId
-  const passcode = props.passcode || defaultProps.passcode
-  const dialIn = props.dialIn || (zoomLink ? '1 647 374 4685' : undefined)
-  const locationName = props.locationName
-  const locationAddress = props.locationAddress
-  const documents = props.documents || defaultProps.documents
-  const note = props.note
+  // Preview mode: when rendered with no props at all (e.g., by the React Email
+  // dev server), show example data so designers can see every section.
+  // When ANY prop is passed (real email send), use only what was provided —
+  // never fall back to example content, since that would leak mock links into
+  // real emails.
+  const isPreviewMode = Object.keys(props).length === 0
+  const src: MeetingEmailProps = isPreviewMode ? defaultProps : props
+
+  const ownerName = src.ownerName || 'Toronto East Christadelphians'
+  const title = src.title || 'Business Meeting'
+  const date = src.date
+  const time = src.time
+  const zoomLink = src.zoomLink
+  const meetingId = src.meetingId
+  const passcode = src.passcode
+  const dialIn = src.dialIn || (zoomLink ? '1 647 374 4685' : undefined)
+  const locationName = src.locationName
+  const locationAddress = src.locationAddress
+  const documents = src.documents
+  const note = src.note
 
   const hasZoomSection = !!(zoomLink || meetingId)
   const hasLocationSection = !!(locationName || locationAddress)

@@ -169,8 +169,14 @@ const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
       <NavigationButtonItem
         key="eventManagement"
         linkTo={linkTo('/admin/events')}
-        text="Event Management"
+        text="Event Manager"
         active={path === '/admin/events'}
+      />
+      <NavigationButtonItem
+        key="meetingManager"
+        linkTo={linkTo('/admin/meetings')}
+        text="Meeting Manager"
+        active={path === '/admin/meetings'}
       />
 
       {/* Admin Tools Sub-menu */}

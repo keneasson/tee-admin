@@ -167,7 +167,7 @@ export default function AdminEventsPage() {
   return (
     <YStack flex={1} padding="$4" space="$4">
       <YStack space="$2">
-        <Heading size="$8">Event Management</Heading>
+        <Heading size="$8">Event Manager</Heading>
         <Text color="$textSecondary">
           Create and manage events for the Toronto East Christadelphian Ecclesia
         </Text>
