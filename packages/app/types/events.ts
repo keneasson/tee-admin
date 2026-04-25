@@ -313,6 +313,7 @@ export interface Event extends BaseEvent {
   startDate?: Date
   endDate?: Date
   customType?: string
+  hideDates?: boolean // When true, suppress date display in newsletter, events list, detail view, and emails
 
   // Recurring event fields
   recurringConfig?: {

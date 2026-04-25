@@ -17,55 +17,67 @@ export { type EmailReasonType as emailReasons } from '@my/app/types'
 import { type EmailReasonType, type EmailSubReason } from '@my/app/types'
 type emailReasons = EmailReasonType // Local alias for use in this file
 
+// All outbound mail uses a single From: address to concentrate sender reputation,
+// and a single Reply-To routing every reply to the Recording Brother.
+const SENDER_EMAIL = 'communications'
+const REPLY_TO = 'teerecbro@gmail.com'
+
 const senders = {
   'sunday-school': {
     name: 'Toronto East Sunday School',
-    email: 'sunday.school',
+    email: SENDER_EMAIL,
     subject: 'Sunday School Tomorrow',
     contactList: 'sundaySchool',
+    replyTo: REPLY_TO,
   },
   newsletter: {
     name: 'Toronto East Ecclesia',
-    email: 'newsletter',
+    email: SENDER_EMAIL,
     subject: 'Toronto East Christadelphian Ecclesia Newsletter',
     contactList: 'newsletter',
+    replyTo: REPLY_TO,
   },
   'bible-class': {
     name: 'Toronto East Ecclesia',
-    email: 'bible.class',
+    email: SENDER_EMAIL,
     subject: 'Bible Class Tonight!',
     contactList: 'bibleClass',
+    replyTo: REPLY_TO,
   },
   recap: {
     name: 'Toronto East Ecclesia',
-    email: 'memorial.recap',
+    email: SENDER_EMAIL,
     subject: 'Memorial Service Tomorrow',
     contactList: 'memorial',
+    replyTo: REPLY_TO,
   },
   'business-meeting': {
     name: 'Toronto East Ecclesia',
-    email: 'business.meeting',
+    email: SENDER_EMAIL,
     subject: 'Business Meeting Details',
     contactList: 'members',
+    replyTo: REPLY_TO,
   },
   custom: {
     name: 'Toronto East Ecclesia',
-    email: 'communications',
+    email: SENDER_EMAIL,
     subject: 'Toronto East Communications',
     contactList: 'testList', // Safe default - will be overridden by customList parameter
+    replyTo: REPLY_TO,
   },
   'event-announcement': {
     name: 'Toronto East Ecclesia',
-    email: 'communications',
+    email: SENDER_EMAIL,
     subject: 'Event Announcement',
     contactList: 'newsletter', // Default - will be overridden by customList parameter
+    replyTo: REPLY_TO,
   },
   'inter-ecclesia': {
     name: 'Toronto East Ecclesia',
-    email: 'communications',
+    email: SENDER_EMAIL,
     subject: 'Inter-Ecclesia Announcement',
     contactList: 'interEcclesia',
-    replyTo: 'teerecbro@gmail.com',
+    replyTo: REPLY_TO,
   },
 }
 
@@ -143,7 +155,7 @@ export const emailSend = async function ({
     const subject = `${test ? '[TEST] ' : ''}${defaultSubject} ${today}`
 
     const sendChunks = chunkArray(senderEmails, SES_RATE_LIMIT)
-    const replyTo = (senders[reason] as any).replyTo as string | undefined
+    const replyTo = senders[reason].replyTo
     let allSent: Sends = { sends: [], skips: [] }
     for (let i = 0; i < sendChunks.length; i++) {
       const sends = await sendDeferred({

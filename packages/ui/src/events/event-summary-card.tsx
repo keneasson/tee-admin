@@ -212,7 +212,7 @@ export function EventSummaryCard({
               }
             }
             // Fallback to startDate/endDate for general events and others
-            else if ((event as any).startDate) {
+            else if ((event as any).startDate && !(event as any).hideDates) {
               const startDate = new Date((event as any).startDate)
               const endDate = (event as any).endDate ? new Date((event as any).endDate) : null
 

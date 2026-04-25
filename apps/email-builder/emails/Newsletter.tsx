@@ -508,6 +508,9 @@ const isElectionActive = (event: Event): boolean => {
 // Helper function to display event dates for different event types
 // IMPORTANT: All dates are stored as EST, so we must format in Toronto timezone
 const EventDateDisplay = (event: Event): string => {
+  if (event.hideDates) {
+    return ''
+  }
   if (event.type === 'study-weekend' && event.dateRange) {
     const start = new Date(event.dateRange.start)
     const end = new Date(event.dateRange.end)

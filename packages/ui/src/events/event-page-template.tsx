@@ -513,7 +513,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
   const renderGeneralEvent = (event: GeneralEvent) => (
     <YStack gap="$4">
       {/* Event Dates */}
-      {(event.startDate || event.endDate) ? <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
+      {!event.hideDates && (event.startDate || event.endDate) ? <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
           <XStack alignItems="center" gap="$2" marginBottom="$2">
             <Calendar size="$1" color={colors.primary} />
             <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>

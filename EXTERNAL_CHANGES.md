@@ -11,18 +11,24 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
-### DynamoDB — Seed service times for Toronto East
-- **Date**: 2026-03-27
-- **Code change**: Unified worship services system — service times moved from hardcoded `schedule-times.ts` to per-ecclesia `scheduleConfig` in DynamoDB (with seasonal schedule support)
-- **External action**: After deploying, run the migration script to seed Toronto East's service times:
-  ```bash
-  npx tsx scripts/seed-service-times.ts --dry-run   # Preview
-  npx tsx scripts/seed-service-times.ts --execute    # Apply
-  ```
-- **Status**: PENDING
-- **Impact if missed**: Service times will be blank in the directory and email templates will fall back to empty strings. The schedule page and newsletter are unaffected (they read from Google Sheets data, not the config).
+_(none)_
+
+## Known Issues (not deploy-blocking)
+
+### DynamoDB — Picton service times seed bug
+- **Date**: 2026-04-15
+- **Code issue**: `scripts/seed-service-times.ts --execute` fails on Picton Ecclesia with `Pass options.removeUndefinedValues=true`. Picton's record has undefined values somewhere in the schedule config that the DynamoDB document client isn't configured to strip.
+- **Fix**: Set `marshallOptions: { removeUndefinedValues: true }` on the script's document client (or sanitize input). One-line fix in `scripts/seed-service-times.ts`.
+- **Impact**: Picton's service times remain blank in the directory. Toronto East and 36 other ecclesias are correctly seeded — no impact on tonight's business meeting email.
 
 ## Completed
+
+### DynamoDB — Seed service times for ecclesias
+- **Date**: 2026-03-27
+- **Code change**: Unified worship services system — service times moved from hardcoded `schedule-times.ts` to per-ecclesia `scheduleConfig` in DynamoDB (with seasonal schedule support)
+- **External action**: Ran `npx tsx scripts/seed-service-times.ts --execute` — 37 of 38 ecclesias seeded successfully. Picton failed due to a script bug (now tracked separately above).
+- **Status**: DONE 2026-04-15
+- **Verified**: Dry-run on 2026-04-15 reports Toronto East and 36 others "already has serviceTime for all enabled types"
 
 ### DynamoDB — Enable TTL on tee-admin table
 - **Date**: 2026-03-17

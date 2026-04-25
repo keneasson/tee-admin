@@ -147,6 +147,9 @@ export function EventDetailView({
         }
       }
     } else if ((event as any).startDate) {
+      if ((event as any).hideDates) {
+        return null
+      }
       const startStr = typeof (event as any).startDate === 'string' ? (event as any).startDate : (event as any).startDate.toISOString()
       const endStr = (event as any).endDate
         ? (typeof (event as any).endDate === 'string' ? (event as any).endDate : (event as any).endDate.toISOString())

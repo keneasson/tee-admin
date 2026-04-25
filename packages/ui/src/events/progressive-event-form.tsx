@@ -811,6 +811,7 @@ export function ProgressiveEventForm({
         startDate: initialData?.startDate,
         endDate: initialData?.endDate,
         eventTimezone: initialData?.eventTimezone || 'America/Toronto',
+        hideDates: initialData?.hideDates || false,
         location: initialData?.location,
         speakers: initialData?.speakers || [],
         schedule: initialData?.schedule || [],
@@ -2082,6 +2083,17 @@ export function ProgressiveEventForm({
                     />
                   </YStack>
                 </XStack>
+                <YStack>
+                  <CheckboxWithCheck
+                    control={control}
+                    name="hideDates"
+                    label="Hide dates for this event"
+                    onCheckChange={() => handleFieldChange()}
+                  />
+                  <Text fontSize="$3" color="$gray11" paddingLeft="$7">
+                    Use the dates to control how long the event is shown, but keep them out of the newsletter, event page, and emails. Put any dates you want readers to see in the description.
+                  </Text>
+                </YStack>
               </YStack> : null}
 
             {currentSelectedType === 'recurring' ? <>

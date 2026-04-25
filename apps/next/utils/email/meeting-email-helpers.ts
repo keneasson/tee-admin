@@ -10,7 +10,14 @@ export function meetingRecordToEmailProps(meeting: MeetingRecord): MeetingEmailP
   let formattedDate: string | undefined
   if (rawDate) {
     try {
-      const dateObj = new Date(rawDate)
+      // rawDate is a date-only string (YYYY-MM-DD). `new Date('2026-04-15')`
+      // parses as midnight UTC, which in Toronto is 8pm the previous day, so
+      // formatting with timeZone: 'America/Toronto' yields the wrong weekday.
+      // Anchor at UTC noon so the calendar date matches across all North American zones.
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(rawDate)
+      const dateObj = match
+        ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12))
+        : new Date(rawDate)
       formattedDate = dateObj.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
