@@ -40,7 +40,7 @@ export function EventFormInput<T extends FieldValues>({
     }
   })
   
-  const debounceTimerRef = useRef<NodeJS.Timeout>()
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>()
   
   // Debounced change handler
   const handleChange = useCallback((text: string) => {
@@ -72,7 +72,7 @@ export function EventFormInput<T extends FieldValues>({
     <YStack space="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
       
       <Input
@@ -94,17 +94,15 @@ export function EventFormInput<T extends FieldValues>({
         disabled={disabled}
         multiline={multiline}
         numberOfLines={multiline ? 4 : 1}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete as any}
         keyboardType={type === 'email' ? 'email-address' : type === 'tel' ? 'phone-pad' : type === 'number' ? 'numeric' : 'default'}
         paddingHorizontal="$3"
         paddingVertical="$2.5"
       />
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

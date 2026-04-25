@@ -19,17 +19,23 @@ export class WebhookSecurity {
 
     try {
       // Remove 'sha256=' prefix if present
-      const providedSignature = signature.startsWith('sha256=') 
-        ? signature.slice(7) 
+      const providedSignature = signature.startsWith('sha256=')
+        ? signature.slice(7)
         : signature
 
-      // Calculate expected signature
+      // Calculate expected signature as hex
       const expectedSignature = createHmac('sha256', this.WEBHOOK_SECRET)
         .update(payload, 'utf8')
         .digest('hex')
 
+      // The Apps Script sends base64url-encoded signatures, so convert to hex for comparison.
+      // Restore standard base64 padding/chars, then decode to hex.
+      const base64Standard = providedSignature.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = base64Standard + '='.repeat((4 - (base64Standard.length % 4)) % 4)
+      const providedHex = Buffer.from(padded, 'base64').toString('hex')
+
       // Use timing-safe comparison
-      return this.timingSafeEqual(providedSignature, expectedSignature)
+      return this.timingSafeEqual(providedHex, expectedSignature)
     } catch (error) {
       console.error('❌ Error validating webhook signature:', error)
       return false

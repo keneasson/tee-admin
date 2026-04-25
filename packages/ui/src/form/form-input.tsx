@@ -50,18 +50,16 @@ export const FormInput = <T extends FieldValues>({
         return (
           <FormFieldset>
             <YStack>
-              {label && <Label htmlFor={id}>{label}</Label>}
+              {label ? <Label htmlFor={id}>{label}</Label> : null}
               <Input 
                 ref={ref} 
                 id={id} 
                 {...validInputProps}
                 value={value || ''}
               />
-              {error && (
-                <Text fontSize="$3" color="$red10">
+              {error ? <Text fontSize="$3" color="$red10">
                   {error.message}
-                </Text>
-              )}
+                </Text> : null}
             </YStack>
           </FormFieldset>
         )

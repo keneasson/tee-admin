@@ -97,8 +97,7 @@ export function LocationSelect<T extends FieldValues>({
   const selectedCountry = useWatch({
     control,
     name: countryFieldName as any,
-    defaultValue: ''
-  })
+  }) as string
 
   const {
     field: { value, onChange },
@@ -123,7 +122,7 @@ export function LocationSelect<T extends FieldValues>({
         data = await fetchCountries()
       } else if (type === 'province') {
         // For provinces, use the selected country or default to CA
-        const countryToUse = selectedCountry || 'CA'
+        const countryToUse = String(selectedCountry || 'CA')
         data = await fetchProvinces(countryToUse)
       }
       
@@ -176,13 +175,13 @@ export function LocationSelect<T extends FieldValues>({
     <YStack gap="$2">
       <Label htmlFor={name} fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10"> *</Text>}
+        {required ? <Text color="$red10"> *</Text> : null}
       </Label>
       
       <Select
         value={value || ''}
         onValueChange={onChange}
-        disabled={isDisabled}
+        {...({ disabled: isDisabled } as any)}
         onOpenChange={(open) => {
           if (open && !hasLoaded) {
             loadOptions()
@@ -229,16 +228,14 @@ export function LocationSelect<T extends FieldValues>({
           <Select.Viewport>
             {options.length > 0 ? (
               <>
-                {!required && (
-                  <Select.Item value="" index={-1}>
+                {!required ? <Select.Item value="" index={-1}>
                     <Select.ItemText>
                       <Text color="$placeholderColor">No selection</Text>
                     </Select.ItemText>
                     <Select.ItemIndicator marginLeft="auto">
                       <Text>✓</Text>
                     </Select.ItemIndicator>
-                  </Select.Item>
-                )}
+                  </Select.Item> : null}
                 
                 {options.map((option, index) => (
                   <Select.Item key={option.code} value={option.code} index={index}>
@@ -271,11 +268,9 @@ export function LocationSelect<T extends FieldValues>({
         </Select.Content>
       </Select>
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

@@ -7,6 +7,9 @@ vi.mock('../../utils/dynamodb/credentials-users', () => ({
   verifyEmailToken: vi.fn(),
 }))
 
+// Import mocked function at module level for use across all tests
+import { verifyEmailToken } from '../../utils/dynamodb/credentials-users'
+
 describe('/api/auth/verify-email', () => {
 
   beforeEach(() => {

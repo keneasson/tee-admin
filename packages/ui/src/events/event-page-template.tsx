@@ -15,12 +15,13 @@ import {
   Paragraph,
   useThemeName
 } from 'tamagui'
-import { 
-  Event, 
-  StudyWeekendEvent, 
-  FuneralEvent, 
-  WeddingEvent, 
-  BaptismEvent, 
+import {
+  Event,
+  ScheduleItem,
+  StudyWeekendEvent,
+  FuneralEvent,
+  WeddingEvent,
+  BaptismEvent,
   GeneralEvent,
   isStudyWeekendEvent,
   isFuneralEvent,
@@ -76,24 +77,20 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
 
   const renderEventHeader = () => (
     <YStack gap="$4" padding="$4">
-      {showDraftBanner && (
-        <Card backgroundColor="$orange2" borderColor="$orange6" padding="$3">
+      {showDraftBanner ? <Card backgroundColor="$orange2" borderColor="$orange6" padding="$3">
           <Text color="$orange11" fontWeight="600">
             🚧 Draft Event - Not yet published
           </Text>
-        </Card>
-      )}
+        </Card> : null}
       
       <YStack gap="$2">
         <H1 size="$9" fontWeight="700" color={colors.textPrimary}>
           {event.title}
         </H1>
         
-        {event.description && (
-          <Paragraph fontSize="$5" color={colors.textSecondary} lineHeight="$6">
+        {event.description ? <Paragraph fontSize="$5" color={colors.textSecondary} lineHeight="$6">
             {event.description}
-          </Paragraph>
-        )}
+          </Paragraph> : null}
       </YStack>
     </YStack>
   )
@@ -127,29 +124,21 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
             </Text>
           </XStack>
           <YStack gap="$1">
-            {location.name?.trim() && (
-              <Text fontSize="$4" color={colors.textPrimary}>{location.name.trim()}</Text>
-            )}
+            {location.name?.trim() ? <Text fontSize="$4" color={colors.textPrimary}>{location.name.trim()}</Text> : null}
             {addressParts.map((part, index) => (
               <Text key={index} fontSize="$3" color={colors.textSecondary}>
                 {part}
               </Text>
             ))}
-            {location.postalCode?.trim() && (
-              <Text fontSize="$3" color={colors.textSecondary}>
+            {location.postalCode?.trim() ? <Text fontSize="$3" color={colors.textSecondary}>
                 {location.postalCode.trim()}
-              </Text>
-            )}
-            {location.directions?.trim() && (
-              <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
+              </Text> : null}
+            {location.directions?.trim() ? <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
                 {location.directions.trim()}
-              </Text>
-            )}
-            {location.parkingInfo?.trim() && (
-              <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
+              </Text> : null}
+            {location.parkingInfo?.trim() ? <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
                 Parking: {location.parkingInfo.trim()}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
         </YStack>
       </Card>
@@ -171,11 +160,9 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
               <Text fontSize="$4" color={colors.textPrimary}>
                 {speaker.firstName} {speaker.lastName}
               </Text>
-              {speaker.ecclesia && (
-                <Text fontSize="$3" color={colors.textSecondary}>
+              {speaker.ecclesia ? <Text fontSize="$3" color={colors.textSecondary}>
                   ({speaker.ecclesia})
-                </Text>
-              )}
+                </Text> : null}
             </XStack>
           ))}
         </YStack>
@@ -183,7 +170,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
     </Card>
   )
 
-  const renderSchedule = (schedule: any[]) => (
+  const renderSchedule = (schedule: ScheduleItem[]) => (
     <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
       <YStack gap="$3">
         <XStack alignItems="center" gap="$2">
@@ -196,22 +183,18 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
           {schedule.map((item, index) => (
             <XStack key={index} gap="$4" alignItems="flex-start">
               <Text fontSize="$3" fontWeight="600" color={colors.primary} minWidth={80}>
-                {formatTime(item.startTime)}
+                {item.startTime ? formatTime(item.startTime) : ''}
               </Text>
               <YStack flex={1} gap="$1">
                 <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
                   {item.title}
                 </Text>
-                {item.description && (
-                  <Text fontSize="$3" color={colors.textSecondary}>
+                {item.description ? <Text fontSize="$3" color={colors.textSecondary}>
                     {item.description}
-                  </Text>
-                )}
-                {item.speakers && item.speakers.length > 0 && (
-                  <Text fontSize="$3" color={colors.textSecondary}>
+                  </Text> : null}
+                {item.speakers && item.speakers.length > 0 ? <Text fontSize="$3" color={colors.textSecondary}>
                     Speaker: {item.speakers.map(s => `${s.firstName} ${s.lastName}`).join(', ')}
-                  </Text>
-                )}
+                  </Text> : null}
               </YStack>
             </XStack>
           ))}
@@ -226,72 +209,56 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
         <H3 size="$6" color={colors.primary}>Registration Required</H3>
         
         <YStack gap="$2">
-          {registration.deadline && (
-            <XStack alignItems="center" gap="$2">
+          {registration.deadline ? <XStack alignItems="center" gap="$2">
               <Calendar size="$1" color={colors.textSecondary} />
               <Text fontSize="$4" color={colors.textPrimary}>
                 Deadline: {formatDate(registration.deadline)}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
           
-          {registration.fee && (
-            <XStack alignItems="center" gap="$2">
+          {registration.fee ? <XStack alignItems="center" gap="$2">
               <Text fontSize="$4" color={colors.textPrimary}>
                 Fee: ${registration.fee} {registration.currency || 'CAD'}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
           
-          {registration.maxAttendees && (
-            <Text fontSize="$3" color={colors.textSecondary}>
+          {registration.maxAttendees ? <Text fontSize="$3" color={colors.textSecondary}>
               Capacity: {registration.currentAttendees || 0} / {registration.maxAttendees} attendees
-            </Text>
-          )}
+            </Text> : null}
         </YStack>
 
         <YStack gap="$2">
-          {registration.registrationUrl && (
-            <Button
+          {registration.registrationUrl ? <Button
               backgroundColor={colors.primary}
               color={colors.primaryForeground}
               icon={<ExternalLink size="$1" />}
               onPress={() => window.open(registration.registrationUrl, '_blank')}
             >
               Register Now
-            </Button>
-          )}
+            </Button> : null}
           
-          {(registration.contactEmail || registration.contactPhone) && (
-            <YStack gap="$1">
+          {(registration.contactEmail || registration.contactPhone) ? <YStack gap="$1">
               <Text fontSize="$3" fontWeight="600" color={colors.textPrimary}>
                 Registration Contact:
               </Text>
-              {registration.contactEmail && (
-                <XStack alignItems="center" gap="$2">
+              {registration.contactEmail ? <XStack alignItems="center" gap="$2">
                   <Mail size="$0.75" color={colors.textSecondary} />
                   <Text fontSize="$3" color={colors.textSecondary}>
                     {registration.contactEmail}
                   </Text>
-                </XStack>
-              )}
-              {registration.contactPhone && (
-                <XStack alignItems="center" gap="$2">
+                </XStack> : null}
+              {registration.contactPhone ? <XStack alignItems="center" gap="$2">
                   <Phone size="$0.75" color={colors.textSecondary} />
                   <Text fontSize="$3" color={colors.textSecondary}>
                     {registration.contactPhone}
                   </Text>
-                </XStack>
-              )}
-            </YStack>
-          )}
+                </XStack> : null}
+            </YStack> : null}
         </YStack>
         
-        {registration.notes && (
-          <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
+        {registration.notes ? <Text fontSize="$3" color={colors.textSecondary} fontStyle="italic">
             {registration.notes}
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
     </Card>
   )
@@ -323,11 +290,9 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
                   <Text fontSize="$3" fontWeight="500" color={colors.textPrimary}>
                     {doc.originalName || doc.fileName}
                   </Text>
-                  {doc.description && (
-                    <Text fontSize="$2" color={colors.textSecondary}>
+                  {doc.description ? <Text fontSize="$2" color={colors.textSecondary}>
                       {doc.description}
-                    </Text>
-                  )}
+                    </Text> : null}
                 </YStack>
                 <ExternalLink size="$0.75" color={colors.textSecondary} />
               </XStack>
@@ -367,30 +332,26 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
       {renderLocationInfo(event.location)}
 
       {/* Speakers */}
-      {event.speakers && event.speakers.length > 0 && renderSpeakers(event.speakers)}
+      {event.speakers && event.speakers.length > 0 ? renderSpeakers(event.speakers) : null}
 
       {/* Schedule */}
-      {event.schedule && event.schedule.length > 0 && renderSchedule(event.schedule)}
+      {event.schedule && event.schedule.length > 0 ? renderSchedule(event.schedule) : null}
 
       {/* Registration */}
-      {event.registration?.required && renderRegistration(event.registration)}
+      {event.registration?.required ? renderRegistration(event.registration) : null}
 
       {/* Accommodation */}
-      {event.accommodation?.available && (
-        <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
+      {event.accommodation?.available ? <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
           <Text fontSize="$4" fontWeight="600" color={colors.textPrimary} marginBottom="$2">
             Accommodation
           </Text>
           <Text fontSize="$4" color={colors.textPrimary}>
             {event.accommodation.details || 'Accommodation is available.'}
           </Text>
-          {event.accommodation.contactInfo && (
-            <Text fontSize="$3" color={colors.textSecondary} marginTop="$2">
+          {event.accommodation.contactInfo ? <Text fontSize="$3" color={colors.textSecondary} marginTop="$2">
               Contact: {event.accommodation.contactInfo}
-            </Text>
-          )}
-        </Card>
-      )}
+            </Text> : null}
+        </Card> : null}
 
       {/* Documents */}
       {renderDocuments(event.documents)}
@@ -420,22 +381,18 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
         <Text fontSize="$5" fontWeight="600" color={colors.textPrimary}>
           {event.deceased.firstName} {event.deceased.lastName}
         </Text>
-        {event.deceased.age && (
-          <Text fontSize="$4" color={colors.textSecondary}>
+        {event.deceased.age ? <Text fontSize="$4" color={colors.textSecondary}>
             Age {event.deceased.age}
-          </Text>
-        )}
-        {event.deceased.obituary && (
-          <Text fontSize="$4" color={colors.textPrimary} marginTop="$3">
+          </Text> : null}
+        {event.deceased.obituary ? <Text fontSize="$4" color={colors.textPrimary} marginTop="$3">
             {event.deceased.obituary}
-          </Text>
-        )}
+          </Text> : null}
       </Card>
 
       {/* Locations */}
-      {event.locations.viewing && renderLocationInfo(event.locations.viewing, "Viewing")}
+      {event.locations.viewing ? renderLocationInfo(event.locations.viewing, "Viewing") : null}
       {renderLocationInfo(event.locations.service, "Service")}
-      {event.locations.burial && renderLocationInfo(event.locations.burial, "Burial")}
+      {event.locations.burial ? renderLocationInfo(event.locations.burial, "Burial") : null}
 
       {/* Documents */}
       {renderDocuments(event.documents)}
@@ -477,24 +434,18 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
       {renderLocationInfo(event.ceremonyLocation, "Ceremony")}
 
       {/* Reception */}
-      {event.reception && (
-        <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
+      {event.reception ? <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
           <Text fontSize="$4" fontWeight="600" color={colors.textPrimary} marginBottom="$2">
             Reception
           </Text>
-          {event.reception.date && (
-            <Text fontSize="$4" color={colors.textPrimary}>
+          {event.reception.date ? <Text fontSize="$4" color={colors.textPrimary}>
               {formatDateTime(event.reception.date)}
-            </Text>
-          )}
-          {event.reception.location && renderLocationInfo(event.reception.location, "Reception Location")}
-          {event.reception.details && (
-            <Text fontSize="$4" color={colors.textPrimary} marginTop="$2">
+            </Text> : null}
+          {event.reception.location ? renderLocationInfo(event.reception.location, "Reception Location") : null}
+          {event.reception.details ? <Text fontSize="$4" color={colors.textPrimary} marginTop="$2">
               {event.reception.details}
-            </Text>
-          )}
-        </Card>
-      )}
+            </Text> : null}
+        </Card> : null}
 
       {/* Documents */}
       {renderDocuments(event.documents)}
@@ -524,24 +475,21 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
         <Text fontSize="$5" fontWeight="600" color={colors.textPrimary}>
           {event.candidate.firstName} {event.candidate.lastName}
         </Text>
-        {event.candidate.testimony && (
-          <YStack marginTop="$3">
+        {event.candidate.testimony ? <YStack marginTop="$3">
             <Text fontSize="$4" fontWeight="600" color={colors.textPrimary} marginBottom="$2">
               Testimony
             </Text>
             <Text fontSize="$4" color={colors.textPrimary}>
               {event.candidate.testimony}
             </Text>
-          </YStack>
-        )}
+          </YStack> : null}
       </Card>
 
       {/* Location */}
       {renderLocationInfo(event.location)}
 
       {/* Zoom Link */}
-      {event.zoomLink && (
-        <Card padding="$4" backgroundColor={colors.primary + '10'} borderColor={colors.primary}>
+      {event.zoomLink ? <Card padding="$4" backgroundColor={colors.primary + '10'} borderColor={colors.primary}>
           <YStack gap="$2">
             <Text fontSize="$4" fontWeight="600" color={colors.primary}>
               Join via Zoom
@@ -555,8 +503,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
               Join Zoom Meeting
             </Button>
           </YStack>
-        </Card>
-      )}
+        </Card> : null}
 
       {/* Documents */}
       {renderDocuments(event.documents)}
@@ -566,8 +513,7 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
   const renderGeneralEvent = (event: GeneralEvent) => (
     <YStack gap="$4">
       {/* Event Dates */}
-      {(event.startDate || event.endDate) && (
-        <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
+      {!event.hideDates && (event.startDate || event.endDate) ? <Card padding="$4" backgroundColor={colors.backgroundSecondary}>
           <XStack alignItems="center" gap="$2" marginBottom="$2">
             <Calendar size="$1" color={colors.primary} />
             <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
@@ -587,20 +533,19 @@ export function EventPageTemplate({ event, showDraftBanner = false }: EventPageT
               Until {formatDateTime(event.endDate)}
             </Text>
           ) : null}
-        </Card>
-      )}
+        </Card> : null}
 
       {/* Location */}
-      {event.location && renderLocationInfo(event.location)}
+      {event.location ? renderLocationInfo(event.location) : null}
 
       {/* Speakers */}
-      {event.speakers && event.speakers.length > 0 && renderSpeakers(event.speakers)}
+      {event.speakers && event.speakers.length > 0 ? renderSpeakers(event.speakers) : null}
 
       {/* Schedule */}
-      {event.schedule && event.schedule.length > 0 && renderSchedule(event.schedule)}
+      {event.schedule && event.schedule.length > 0 ? renderSchedule(event.schedule) : null}
 
       {/* Registration */}
-      {event.registration?.required && renderRegistration(event.registration)}
+      {event.registration?.required ? renderRegistration(event.registration) : null}
 
       {/* Documents */}
       {renderDocuments(event.documents)}

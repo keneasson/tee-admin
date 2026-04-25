@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Dialog, Button } from 'tamagui'
+import { Dialog } from 'tamagui'
+import { Button } from '../Button'
 import { Plus } from '@tamagui/lucide-icons'
 import { AddEcclesiaForm } from './add-ecclesia-form'
 
@@ -9,14 +10,19 @@ interface EcclesiaFormData {
   province: string
   city: string
   address?: string
+  postalCode?: string
+  venue?: string
 }
 
 interface AddEcclesiaModalProps {
+  initialData?: Partial<EcclesiaFormData>
+  /** @deprecated Use initialData instead */
   initialName?: string
   onEcclesiaAdded: (ecclesia: EcclesiaFormData) => void
   trigger?: React.ReactNode
   isOpen?: boolean
   onOpenChange?: (open: boolean) => void
+  mode?: 'add' | 'edit'
 }
 
 // API function for saving ecclesia
@@ -31,11 +37,11 @@ const saveNewEcclesia = async (data: EcclesiaFormData): Promise<boolean> => {
     })
 
     const result = await response.json()
-    
+
     if (!result.success) {
       console.error('Save failed:', result.error)
     }
-    
+
     return result.success
   } catch (error) {
     console.error('Error saving new ecclesia:', error)
@@ -43,12 +49,38 @@ const saveNewEcclesia = async (data: EcclesiaFormData): Promise<boolean> => {
   }
 }
 
+// API function for updating ecclesia
+const updateEcclesia = async (originalName: string, data: EcclesiaFormData): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/ecclesia', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ originalName, ...data }),
+    })
+
+    const result = await response.json()
+
+    if (!result.success) {
+      console.error('Update failed:', result.error)
+    }
+
+    return result.success
+  } catch (error) {
+    console.error('Error updating ecclesia:', error)
+    return false
+  }
+}
+
 export function AddEcclesiaModal({
+  initialData,
   initialName = '',
   onEcclesiaAdded,
   trigger,
   isOpen = false,
-  onOpenChange
+  onOpenChange,
+  mode = 'add'
 }: AddEcclesiaModalProps) {
   const [isLoading, setIsLoading] = useState(false)
 
@@ -59,8 +91,13 @@ export function AddEcclesiaModal({
   const handleSave = async (ecclesiaData: EcclesiaFormData): Promise<boolean> => {
     setIsLoading(true)
     try {
-      const success = await saveNewEcclesia(ecclesiaData)
-      
+      let success: boolean
+      if (mode === 'edit' && initialData?.name) {
+        success = await updateEcclesia(initialData.name, ecclesiaData)
+      } else {
+        success = await saveNewEcclesia(ecclesiaData)
+      }
+
       if (success) {
         // Close modal and notify parent
         handleOpenChange(false)
@@ -77,14 +114,19 @@ export function AddEcclesiaModal({
     handleOpenChange(false)
   }
 
+  const title = mode === 'edit' ? 'Edit Ecclesia' : 'Add New Ecclesia'
+  const description = mode === 'edit'
+    ? `Update the details for "${initialData?.name || ''}".`
+    : initialData?.name || initialName
+      ? `Add "${initialData?.name || initialName}" as a new ecclesia in our directory.`
+      : 'Add a new ecclesia to our directory.'
+
   return (
     <Dialog modal open={isOpen} onOpenChange={handleOpenChange}>
-      {trigger && (
-        <Dialog.Trigger asChild>
+      {trigger ? <Dialog.Trigger asChild>
           {trigger}
-        </Dialog.Trigger>
-      )}
-      
+        </Dialog.Trigger> : null}
+
       <Dialog.Portal>
         <Dialog.Overlay
           key="overlay"
@@ -97,15 +139,7 @@ export function AddEcclesiaModal({
           bordered
           elevate
           key="content"
-          animateOnly={['transform', 'opacity']}
-          animation={[
-            'quick',
-            {
-              opacity: {
-                overshootClamping: true,
-              },
-            },
-          ]}
+          animation="quick"
           enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           gap="$0"
@@ -117,26 +151,25 @@ export function AddEcclesiaModal({
             fontSize="$6"
             fontWeight="600"
           >
-            Add New Ecclesia
+            {title}
           </Dialog.Title>
-          
+
           <Dialog.Description
             padding="$4"
             paddingTop="$0"
             paddingBottom="$2"
             color="$textSecondary"
           >
-            {initialName 
-              ? `Add "${initialName}" as a new ecclesia in our directory.`
-              : 'Add a new ecclesia to our directory.'
-            }
+            {description}
           </Dialog.Description>
 
           <AddEcclesiaForm
+            initialData={initialData}
             initialName={initialName}
             onSave={handleSave}
             onCancel={handleCancel}
             isLoading={isLoading}
+            mode={mode}
           />
         </Dialog.Content>
       </Dialog.Portal>

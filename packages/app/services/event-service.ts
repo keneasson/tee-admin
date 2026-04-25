@@ -1,7 +1,8 @@
 import { scheduleRepo } from '@my/app/provider/dynamodb'
-import { Event, EventFilters, EventListResponse, UpdateEventRequest, EventType } from '@my/app/types/events'
+import { Event, EventFilters, EventListResponse, UpdateEventRequest, EventType, isEventActive } from '@my/app/types/events'
 import type { ScheduleRecord } from '@my/app/provider/dynamodb/types'
 import { EventValidator } from '@my/app/utils/event-validation'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { v4 as uuidv4 } from 'uuid'
 
 /**
@@ -18,23 +19,16 @@ import { v4 as uuidv4 } from 'uuid'
 // Helper functions for event data transformation
 
 const extractHostingEcclesia = (event: Event): string => {
-  switch (event.type) {
-    case 'study-weekend':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'wedding':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'baptism':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    case 'general':
-      return event.hostingEcclesia?.name || 'Unknown Ecclesia'
-    default:
-      return 'Unknown Ecclesia'
-  }
+  // Handle hostingEcclesia being either a string or { name: string } object
+  const he = event.hostingEcclesia
+  if (!he) return 'Unknown Ecclesia'
+  if (typeof he === 'string') return he
+  return he.name || 'Unknown Ecclesia'
 }
 
 const extractEventDate = (event: Event): string => {
   let date: Date
-  
+
   switch (event.type) {
     case 'funeral':
       date = event.serviceDate ? new Date(event.serviceDate) : new Date()
@@ -52,7 +46,17 @@ const extractEventDate = (event: Event): string => {
       date = event.startDate ? new Date(event.startDate) : new Date()
       break
     case 'recurring':
-      date = event.recurringConfig?.startDate ? new Date(event.recurringConfig.startDate) : new Date()
+      // Check both startDate and dateRange.start for recurring events
+      if (event.recurringConfig?.startDate) {
+        date = new Date(event.recurringConfig.startDate)
+      } else if ((event.recurringConfig as any)?.dateRange?.start) {
+        date = new Date((event.recurringConfig as any).dateRange.start)
+      } else {
+        date = new Date()
+      }
+      break
+    case 'election-cycle':
+      date = event.electionStartDate ? new Date(event.electionStartDate) : new Date()
       break
     default:
       date = new Date()
@@ -63,8 +67,43 @@ const extractEventDate = (event: Event): string => {
     console.warn('[extractEventDate] Invalid date detected, using current date as fallback')
     date = new Date()
   }
-  
+
   return date.toISOString().split('T')[0]
+}
+
+const extractEventEndDate = (event: Event): string | null => {
+  let date: Date | null = null
+
+  switch (event.type) {
+    case 'study-weekend':
+      // Multi-day event - use end date
+      date = event.dateRange?.end ? new Date(event.dateRange.end) : null
+      break
+    case 'general':
+      // May have end date for multi-day events
+      date = event.endDate ? new Date(event.endDate) : null
+      break
+    case 'election-cycle':
+      // Election cycle has explicit end date
+      date = event.electionEndDate ? new Date(event.electionEndDate) : null
+      break
+    case 'funeral':
+    case 'wedding':
+    case 'baptism':
+    case 'recurring':
+      // Single day events - no end date needed
+      return null
+    default:
+      return null
+  }
+
+  // Validate the date
+  if (date && isNaN(date.getTime())) {
+    console.warn('[extractEventEndDate] Invalid end date detected')
+    return null
+  }
+
+  return date ? date.toISOString().split('T')[0] : null
 }
 
 const extractEventTime = (event: Event): string => {
@@ -87,7 +126,9 @@ const extractEventTime = (event: Event): string => {
       date = event.startDate ? new Date(event.startDate) : new Date()
       break
     case 'recurring':
-      return event.recurringConfig.startTime
+      return event.recurringConfig!.startTime
+    case 'election-cycle':
+      return '00:00' // All-day event, no specific time
     default:
       date = new Date()
   }
@@ -106,12 +147,12 @@ const serializeEventData = (event: Event): string => {
 const deserializeEventData = (eventDataJson: string): Event => {
   try {
     const parsed = JSON.parse(eventDataJson)
-    
+
     // Convert date strings back to Date objects
     if (parsed.createdAt) parsed.createdAt = new Date(parsed.createdAt)
     if (parsed.updatedAt) parsed.updatedAt = new Date(parsed.updatedAt)
     if (parsed.publishDate) parsed.publishDate = new Date(parsed.publishDate)
-    
+
     // Convert event-specific dates
     if (parsed.serviceDate) parsed.serviceDate = new Date(parsed.serviceDate)
     if (parsed.ceremonyDate) parsed.ceremonyDate = new Date(parsed.ceremonyDate)
@@ -121,6 +162,29 @@ const deserializeEventData = (eventDataJson: string): Event => {
     if (parsed.dateRange) {
       parsed.dateRange.start = new Date(parsed.dateRange.start)
       parsed.dateRange.end = new Date(parsed.dateRange.end)
+    }
+
+    // Convert recurring event dates
+    if (parsed.recurringConfig) {
+      if (parsed.recurringConfig.startDate) {
+        parsed.recurringConfig.startDate = new Date(parsed.recurringConfig.startDate)
+      }
+      if (parsed.recurringConfig.endDate) {
+        parsed.recurringConfig.endDate = new Date(parsed.recurringConfig.endDate)
+      }
+      if (parsed.recurringConfig.dateRange) {
+        parsed.recurringConfig.dateRange.start = new Date(parsed.recurringConfig.dateRange.start)
+        parsed.recurringConfig.dateRange.end = new Date(parsed.recurringConfig.dateRange.end)
+      }
+    }
+
+    // Convert election cycle dates
+    if (parsed.electionStartDate) parsed.electionStartDate = new Date(parsed.electionStartDate)
+    if (parsed.electionEndDate) parsed.electionEndDate = new Date(parsed.electionEndDate)
+
+    // Convert registration deadline
+    if (parsed.registration && parsed.registration.deadline) {
+      parsed.registration.deadline = new Date(parsed.registration.deadline)
     }
 
     return parsed as Event
@@ -144,15 +208,15 @@ const generateSearchableContent = (event: Event): string => {
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'funeral':
-      searchParts.push(`${event.deceased.firstName} ${event.deceased.lastName}`)
+      searchParts.push(`${event.deceased?.firstName} ${event.deceased?.lastName}`)
       break
     case 'wedding':
-      searchParts.push(`${event.couple.bride.firstName} ${event.couple.bride.lastName}`)
-      searchParts.push(`${event.couple.groom.firstName} ${event.couple.groom.lastName}`)
+      searchParts.push(`${event.couple?.bride.firstName} ${event.couple?.bride.lastName}`)
+      searchParts.push(`${event.couple?.groom.firstName} ${event.couple?.groom.lastName}`)
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'baptism':
-      searchParts.push(`${event.candidate.firstName} ${event.candidate.lastName}`)
+      searchParts.push(`${event.candidate?.firstName} ${event.candidate?.lastName}`)
       searchParts.push(event.hostingEcclesia?.name || '')
       break
     case 'general':
@@ -186,19 +250,36 @@ const scheduleRecordToEvent = (record: ScheduleRecord): Event => {
         createdBy: 'system',
         createdAt: new Date(record.lastUpdated),
         updatedAt: new Date(record.lastUpdated),
+        active: false, // Default to inactive for legacy records
         status: 'draft',
         description: record.description,
         documents: [] // Default to empty array
       } as Event
     }
-    
+
+    // Determine active state from record or data
+    const recordActive = (record as any).active
+    const recordStatus = ((record as any).status as 'draft' | 'ready' | 'published' | 'archived') || eventData.status
+
+    // Compute active: use explicit active field, or derive from legacy status
+    let active: boolean
+    if (typeof recordActive === 'boolean') {
+      active = recordActive
+    } else if (typeof eventData.active === 'boolean') {
+      active = eventData.active
+    } else {
+      // Derive from legacy status
+      active = recordStatus === 'published' || recordStatus === 'ready'
+    }
+
     // Override with any direct fields from the record to ensure consistency
     return {
       ...eventData,
       id: record.eventId!,
       title: record.title || eventData.title,
       featured: (record as any).featured ?? eventData.featured,
-      status: ((record as any).status as 'draft' | 'ready' | 'published' | 'archived') || eventData.status,
+      active, // Use computed active state
+      status: recordStatus, // Keep for backward compatibility
       createdAt: (record as any).createdAt ? new Date((record as any).createdAt) : eventData.createdAt,
       updatedAt: (record as any).updatedAt ? new Date((record as any).updatedAt) : eventData.updatedAt,
       publishDate: (record as any).publishDate ? new Date((record as any).publishDate) : eventData.publishDate,
@@ -212,47 +293,50 @@ const eventToScheduleRecord = (event: Event, eventId: string): any => {
   const hostingEcclesiaName = extractHostingEcclesia(event)
   const eventDate = extractEventDate(event)  // Full date: "2025-10-12"
   const eventTime = extractEventTime(event)  // Time or null
-  
+
   const record: any = {
     PK: `EVENT#${eventId}`,
     SK: 'DETAILS',
-    
+
     // Single GSI for chronological queries
     GSI1PK: 'EVENTS',                       // Simple partition for all events
     GSI1SK: `${eventDate}#${eventId}`,     // Full date + ID: "2025-10-12#uuid123"
-    
+
     // Core fields
     date: eventDate,                       // Required: "2025-10-12"
     time: eventTime || null,               // Optional: "10:00" or null
     title: event.title,                    // Required
     eventType: event.type,                 // Required: "study-weekend"
     ecclesia: hostingEcclesiaName,         // For filtering
-    
+
     // Legacy fields for backward compatibility
     type: 'event' as const,
-    
+
     // Event-specific fields
     eventId,
     description: event.description,
     details: serializeEventData(event) as any, // Store the full Event object as JSON
-    
-    // Enhanced fields
+
+    // New simplified lifecycle
+    active: event.active ?? false, // Is event visible?
+
+    // Legacy status fields (kept for backward compatibility)
     status: event.status,
     featured: event.featured,
     createdBy: event.createdBy,
     createdAt: event.createdAt ? (typeof event.createdAt === 'string' ? event.createdAt : event.createdAt.toISOString()) : new Date().toISOString(),
     updatedAt: event.updatedAt ? (typeof event.updatedAt === 'string' ? event.updatedAt : event.updatedAt.toISOString()) : new Date().toISOString(),
     hostingEcclesia: hostingEcclesiaName,
-    
+
     // Search content for future Elasticsearch integration
     searchableContent: generateSearchableContent(event),
   }
-  
+
   // Only add publishDate if it exists to avoid null/undefined issues
   if (event.publishDate) {
     record.publishDate = typeof event.publishDate === 'string' ? event.publishDate : event.publishDate.toISOString()
   }
-  
+
   return record
 }
 
@@ -307,14 +391,31 @@ export const createEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'u
       }
       break
   }
+
+  // Convert registration deadline if present
+  if (processedEventData.registration && processedEventData.registration.deadline) {
+    processedEventData.registration.deadline = new Date(processedEventData.registration.deadline)
+  }
   
+  // Derive publishDate from active state for backward compat:
+  // If caller passes active=true but no publishDate, set publishDate=now (immediate activation)
+  // If caller passes publishDate, use it directly
+  let publishDate = processedEventData.publishDate
+    ? new Date(processedEventData.publishDate)
+    : undefined
+  if (!publishDate && processedEventData.active) {
+    publishDate = now
+  }
+
   const event: Event = {
     ...processedEventData,
     id: eventId,
     createdAt: now,
     updatedAt: now,
-    status: processedEventData.status || 'draft', // Default to draft for progressive creation
-    published: processedEventData.published ?? false, // Default to unpublished
+    publishDate,
+    active: processedEventData.active ?? false, // @deprecated — kept for legacy readers
+    status: processedEventData.status || 'draft', // @deprecated — kept for legacy readers
+    published: processedEventData.published ?? false, // @deprecated — kept for legacy readers
   } as Event
 
   // Convert Event to ScheduleRecord format with all the rich data
@@ -356,11 +457,14 @@ export const saveEventDraft = async (eventData: Partial<Event> & { id?: string }
   } else {
     console.log('[saveEventDraft] Creating new draft event')
     // Create new draft event with minimal data
+    // Drafts have no publishDate (inactive by definition)
     const minimalEvent = {
       title: eventData.title || 'Untitled Event',
       type: eventData.type || 'general',
       createdBy: eventData.createdBy || 'system',
-      status: 'draft',
+      publishDate: undefined, // Drafts are not active
+      active: false, // @deprecated — kept for legacy readers
+      status: 'draft', // @deprecated — kept for legacy readers
       ...eventData,
     } as Omit<Event, 'id' | 'createdAt' | 'updatedAt'>
     
@@ -435,9 +539,24 @@ export const updateEvent = async (updateData: UpdateEventRequest): Promise<Event
       }
       break
   }
+
+  // Convert registration deadline if present
+  if (processedUpdateData.registration && processedUpdateData.registration.deadline) {
+    processedUpdateData.registration.deadline = new Date(processedUpdateData.registration.deadline)
+  }
   
+  // Fields that can be explicitly removed by omitting them from the update
+  // If the update data doesn't include these, remove them from the existing event
+  const removableFields = ['hostingEcclesia', 'location', 'locations', 'sections'] as const
+  const cleanedExisting = { ...existingEvent }
+  for (const field of removableFields) {
+    if (!(field in processedUpdateData)) {
+      delete (cleanedExisting as any)[field]
+    }
+  }
+
   const updatedEvent: Event = {
-    ...existingEvent,
+    ...cleanedExisting,
     ...processedUpdateData,
     updatedAt: new Date(),
   } as Event
@@ -665,12 +784,178 @@ export const validateSaveTheDate = (event: Partial<Event>) => {
 }
 
 /**
- * Get only published events for public consumption
+ * Post-event display duration rules (in days)
+ * Some events should continue to display for a period AFTER the event date
+ * - baptism: 1 week after (celebration/announcement)
+ * - funeral: handled by EventDurationCalculator (2 newsletters from publishDate, then Thursday before service)
+ * - wedding: shown until ceremony date only
+ * - others: shown until event date only
+ */
+const POST_EVENT_DISPLAY_DAYS: Record<string, number> = {
+  baptism: 7,   // 1 week after event
+  // funeral duration is handled by EventDurationCalculator in news-events.tsx
+}
+
+/**
+ * Check if an event is currently active or upcoming
+ * For multi-day events, they remain active until the END date has passed
+ * For events with post-event display rules (baptism), they remain
+ * active for a period AFTER the event date
+ * For funerals, we use publishDate + 14 days (handled by EventDurationCalculator for final decision)
+ */
+const isEventActiveOrUpcoming = (event: Event): boolean => {
+  const today = new Date()
+  // Use Toronto timezone to avoid UTC date shift
+  // (e.g., 8pm EST = 1am UTC next day, which would incorrectly exclude today's events)
+  const todayStr = today.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+  const endDate = extractEventEndDate(event)
+
+  if (endDate) {
+    // Multi-day event: show until end date has passed
+    return endDate >= todayStr
+  }
+
+  // Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+  // recurringConfig.startDate is the SERIES start, not the next occurrence.
+  // Always include if the series hasn't ended - client handles day-level filtering.
+  if (event.type === 'recurring') {
+    if (event.recurringConfig?.endDate) {
+      const endStr = new Date(event.recurringConfig.endDate)
+        .toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+      return endStr >= todayStr
+    }
+    return true // No end date = always active
+  }
+
+  // Funeral special handling: use publishDate + 14 days as the window
+  // The EventDurationCalculator in news-events.tsx will do the final filtering
+  if (event.type === 'funeral') {
+    const publishDate = event.publishDate ? new Date(event.publishDate) : null
+    if (publishDate) {
+      const funeralWindowEnd = new Date(publishDate)
+      funeralWindowEnd.setDate(funeralWindowEnd.getDate() + 14)
+      // Also check Thursday before service for services scheduled far out
+      const serviceDate = event.serviceDate ? new Date(event.serviceDate) : null
+      if (serviceDate && today > funeralWindowEnd) {
+        // Outside 14-day window - only show if service is still upcoming
+        // (EventDurationCalculator will handle Thursday-before-service logic)
+        return today <= serviceDate
+      }
+      return today <= funeralWindowEnd
+    }
+    // No publishDate - let it through, EventDurationCalculator will handle
+    return true
+  }
+
+  // Get the event's primary date
+  const eventDateStr = extractEventDate(event)
+  const eventDate = new Date(eventDateStr)
+
+  // Check for post-event display rules
+  const postEventDays = POST_EVENT_DISPLAY_DAYS[event.type] || 0
+
+  if (postEventDays > 0) {
+    // Event type has post-event display period
+    const displayUntilDate = new Date(eventDate)
+    displayUntilDate.setDate(displayUntilDate.getDate() + postEventDays)
+    return today <= displayUntilDate
+  }
+
+  // Default: show until event date has passed
+  return eventDateStr >= todayStr
+}
+
+/**
+ * Get events eligible for inter-ecclesia sharing
+ * Filters for funeral, baptism, wedding, engagement events
+ * Default: Toronto East hosted events from the last 30 days and upcoming 60 days
+ */
+export const getInterEcclesiaEvents = async (options?: {
+  hostingEcclesia?: string
+  eventTypes?: EventType[]
+  daysBack?: number
+  daysAhead?: number
+}): Promise<Event[]> => {
+  const {
+    hostingEcclesia = HOME_ECCLESIA.canonicalName,
+    eventTypes = ['study-weekend', 'funeral', 'baptism', 'wedding', 'engagement', 'general'] as EventType[],
+    daysBack = 30,
+    daysAhead = 90, // Extended for study weekends which are often planned further ahead
+  } = options || {}
+
+  // Calculate date range
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - daysBack)
+  const endDate = new Date()
+  endDate.setDate(endDate.getDate() + daysAhead)
+
+  // Get all events in the date range
+  const result = await getFilteredEvents({
+    dateFrom: startDate,
+    dateTo: endDate,
+    type: eventTypes,
+    limit: 1000,
+  })
+
+  // Filter for active events from the specified ecclesia
+  const filteredEvents = result.events.filter(event => {
+    // Check active state (uses new active field with legacy fallback)
+    if (!isEventActive(event)) {
+      return false
+    }
+
+    // Check event type
+    if (!eventTypes.includes(event.type)) {
+      return false
+    }
+
+    // Check hosting ecclesia
+    // For funerals/baptisms without explicit hostingEcclesia, assume Toronto East if created by a Toronto East user
+    const eventEcclesia = typeof event.hostingEcclesia === 'string'
+      ? event.hostingEcclesia
+      : event.hostingEcclesia?.name || HOME_ECCLESIA.canonicalName
+
+    if (!eventEcclesia.toLowerCase().includes(hostingEcclesia.toLowerCase())) {
+      return false
+    }
+
+    return true
+  })
+
+  // Sort by event date (most recent first)
+  return filteredEvents.sort((a, b) => {
+    const aDate = extractEventDate(a)
+    const bDate = extractEventDate(b)
+    return new Date(bDate).getTime() - new Date(aDate).getTime()
+  })
+}
+
+/**
+ * Get only active events for public consumption
  * Used by newsletter, events page, and other public-facing components
+ * Includes ongoing multi-day events (shows until end date, not just start date)
+ * Sorted by start date/time in ascending order (earliest first)
  */
 export const getPublishedEvents = async (): Promise<Event[]> => {
   const allEvents = await getAllEvents(false)
-  return allEvents.filter(event =>
-    event.status === 'published' || event.status === 'ready'
-  )
+  const publishedEvents = allEvents.filter(event => {
+    // Use new isEventActive helper which handles both new and legacy fields
+    const isActiveState = isEventActive(event)
+    const isActiveOrUpcoming = isEventActiveOrUpcoming(event)
+    return isActiveState && isActiveOrUpcoming
+  })
+
+  // Sort by start date/time in ascending order (earliest first)
+  return publishedEvents.sort((a, b) => {
+    const aDate = extractEventDate(a)
+    const bDate = extractEventDate(b)
+    const dateCompare = new Date(aDate).getTime() - new Date(bDate).getTime()
+
+    if (dateCompare !== 0) return dateCompare
+
+    // If same date, sort by time
+    const aTime = extractEventTime(a)
+    const bTime = extractEventTime(b)
+    return aTime.localeCompare(bTime)
+  })
 }

@@ -4,39 +4,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Model Selection Guidelines (Opus vs Sonnet)
 
-### Use Sonnet (3.5) for:
+### Use Sonnet 4.5 for (Default):
+- **End-to-End Feature Development**: Discovery, planning, implementation, and verification
 - **File Operations**: Reading, searching, grepping files
-- **Simple Edits**: Straightforward code changes, fixing typos, updating imports
+- **Code Changes**: Simple edits, refactoring, restructuring
 - **Bash Commands**: Running builds, tests, checking git status
-- **Documentation**: Writing comments, updating READMEs
-- **Type Checking**: Running TypeScript compiler, fixing simple type errors
+- **Documentation**: Writing comments, updating READMEs, API docs
+- **Type Checking**: Running TypeScript compiler, fixing type errors
 - **Todo Management**: Updating task lists, marking items complete
 - **Code Formatting**: Fixing indentation, organizing imports
 - **Search & Discovery**: Finding files, understanding project structure
-
-### Use Opus (4.1) for:
-- **Architecture Decisions**: Designing system components, data models
-- **Complex Debugging**: Solving tricky bugs requiring deep analysis
-- **Algorithm Design**: Creating efficient solutions to complex problems
-- **Security Analysis**: Reviewing authentication, authorization logic
-- **Performance Optimization**: Analyzing and improving slow code
-- **API Design**: Creating clean, extensible interfaces
-- **Complex Refactoring**: Restructuring code while maintaining functionality
-- **Cross-System Integration**: Coordinating changes across multiple services
+- **Complex Debugging**: Root cause analysis, multi-step debugging
+- **API Design**: RESTful, GraphQL, following established patterns
+- **Multi-File Refactoring**: Cross-cutting changes with dependency tracking
 - **Business Logic**: Implementing complex domain rules and workflows
+- **Security Analysis**: Authentication, authorization, routine security reviews
+- **Performance Issues**: Identifying bottlenecks, standard optimizations
+
+### Use Opus (4.1) for (Rare Cases):
+- **Novel Architecture Design**: Completely new system components requiring deep innovation
+- **Algorithmic Innovation**: Creating new algorithms, complex mathematical solutions
+- **Critical Security Vulnerabilities**: Expert-level security analysis for zero-days
+- **Performance Breakthroughs**: Algorithmic optimization requiring novel approaches
+- **Complex Cross-System Design**: New integration patterns across multiple services
+- **Research & Proof of Concepts**: Exploring uncharted technical territory
+
+### Sonnet 4.5 Capabilities (New)
+- **Advanced reasoning**: Complex multi-step problem solving
+- **Deep code understanding**: Large codebase analysis and navigation
+- **Context utilization**: Effective use of large conversation contexts
+- **Error recovery**: Self-correction and debugging without escalation
+- **Pattern recognition**: Identifying architectural patterns and anti-patterns
+- **Dependency tracking**: Managing changes across related components
 
 ### Prompting for Efficiency
-When starting a task, consider prefixing with:
-- "Using Sonnet would be fine for this:" - for routine tasks
-- "This needs Opus:" - for complex reasoning
-- "Start with Sonnet, then switch to Opus if needed:" - for exploration
+Default to Sonnet 4.5 for all tasks. Only escalate when:
+- "This needs Opus:" - Novel problems, algorithmic innovation, or architectural redesign
+- "Try Sonnet first, escalate if needed:" - Uncertain complexity
 
-### Task Breakdown Strategy
-1. **Discovery Phase** (Sonnet): Understand the problem, search codebase, read files
-2. **Planning Phase** (Opus): Design the solution, identify edge cases
-3. **Implementation Phase** (Sonnet): Make the code changes
-4. **Verification Phase** (Sonnet): Run tests, check types
-5. **Complex Issues** (Opus): Debug failures, solve unexpected problems
+### Task Breakdown Strategy (Simplified)
+1. **Start with Sonnet 4.5** (Default): Handles discovery → planning → implementation → verification
+2. **Escalate to Opus only when**: Hitting novel problems, need algorithmic innovation, or major architectural redesign
+3. **Return to Sonnet**: Once Opus provides design/strategy, Sonnet implements
 
 ## Project Overview
 
@@ -93,16 +102,75 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - **Invitation system**: 8-character codes with 7-day expiry and single-use enforcement
 - **Password requirements**: Minimum 12 characters, spaces encouraged for passphrases
 - **CRITICAL**: Single production DynamoDB - all environments use the SAME tables (`tee-admin`, `tee-schedules`, `tee-sync-status`)
-- User data stored in DynamoDB with email-based account linking
-- Role-based access control (owner, admin, member, guest)
-- Google Sheets integration for schedules, contacts, and newsletters
-- Email campaigns triggered via Vercel cron jobs
+- **People/contacts**: Stored in DynamoDB PersonRecords (`PERSON#` prefix in `tee-admin` table) using adjacency list + overloaded GSI pattern. Each person has one PROFILE item + N EMAIL# items. Lookup by any email via GSI1 in O(1). **NEVER source people data from DIRECTORY#MEMBERS or Google Sheets.**
+- Role-based access control (owner, admin, member, guest) stored on PersonRecord
+- Privacy system: per-field visibility with role-based overrides (Owner sees all, Admin sees same-ecclesia)
+- Google Sheets integration for **schedules/programs only** (NOT members or contacts)
+- Email campaigns scheduled via Vercel cron (AWS EventBridge migration planned for future)
 
-### Cross-Platform Development
-- Business logic lives in `packages/app/features/`
-- UI components in `packages/ui/` work across web and mobile
-- Platform-specific code only in `apps/` directories
-- Shared navigation logic using Solito
+### Cross-Platform Development & Package Architecture Rules
+
+**CRITICAL**: The `packages/ui/` and `packages/app/` directories are shared between Next.js (web) and Expo (mobile). Follow these strict rules:
+
+#### Platform-Specific Code Separation
+- **Next.js-specific code** (e.g., `next-auth/react`, `next/navigation`) → **MUST** live in `apps/next/`
+- **Expo-specific code** (e.g., React Native APIs) → **MUST** live in `apps/expo/`
+- **Shared code** (business logic, UI components) → Lives in `packages/app/` and `packages/ui/`
+
+#### Authentication State Management
+- **Never import** `next-auth/react` or `next/navigation` in `packages/ui/` or `packages/app/`
+- **Auth state must be passed down** as props from platform-specific code
+- **Next.js auth hooks** → `apps/next/hooks/` (e.g., `use-user-role.tsx`, `use-admin-access.tsx`)
+- **Expo auth hooks** → `apps/expo/hooks/` (when implemented)
+- **Shared components** receive auth state as props (e.g., `userRole`, `isMemberOrHigher`)
+
+#### Example Pattern
+```typescript
+// ❌ WRONG - Don't import next-auth in shared UI package
+import { useSession } from 'next-auth/react'
+export function SharedComponent() {
+  const { data: session } = useSession() // Platform-specific!
+}
+
+// ✅ CORRECT - Receive auth state as props
+export function SharedComponent({ userRole, isMemberOrHigher }) {
+  // Use props passed from platform-specific parent
+}
+```
+
+#### Avoiding Circular Dependencies
+- Platform apps (`apps/next/`, `apps/expo/`) import from shared packages
+- Shared packages (`packages/ui/`, `packages/app/`) **never** import from platform apps
+- State flows downward: Platform → Shared, never upward: Shared → Platform
+
+#### Build System Compatibility
+- **Tamagui static extraction** runs during Next.js build and attempts to `require()` all UI components
+- Any component importing ESM-only modules (like `next-auth/react`) will cause build failures
+- Keep platform-specific dependencies out of shared packages to avoid `require()` errors
+
+#### JSX Conditional Rendering (CRITICAL for React Native)
+
+**NEVER** use `&&` for conditional JSX rendering. In React Native, falsy values (0, "", false) can leak into render output and cause crashes: "Text strings must be rendered within a <Text> component".
+
+```typescript
+// ❌ WRONG - Can crash React Native
+{condition && <Component />}
+{items.length && <List items={items} />}
+{error && <ErrorMessage error={error} />}
+
+// ✅ CORRECT - Safe for all platforms
+{condition ? <Component /> : null}
+{items.length > 0 ? <List items={items} /> : null}
+{error ? <ErrorMessage error={error} /> : null}
+```
+
+This rule is enforced by ESLint via `react/jsx-no-leaked-render`. Run `yarn lint` to check and `yarn lint:fix` to auto-fix violations.
+
+#### Reference Implementation
+- `apps/next/hooks/use-user-role.tsx` - Next.js-specific auth hook
+- `apps/next/hooks/use-admin-access.tsx` - Next.js-specific admin access hook
+- `packages/ui/src/events/event-summary-card.tsx` - Shared component receiving auth props
+- `packages/ui/src/events/event-detail-view.tsx` - Shared component receiving auth props
 
 ### App Router Architecture & Patterns
 
@@ -145,7 +213,7 @@ export default function MyPage() {
 
 ```typescript
 // Standard form input pattern:
-<FormInput 
+<FormInput
   control={control}
   name="email"
   label="Email Address"
@@ -163,6 +231,47 @@ export default function MyPage() {
   rules={{ required: 'Password is required' }}
 />
 ```
+
+### Email Scheduling System
+
+TEE Admin uses a simple Vercel cron-based email system for scheduled test emails.
+
+#### Current Schedule
+- **Thursday 9:30pm** - Test newsletter email (via Vercel cron)
+  - Endpoint: `/api/email/test-thursday`
+  - Always runs in **TEST MODE** (sends to test list only)
+  - Uses newsletter template
+
+#### Configuration
+Scheduled emails are configured in `apps/next/vercel.json`:
+```json
+{
+  "crons": [
+    {
+      "path": "/api/email/test-thursday",
+      "schedule": "30 21 * * 4"  // Thursday 9:30pm
+    }
+  ]
+}
+```
+
+#### Security
+- All email endpoints require `EMAIL_SENDER_SECRET` authentication
+- Vercel automatically includes this in cron requests
+- Manual testing: `curl -H "Authorization: Bearer $EMAIL_SENDER_SECRET" https://your-domain.vercel.app/api/email/test-thursday`
+
+#### Email Types Available
+- `newsletter` - Weekly newsletter
+- `bible-class` - Bible class reminder
+- `sunday-school` - Sunday school reminder
+- `recap` - Memorial service (recap)
+
+#### Advanced System (Future)
+For advanced scheduling needs, see [`AWS_EVENTBRIDGE_SETUP.md`](./AWS_EVENTBRIDGE_SETUP.md) for the DynamoDB queue-based system with EventBridge integration.
+
+#### Environment Variables
+- `EMAIL_SENDER_SECRET` - Bearer token for authenticating cron requests
+- AWS credentials - Required for SES email delivery
 
 ## Configuration Requirements
 
@@ -266,23 +375,13 @@ TEE Admin includes a comprehensive brand system accessible at `/brand/*` routes 
 3. **Phase 3**: Expo SDK 53 + React Native 0.77 ✅
 4. **Phase 4**: Complete App Router migration ✅
 
-### Migration Tracking
-- **Progress Tracker**: `MIGRATION_TRACKER.md`
-- **Risk Evaluation**: `GITHUB_ISSUES/00-comprehensive-risk-evaluation.md`
-- **Upgrade Issues**: `GITHUB_ISSUES/01-05-*.md`
+### Documentation
+- **Architecture Reference**: `docs/ARCHITECTURE.md` - System boundaries, data contracts, integration patterns
+- **Development Guide**: `docs/DEVELOPMENT.md` - Patterns, workflows, learnings
+- **Infrastructure Guide**: `docs/INFRASTRUCTURE.md` - Deployment, email scheduling, AWS services
+- **Migration Archive**: `docs/MIGRATION_ARCHIVE.md` - Historical migration records
 
-### Important Notes for Development
-- **NO PRODUCTION CHANGES** until Phase 0 validation complete
-- **Feature Freeze**: No new features during migration period
-- **Backup Strategy**: Current working state preserved as rollback option
-- **Testing Required**: All changes require comprehensive testing
-- **Documentation**: All migration steps documented for continuity
-
-### Migration Phases (Pending Validation)
-1. **Phase 1**: Foundation (Node.js 22 + Tamagui upgrade)
-2. **Phase 2**: Framework (Next.js 15 + React 19) - **HIGH RISK**
-3. **Phase 3**: Mobile (Expo SDK 53 + React Native 0.77) - **HIGH RISK**
-4. **Phase 4**: Architecture (Pages → App Router migration)
-5. **Phase 5**: Data Layer (TanStack Query implementation)
-
-**⚠️ CRITICAL**: Migration may be halted if Phase 0 validation reveals blocking incompatibilities. Always check `MIGRATION_TRACKER.md` for current status before making any changes.
+### DynamoDB Key Naming Conventions
+- **Legacy pattern**: Tables use `pkey/skey` attribute names (e.g., `tee-admin`, `tee-schedules`)
+- **New standard**: New tables should use `PK/SK` following AWS best practices
+- **Note**: Do not change existing tables; maintain backward compatibility with `pkey/skey`

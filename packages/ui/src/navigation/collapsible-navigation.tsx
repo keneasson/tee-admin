@@ -63,14 +63,11 @@ export function CollapsibleNavigation({
           padding="$3"
         >
           <XStack alignItems="center" justifyContent="space-between">
-            {(!isCollapsed || showLabelsWhenCollapsed) && header && (
-              <View flex={1}>
+            {(!isCollapsed || showLabelsWhenCollapsed) && header ? <View flex={1}>
                 {header}
-              </View>
-            )}
+              </View> : null}
             
-            {collapsibleOnDesktop && (
-              <Button
+            {collapsibleOnDesktop ? <Button
                 size="$2"
                 onPress={toggleCollapsed}
                 backgroundColor="transparent"
@@ -80,8 +77,7 @@ export function CollapsibleNavigation({
                 <Text fontSize="$4" color={colors.textSecondary}>
                   {isCollapsed ? '→' : '←'}
                 </Text>
-              </Button>
-            )}
+              </Button> : null}
           </XStack>
         </View>
         
@@ -107,16 +103,14 @@ export function CollapsibleNavigation({
         </YStack>
         
         {/* Footer Section */}
-        {footer && (!isCollapsed || showLabelsWhenCollapsed) && (
-          <View
+        {footer && (!isCollapsed || showLabelsWhenCollapsed) ? <View
             backgroundColor={colors.surface}
             borderTopWidth={1}
             borderTopColor={colors.borderLight}
             padding="$3"
           >
             {footer}
-          </View>
-        )}
+          </View> : null}
       </YStack>
     </View>
   )
@@ -132,11 +126,9 @@ export function CollapsibleNavigation({
       $md={{ display: 'none' }}
     >
       <XStack alignItems="center" justifyContent="space-between">
-        {header && (
-          <View flex={1}>
+        {header ? <View flex={1}>
             {header}
-          </View>
-        )}
+          </View> : null}
         
         <Button
           size="$3"
@@ -171,15 +163,7 @@ export function CollapsibleNavigation({
           bordered
           elevate
           key="content"
-          animateOnly={['transform', 'opacity']}
-          animation={[
-            'quicker',
-            {
-              opacity: {
-                overshootClamping: true,
-              },
-            },
-          ]}
+          animation="quick"
           enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           width="90%"
@@ -188,16 +172,14 @@ export function CollapsibleNavigation({
         >
           <YStack flex={1} padding="$4" gap="$3">
             {/* Mobile Header */}
-            {header && (
-              <View
+            {header ? <View
                 backgroundColor={colors.backgroundSecondary}
                 padding="$3"
                 borderRadius="$3"
                 marginBottom="$2"
               >
                 {header}
-              </View>
-            )}
+              </View> : null}
             
             {/* Mobile Navigation Items */}
             <YStack flex={1} gap="$2">
@@ -215,16 +197,14 @@ export function CollapsibleNavigation({
             </YStack>
             
             {/* Mobile Footer */}
-            {footer && (
-              <View
+            {footer ? <View
                 backgroundColor={colors.backgroundSecondary}
                 padding="$3"
                 borderRadius="$3"
                 marginTop="$2"
               >
                 {footer}
-              </View>
-            )}
+              </View> : null}
           </YStack>
         </Dialog.Content>
       </Dialog.Portal>
@@ -283,19 +263,14 @@ export function NavigationContainer({
   
   const Header = () => (
     <YStack gap="$2">
-      {branding && (
-        <XStack alignItems="center" gap="$2">
+      {branding ? <XStack alignItems="center" gap="$2">
           {branding.logo}
-          {branding.title && (
-            <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
+          {branding.title ? <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
               {branding.title}
-            </Text>
-          )}
-        </XStack>
-      )}
+            </Text> : null}
+        </XStack> : null}
       
-      {user && (
-        <View
+      {user ? <View
           backgroundColor={colors.backgroundTertiary}
           padding="$2"
           borderRadius="$2"
@@ -306,8 +281,7 @@ export function NavigationContainer({
           <Text fontSize="$2" color={colors.textSecondary}>
             {user.role}
           </Text>
-        </View>
-      )}
+        </View> : null}
       
       {headerContent}
     </YStack>
@@ -315,11 +289,9 @@ export function NavigationContainer({
   
   const Footer = () => (
     <YStack gap="$2">
-      {branding?.version && (
-        <Text fontSize="$2" color={colors.textTertiary} textAlign="center">
+      {branding?.version ? <Text fontSize="$2" color={colors.textTertiary} textAlign="center">
           v{branding.version}
-        </Text>
-      )}
+        </Text> : null}
       {footerContent}
     </YStack>
   )

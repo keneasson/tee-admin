@@ -36,6 +36,14 @@ vi.mock('../../utils/password', () => ({
   validatePassword: vi.fn(() => ({ isValid: true, errors: [] })),
 }))
 
+// Declare mock variables for use in tests that reference them directly
+const mockFindCredentialsUserByEmail = vi.fn()
+const mockCreatePasswordResetToken = vi.fn()
+const mockSendPasswordResetEmail = vi.fn()
+const mockValidatePasswordResetToken = vi.fn()
+const mockResetPassword = vi.fn()
+const mockValidatePassword = vi.fn()
+
 // Import the API route handlers
 import { POST as forgotPasswordPOST } from '../../app/api/auth/forgot-password/route'
 import { POST as resetPasswordPOST } from '../../app/api/auth/reset-password/route'

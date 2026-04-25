@@ -3,15 +3,18 @@ export * from './config'
 export * from './types'
 export * from './repositories/schedule-repository'
 export * from './repositories/admin-repository'
+export * from './repositories/person-repository'
 export * from './table-definitions'
 
 // Repository instances (singletons)
 import { ScheduleRepository } from './repositories/schedule-repository'
 import { AdminRepository } from './repositories/admin-repository'
+import { PersonRepository } from './repositories/person-repository'
 
 // Export repository instances
 export const scheduleRepo = new ScheduleRepository()
 export const adminRepo = new AdminRepository()
+export const personRepo = new PersonRepository()
 
 // Convenience methods for common operations
 export const DynamoDataLayer = {
@@ -42,9 +45,20 @@ export const DynamoDataLayer = {
     deleteEvent: scheduleRepo.deleteEvent.bind(scheduleRepo),
   },
 
+  // Person operations (UUID-based identity - Unified People System)
+  persons: {
+    getById: personRepo.getById.bind(personRepo),
+    getByEmail: personRepo.getByEmail.bind(personRepo),
+    listByEcclesia: personRepo.listByEcclesia.bind(personRepo),
+    searchByName: personRepo.searchByName.bind(personRepo),
+    create: personRepo.create.bind(personRepo),
+    getProfileWithPrivacy: personRepo.getProfileWithPrivacy.bind(personRepo),
+  },
+
   // Repository instances for advanced operations
   repos: {
     schedule: scheduleRepo, // Consolidated schedules + events
-    admin: adminRepo,      // Enhanced tee-admin table
+    admin: adminRepo,       // Enhanced tee-admin table
+    person: personRepo,     // UUID-based person identity
   },
 }

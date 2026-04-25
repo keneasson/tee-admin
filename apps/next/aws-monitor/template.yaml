@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TEE Admin Health Monitor - Checks site health every 6 hours
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: ken.easson@gmail.com
+    Description: Email address to receive health check alerts
+  FromEmail:
+    Type: String
+    Default: noreply@tee-admin.com
+    Description: Email address to send alerts from (must be verified in SES)
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: nodejs18.x
+    MemorySize: 256
+
+Resources:
+  # Lambda Function
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: tee-admin-health-check
+      Handler: health-check.handler
+      CodeUri: .
+      Description: Monitors TEE Admin website and API health
+      Environment:
+        Variables:
+          ALERT_EMAIL: !Ref AlertEmail
+          FROM_EMAIL: !Ref FromEmail
+      Policies:
+        - SESCrudPolicy:
+            IdentityName: !Ref FromEmail
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+      Events:
+        # Run every 6 hours
+        ScheduledCheck:
+          Type: Schedule
+          Properties:
+            Schedule: rate(6 hours)
+            Name: tee-admin-health-check-schedule
+            Description: Run health check every 6 hours
+            Enabled: true
+        # Also allow manual invocation via HTTP
+        ManualTrigger:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: get
+            RestApiId: !Ref HealthCheckApi
+
+  # API Gateway for manual triggers and status page
+  HealthCheckApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: tee-admin-health-api
+      StageName: prod
+      Description: API for TEE Admin health monitoring
+      Cors:
+        AllowMethods: "'GET,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  # CloudWatch Alarm for failed health checks
+  HealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: tee-admin-health-check-failures
+      AlarmDescription: Alarm when health check Lambda reports failures
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 21600  # 6 hours
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HealthCheckFunction
+      TreatMissingData: notBreaching
+
+Outputs:
+  HealthCheckFunctionArn:
+    Description: Health Check Lambda Function ARN
+    Value: !GetAtt HealthCheckFunction.Arn
+
+  HealthCheckApiUrl:
+    Description: URL to manually trigger health check
+    Value: !Sub "https://${HealthCheckApi}.execute-api.${AWS::Region}.amazonaws.com/prod/health"
+
+  CloudWatchLogsUrl:
+    Description: CloudWatch Logs for the health check
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/$252Faws$252Flambda$252F${HealthCheckFunction}"

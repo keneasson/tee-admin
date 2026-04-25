@@ -26,14 +26,42 @@ type ReadingsType = {
 async function get_json(range: Date[]) {
   const json = await import('../../../../data/daily-readings.json')
   const [start, end] = range
-  // console.log('start & end', { start, end })
   const readings = json.default as unknown as ReadingsType[]
-  return readings.filter((row, i, j) => {
+
+  // Handle year rollover (Dec → Jan)
+  // If end is in a different year than start, we need to check both years for each date
+  const startYear = start.getUTCFullYear()
+  const endYear = end.getUTCFullYear()
+
+  // Filter and collect matching readings with their actual dates for sorting
+  const matchedReadings: Array<{ reading: ReadingsType; sortDate: Date }> = []
+
+  for (const row of readings) {
     const date = Object.keys(row)[0]
-    const dateObj = new Date(`${date}, ${start.getUTCFullYear()}`)
-    const dateOnly = stripTime(dateObj)
-    return dateOnly >= start && dateOnly <= end
-  })
+
+    // Try the date with start year first
+    let dateObj = new Date(`${date}, ${startYear}`)
+    let dateOnly = stripTime(dateObj)
+
+    if (dateOnly >= start && dateOnly <= end) {
+      matchedReadings.push({ reading: row, sortDate: dateOnly })
+      continue
+    }
+
+    // If years differ and date didn't match, try with end year (for Jan dates when crossing year boundary)
+    if (startYear !== endYear) {
+      dateObj = new Date(`${date}, ${endYear}`)
+      dateOnly = stripTime(dateObj)
+      if (dateOnly >= start && dateOnly <= end) {
+        matchedReadings.push({ reading: row, sortDate: dateOnly })
+      }
+    }
+  }
+
+  // Sort by date chronologically
+  matchedReadings.sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime())
+
+  return matchedReadings.map(m => m.reading)
 }
 
 function setDefaultRange() {

@@ -1,0 +1,8 @@
+# SAM build artifacts
+.aws-sam/
+
+# Node modules
+node_modules/
+
+# Local test output
+output.json

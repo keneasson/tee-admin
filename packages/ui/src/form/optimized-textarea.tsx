@@ -56,17 +56,15 @@ export function OptimizedTextarea<T extends FieldValues>({
       <YStack>
         <Label htmlFor={name} fontSize="$4" fontWeight="600">
           {label}
-          {required && <Text color="$red10"> *</Text>}
+          {required ? <Text color="$red10"> *</Text> : null}
         </Label>
-        {maxLength && (
-          <Text 
+        {maxLength ? <Text 
             fontSize="$2" 
             color={isOverLimit ? '$red10' : isNearLimit ? '$orange10' : '$gray10'}
             alignSelf="flex-end"
           >
             {characterCount}/{maxLength}
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
       
       <TextArea
@@ -87,22 +85,20 @@ export function OptimizedTextarea<T extends FieldValues>({
         }}
         disabled={disabled}
         rows={rows}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete as any}
         maxLength={maxLength}
         paddingHorizontal="$3"
         paddingVertical="$2.5"
         // Performance optimizations
         textAlignVertical="top"
         multiline
-        // Prevent text node issues in React Native
+        // @ts-expect-error - suppressHydrationWarning is a web-only prop
         suppressHydrationWarning
       />
       
-      {error && (
-        <Text color="$red11" fontSize="$3">
+      {error ? <Text color="$red11" fontSize="$3">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

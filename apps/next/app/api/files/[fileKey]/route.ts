@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getFileStorageService } from '@/utils/file-storage'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { fileKey: string } }
+  { params }: { params: Promise<{ fileKey: string }> }
 ) {
   try {
     // Check authentication
     const session = await auth()
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Require admin/owner for file deletion
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
 
-    const { fileKey } = params
+    const { fileKey } = await params
 
     if (!fileKey) {
       return NextResponse.json({ error: 'File key is required' }, { status: 400 })
@@ -43,16 +49,21 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { fileKey: string } }
+  { params }: { params: Promise<{ fileKey: string }> }
 ) {
   try {
     // Check authentication
     const session = await auth()
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Require at least member role for file access
+    const getCallerRole = (session.user as any).role as string || ROLES.GUEST
+    if (getCallerRole === ROLES.GUEST || getCallerRole === ROLES.DECEASED) {
+      return NextResponse.json({ error: 'Member access required' }, { status: 403 })
+    }
 
-    const { fileKey } = params
+    const { fileKey } = await params
 
     if (!fileKey) {
       return NextResponse.json({ error: 'File key is required' }, { status: 400 })

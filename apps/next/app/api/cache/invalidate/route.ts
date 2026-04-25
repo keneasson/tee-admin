@@ -13,8 +13,15 @@ export async function POST(request: NextRequest) {
   try {
     // Authenticate user - only admins/owners can invalidate cache
     const session = await auth()
-    
-    if (!session?.user?.id) {
+
+    console.log('🔐 Cache invalidate auth check:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userEmail: session?.user?.email,
+      userRole: session?.user?.role,
+    })
+
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -98,7 +105,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }

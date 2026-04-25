@@ -1,4 +1,4 @@
-import { Event, EventType } from '@my/app/types/events'
+import { Event, EventType, isEventActive } from '@my/app/types/events'
 import {
   Pencil,
   Calendar,
@@ -11,8 +11,9 @@ import {
   Mic,
   Trash,
 } from '@tamagui/lucide-icons'
-import { useState } from 'react'
-import { Button, Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet } from 'tamagui'
+import { useState, useEffect } from 'react'
+import { Card, Text, XStack, YStack, ScrollView, Circle, Input, Dialog, Sheet, AnimatePresence } from 'tamagui'
+import { Button } from '../Button'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 
 interface EventListSelectorProps {
@@ -24,7 +25,7 @@ interface EventListSelectorProps {
   isLoading?: boolean
 }
 
-function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void; onDelete?: (event: Event) => void }) {
+function EventCard({ event, onSelect, onPreview, onDelete, isDeleting }: { event: Event; onSelect: (event: Event) => void; onPreview?: (event: Event) => void; onDelete?: (event: Event) => void; isDeleting?: boolean }) {
   const getEventDateDisplay = (event: Event): string => {
     switch (event.type) {
       case 'study-weekend':
@@ -36,8 +37,13 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
         break
       case 'wedding':
         return event.ceremonyDate ? new Date(event.ceremonyDate).toLocaleDateString() : 'Date TBD'
-      case 'baptism':
-        return event.baptismDate ? new Date(event.baptismDate).toLocaleDateString() : 'Date TBD'
+      case 'baptism': {
+        if (!event.baptismDate) return 'Date TBD'
+        const d = new Date(event.baptismDate)
+        const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        if (d.getHours() === 0 && d.getMinutes() === 0) return date
+        return `${date} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+      }
       case 'funeral':
         return event.serviceDate ? new Date(event.serviceDate).toLocaleDateString() : 'Date TBD'
       case 'general':
@@ -63,7 +69,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             frequencyText = `bi-weekly ${selectedDays}`
           } else if (frequency === 'monthly') {
             frequencyText = 'monthly'
-          } else if ((frequency as any) === 'custom') {
+          } else if (frequency === 'custom') {
             frequencyText = 'custom dates'
           }
           
@@ -116,54 +122,58 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
     return ''
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return '$orange11'
-      case 'published':
-      case 'ready':
-        return '$green11'
-      case 'archived':
-        return '$red11'
-      default:
-        return '$blue11'
-    }
+  // Use new active field with legacy fallback
+  const active = isEventActive(event)
+
+  const getStatusColor = () => {
+    if (active) return '$green11'
+    if (event.status === 'archived') return '$red11'
+    return '$orange11' // Inactive/draft
   }
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return '$orange3'
-      case 'published':
-      case 'ready':
-        return '$green3'
-      case 'archived':
-        return '$red3'
-      default:
-        return '$blue3'
-    }
+  const getStatusBadgeColor = () => {
+    if (active) return '$green3'
+    if (event.status === 'archived') return '$red3'
+    return '$orange3' // Inactive/draft
   }
 
-  const getStatusDisplayName = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'Ready'
-      case 'ready':
-        return 'Ready'
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1)
-    }
+  const getStatusDisplayName = () => {
+    if (active) return 'Active'
+    if (event.status === 'archived') return 'Archived'
+    return 'Inactive'
   }
 
   const secondaryInfo = getEventSecondaryInfo(event)
   const dateDisplay = getEventDateDisplay(event)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false)
+    // Trigger the parent's delete handler which will set isDeleting
+    onDelete?.(event)
+  }
+
   return (
     <Card
       padding="$4"
       borderWidth={1}
       borderColor="$borderColor"
+      animation="quick"
+      opacity={isDeleting ? 0 : 1}
+      height={isDeleting ? 0 : 'auto'}
+      overflow="hidden"
+      marginVertical={isDeleting ? 0 : '$2'}
+      scale={isDeleting ? 0.95 : 1}
+      enterStyle={{
+        opacity: 0,
+        height: 0,
+        scale: 0.95,
+      }}
+      exitStyle={{
+        opacity: 0,
+        height: 0,
+        scale: 0.95,
+      }}
     >
       <YStack>
         <XStack justifyContent="space-between" alignItems="flex-start">
@@ -178,11 +188,9 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             </Text>
 
             {/* Secondary info (names, theme, etc) */}
-            {secondaryInfo && (
-              <Text fontSize="$4" color="$color" marginTop="$1">
+            {secondaryInfo ? <Text fontSize="$4" color="$color" marginTop="$1">
                 {secondaryInfo}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
 
           {/* Status badge and Action buttons aligned */}
@@ -191,28 +199,26 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             <XStack
               paddingHorizontal="$2"
               paddingVertical="$1"
-              backgroundColor={getStatusBadgeColor(event.status)}
+              backgroundColor={getStatusBadgeColor()}
               borderRadius="$2"
               alignItems="center"
             >
-              <Text fontSize="$2" color={getStatusColor(event.status)} fontWeight="500">
-                {getStatusDisplayName(event.status)}
+              <Text fontSize="$2" color={getStatusColor()} fontWeight="500">
+                {getStatusDisplayName()}
               </Text>
             </XStack>
             
             {/* Action buttons */}
-            {onPreview && (
-              <Button 
-                size="$3" 
-                variant="ghost" 
+            {onPreview ? <Button
+                size="$3"
+                chromeless
                 icon={Eye}
                 borderWidth={2}
                 borderColor="$textTertiary"
                 onPress={() => onPreview(event)}
               >
                 Preview
-              </Button>
-            )}
+              </Button> : null}
             <Button 
               size="$3" 
               variant="outlined" 
@@ -223,8 +229,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             >
               Edit
             </Button>
-            {onDelete && (
-              <Button 
+            {onDelete ? <Button 
                 size="$3" 
                 icon={Trash}
                 borderWidth={2}
@@ -238,8 +243,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
                 onPress={() => setShowDeleteConfirm(true)}
               >
                 Delete
-              </Button>
-            )}
+              </Button> : null}
           </XStack>
         </XStack>
 
@@ -256,51 +260,41 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             event.type === 'wedding' ||
             event.type === 'baptism' ||
             event.type === 'general') &&
-            event.hostingEcclesia && (
-              <XStack space="$1" alignItems="center">
+            event.hostingEcclesia ? <XStack space="$1" alignItems="center">
                 <Church size="$1" color="$gray11" />
                 <Text fontSize="$3" color="$gray11">
                   {event.hostingEcclesia.name}
-                  {event.hostingEcclesia.province && (
-                    <Text color="$gray11"> {event.hostingEcclesia.province}</Text>
-                  )}
+                  {event.hostingEcclesia.province ? `, ${event.hostingEcclesia.province}` : ''}
                 </Text>
-              </XStack>
-            )}
+              </XStack> : null}
 
-          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 && (
-            <XStack space="$1" alignItems="center">
+          {event.type === 'study-weekend' && event.speakers && event.speakers.length > 0 ? <XStack space="$1" alignItems="center">
               <Mic size="$1" color="$gray11" />
               <Text fontSize="$3" color="$gray11">
                 {event.speakers.length} Speaker{event.speakers.length > 1 ? 's' : ''}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
 
-          {(event as any).location?.name && (
-            <XStack space="$1" alignItems="center">
+          {(event as any).location?.name ? <XStack space="$1" alignItems="center">
               <MapPin size="$1" color="$gray11" />
               <Text fontSize="$3" color="$gray11">
                 {(event as any).location.name}
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
           </XStack>
         </XStack>
 
         <XStack justifyContent="space-between" alignItems="center" marginTop="$2">
           <Text fontSize="$2" color="$gray11">
-            Updated: {new Date(event.updatedAt).toLocaleDateString()}
+            Created: {new Date(event.createdAt).toLocaleDateString()}
           </Text>
 
-          {event.status === 'published' && (
-            <XStack space="$1" alignItems="center">
+          {active ? <XStack space="$1" alignItems="center">
               <Circle size="$0.5" backgroundColor="$green10" />
               <Text fontSize="$2" color="$green11" fontWeight="500">
-                Published
+                Live
               </Text>
-            </XStack>
-          )}
+            </XStack> : null}
         </XStack>
       </YStack>
       
@@ -318,14 +312,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
             key="content"
             bordered
             elevate
-            animation={[
-              'quick',
-              {
-                opacity: {
-                  overshootClamping: true,
-                },
-              },
-            ]}
+            animation="quick"
             enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
             exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
             space
@@ -356,10 +343,7 @@ function EventCard({ event, onSelect, onPreview, onDelete }: { event: Event; onS
                   backgroundColor: brandColors.light.error,
                   opacity: 0.9
                 }}
-                onPress={() => {
-                  setShowDeleteConfirm(false)
-                  onDelete?.(event)
-                }}
+                onPress={handleConfirmDelete}
               >
                 Delete Event
               </Button>
@@ -384,6 +368,32 @@ export function EventListSelector({
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published' | 'archived'>(
     'all'
   )
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+
+  // Pagination - show 10 events at a time per section
+  const EVENTS_PER_PAGE = 10
+  const [draftVisible, setDraftVisible] = useState(EVENTS_PER_PAGE)
+  const [publishedVisible, setPublishedVisible] = useState(EVENTS_PER_PAGE)
+  const [otherVisible, setOtherVisible] = useState(EVENTS_PER_PAGE)
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setDraftVisible(EVENTS_PER_PAGE)
+    setPublishedVisible(EVENTS_PER_PAGE)
+    setOtherVisible(EVENTS_PER_PAGE)
+  }, [searchTerm, filterType, filterStatus])
+
+  // Handle delete with animation
+  const handleDelete = (event: Event) => {
+    // Start the collapse animation
+    setDeletingEventId(event.id)
+
+    // Wait for animation to complete (400ms for "medium" animation), then actually delete
+    setTimeout(() => {
+      onDelete?.(event)
+      setDeletingEventId(null)
+    }, 400)
+  }
 
   // Filter events based on search and filters
   const filteredEvents = events.filter((event) => {
@@ -438,10 +448,28 @@ export function EventListSelector({
     return true
   })
 
-  // Group events by status for better organization
-  const draftEvents = filteredEvents.filter((e) => e.status === 'draft')
-  const publishedEvents = filteredEvents.filter((e) => e.status === 'published')
-  const otherEvents = filteredEvents.filter((e) => e.status !== 'draft' && e.status !== 'published')
+  // Sort events by createdAt descending (newest first) - per user request
+  const sortByDate = (a: Event, b: Event) => {
+    const dateA = new Date(a.createdAt).getTime()
+    const dateB = new Date(b.createdAt).getTime()
+    return dateB - dateA // Descending order (newest first)
+  }
+
+  // Group events by active state for better organization, sorted by date descending (newest first)
+  // Use isEventActive helper for backward compatibility with legacy status field
+  const inactiveEvents = filteredEvents.filter((e) => !isEventActive(e) && e.status !== 'archived').sort(sortByDate)
+  const activeEvents = filteredEvents.filter((e) => isEventActive(e)).sort(sortByDate)
+  const archivedEvents = filteredEvents.filter((e) => e.status === 'archived').sort(sortByDate)
+
+  // Paginated views - show only up to the visible count
+  const visibleInactiveEvents = inactiveEvents.slice(0, draftVisible)
+  const visibleActiveEvents = activeEvents.slice(0, publishedVisible)
+  const visibleArchivedEvents = archivedEvents.slice(0, otherVisible)
+
+  // Check if there are more events to load
+  const hasMoreInactive = inactiveEvents.length > draftVisible
+  const hasMoreActive = activeEvents.length > publishedVisible
+  const hasMoreArchived = archivedEvents.length > otherVisible
 
   return (
     <YStack space="$4">
@@ -463,28 +491,28 @@ export function EventListSelector({
             </YStack>
 
             <Button
-              variant={filterType === 'all' ? 'solid' : 'outlined'}
+              variant={filterType === 'all' ? undefined : 'outlined'}
               onPress={() => setFilterType('all')}
               size="$3"
             >
               All Types
             </Button>
             <Button
-              variant={filterType === 'study-weekend' ? 'solid' : 'outlined'}
+              variant={filterType === 'study-weekend' ? undefined : 'outlined'}
               onPress={() => setFilterType('study-weekend')}
               size="$3"
             >
               Study Weekend
             </Button>
             <Button
-              variant={filterType === 'baptism' ? 'solid' : 'outlined'}
+              variant={filterType === 'baptism' ? undefined : 'outlined'}
               onPress={() => setFilterType('baptism')}
               size="$3"
             >
               Baptism
             </Button>
             <Button
-              variant={filterType === 'wedding' ? 'solid' : 'outlined'}
+              variant={filterType === 'wedding' ? undefined : 'outlined'}
               onPress={() => setFilterType('wedding')}
               size="$3"
             >
@@ -494,25 +522,25 @@ export function EventListSelector({
 
           <XStack space="$2">
             <Button
-              variant={filterStatus === 'all' ? 'solid' : 'outlined'}
+              variant={filterStatus === 'all' ? undefined : 'outlined'}
               onPress={() => setFilterStatus('all')}
               size="$3"
             >
               All Status
             </Button>
             <Button
-              variant={filterStatus === 'draft' ? 'solid' : 'outlined'}
-              onPress={() => setFilterStatus('draft')}
-              size="$3"
-            >
-              Drafts
-            </Button>
-            <Button
-              variant={filterStatus === 'published' ? 'solid' : 'outlined'}
+              variant={filterStatus === 'published' ? undefined : 'outlined'}
               onPress={() => setFilterStatus('published')}
               size="$3"
             >
-              Published
+              Active
+            </Button>
+            <Button
+              variant={filterStatus === 'draft' ? undefined : 'outlined'}
+              onPress={() => setFilterStatus('draft')}
+              size="$3"
+            >
+              Inactive
             </Button>
           </XStack>
         </YStack>
@@ -540,59 +568,98 @@ export function EventListSelector({
         </Card>
       ) : (
         <YStack space="$4">
-          {/* Draft Events Section */}
-          {draftEvents.length > 0 && (
-            <YStack space="$3">
+          {/* Inactive Events Section (shown first - these are drafts/WIP) */}
+          {inactiveEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
                 <Circle size="$1" backgroundColor="$gray8" />
                 <Text fontSize="$5" fontWeight="600" color="$gray11">
-                  Draft Events ({draftEvents.length})
+                  Inactive Events ({inactiveEvents.length})
                 </Text>
               </XStack>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {draftEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+              <YStack space="$3">
+                {visibleInactiveEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreInactive ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setDraftVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({inactiveEvents.length - draftVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
 
-          {/* Published Events Section */}
-          {publishedEvents.length > 0 && (
-            <YStack space="$3">
+          {/* Active Events Section */}
+          {activeEvents.length > 0 ? <YStack space="$3">
               <XStack space="$2" alignItems="center">
                 <Circle size="$1" backgroundColor="$green8" />
                 <Text fontSize="$5" fontWeight="600" color="$green11">
-                  Published Events ({publishedEvents.length})
+                  Active Events ({activeEvents.length})
                 </Text>
               </XStack>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {publishedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+              <YStack space="$3">
+                {visibleActiveEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreActive ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setPublishedVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({activeEvents.length - publishedVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
 
-          {/* Other Events Section */}
-          {otherEvents.length > 0 && (
-            <YStack space="$3">
-              <Text fontSize="$5" fontWeight="600">
-                Other Events ({otherEvents.length})
-              </Text>
-              <ScrollView maxHeight="400">
-                <YStack space="$3">
-                  {otherEvents.map((event) => (
-                    <EventCard key={event.id} event={event} onSelect={onSelect} onPreview={onPreview} onDelete={onDelete} />
-                  ))}
-                </YStack>
-              </ScrollView>
-            </YStack>
-          )}
+          {/* Archived Events Section */}
+          {archivedEvents.length > 0 ? <YStack space="$3">
+              <XStack space="$2" alignItems="center">
+                <Circle size="$1" backgroundColor="$red8" />
+                <Text fontSize="$5" fontWeight="600" color="$red11">
+                  Archived Events ({archivedEvents.length})
+                </Text>
+              </XStack>
+              <YStack space="$3">
+                {visibleArchivedEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onSelect={onSelect}
+                    onPreview={onPreview}
+                    onDelete={handleDelete}
+                    isDeleting={deletingEventId === event.id}
+                  />
+                ))}
+                {hasMoreArchived ? (
+                  <Button
+                    variant="outlined"
+                    onPress={() => setOtherVisible((prev) => prev + EVENTS_PER_PAGE)}
+                    alignSelf="center"
+                  >
+                    Load More ({archivedEvents.length - otherVisible} remaining)
+                  </Button>
+                ) : null}
+              </YStack>
+            </YStack> : null}
         </YStack>
       )}
     </YStack>

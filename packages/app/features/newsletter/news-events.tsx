@@ -1,32 +1,99 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { YStack, Heading, Text } from '@my/ui'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { Loading } from '@my/app/provider/loading'
-import { useRouter } from 'next/navigation'
+import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
+import type { DisplayDuration } from '@my/app/types/newsletter-rules'
 
 type EventTypeOrder = {
   [key: string]: number
 }
 
+type EventTypeRule = {
+  displayDuration: DisplayDuration
+  priority: number
+  includeInSummary: boolean
+  requiresCTA: boolean
+}
+
 const EVENT_TYPE_ORDER: EventTypeOrder = {
   'recurring': 1,
   'funeral': 2,
-  'wedding': 3,
-  'baptism': 4,
-  'study-weekend': 5,
-  'general': 6
+  'engagement': 3,  // Grouped with wedding, but engagements first
+  'wedding': 4,
+  'baptism': 5,
+  'study-weekend': 6,
+  'general': 7,
+  'election-cycle': 8
 }
 
 const EVENT_TYPE_LABELS: { [key: string]: string } = {
   'recurring': 'Recurring Events',
   'funeral': 'Funerals',
+  'engagement': 'Engagements',
   'wedding': 'Weddings',
   'baptism': 'Baptisms',
   'study-weekend': 'Study Weekends',
-  'general': 'General Events'
+  'general': 'General Events',
+  'election-cycle': 'Election Cycles'
 }
+
+// Event display duration rules
+const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
+  'recurring': {
+    displayDuration: 'until_event_date',
+    priority: 1,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'funeral': {
+    displayDuration: '2_weeks_then_thursday_before',
+    priority: 2,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'engagement': {
+    displayDuration: '3_weeks_from_publish',
+    priority: 3,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'wedding': {
+    displayDuration: '3_weeks_or_until_event_date',
+    priority: 4,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'baptism': {
+    displayDuration: '1_week_after_event',
+    priority: 5,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'study-weekend': {
+    displayDuration: 'until_event_date',
+    priority: 6,
+    includeInSummary: true,
+    requiresCTA: true,
+  },
+  'general': {
+    displayDuration: 'until_event_date',
+    priority: 7,
+    includeInSummary: true,
+    requiresCTA: false,
+  },
+  'election-cycle': {
+    displayDuration: 'until_event_date',
+    priority: 8,
+    includeInSummary: false, // Election cycle triggers a message, not shown as an event
+    requiresCTA: false,
+  },
+}
+
+// Fresh event threshold - events created within this time are sorted by creation date
+const FRESH_EVENT_DAYS = 7
 
 interface NewsletterEventsProps {
   // Optional prop to limit to specific date range for newsletter
@@ -34,35 +101,92 @@ interface NewsletterEventsProps {
     start: Date
     end: Date
   }
+  // Optional prop to exclude certain event types (e.g., baptism, wedding, funeral shown elsewhere)
+  excludeTypes?: string[]
+  /**
+   * Optional callback when an event is pressed
+   * Platform-specific navigation should be handled by the caller
+   * If not provided, events are not clickable
+   */
+  onEventPress?: (eventId: string) => void
 }
 
-export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
+export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange, excludeTypes = [], onEventPress }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
 
   useEffect(() => {
     const fetchEvents = async () => {
+      console.log('🚀 NewsEvents: Starting to fetch events...')
       try {
-        const response = await fetch('/api/events/public')
+        // Force cache bypass with timestamp in development
+        const cacheBuster = process.env.NODE_ENV === 'development' ? `?_t=${Date.now()}` : ''
+        console.log(`📡 Fetching from: /api/events/public${cacheBuster}`)
+        const response = await fetch(`/api/events/public${cacheBuster}`, {
+          cache: 'no-store', // Let server handle caching
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        })
         if (!response.ok) {
           throw new Error('Failed to fetch events')
         }
         const data = await response.json()
-        
-        // Only show published/ready events
-        const publishedEvents = data.filter((event: Event) => 
-          event.status === 'published' || event.status === 'ready'
-        )
-        
-        // Filter by date range if provided
-        let filteredEvents = publishedEvents
+        console.log(`📦 Received ${data.length} events from API:`, data.map((e: Event) => e.title))
+
+        // Only show active events (uses new active field with legacy fallback)
+        const publishedEvents = data.filter((event: Event) => isEventActive(event))
+
+        // Filter by event duration rules
+        const currentDate = new Date()
+        console.log('📅 Current date for filtering:', currentDate.toISOString())
+
+        const filteredByDuration = publishedEvents.filter((event: Event) => {
+          const rule = EVENT_DURATION_RULES[event.type]
+          if (!rule) {
+            console.warn(`No duration rule found for event type: ${event.type}`)
+            return true // Include if no rule defined
+          }
+
+          // Use EventDurationCalculator to determine if event should be included
+          const context = {
+            event,
+            rule,
+            currentDate,
+            firstIncludedDate: (event as any).newsletter?.firstIncludedDate
+              ? new Date((event as any).newsletter.firstIncludedDate)
+              : undefined
+          }
+
+          const result = EventDurationCalculator.shouldIncludeEvent(context)
+
+          // Always log filtering decisions in development
+          console.log(`Event "${event.title}" (${event.type}):`, {
+            shouldInclude: result.shouldInclude,
+            reason: result.reason,
+            displayUntilDate: result.displayUntilDate?.toISOString(),
+          })
+
+          return result.shouldInclude
+        })
+
+        console.log(`✅ Filtered ${publishedEvents.length} events down to ${filteredByDuration.length} based on duration rules`)
+
+        // Filter out excluded event types
+        let filteredEvents = filteredByDuration
+        if (excludeTypes.length > 0) {
+          filteredEvents = filteredEvents.filter((event: Event) => !excludeTypes.includes(event.type))
+          console.log(`📋 Excluded types ${excludeTypes.join(', ')}: ${filteredByDuration.length} → ${filteredEvents.length} events`)
+        }
+
+        // Filter by date range if provided (additional filtering on top of duration rules)
         if (dateRange) {
-          filteredEvents = publishedEvents.filter((event: Event) => {
+          filteredEvents = filteredEvents.filter((event: Event) => {
             // Check various date fields depending on event type
             let eventDate: Date | null = null
-            
+
             if (event.type === 'study-weekend' && event.dateRange) {
               eventDate = new Date(event.dateRange.start)
             } else if (event.type === 'wedding' && event.ceremonyDate) {
@@ -74,13 +198,13 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
             } else if (event.startDate) {
               eventDate = new Date(event.startDate)
             }
-            
+
             if (!eventDate) return false
-            
+
             return eventDate >= dateRange.start && eventDate <= dateRange.end
           })
         }
-        
+
         setEvents(filteredEvents)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')
@@ -92,26 +216,47 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
     fetchEvents()
   }, [dateRange])
 
-  const groupEventsByType = (events: Event[]) => {
-    const grouped: { [key: string]: Event[] } = {}
-    
+  // Get the publish/announcement date for an event (publishDate if set, otherwise createdAt)
+  const getPublishDate = (event: Event): Date => {
+    if (event.publishDate) return new Date(event.publishDate)
+    if (event.createdAt) return new Date(event.createdAt)
+    return new Date(0)
+  }
+
+  // Sort events by type order, then by publish date within same type
+  const sortByTypeOrder = (a: Event, b: Event) => {
+    const aType = a.type || 'general'
+    const bType = b.type || 'general'
+    const typeOrderDiff = (EVENT_TYPE_ORDER[aType] || 999) - (EVENT_TYPE_ORDER[bType] || 999)
+    if (typeOrderDiff !== 0) return typeOrderDiff
+
+    // Same type: sort by publish date (newest first)
+    const aPublishDate = getPublishDate(a)
+    const bPublishDate = getPublishDate(b)
+    return bPublishDate.getTime() - aPublishDate.getTime()
+  }
+
+  const groupEventsByFreshness = (events: Event[]): { fresh: Event[], older: Event[] } => {
+    const now = new Date()
+    const freshThreshold = new Date(now.getTime() - FRESH_EVENT_DAYS * 24 * 60 * 60 * 1000)
+
+    const fresh: Event[] = []
+    const older: Event[] = []
+
     events.forEach(event => {
-      const eventType = event.type || 'general'
-      if (!grouped[eventType]) {
-        grouped[eventType] = []
+      const publishDate = getPublishDate(event)
+      if (publishDate >= freshThreshold) {
+        fresh.push(event)
+      } else {
+        older.push(event)
       }
-      grouped[eventType].push(event)
     })
-    
-    // Sort groups by the defined order
-    const sortedGroups: { [key: string]: Event[] } = {}
-    Object.keys(grouped)
-      .sort((a, b) => (EVENT_TYPE_ORDER[a] || 999) - (EVENT_TYPE_ORDER[b] || 999))
-      .forEach(key => {
-        sortedGroups[key] = grouped[key]
-      })
-    
-    return sortedGroups
+
+    // Sort each group by type order
+    fresh.sort(sortByTypeOrder)
+    older.sort(sortByTypeOrder)
+
+    return { fresh, older }
   }
 
   if (loading) {
@@ -134,26 +279,20 @@ export const NewsEvents: React.FC<NewsletterEventsProps> = ({ dateRange }) => {
     )
   }
 
-  const groupedEvents = groupEventsByType(events)
+  const { fresh, older } = groupEventsByFreshness(events)
+
+  // Combine fresh and older events into a single sorted list
+  const allSorted = [...fresh, ...older]
 
   return (
-    <YStack gap="$4">
-      {Object.entries(groupedEvents).map(([eventType, typeEvents]) => (
-        <YStack key={eventType} gap="$3">
-          <Heading size={3} fontFamily="$body" fontWeight="500" color="$textSecondary">
-            {EVENT_TYPE_LABELS[eventType] || eventType}
-          </Heading>
-          <YStack gap="$3">
-            {typeEvents.map((event) => (
-              <EventSummaryCard
-                key={event.id}
-                event={event}
-                variant="newsletter"
-                onPress={() => router.push(`/events/${event.id}`)}
-              />
-            ))}
-          </YStack>
-        </YStack>
+    <YStack gap="$3">
+      {allSorted.map((event) => (
+        <EventSummaryCard
+          key={event.id}
+          event={event}
+          variant="newsletter"
+          onPress={onEventPress ? () => onEventPress(event.id) : undefined}
+        />
       ))}
     </YStack>
   )

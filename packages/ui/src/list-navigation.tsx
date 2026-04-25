@@ -1,5 +1,6 @@
 import React from 'react'
-import { Button, styled } from 'tamagui'
+import { styled } from 'tamagui'
+import { Button } from './Button'
 
 type ListSelectorProps = {
   children?: React.ReactNode

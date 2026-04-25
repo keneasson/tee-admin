@@ -28,8 +28,7 @@ export function ComponentShowcase({ title, description, children, code, variants
         </Text>
       </YStack>
       
-      {variants && variants.length > 0 && (
-        <XStack gap="$2" flexWrap="wrap">
+      {variants && variants.length > 0 ? <XStack gap="$2" flexWrap="wrap">
           {variants.map((variant, index) => (
             <Button
               key={variant.name}
@@ -40,8 +39,7 @@ export function ComponentShowcase({ title, description, children, code, variants
               {variant.name}
             </Button>
           ))}
-        </XStack>
-      )}
+        </XStack> : null}
       
       <View
         backgroundColor="$backgroundSecondary"
@@ -55,8 +53,7 @@ export function ComponentShowcase({ title, description, children, code, variants
         )}
       </View>
       
-      {code && (
-        <YStack gap="$2">
+      {code ? <YStack gap="$2">
           <Button
             variant={showCode ? 'outlined' : undefined}
             onPress={() => setShowCode(!showCode)}
@@ -65,8 +62,7 @@ export function ComponentShowcase({ title, description, children, code, variants
             {showCode ? 'Hide' : 'Show'} Code
           </Button>
           
-          {showCode && (
-            <View
+          {showCode ? <View
               backgroundColor="$backgroundTertiary"
               borderRadius="$4"
               padding="$3"
@@ -76,10 +72,8 @@ export function ComponentShowcase({ title, description, children, code, variants
               <Text fontFamily="monospace" fontSize="$2">
                 {code}
               </Text>
-            </View>
-          )}
-        </YStack>
-      )}
+            </View> : null}
+        </YStack> : null}
     </YStack>
   )
 }

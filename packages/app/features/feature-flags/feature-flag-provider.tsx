@@ -11,17 +11,10 @@ interface FeatureFlagContextType {
 
 const FeatureFlagContext = createContext<FeatureFlagContextType | undefined>(undefined)
 
-interface FeatureFlagProviderProps {
-  children: ReactNode
-}
-
-export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
+export function FeatureFlagProvider({ children }: { children: ReactNode }) {
   const flags = useFeatureFlags()
-  
-  const isEnabled = (flag: FeatureFlag): boolean => {
-    return flags[flag] || false
-  }
-  
+  const isEnabled = (flag: FeatureFlag): boolean => flags[flag] || false
+
   return (
     <FeatureFlagContext.Provider value={{ flags, isEnabled }}>
       {children}
@@ -35,16 +28,4 @@ export function useFeatureFlagContext(): FeatureFlagContextType {
     throw new Error('useFeatureFlagContext must be used within a FeatureFlagProvider')
   }
   return context
-}
-
-interface FeatureGateProps {
-  flag: FeatureFlag
-  children: ReactNode
-  fallback?: ReactNode
-}
-
-export function FeatureGate({ flag, children, fallback = null }: FeatureGateProps) {
-  const { isEnabled } = useFeatureFlagContext()
-  
-  return isEnabled(flag) ? <>{children}</> : <>{fallback}</>
 }

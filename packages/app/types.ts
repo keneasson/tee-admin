@@ -30,11 +30,63 @@ export enum EmailListTypes {
   newsletter = 'newsletter',
   memorial = 'memorial',
   bibleClass = 'bibleClass',
+  members = 'members',
   testList = 'testList',
+  interEcclesia = 'interEcclesia',
 }
 
 export type ProgramTypeKeys = keyof typeof ProgramsTypes
 export type EmailListTypeKeys = keyof typeof EmailListTypes
+
+/**
+ * Email reason types for sending emails
+ * Moved from apps/next/utils/email/email-send.tsx for cross-platform compatibility
+ */
+export type EmailReasonType =
+  | 'sunday-school'
+  | 'newsletter'
+  | 'bible-class'
+  | 'recap'
+  | 'business-meeting'
+  | 'custom'
+  | 'event-announcement'
+  | 'inter-ecclesia'
+
+/**
+ * Sub-reason for categorizing the purpose of an email send.
+ * Especially valuable for inter-ecclesia and custom emails.
+ */
+export type EmailSubReason =
+  | 'memorial'
+  | 'lecture'
+  | 'fraternal'
+  | 'youth'
+  | 'schedule'
+  | 'transfer'
+  | 'appeal'
+  | 'correction'
+  | 'general'
+
+/**
+ * Auth session types for cross-platform components
+ * Components in packages/app should receive these as props, not use next-auth hooks
+ */
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
+
+export interface AuthSession {
+  user?: {
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    role?: string
+  }
+  expires?: string
+}
+
+export interface AuthProps {
+  session: AuthSession | null
+  status: AuthStatus
+}
 
 export type GoogleSheet = {
   name: string
@@ -71,6 +123,9 @@ export type ContactPreferences = {
   unsubscribed: boolean
   displayName: string
   preferences: ContactsEmailPreferences
+  firstName?: string
+  lastName?: string
+  isMember?: boolean
 }
 
 export type ContactListMeta = {
@@ -128,6 +183,9 @@ export type MemorialServiceType = {
   'Hymn-memorial': string
   'Hymn-closing': string
   YouTube: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T16:00:00.000Z"
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 }
 
 export type SundaySchoolType = {
@@ -135,16 +193,22 @@ export type SundaySchoolType = {
   Key: ProgramsTypes.sundaySchool
   Refreshments: string
   'Holidays and Special Events'?: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T14:30:00.000Z"
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 }
 
 export type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
 export type NextMemorialServiceProps = {
   events: SundayEvents[]
+  note?: string
+  upcomingEvents?: import('@my/app/types/events').Event[]
 }
 
 export type NextSundaySchoolProps = {
   events: SundaySchoolType[]
+  note?: string
 }
 
 export type BibleClassType = {
@@ -153,10 +217,25 @@ export type BibleClassType = {
   Presider: string
   Speaker: string
   Topic: string
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC: "2026-02-06T00:30:00.000Z" (7:30pm Toronto)
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
+  // Joint Bible Class fields (from Google Sheets)
+  MetaData?: string            // Descriptive title e.g. "joint Bible Class at MWE and via Zoom"
+  Host?: string                // Host ecclesia name
+  ZoomURL?: string             // Override Zoom URL
+  MeetingID?: string           // Override Meeting ID
+  MeetingPwd?: string          // Override Meeting Password
+  InPerson?: string            // "Yes" or full address
+  // Resolved at render time (not from Sheets)
+  resolvedAddress?: string     // Full address from ecclesia lookup
+  resolvedVenue?: string       // Venue name from ecclesia lookup
+  resolvedMapUrl?: string      // Google Maps link for the host ecclesia
 }
 
 export type NextBibleClassProps = {
   events: BibleClassType[]
+  note?: string
 }
 
 export type NextNewsletterProps = {
@@ -178,6 +257,9 @@ type CycSpecial = {
 export type CycType = {
   Date: Date
   Key: ProgramsTypes.cyc
+  // Timezone-aware datetime fields
+  DateTime?: string        // Full ISO datetime in UTC
+  ServiceTimezone?: string // IANA timezone: "America/Toronto"
 } & (CycRegular | CycSpecial)
 
 export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType

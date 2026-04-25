@@ -12,7 +12,7 @@ const headingFont = createInterFont({
     6: 15,
   },
   transform: {
-    6: 'uppercase',
+    6: 'none',
     7: 'none',
   },
   weight: {
@@ -67,9 +67,7 @@ export const config = createTamagui({
     body: bodyFont,
     heading: headingFont,
   },
-  settings: {
-    allowedStyleValues: 'somewhat-strict',
-  },
+  settings: {},
   themes: {
     ...themes,
     ...teeThemes,

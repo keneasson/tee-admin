@@ -8,33 +8,45 @@ import { XStack, YStack, Card, Text } from 'tamagui'
 import { Section } from '@my/app/features/newsletter/Section'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { EventDetailView } from '@my/ui/src/events/event-detail-view'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
+
+export type BackLink = {
+  href: string
+  label: string
+}
 
 type EventProps = {
   eventId?: string | string[]
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
+  backLink?: BackLink
 }
-export const Events: React.FC<EventProps> = ({ eventId }) => {
+export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
   if (!eventId) {
-    return <EventListing />
+    return <EventListing userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
   }
-  
+
   // Handle legacy study weekend
   if (eventId === 'study-weekend-2024') {
     return <StudyWeekend2024 />
   }
-  
+
   // Handle dynamic events
   if (typeof eventId === 'string') {
-    return <DynamicEventDetail eventId={eventId} />
+    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} backLink={backLink} />
   }
-  
-  return <EventListing isNotFound={true} />
+
+  return <EventListing isNotFound={true} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
 }
 
 type EventListingProps = {
   isNotFound?: boolean
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
 }
-export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
+export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole, isMemberOrHigher = false, isAuthLoading = false }) => {
   const router = useRouter()
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,10 +60,8 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
           throw new Error('Failed to fetch events')
         }
         const data = await response.json()
-        // Only show published/ready events on public page
-        const publishedEvents = data.filter((event: Event) => 
-          event.status === 'published' || event.status === 'ready'
-        )
+        // Only show active events on public page
+        const publishedEvents = data.filter((event: Event) => isEventActive(event))
         setEvents(publishedEvents)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')
@@ -68,7 +78,7 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
   }
 
   return (
-    <Wrapper subHheader={'Events hosted by Toronto East'}>
+    <Wrapper subHeader={'Events hosted by Toronto East'}>
       {isNotFound ? (
         <Section>
           <Paragraph color={'red'}>The event you were looking for was not found. </Paragraph>
@@ -103,6 +113,8 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
                 event={event}
                 onPress={() => handleEventPress(event.id)}
                 variant="newsletter"
+                userRole={userRole}
+                isMemberOrHigher={isMemberOrHigher}
               />
             ))}
           </YStack>
@@ -118,9 +130,13 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound }) => {
 
 type DynamicEventDetailProps = {
   eventId: string
+  userRole?: string
+  isMemberOrHigher?: boolean
+  isAuthLoading?: boolean
+  backLink?: BackLink
 }
 
-export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId }) => {
+export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
   const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
@@ -152,7 +168,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId 
 
   if (loading) {
     return (
-      <Wrapper subHheader={'Event Details'}>
+      <Wrapper subHeader={'Event Details'}>
         <Section>
           <Paragraph>Loading event...</Paragraph>
         </Section>
@@ -162,31 +178,36 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId 
 
   if (error || !event) {
     return (
-      <Wrapper subHheader={'Event Not Found'}>
+      <Wrapper subHeader={'Event Not Found'}>
         <Section>
           <Paragraph color={'red'}>{error || 'Event not found'}</Paragraph>
-          <EventsFooter />
+          <EventsFooter backLink={backLink} />
         </Section>
       </Wrapper>
     )
   }
 
   return (
-    <Wrapper subHheader={event.title || 'Event Details'}>
+    <Wrapper subHeader={event.title || 'Event Details'}>
       <Section>
-        <EventDetailView event={event} />
-        <EventsFooter />
+        <EventDetailView
+          event={event}
+          userRole={userRole}
+          isMemberOrHigher={isMemberOrHigher}
+          isAuthLoading={isAuthLoading}
+        />
+        <EventsFooter backLink={backLink} />
       </Section>
     </Wrapper>
   )
 }
 
-export const EventsFooter: React.FC = () => {
+export const EventsFooter: React.FC<{ backLink?: BackLink }> = ({ backLink }) => {
   const router = useRouter()
   return (
     <XStack paddingTop="$6">
       <Text
-        onPress={() => router.back()}
+        onPress={() => backLink ? router.push(backLink.href) : router.back()}
         color="$blue10"
         fontWeight="600"
         fontSize="$3"
@@ -194,7 +215,7 @@ export const EventsFooter: React.FC = () => {
         textDecorationLine="none"
         hoverStyle={{ textDecorationLine: "underline" }}
       >
-        ← Back
+        {backLink ? `${backLink.label} →` : '← Back'}
       </Text>
     </XStack>
   )

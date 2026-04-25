@@ -1,5 +1,4 @@
 import { SendEmailCommandInput, SESv2Client as SESOrig } from '@aws-sdk/client-sesv2'
-import { OutputType } from 'aws-sdk/clients/appsync'
 
 export class SendEmailCommand {
   private emailInput: SendEmailCommandInput
@@ -20,7 +19,7 @@ async function setTimeoutAsync(milliseconds: number) {
 }
 
 class SESv2Client extends SESOrig {
-  public async send(command: unknown): Promise<OutputType | unknown> {
+  public async send(command: unknown): Promise<unknown> {
     console.log('Faking send')
     return await setTimeoutAsync(50)
   }

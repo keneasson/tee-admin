@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getFileStorageService } from '../../../../utils/file-storage'
 import { randomUUID } from 'crypto'
 
@@ -7,14 +8,19 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await auth()
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // Require at least member role for file upload
+    const callerRole = (session.user as any).role as string || ROLES.GUEST
+    if (callerRole === ROLES.GUEST || callerRole === ROLES.DECEASED) {
+      return NextResponse.json({ error: 'Member access required' }, { status: 403 })
     }
 
     // Get file from form data
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const description = formData.get('description') as string
+    const formData = await request.formData() as any
+    const file = formData.get('file') as File | null
+    const description = (formData.get('description') as string) || ''
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -44,6 +50,7 @@ export async function POST(request: NextRequest) {
     // Return document attachment object
     const documentAttachment = {
       id: randomUUID(),
+      documentType: 'upload' as const,
       fileName: uniqueFileName,
       originalName: file.name,
       fileUrl,
@@ -52,6 +59,7 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date(),
       uploadedBy: session.user.id || session.user.email || 'unknown',
       description: description || undefined,
+      editable: false, // Uploaded files have fixed names
     }
 
     return NextResponse.json({

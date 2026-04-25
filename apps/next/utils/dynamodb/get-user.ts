@@ -1,3 +1,10 @@
+/**
+ * @deprecated This file uses full table SCAN which is inefficient.
+ * Use personRepository.getByEmailForAuth() instead for O(1) email lookups via GSI1.
+ *
+ * Migration: Set UNIFIED_PEOPLE_AUTH=true in environment to use the new system.
+ * This file will be removed once all users are migrated to PersonRecords.
+ */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { getAwsDbConfig } from '../email/sesClient'

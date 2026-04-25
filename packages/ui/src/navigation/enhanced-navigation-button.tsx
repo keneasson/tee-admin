@@ -15,8 +15,8 @@ interface EnhancedNavigationButtonProps {
   icon?: string | React.ReactNode
   /** Theme mode for color selection */
   mode?: ColorMode
-  /** Whether to show a notification badge */
-  badge?: number | boolean
+  /** Whether to show a notification badge (number for count, boolean for dot, string for label) */
+  badge?: number | boolean | string
   /** Whether the button is disabled */
   disabled?: boolean
   /** Size variant of the button */
@@ -91,8 +91,7 @@ export function EnhancedNavigationButton({
       >
         <XStack alignItems="center" gap="$2" flex={1}>
           {/* Icon */}
-          {icon && (
-            <View
+          {icon ? <View
               width={24}
               height={24}
               alignItems="center"
@@ -108,8 +107,7 @@ export function EnhancedNavigationButton({
               ) : (
                 icon
               )}
-            </View>
-          )}
+            </View> : null}
           
           {/* Text Content */}
           <YStack flex={1} gap="$1">
@@ -122,22 +120,19 @@ export function EnhancedNavigationButton({
               {text}
             </Text>
             
-            {description && (
-              <Text
+            {description ? <Text
                 color={active ? colors.primaryForeground : colors.textSecondary}
                 fontSize="$2"
                 numberOfLines={2}
                 opacity={0.8}
               >
                 {description}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
         </XStack>
         
         {/* Badge */}
-        {badge && (
-          <View
+        {badge ? <View
             backgroundColor={active ? colors.accent : colors.error}
             borderRadius="$6"
             minWidth={20}
@@ -153,8 +148,7 @@ export function EnhancedNavigationButton({
             >
               {typeof badge === 'number' ? badge : '•'}
             </Text>
-          </View>
-        )}
+          </View> : null}
       </XStack>
     </View>
   )

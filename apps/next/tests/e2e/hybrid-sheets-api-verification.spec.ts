@@ -115,7 +115,7 @@ test.describe('Hybrid Google Sheets API + Playwright Verification', () => {
           
           break
         } catch (error) {
-          console.log(`❌ Could not click button: ${error.message}`)
+          console.log(`Could not click button: ${(error as Error).message}`)
         }
       }
     }

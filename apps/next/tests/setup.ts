@@ -84,9 +84,9 @@ vi.mock('next-auth', () => ({
 vi.mock('next/server', () => ({
   NextRequest: vi.fn(),
   NextResponse: {
-    json: vi.fn((data, options) => ({ 
+    json: vi.fn((data, options) => ({
       json: () => Promise.resolve(data),
-      status: options?.status || 200 
+      status: options?.status || 200,
     })),
   },
 }))
@@ -94,18 +94,19 @@ vi.mock('next/server', () => ({
 // Mock environment variables
 process.env.AWS_ACCESS_KEY_ID = 'test-access-key'
 process.env.AWS_SECRET_ACCESS_KEY = 'test-secret-key'
-process.env.AWS_REGION = 'us-east-1'
+process.env.AWS_REGION = 'ca-central-1'
 process.env.NEXTAUTH_SECRET = 'test-secret'
 
 // Export mocks for use in tests
+type MockFn = ReturnType<typeof vi.fn>
 declare global {
-  var mockPut: typeof mockPut
-  var mockGet: typeof mockGet
-  var mockQuery: typeof mockQuery
-  var mockUpdate: typeof mockUpdate
-  var mockDelete: typeof mockDelete
-  var mockScan: typeof mockScan
-  var mockSend: typeof mockSend
+  var mockPut: MockFn
+  var mockGet: MockFn
+  var mockQuery: MockFn
+  var mockUpdate: MockFn
+  var mockDelete: MockFn
+  var mockScan: MockFn
+  var mockSend: MockFn
 }
 
 globalThis.mockPut = mockPut

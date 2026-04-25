@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { XStack, YStack, Select, Button, Text } from 'tamagui'
+import { XStack, YStack, Select, Text } from 'tamagui'
+import { Button } from '../Button'
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 
 interface TimeSelectorProps<T extends FieldValues> {
@@ -85,7 +86,7 @@ export function TimeSelector<T extends FieldValues>({
     <YStack space="$2">
       <Text fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Text>
       
       <XStack space="$2" alignItems="center">
@@ -184,11 +185,9 @@ export function TimeSelector<T extends FieldValues>({
         </XStack>
       </XStack>
       
-      {error && (
-        <Text fontSize="$3" color="$red10">
+      {error ? <Text fontSize="$3" color="$red10">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

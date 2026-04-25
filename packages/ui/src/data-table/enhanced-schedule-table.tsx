@@ -4,7 +4,8 @@ import React, { useState, useCallback } from 'react'
 import { BaseDataTable } from './base-data-table'
 import { ScheduleTabs, type ScheduleTab } from './schedule-tabs'
 import { type ColumnDef } from '@tanstack/react-table'
-import { YStack, Text, Button, XStack, useThemeName } from 'tamagui'
+import { YStack, Text, XStack, useThemeName } from 'tamagui'
+import { Button } from '../Button'
 import { brandColors, type ColorMode } from '../branding/brand-colors'
 
 // Enhanced schedule event interface matching requirements
@@ -49,8 +50,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               day: 'numeric',
             })}
           </Text>
-          {isNextEvent && (
-            <Button 
+          {isNextEvent ? <Button 
               backgroundColor={colors.success} 
               color={colors.successForeground} 
               size="$1"
@@ -61,8 +61,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               fontSize={12}
             >
               Next
-            </Button>
-          )}
+            </Button> : null}
         </XStack>
       )
     },
@@ -104,8 +103,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
           >
             {name}
           </Text>
-          {hasConflict && (
-            <Button 
+          {hasConflict ? <Button 
               backgroundColor={colors.warning} 
               color={colors.warningForeground} 
               size="$1"
@@ -116,8 +114,7 @@ const createEnhancedColumns = (colors: any, currentUser?: string): ColumnDef<Enh
               fontSize={12}
             >
               Conflict
-            </Button>
-          )}
+            </Button> : null}
         </XStack>
       )
     },

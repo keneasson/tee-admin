@@ -27,6 +27,7 @@ import React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
+import { AutoLinkText } from '../components/AutoLinkText'
 
 const mockEvents: SundaySchoolType[] = [
   {
@@ -42,7 +43,7 @@ const mockEvents: SundaySchoolType[] = [
   },
 ]
 
-const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
+const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
   const sundaySchoolEvents = events || mockEvents
 
   return (
@@ -56,6 +57,32 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events }) => {
           <Heading>Toronto East Sunday School</Heading>
           <Text style={defaultText}>2024/2025 News and Reminders</Text>
         </Section>
+
+        {/* Optional Note Section */}
+        {note && note.trim() && (
+          <Section style={{
+            backgroundColor: '#fff3cd',
+            padding: '16px',
+            marginTop: '20px',
+            marginBottom: '20px',
+            borderRadius: '4px'
+          }}>
+            <Text style={{
+              ...defaultText,
+              margin: '0 0 8px 0',
+              fontWeight: 'bold'
+            }}>
+              Note:
+            </Text>
+            <Text style={{
+              ...defaultText,
+              margin: '0',
+              whiteSpace: 'pre-wrap'
+            }}>
+              <AutoLinkText text={note} />
+            </Text>
+          </Section>
+        )}
 
         <Container style={container} className="container">
           <Section style={program}>

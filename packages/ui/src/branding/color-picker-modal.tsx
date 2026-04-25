@@ -280,11 +280,9 @@ export function ColorPickerModal({ initialColor, colorName, onColorChange, onClo
             flex={1}
           />
         </XStack>
-        {!isValidInput && (
-          <Text color="$error" fontSize="$2">
+        {!isValidInput ? <Text color="$error" fontSize="$2">
             Please enter a valid hex color (e.g., #FF0000 or #F00)
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
       
       {/* Smart Color Suggestions */}
@@ -380,15 +378,7 @@ export function ColorPickerModal({ initialColor, colorName, onColorChange, onClo
           bordered
           elevate
           key="content"
-          animateOnly={['transform', 'opacity']}
-          animation={[
-            'quick',
-            {
-              opacity: {
-                overshootClamping: true,
-              },
-            },
-          ]}
+          animation="quick"
           enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           maxWidth={450}

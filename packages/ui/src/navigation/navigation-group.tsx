@@ -56,8 +56,7 @@ export function NavigationGroup({
         <XStack alignItems="center" justifyContent="space-between" gap="$2">
           <XStack alignItems="center" gap="$2" flex={1}>
             {/* Icon */}
-            {icon && (
-              <View
+            {icon ? <View
                 width={16}
                 height={16}
                 alignItems="center"
@@ -70,8 +69,7 @@ export function NavigationGroup({
                 ) : (
                   icon
                 )}
-              </View>
-            )}
+              </View> : null}
             
             {/* Title and Description */}
             <YStack flex={1}>
@@ -85,46 +83,38 @@ export function NavigationGroup({
                 {title}
               </Text>
               
-              {description && (
-                <Text
+              {description ? <Text
                   fontSize="$1"
                   color={colors.textTertiary}
                   numberOfLines={1}
                 >
                   {description}
-                </Text>
-              )}
+                </Text> : null}
             </YStack>
           </XStack>
           
           {/* Collapse Indicator */}
-          {collapsible && (
-            <Text
+          {collapsible ? <Text
               fontSize="$3"
               color={colors.textTertiary}
               animation="quick"
               rotate={isCollapsed ? '0deg' : '90deg'}
             >
               ▶
-            </Text>
-          )}
+            </Text> : null}
         </XStack>
       </View>
       
       {/* Group Content */}
-      {(!collapsible || !isCollapsed) && (
-        <YStack gap="$1" paddingLeft="$2">
+      {(!collapsible || !isCollapsed) ? <YStack gap="$1" paddingLeft="$2">
           {children}
-        </YStack>
-      )}
+        </YStack> : null}
       
       {/* Separator */}
-      {showSeparator && (
-        <Separator
+      {showSeparator ? <Separator
           marginVertical="$2"
           borderColor={colors.borderLight}
-        />
-      )}
+        /> : null}
     </YStack>
   )
 }

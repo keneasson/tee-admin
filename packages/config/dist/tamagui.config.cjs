@@ -36,7 +36,7 @@ const headingFont = (0, import_font_inter.createInterFont)({
       6: 15
     },
     transform: {
-      6: "uppercase",
+      6: "none",
       7: "none"
     },
     weight: {
@@ -88,9 +88,7 @@ const headingFont = (0, import_font_inter.createInterFont)({
       body: bodyFont,
       heading: headingFont
     },
-    settings: {
-      allowedStyleValues: "somewhat-strict"
-    },
+    settings: {},
     themes: {
       ...import_v3.themes,
       ...import_tee_themes.teeThemes

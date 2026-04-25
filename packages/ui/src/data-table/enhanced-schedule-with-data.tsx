@@ -1,26 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { YStack, Text, Button, XStack, useThemeName, Spinner } from 'tamagui'
+import { useState } from 'react'
+import { YStack, Text, XStack, useThemeName, Spinner } from 'tamagui'
+import { Button } from '../Button'
 import { EnhancedScheduleResponsive } from './enhanced-schedule-responsive'
 import { useEnhancedSchedule } from '@my/app/hooks/use-enhanced-schedule'
 import { brandColors } from '../branding/brand-colors'
 
 export interface EnhancedScheduleWithDataProps {
-  /** Schedule types to display */
-  types?: string[]
-  /** Initial active tab */
-  initialTab?: string
+  /** Which tab is active — controlled by the parent (URL) */
+  activeTab: string
+  /** Callback when user clicks a different tab */
+  onTabChange: (tabId: string) => void
   /** Show admin features */
   showAdminFeatures?: boolean
+  /** Callback to invalidate server cache (admin only) */
+  onClearCache?: () => Promise<void>
 }
 
 export function EnhancedScheduleWithData({
-  types = ['memorial', 'bibleClass', 'sundaySchool', 'cyc'],
-  initialTab,
+  activeTab,
+  onTabChange,
   showAdminFeatures = false,
+  onClearCache,
 }: EnhancedScheduleWithDataProps) {
-  const [activeTab, setActiveTab] = useState<string | undefined>(initialTab)
+  const [clearingCache, setClearingCache] = useState(false)
 
   const {
     data,
@@ -33,28 +37,21 @@ export function EnhancedScheduleWithData({
     hasOlder,
     loadOlder,
     refetch,
-    switchToTab,
   } = useEnhancedSchedule({
-    types,
+    activeTab,
     infiniteScroll: true,
-    limit: 30,
   })
-
-  useEffect(() => {
-    console.log('data changed', data)
-  }, [data.length])
 
   const themeName = useThemeName()
   const mode = themeName.includes('dark') ? 'dark' : 'light'
   const colors = brandColors[mode]
 
-  // Loading state - show during initial load or when switching tabs with no existing data
-  // Don't show full loading screen if we already have some data (e.g., loading older events)
+  // Loading state — only on initial load with no data
   const hasExistingData = Object.keys(data).length > 0 && totalEvents > 0
   if (loading && !hasExistingData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
-        <Spinner size={20} color={colors.primary} />
+        <Spinner size="large" color={colors.primary} />
         <Text color={colors.textSecondary} fontSize="$4">
           Loading schedule data...
         </Text>
@@ -62,7 +59,7 @@ export function EnhancedScheduleWithData({
     )
   }
 
-  // Error state - only show if not loading and there's actually an error with no data
+  // Error state
   if (error && !loading && Object.keys(data).length === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
@@ -86,7 +83,7 @@ export function EnhancedScheduleWithData({
     )
   }
 
-  // No data state - only show after loading is complete and there's actually no data
+  // No data state
   if (!loading && !error && Object.keys(data).length === 0 && totalEvents === 0) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$8" gap="$4">
@@ -105,20 +102,10 @@ export function EnhancedScheduleWithData({
     )
   }
 
-  const handleTabChange = (tabKey: string) => {
-    setActiveTab(tabKey)
-    // Switch to the new tab's data
-    switchToTab(tabKey)
-  }
-
-  // Determine active tab (use first available tab if none specified)
-  const currentActiveTab = activeTab || tabs[0]?.id || ''
-
   return (
     <YStack flex={1} gap="$4">
       {/* Header with status info */}
-      {(showAdminFeatures || error) && (
-        <XStack
+      {(showAdminFeatures || error) ? <XStack
           justifyContent="space-between"
           alignItems="center"
           paddingHorizontal="$4"
@@ -129,34 +116,46 @@ export function EnhancedScheduleWithData({
           borderColor={error ? colors.error : 'transparent'}
         >
           <YStack gap="$1">
-            {error && (
-              <Text fontSize="$2" color={colors.error} fontWeight="600">
+            {error ? <Text fontSize="$2" color={colors.error} fontWeight="600">
                 ⚠️ {error}
-              </Text>
-            )}
-            {showAdminFeatures && (
-              <Text fontSize="$2" color={colors.textSecondary}>
+              </Text> : null}
+            {showAdminFeatures ? <Text fontSize="$2" color={colors.textSecondary}>
                 {totalEvents} events • Updated{' '}
                 {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'never'}
-              </Text>
-            )}
+              </Text> : null}
           </YStack>
 
-          {(showAdminFeatures || error) && (
-            <Button size="$2" variant="outlined" onPress={refetch} disabled={loading}>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </Button>
-          )}
-        </XStack>
-      )}
+          <XStack gap="$2">
+            {showAdminFeatures && onClearCache ? <Button
+                size="$2"
+                variant="outlined"
+                onPress={async () => {
+                  setClearingCache(true)
+                  try {
+                    await onClearCache()
+                    await refetch()
+                  } finally {
+                    setClearingCache(false)
+                  }
+                }}
+                disabled={loading || clearingCache}
+                borderColor={colors.warning}
+              >
+                {clearingCache ? 'Clearing...' : 'Clear Cache'}
+              </Button> : null}
+            {(showAdminFeatures || error) ? <Button size="$2" variant="outlined" onPress={refetch} disabled={loading || clearingCache}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </Button> : null}
+          </XStack>
+        </XStack> : null}
 
-      {/* Enhanced Schedule Table */}
+      {/* Schedule Table */}
       <EnhancedScheduleResponsive
         tabs={tabs}
         data={data}
         currentUser={currentUser || undefined}
-        onTabChange={handleTabChange}
-        activeTab={currentActiveTab}
+        onTabChange={onTabChange}
+        activeTab={activeTab}
         hasOlder={hasOlder}
         onLoadOlder={loadOlder}
         loading={loading}

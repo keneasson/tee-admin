@@ -10,8 +10,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ failed: 'Invalid argument (invalid request payload).' })
     }
     console.log('email', email)
-    console.log(response)
 
-    return res.status(200).json(response)
-  } catch (e) {}
+    // Placeholder: security check not yet implemented
+    return res.status(200).json({ email, status: 'ok' })
+  } catch (e) {
+    return res.status(500).json({ failed: 'Internal server error' })
+  }
 }

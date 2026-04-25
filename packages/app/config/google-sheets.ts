@@ -124,12 +124,12 @@ export class GoogleSheetsConfig {
 
     } catch (error) {
       // Re-throw with context
-      if (error.message.includes('CRITICAL:')) {
+      if ((error as Error).message?.includes('CRITICAL:')) {
         throw error // Already has good context
       }
       throw new Error(
         `CRITICAL: Failed to load Google service account configuration from ${configFile}\n` +
-        `Error: ${error.message}`
+        `Error: ${(error as Error).message}`
       )
     }
   }

@@ -16,9 +16,7 @@ const Wrapper: React.FC<Contact> = ({ email, preferences, index }) => {
       backgroundColor={index % 2 ? '$color2' : 'white'}
     >
       <Text>{email}</Text>
-      {preferences && (
-        <Preferences email={email} preferences={preferences} index={index}></Preferences>
-      )}
+      {preferences ? <Preferences email={email} preferences={preferences} index={index}></Preferences> : null}
     </XStack>
   )
 }
@@ -31,13 +29,13 @@ type PreferencesProps = {
 const Preferences: React.FC<PreferencesProps> = ({ email, preferences, index }) => {
   return (
     <XStack gap={'$10'}>
-      {Object.keys(EmailListTypes).map((emailList: EmailListTypeKeys, key: number) => {
+      {(Object.keys(EmailListTypes) as EmailListTypeKeys[]).map((emailList, key: number) => {
         return (
           <ConnectForm key={`${index}.${key}`}>
-            {({ register }) => (
+            {({ register }: { register: any }) => (
               <CheckboxWithCheck
                 {...register(`${index}.${emailList}`, {
-                  value: !!preferences[emailList],
+                  value: !!preferences.preferences[emailList],
                 })}
                 size={'$5'}
               />

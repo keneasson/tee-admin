@@ -24,16 +24,22 @@ export class EventDurationCalculator {
       
       case '3_weeks_after_event':
         return this.calculateWeeksAfterEvent(event, currentDate, 3)
-      
+
+      case '3_weeks_from_publish':
+        return this.calculateWeeksFromPublish(event, currentDate, 3)
+
       case '3_weeks_from_first_inclusion':
         return this.calculateWeeksFromFirstInclusion(firstIncludedDate, currentDate, 3)
       
       case '3_weeks_or_until_event_date':
         return this.calculateWeeksOrUntilEvent(event, currentDate, firstIncludedDate, 3)
       
+      case '2_weeks_then_thursday_before':
+        return this.calculateFuneralDuration(event, currentDate, firstIncludedDate)
+
       case 'custom':
         return this.calculateCustomDuration(event, currentDate)
-      
+
       default:
         return {
           shouldInclude: false,
@@ -43,12 +49,20 @@ export class EventDurationCalculator {
   }
 
   /**
-   * Include until the event date
+   * Include until the event date (inclusive - shows for the entire day in user's timezone)
    * Used for: study-weekend, general events, fraternals, bible-school
+   * Recurring events are handled specially - they show as long as the series is active
    */
   private static calculateUntilEventDate(event: any, currentDate: Date): DurationCalculationResult {
+    // Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+    // recurringConfig.startDate is the SERIES start, not the next occurrence.
+    // Show as long as the series hasn't ended.
+    if (event.type === 'recurring' && event.recurringConfig) {
+      return this.calculateRecurringSeries(event, currentDate)
+    }
+
     const eventDate = this.getEventDate(event)
-    
+
     if (!eventDate) {
       return {
         shouldInclude: true,
@@ -56,14 +70,52 @@ export class EventDurationCalculator {
       }
     }
 
-    const shouldInclude = currentDate <= eventDate
-    
+    // For multi-day events, use the end date so the event remains visible
+    // through its last day (e.g., a Friday-Sunday fraternal gathering stays
+    // visible on Saturday when the recap email is sent)
+    const endDate = this.getEventEndDate(event)
+    const displayUntilDate = endDate || eventDate
+
+    // Timezone-aware date comparison:
+    // - currentDate uses user's local timezone (browser's new Date())
+    // - eventDate uses UTC (stored as midnight UTC from "YYYY-MM-DD" strings)
+    // This ensures events show until midnight in the user's timezone
+    const shouldInclude = this.isUserDateOnOrBefore(currentDate, displayUntilDate)
+
     return {
       shouldInclude,
-      displayUntilDate: eventDate,
-      reason: shouldInclude 
-        ? `Event is scheduled for ${eventDate.toDateString()}` 
-        : `Event date ${eventDate.toDateString()} has passed`
+      displayUntilDate,
+      reason: shouldInclude
+        ? `Event is scheduled for ${eventDate.toDateString()}${endDate ? ` - ${endDate.toDateString()}` : ''}`
+        : `Event date ${eventDate.toDateString()}${endDate ? ` - ${endDate.toDateString()}` : ''} has passed`
+    }
+  }
+
+  /**
+   * Recurring events (Bible Class, Memorial, Sunday School) are ongoing series.
+   * They show continuously as long as the series is active (endDate not passed).
+   */
+  private static calculateRecurringSeries(event: any, currentDate: Date): DurationCalculationResult {
+    const endDate = event.recurringConfig.endDate
+      ? (event.recurringConfig.endDate instanceof Date
+          ? event.recurringConfig.endDate
+          : new Date(event.recurringConfig.endDate))
+      : null
+
+    if (endDate && !this.isUserDateOnOrBefore(currentDate, endDate)) {
+      return {
+        shouldInclude: false,
+        displayUntilDate: endDate,
+        reason: `Recurring series ended on ${endDate.toDateString()}`
+      }
+    }
+
+    return {
+      shouldInclude: true,
+      displayUntilDate: endDate || undefined,
+      reason: endDate
+        ? `Recurring event active until ${endDate.toDateString()}`
+        : 'Recurring event with no end date - always active'
     }
   }
 
@@ -92,6 +144,36 @@ export class EventDurationCalculator {
       reason: shouldInclude
         ? `Event occurred on ${eventDate.toDateString()}, displaying for ${weeks} weeks until ${cutoffDate.toDateString()}`
         : `${weeks} week display period ended on ${cutoffDate.toDateString()}`
+    }
+  }
+
+  /**
+   * Include for X weeks from the publish/announcement date
+   * Used for: engagement announcements (show 3 Thursdays from when announced)
+   */
+  private static calculateWeeksFromPublish(event: any, currentDate: Date, weeks: number): DurationCalculationResult {
+    const publishDate = event.publishDate ? new Date(event.publishDate)
+      : event.createdAt ? new Date(event.createdAt)
+      : null
+
+    if (!publishDate) {
+      return {
+        shouldInclude: true,
+        reason: 'No publish date specified - including by default'
+      }
+    }
+
+    const cutoffDate = new Date(publishDate)
+    cutoffDate.setDate(cutoffDate.getDate() + (weeks * 7))
+
+    const shouldInclude = currentDate <= cutoffDate
+
+    return {
+      shouldInclude,
+      displayUntilDate: cutoffDate,
+      reason: shouldInclude
+        ? `Published on ${publishDate.toDateString()}, displaying for ${weeks} weeks until ${cutoffDate.toDateString()}`
+        : `${weeks} week display period from publish date ended on ${cutoffDate.toDateString()}`
     }
   }
 
@@ -205,20 +287,164 @@ export class EventDurationCalculator {
   }
 
   /**
+   * Calculate funeral display duration
+   * Rule: Show for 14 days from publishDate (guarantees 2 newsletters regardless of publish day),
+   * then only show on Thursday before service (if service hasn't passed yet)
+   * Used for: funeral announcements
+   */
+  private static calculateFuneralDuration(
+    event: any,
+    currentDate: Date,
+    firstIncludedDate: Date | undefined
+  ): DurationCalculationResult {
+    const serviceDate = this.getEventDate(event)
+
+    // Use publishDate as the start of the 2-newsletter window
+    const publishDate = event.publishDate ? new Date(event.publishDate) : null
+
+    // No publish date - include by default
+    if (!publishDate) {
+      return {
+        shouldInclude: true,
+        reason: 'No publish date - including by default'
+      }
+    }
+
+    // Calculate cutoff: 14 days from publish date (guarantees 2 Thursday newsletters)
+    const twoNewsletterCutoff = new Date(publishDate)
+    twoNewsletterCutoff.setDate(twoNewsletterCutoff.getDate() + 14)
+
+    // Within 2-newsletter window (14 days) - ALWAYS include, even if service has passed
+    if (currentDate <= twoNewsletterCutoff) {
+      return {
+        shouldInclude: true,
+        displayUntilDate: twoNewsletterCutoff,
+        reason: `Within 2-newsletter window (until ${twoNewsletterCutoff.toDateString()})`
+      }
+    }
+
+    // AFTER the 2-newsletter window - only show on Thursday before service
+
+    // If service date has passed, exclude (window complete, no upcoming service to remind about)
+    if (serviceDate && currentDate > serviceDate) {
+      return {
+        shouldInclude: false,
+        reason: `2-newsletter window complete and service date ${serviceDate.toDateString()} has passed`
+      }
+    }
+
+    // Check if this is the Thursday before service (final reminder for services scheduled far out)
+    if (serviceDate) {
+      const thursdayBefore = this.getThursdayBefore(serviceDate)
+      const isThursdayBeforeService = this.isSameDay(currentDate, thursdayBefore)
+
+      if (isThursdayBeforeService) {
+        return {
+          shouldInclude: true,
+          displayUntilDate: serviceDate,
+          reason: `Final reminder - Thursday before service (${serviceDate.toDateString()})`
+        }
+      }
+    }
+
+    // Outside 2-newsletter window, not Thursday before service, service still upcoming
+    return {
+      shouldInclude: false,
+      reason: '2-newsletter window ended, waiting for Thursday before service'
+    }
+  }
+
+  /**
+   * Get the Thursday before a given date
+   * If the date is a Thursday, returns the previous Thursday (7 days before)
+   */
+  private static getThursdayBefore(date: Date): Date {
+    const result = new Date(date)
+    const dayOfWeek = result.getDay()
+    // Calculate days to go back to reach Thursday (4)
+    // If date is Thursday (4), go back 7 days to previous Thursday
+    // If date is Friday (5), go back 1 day
+    // If date is Saturday (6), go back 2 days
+    // If date is Sunday (0), go back 3 days
+    // If date is Monday (1), go back 4 days
+    // If date is Tuesday (2), go back 5 days
+    // If date is Wednesday (3), go back 6 days
+    const daysBack = dayOfWeek === 4 ? 7 : (dayOfWeek + 3) % 7 || 7
+    result.setDate(result.getDate() - daysBack)
+    return result
+  }
+
+  /**
+   * Check if two dates are the same day (ignoring time)
+   * Both dates use the same timezone context (local methods)
+   */
+  private static isSameDay(date1: Date, date2: Date): boolean {
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    )
+  }
+
+  /**
+   * Timezone-aware date comparison for event filtering.
+   *
+   * Event dates stored as "YYYY-MM-DD" create midnight UTC dates, so we use
+   * UTC accessors (getUTCFullYear etc.) to get the intended calendar date.
+   *
+   * currentDate (from browser's new Date()) uses local accessors to get the
+   * user's actual calendar date in their timezone.
+   *
+   * This ensures events show until midnight in the USER's timezone.
+   */
+  private static isUserDateOnOrBefore(currentDate: Date, eventDate: Date): boolean {
+    const currentStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
+    const eventStr = `${eventDate.getUTCFullYear()}-${String(eventDate.getUTCMonth() + 1).padStart(2, '0')}-${String(eventDate.getUTCDate()).padStart(2, '0')}`
+    return currentStr <= eventStr
+  }
+
+  /**
    * Extract the primary event date from an event object
    */
   private static getEventDate(event: any): Date | null {
     // Try different date fields based on event type
+    // Note: recurringConfig.startDate is NOT included here because it's the
+    // SERIES start date, not the next occurrence. Recurring events are handled
+    // by calculateRecurringSeries() instead.
     const dateFields = [
       'eventDate',
       'serviceDate',      // funeral
       'ceremonyDate',     // wedding
       'baptismDate',      // baptism
+      'engagementDate',   // engagement - when the engagement occurred
       'startDate',        // general
-      'dateRange.start'   // study-weekend
+      'dateRange.start',  // study-weekend
+      'publishDate'       // fallback for events without specific dates
     ]
 
     for (const field of dateFields) {
+      const value = this.getNestedProperty(event, field)
+      if (value) {
+        const date = value instanceof Date ? value : new Date(value)
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Extract the end date for multi-day events (e.g., fraternal gatherings, study weekends)
+   */
+  private static getEventEndDate(event: any): Date | null {
+    const endFields = [
+      'endDate',
+      'dateRange.end',
+    ]
+
+    for (const field of endFields) {
       const value = this.getNestedProperty(event, field)
       if (value) {
         const date = value instanceof Date ? value : new Date(value)

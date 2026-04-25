@@ -1,0 +1,88 @@
+# Page snapshot
+
+```yaml
+- text: TEE Portal
+- button "Switch to dark theme":
+  - img
+- text: Main Menu
+- button "Home"
+- button "Newsletter"
+- button "Schedules"
+- button "Events"
+- button "Contact List"
+- text: Sign In
+- heading "Open BibleToronto East Ecclesia" [level=1]:
+  - img "Open Bible"
+  - text: Toronto East Ecclesia
+- heading "Newsletter" [level=2]
+- heading "Regular Services" [level=2]
+- paragraph: Sunday, January 4, 2026
+- paragraph: No Sunday School this week
+- paragraph: Memorial Service at 11:00am
+- paragraph: "Presiding: Brad Stephens"
+- paragraph: "Exhorting: Tim Narjes"
+- paragraph: "Organist: Esther Dawes"
+- paragraph: "Steward: Brad Stephens"
+- paragraph: "Doorkeeper: Phil Dwyer"
+- paragraph: "Hymns:"
+- paragraph: "159"
+- paragraph: "347"
+- paragraph: "224"
+- paragraph: "436"
+- paragraph: Second Collection is for ASK
+- button "Zoom Info - Click to open":
+  - text: Zoom Info - Click to open
+  - img
+- button "YouTube Info - click to open":
+  - text: YouTube Info - click to open
+  - img
+- paragraph: Wednesday, January 7, 2026
+- paragraph: Bible Class at 7:30pm
+- paragraph: "Presiding: Desmond Amos"
+- paragraph: "Leader: Nesbit Amos"
+- paragraph: The Three P's in Prayer
+- button "Zoom Info - Click to open":
+  - paragraph: Zoom Info - Click to open
+  - img
+- paragraph: Sunday, January 11, 2026
+- paragraph: Sunday School at 9:30am
+- paragraph: "Refreshments provided by: Eassons"
+- paragraph: Memorial Service at 11:00am
+- paragraph: "Presiding: Dennis Dawes"
+- paragraph: "Exhorting: Brad Stephens"
+- paragraph: "Organist: Esther Dawes"
+- paragraph: "Steward: Gord Easson"
+- paragraph: "Doorkeeper: Ken Easson"
+- paragraph: Second Collection is for Agape in Action
+- button "Zoom Info - Click to open":
+  - text: Zoom Info - Click to open
+  - img
+- button "YouTube Info - click to open":
+  - text: YouTube Info - click to open
+  - img
+- paragraph: Wednesday, January 14, 2026
+- paragraph: Bible Class at 7:30pm
+- paragraph: "Presiding: Chris Westwood"
+- paragraph: "Leader: Phil Dwyer"
+- paragraph: Beasts of the Bible
+- button "Zoom Info - Click to open":
+  - paragraph: Zoom Info - Click to open
+  - img
+- img
+- text: "Election Notice Elections for Service brethren are underway. Members should have received a link to the online ballot already—if not, please ask the Arranging brethren. You have 3 ways to vote: (1) online ballot, (2) asking another member to submit your vote, or (3) requesting a printed ballot. The election concludes January 4, 2026."
+- heading "Special Announcements" [level=2]
+- text: Brother Gord Easson is engaged to Sister Jessica Miller. January 1, 2026 View Details →
+- heading "In Loving Memory of Brother David McKay" [level=3]
+- text: "With sadness, we share the passing of Brother David McKay. With great sadness we announce the falling asleep in Christ of Brother David McKay of the Brampton Christadelphian Ecclesia. Location: Toronto (North) Christadelphian Ecclesial Hall Service time: Saturday, Jan 3, 2026 2:00pm View Details →"
+- heading "Upcoming Events" [level=2]
+- heading "Announcements"
+- 'heading "Ladore Christadelphian Youth Camp 2026 - Manasseh: Amazing Grace - Jason Hensley" [level=3]'
+- text: "Feb 6 to Feb 8 2026 Speaker: Jason Hensley Location: The Ladore Lodge Host: The Baltimore Christadelphians View Details →"
+- heading "Palm Spring Bible School - TBA" [level=3]
+- text: "Feb 22 to Feb 27 2026 Speakers: Daffyd Jenkins, Jason Robinson Location: Palm Springs View Details →"
+- heading "Daily Bible Reading Planner" [level=2]
+- text: Jan 2 Genesis 3-4 Psalms 3-5 Matthew 3-4 Jan 3 Genesis 5-6 Psalms 6-8 Matthew 5 Jan 4 Genesis 7-8 Psalms 9-10 Matthew 6 Jan 5 Genesis 9-10 Psalms 11-13 Matthew 7 Jan 6 Genesis 11-12 Psalms 14-16 Matthew 8 Jan 7 Genesis 13-14 Psalms 17 Matthew 9 Jan 8 Genesis 15-16 Psalms 18 Matthew 10 Jan 9 Genesis 17-18 Psalms 19-21 Matthew 11
+- alert
+- button "Open Next.js Dev Tools":
+  - img
+```

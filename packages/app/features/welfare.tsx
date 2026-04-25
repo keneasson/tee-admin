@@ -3,13 +3,15 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { Heading, Paragraph } from '@my/ui'
 import React from 'react'
-import { useSession } from 'next-auth/react'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 
-export const Welfare: React.FC = () => {
-  const { data: session } = useSession()
+type WelfareProps = {
+  /** Whether user is authenticated */
+  isAuthenticated?: boolean
+}
 
-  if (!(session && session.user)) {
+export const Welfare: React.FC<WelfareProps> = ({ isAuthenticated = false }) => {
+  if (!isAuthenticated) {
     return (
       <Wrapper>
         <Section space={'$4'}>

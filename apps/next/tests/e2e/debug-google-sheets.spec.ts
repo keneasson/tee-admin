@@ -58,23 +58,23 @@ test.describe('Google Sheets Access Debugging', () => {
         console.log('⚠️  No grid elements found - may need authentication')
         
         // Check if we're on a login page
-        const signInButton = page.locator('text=Sign in', 'button:has-text("Sign in")')
+        const signInButton = page.locator('text=Sign in, button:has-text("Sign in")')
         if (await signInButton.isVisible()) {
-          console.log('🔐 Login required - found Sign in button')
+          console.log('Login required - found Sign in button')
         }
-        
+
         // Check for access denied messages
-        const accessDenied = page.locator('text=Access denied', 'text=Permission denied')
+        const accessDenied = page.locator('text=Access denied, text=Permission denied')
         if (await accessDenied.isVisible()) {
-          console.log('❌ Access denied to sheet')
+          console.log('Access denied to sheet')
         }
       }
       
-    } catch (error) {
-      console.error('❌ Error accessing sheet:', error.message)
-      await page.screenshot({ 
+    } catch (error: unknown) {
+      console.error('Error accessing sheet:', (error as Error).message)
+      await page.screenshot({
         path: 'apps/next/tests/e2e/debug-sheet-error.png',
-        fullPage: true 
+        fullPage: true
       })
       throw error
     }
@@ -213,7 +213,7 @@ test.describe('Google Sheets Access Debugging', () => {
           break
         }
       } catch (error) {
-        console.log(`❌ Strategy ${i + 1} failed:`, error.message)
+        console.log(`Strategy ${i + 1} failed:`, (error as Error).message)
       }
     }
     

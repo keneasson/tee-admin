@@ -1,6 +1,7 @@
 import { Control, useController, FieldPath, FieldValues } from 'react-hook-form'
 import React, { useState } from 'react'
-import { Label, Text, YStack, XStack, Button, Card, ScrollView } from 'tamagui'
+import { Label, Text, YStack, XStack, Card, ScrollView } from 'tamagui'
+import { Button } from '../Button'
 import { Calendar, ChevronLeft, ChevronRight, X } from '@tamagui/lucide-icons'
 
 interface MultiDateSelectorProps<T extends FieldValues> {
@@ -72,6 +73,9 @@ function CalendarGrid({
       color = '$primary'
     }
     
+    const hoverBg = isSelected ? '$blue9' : isToday ? '$blue3' : '$gray3'
+    const pressBg = isSelected ? '$blue8' : isToday ? '$blue4' : '$gray4'
+
     days.push(
       <Button
         key={day}
@@ -84,7 +88,15 @@ function CalendarGrid({
         borderWidth={isToday && !isSelected ? 2 : 0}
         borderColor="$primary"
         onPress={() => !isDisabled && onDateToggle(dateStr)}
-        pressStyle={isDisabled ? {} : { scale: 0.95 }}
+        hoverStyle={isDisabled ? {} : {
+          opacity: 1,
+          backgroundColor: hoverBg,
+        }}
+        pressStyle={isDisabled ? {} : {
+          opacity: 1,
+          scale: 0.95,
+          backgroundColor: pressBg,
+        }}
         disabled={isDisabled}
       >
         {day}
@@ -188,7 +200,7 @@ export function MultiDateSelector<T extends FieldValues>({
     <YStack space="$3">
       <Label fontSize="$4" fontWeight="600">
         {label}
-        {required && <Text color="$red10">*</Text>}
+        {required ? <Text color="$red10">*</Text> : null}
       </Label>
 
       {/* Calendar */}
@@ -225,8 +237,7 @@ export function MultiDateSelector<T extends FieldValues>({
           />
 
           {/* Selected dates list */}
-          {selectedDates.length > 0 && (
-            <YStack space="$2">
+          {selectedDates.length > 0 ? <YStack space="$2">
               <Text fontSize="$3" fontWeight="600" color="$gray11">
                 Selected Dates ({selectedDates.length}):
               </Text>
@@ -255,22 +266,17 @@ export function MultiDateSelector<T extends FieldValues>({
                   ))}
                 </XStack>
               </ScrollView>
-            </YStack>
-          )}
+            </YStack> : null}
 
-          {selectedDates.length === 0 && (
-            <Text fontSize="$3" color="$gray11" textAlign="center">
+          {selectedDates.length === 0 ? <Text fontSize="$3" color="$gray11" textAlign="center">
               Click on dates to select them
-            </Text>
-          )}
+            </Text> : null}
         </YStack>
       </Card>
 
-      {error && (
-        <Text fontSize="$3" color="$red10">
+      {error ? <Text fontSize="$3" color="$red10">
           {error.message}
-        </Text>
-      )}
+        </Text> : null}
     </YStack>
   )
 }

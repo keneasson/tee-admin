@@ -33,7 +33,7 @@ export const BibleReadingsEmail: React.FC<BibleReadingsEmailProps> = ({
     <div style={containerStyle}>
       <h3 style={titleStyle}>
         {title}
-        {weekRange && <span style={weekRangeStyle}> - {weekRange}</span>}
+        {weekRange ? <span style={weekRangeStyle}> - {weekRange}</span> : null}
       </h3>
       
       {/* Desktop Table Layout */}
@@ -112,7 +112,7 @@ export const BibleReadingsWeb: React.FC<BibleReadingsEmailProps> = ({
     <div style={webContainerStyle}>
       <h3 style={webTitleStyle}>
         {title}
-        {weekRange && <span style={weekRangeStyle}> - {weekRange}</span>}
+        {weekRange ? <span style={weekRangeStyle}> - {weekRange}</span> : null}
       </h3>
       
       <div style={webTableWrapperStyle}>

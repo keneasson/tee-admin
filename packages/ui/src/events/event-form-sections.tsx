@@ -1,13 +1,18 @@
-import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext } from 'react-hook-form'
+import { useEffect, useRef } from 'react'
+import { Control, useFieldArray, useController, FieldValues, FieldPath, useWatch, useFormContext, PathValue, Path } from 'react-hook-form'
 import { formatEcclesiaToLocation, createLocationFieldUpdates } from './location-utils'
 import { LocationFieldsContainer } from './location-components'
-import { YStack, XStack, Card, Text, Button, Separator, Checkbox } from 'tamagui'
-import { Plus, MapPin, User, Calendar, FileText, Trash2, Check } from '@tamagui/lucide-icons'
+import { YStack, XStack, Card, Text, Separator, Checkbox } from 'tamagui'
+import { Button } from '../Button'
+import { Plus, MapPin, User, Calendar, FileText, Trash2, Check, Video, Globe } from '@tamagui/lucide-icons'
 import { EventFormInput } from '../form/event-form-input'
 import { EventDatePicker } from '../form/event-date-picker'
 import { EventFormSelect } from '../form/event-form-select'
 import { EcclesiaSearchInput } from '../form/ecclesia-search-input'
+import { AddressAutocomplete } from '../form/address-autocomplete'
 import { CountrySelect, ProvinceSelect } from '../form/location-select'
+import type { ParsedAddress } from '@my/app/types/address-autocomplete'
+import { buildMapsUrl } from '@my/app/types/address-autocomplete'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { useAdminSpacing } from '../hooks/use-admin-spacing'
@@ -76,9 +81,9 @@ interface MultipleLocationsSectionProps<T extends FieldValues> {
   allowCustomLocationTypes?: boolean
 }
 
-export function LocationSection<T extends FieldValues>({ 
-  control, 
-  namePrefix, 
+export function LocationSection<T extends FieldValues>({
+  control,
+  namePrefix,
   title = "Location Details",
   required = false,
   showAtTheHallOption = false,
@@ -86,16 +91,69 @@ export function LocationSection<T extends FieldValues>({
   setValue: setValueProp
 }: LocationSectionProps<T>) {
   const { card, text, button } = useAdminSpacing()
-  
+
   // Try to get setValue from prop first, then from context as fallback
   const formContext = useFormContext()
   const setValue = setValueProp || formContext?.setValue
-  
+
   const hostingEcclesia = useWatch({
     control,
     name: hostingEcclesiaFieldName as FieldPath<T>
   })
-  
+
+  // Watch the location mode to show/hide fields conditionally
+  const locationMode = (useWatch({
+    control,
+    name: `${namePrefix}.mode` as FieldPath<T>
+  }) as 'in-person' | 'online' | 'hybrid' | undefined) || 'in-person' // Default to in-person if not set
+
+  // Watch the "At the Hall" checkbox to show read-only vs editable fields
+  const atTheHall = useWatch({
+    control,
+    name: `${namePrefix}._atTheHall` as FieldPath<T>
+  }) as boolean | undefined
+
+  // Default "At the Hall" to checked when showAtTheHallOption is enabled
+  const didDefaultRef = useRef(false)
+  useEffect(() => {
+    if (showAtTheHallOption && hostingEcclesia && setValue && !didDefaultRef.current && atTheHall === undefined) {
+      didDefaultRef.current = true
+      setValue(`${namePrefix}._atTheHall` as any, true)
+      // Populate location fields from hosting ecclesia (handles both string and object)
+      const locationData = formatEcclesiaToLocation(hostingEcclesia)
+      if (typeof hostingEcclesia !== 'string') {
+        locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      }
+      const updates = createLocationFieldUpdates(locationData, namePrefix)
+      updates.forEach(({ field, value }) => {
+        const fieldName = field.includes('.parking') ? field.replace('.parking', '.parkingInfo') : field
+        setValue(fieldName as any, value)
+      })
+    }
+  }, [showAtTheHallOption, hostingEcclesia, setValue, namePrefix, atTheHall])
+
+  // Watch selected platform for conditional field display
+  const selectedPlatform = useWatch({
+    control,
+    name: `${namePrefix}.onlineMeeting.platform` as FieldPath<T>
+  }) as string | undefined
+
+  // Watch address and name for autocomplete integration
+  const addressValue = useWatch({
+    control,
+    name: `${namePrefix}.address` as FieldPath<T>
+  }) as string | undefined
+
+  const locationName = useWatch({
+    control,
+    name: `${namePrefix}.name` as FieldPath<T>
+  }) as string | undefined
+
+  const locationCountry = useWatch({
+    control,
+    name: `${namePrefix}.country` as FieldPath<T>
+  }) as string | undefined
+
   // Use pure functions for data transformation
   const handleAtTheHallChange = (checked: boolean) => {
     // Only proceed if setValue is available
@@ -103,13 +161,15 @@ export function LocationSection<T extends FieldValues>({
       console.warn('LocationSection: setValue not available - component must be used within a FormProvider')
       return
     }
-    
+
     if (checked && hostingEcclesia) {
-      // Transform data using pure function
+      // Transform data using pure function (handles both string and object)
       const locationData = formatEcclesiaToLocation(hostingEcclesia)
-      // Handle parkingInfo vs parking field name
-      locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
-      
+      // Handle parkingInfo vs parking field name (only for object values)
+      if (typeof hostingEcclesia !== 'string') {
+        locationData.parking = hostingEcclesia.hall?.parkingInfo || hostingEcclesia.parkingInfo || ''
+      }
+
       // Get field updates and apply them
       const updates = createLocationFieldUpdates(locationData, namePrefix)
       // Rename parking to parkingInfo for this form
@@ -127,7 +187,10 @@ export function LocationSection<T extends FieldValues>({
       })
     }
   }
-  
+
+  const showPhysicalLocation = locationMode === 'in-person' || locationMode === 'hybrid'
+  const showOnlineFields = locationMode === 'online' || locationMode === 'hybrid'
+
   return (
     <Card padding={card.padding} borderWidth={1} borderColor="$borderColor">
       <YStack space={card.space}>
@@ -135,94 +198,253 @@ export function LocationSection<T extends FieldValues>({
           <MapPin size={button.iconSize} color="$blue10" />
           <Text fontSize="$4" fontWeight="600">{title}</Text>
         </XStack>
-        
+
         <YStack space={card.space}>
-          {/* At the Hall convenience option */}
-          {showAtTheHallOption && hostingEcclesia && (
-            <CheckboxWithCheck
-              control={control}
-              name={`${namePrefix}._atTheHall` as any}
-              label={`At the Hall - Use ${hostingEcclesia.name}'s hall location`}
-              onCheckChange={handleAtTheHallChange}
-            />
-          )}
-          
-          <EventFormInput
+          {/* Location Mode Selector */}
+          <EventFormSelect
             control={control}
-            name={`${namePrefix}.name` as any}
-            label="Location Name"
-            placeholder="e.g., Toronto East Ecclesial Hall"
-            required={required}
+            name={`${namePrefix}.mode` as any}
+            label="Location Type"
+            placeholder="Select location type"
+            required
+            options={[
+              { value: 'in-person', label: 'In-Person Only' },
+              { value: 'online', label: 'Online' },
+              { value: 'hybrid', label: 'Hybrid (In-Person & Online)' }
+            ]}
           />
-          
-          <EventFormInput
-            control={control}
-            name={`${namePrefix}.address` as any}
-            label="Address"
-            placeholder="123 Main Street"
-            required={required}
-          />
-          
-          <XStack space="$2">
-            <YStack flex={1}>
+
+          {/* Physical Location Fields - shown for in-person and hybrid */}
+          {showPhysicalLocation ? <>
+              <Separator marginVertical="$2" />
+              <XStack gap="$2" alignItems="center">
+                <MapPin size="$0.75" color="$green10" />
+                <Text fontSize="$3" fontWeight="600" color="$green11">
+                  Physical Location
+                </Text>
+              </XStack>
+
+              {/* At the hosting ecclesia's location */}
+              {showAtTheHallOption && hostingEcclesia ? <CheckboxWithCheck
+                  control={control}
+                  name={`${namePrefix}._atTheHall` as any}
+                  label={typeof hostingEcclesia === 'string' ? hostingEcclesia : (hostingEcclesia.name || 'Hosting Ecclesia')}
+                  onCheckChange={handleAtTheHallChange}
+                /> : null}
+
+              {/* Show read-only location when "At the Hall" is checked */}
+              {atTheHall && hostingEcclesia ? (() => {
+                // Normalize: hostingEcclesia can be a string or object
+                const he = typeof hostingEcclesia === 'string'
+                  ? { name: hostingEcclesia } as Record<string, any>
+                  : hostingEcclesia
+                const hallName = he.hall?.name || he.name
+                const hallAddress = he.hall?.address || he.address
+                const cityLine = [
+                  he.hall?.city || he.city,
+                  he.hall?.province || he.province,
+                  he.hall?.postalCode || he.postalCode
+                ].filter(Boolean).join(', ')
+                const country = he.hall?.country || he.country
+                const parking = he.hall?.parkingInfo || he.parkingInfo
+
+                return (
+                  <Card padding="$3" backgroundColor="$gray2" borderRadius="$3">
+                    <YStack gap="$2">
+                      <Text fontSize="$4" fontWeight="600" color="$gray12">
+                        {hallName}
+                      </Text>
+                      {hallAddress ? (
+                        <Text fontSize="$3" color="$gray11">{hallAddress}</Text>
+                      ) : null}
+                      {cityLine ? (
+                        <Text fontSize="$3" color="$gray11">{cityLine}</Text>
+                      ) : null}
+                      {country ? (
+                        <Text fontSize="$3" color="$gray11">{country}</Text>
+                      ) : null}
+                      {parking ? (
+                        <YStack marginTop="$2">
+                          <Text fontSize="$2" fontWeight="600" color="$gray10">Parking</Text>
+                          <Text fontSize="$3" color="$gray11">{parking}</Text>
+                        </YStack>
+                      ) : null}
+                    </YStack>
+                  </Card>
+                )
+              })() : (
+                /* Show editable fields when "At the Hall" is NOT checked */
+                <>
+                  <EventFormInput
+                    control={control}
+                    name={`${namePrefix}.name` as any}
+                    label="Venue Name"
+                    placeholder=""
+                    required={required}
+                  />
+
+                  <AddressAutocomplete
+                    value={addressValue || ''}
+                    onChangeText={(text) => {
+                      if (setValue) setValue(`${namePrefix}.address` as any, text)
+                    }}
+                    onAddressSelect={(parsed: ParsedAddress) => {
+                      if (!setValue) return
+                      setValue(`${namePrefix}.address` as any, parsed.formattedAddress || parsed.streetAddress)
+                      setValue(`${namePrefix}.city` as any, parsed.city)
+                      setValue(`${namePrefix}.province` as any, parsed.province)
+                      setValue(`${namePrefix}.postalCode` as any, parsed.postalCode)
+                      setValue(`${namePrefix}.country` as any, parsed.country)
+                      setValue(`${namePrefix}.mapsUrl` as any, buildMapsUrl(parsed))
+                      if (parsed.lat) setValue(`${namePrefix}.lat` as any, parsed.lat)
+                      if (parsed.lng) setValue(`${namePrefix}.lng` as any, parsed.lng)
+                      if (parsed.placeId) setValue(`${namePrefix}.placeId` as any, parsed.placeId)
+                      if (parsed.name) setValue(`${namePrefix}.placeName` as any, parsed.name)
+                    }}
+                    label="Address"
+                    placeholder="123 Main Street"
+                    country={locationCountry}
+                    disabled={!setValue}
+                  />
+
+                  <XStack space="$2">
+                    <YStack flex={1}>
+                      <EventFormInput
+                        control={control}
+                        name={`${namePrefix}.city` as any}
+                        label="City"
+                        placeholder="Toronto"
+                        required={required}
+                      />
+                    </YStack>
+
+                    <YStack flex={1}>
+                      <ProvinceSelect
+                        control={control}
+                        name={`${namePrefix}.province` as any}
+                        countryFieldName={`${namePrefix}.country` as any}
+                        label="Province"
+                        placeholder="Select Province"
+                        required={required}
+                      />
+                    </YStack>
+
+                    <YStack flex={1}>
+                      <EventFormInput
+                        control={control}
+                        name={`${namePrefix}.postalCode` as any}
+                        label="Postal Code"
+                        placeholder="M1A 1A1"
+                      />
+                    </YStack>
+                  </XStack>
+
+                  <XStack space="$2">
+                    <YStack flex={1}>
+                      <CountrySelect
+                        control={control}
+                        name={`${namePrefix}.country` as any}
+                        label="Country"
+                        placeholder="Select Country"
+                      />
+                    </YStack>
+                  </XStack>
+
+                  <OptimizedTextarea
+                    control={control}
+                    name={`${namePrefix}.directions` as any}
+                    label="Directions"
+                    placeholder="Additional directions or landmarks"
+                    rows={3}
+                    maxLength={500}
+                  />
+
+                  <OptimizedTextarea
+                    control={control}
+                    name={`${namePrefix}.parkingInfo` as any}
+                    label="Parking Information"
+                    placeholder="Parking details and restrictions"
+                    rows={3}
+                    maxLength={300}
+                  />
+                </>
+              )}
+            </> : null}
+
+          {/* Online Meeting Fields - shown for online and hybrid */}
+          {showOnlineFields ? <>
+              <Separator marginVertical="$2" />
+              <XStack gap="$2" alignItems="center">
+                <Video size="$0.75" color="$purple10" />
+                <Text fontSize="$3" fontWeight="600" color="$purple11">
+                  Online Meeting Details
+                </Text>
+              </XStack>
+
               <EventFormInput
                 control={control}
-                name={`${namePrefix}.city` as any}
-                label="City"
-                placeholder="Toronto"
+                name={`${namePrefix}.onlineMeeting.link` as any}
+                label="Meeting Link"
+                placeholder="https://zoom.us/j/123456789 or https://meet.google.com/..."
+                type="url"
                 required={required}
               />
-            </YStack>
-            
-            <YStack flex={1}>
-              <ProvinceSelect
+
+              <EventFormSelect
                 control={control}
-                name={`${namePrefix}.province` as any}
-                countryFieldName={`${namePrefix}.country` as any}
-                label="Province"
-                placeholder="Select Province"
-                required={required}
+                name={`${namePrefix}.onlineMeeting.platform` as any}
+                label="Platform (Optional)"
+                placeholder="Select platform"
+                options={[
+                  { value: '', label: '— None —' },
+                  { value: 'zoom', label: 'Zoom' },
+                  { value: 'google-meet', label: 'Google Meet' },
+                  { value: 'teams', label: 'Microsoft Teams' },
+                  { value: 'webex', label: 'Webex' },
+                  { value: 'custom-stream', label: 'Video Stream' },
+                ]}
               />
-            </YStack>
-            
-            <YStack flex={1}>
-              <EventFormInput
+
+              {/* Platform-specific fields — hidden for Custom Stream (just a link) */}
+              {selectedPlatform !== 'custom-stream' ? <>
+                <XStack space="$2">
+                  <YStack flex={1}>
+                    <EventFormInput
+                      control={control}
+                      name={`${namePrefix}.onlineMeeting.meetingId` as any}
+                      label={selectedPlatform === 'webex' ? 'Meeting Number (Optional)' : 'Meeting ID (Optional)'}
+                      placeholder={selectedPlatform === 'webex' ? 'e.g., 2631 234 5678' : 'e.g., 123 456 789'}
+                    />
+                  </YStack>
+
+                  <YStack flex={1}>
+                    <EventFormInput
+                      control={control}
+                      name={`${namePrefix}.onlineMeeting.password` as any}
+                      label="Passcode (Optional)"
+                      placeholder="Meeting passcode"
+                    />
+                  </YStack>
+                </XStack>
+
+                <EventFormInput
+                  control={control}
+                  name={`${namePrefix}.onlineMeeting.dialInNumber` as any}
+                  label="Dial-In Number (Optional)"
+                  placeholder="+1 234 567 8900"
+                  type="tel"
+                />
+              </> : null}
+
+              <OptimizedTextarea
                 control={control}
-                name={`${namePrefix}.postalCode` as any}
-                label="Postal Code"
-                placeholder="M1A 1A1"
+                name={`${namePrefix}.onlineMeeting.additionalInfo` as any}
+                label="Additional Online Info (Optional)"
+                placeholder="Any other relevant meeting details or instructions"
+                rows={3}
+                maxLength={500}
               />
-            </YStack>
-          </XStack>
-          
-          <XStack space="$2">
-            <YStack flex={1}>
-              <CountrySelect
-                control={control}
-                name={`${namePrefix}.country` as any}
-                label="Country"
-                placeholder="Select Country"
-              />
-            </YStack>
-          </XStack>
-          
-          <OptimizedTextarea
-            control={control}
-            name={`${namePrefix}.directions` as any}
-            label="Directions"
-            placeholder="Additional directions or landmarks"
-            rows={3}
-            maxLength={500}
-          />
-          
-          <OptimizedTextarea
-            control={control}
-            name={`${namePrefix}.parkingInfo` as any}
-            label="Parking Information"
-            placeholder="Parking details and restrictions"
-            rows={3}
-            maxLength={300}
-          />
+            </> : null}
         </YStack>
       </YStack>
     </Card>
@@ -303,11 +525,9 @@ export function SpeakerSection<T extends FieldValues>({
             </Card>
           ))}
           
-          {fields.length === 0 && (
-            <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
+          {fields.length === 0 ? <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
               No speakers added yet. Click "Add Speaker" to get started.
-            </Text>
-          )}
+            </Text> : null}
       </YStack>
   )
 }
@@ -406,7 +626,6 @@ export function ScheduleSection<T extends FieldValues>({
                       name={`${namePrefix}.${index}.endTime` as any}
                       label="End Time (Optional)"
                       includeTime
-                      placeholder="Leave blank if no specific end time"
                     />
                   </YStack>
                 </XStack>
@@ -430,11 +649,9 @@ export function ScheduleSection<T extends FieldValues>({
             </Card>
           ))}
           
-          {fields.length === 0 && (
-            <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
+          {fields.length === 0 ? <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
               No schedule items added yet. Click "Add Item" to get started.
-            </Text>
-          )}
+            </Text> : null}
       </YStack>
   )
 }
@@ -457,7 +674,7 @@ export function RegistrationSection<T extends FieldValues>({
   } = useController({
     name: `${namePrefix}.hasFee` as FieldPath<T>,
     control,
-    defaultValue: false
+    defaultValue: false as PathValue<T, Path<T>>
   })
 
   return (
@@ -532,8 +749,7 @@ export function RegistrationSection<T extends FieldValues>({
           </XStack>
 
           {/* Fee fields - only show when checkbox is checked */}
-          {hasFee && (
-            <YStack space={card.space} paddingLeft={card.padding}>
+          {hasFee ? <YStack space={card.space} paddingLeft={card.padding}>
               <EventFormInput
                 control={control}
                 name={`${namePrefix}.fee` as any}
@@ -549,8 +765,7 @@ export function RegistrationSection<T extends FieldValues>({
                 placeholder="How to pay registration fee"
                 multiline
               />
-            </YStack>
-          )}
+            </YStack> : null}
           
           <EventFormInput
             control={control}
@@ -668,7 +883,8 @@ export function MultipleLocationsSection<T extends FieldValues>({
                   <ProvinceSelect
                     control={control}
                     name={`${namePrefix}.${index}.province` as any}
-                    country={(field as any).country || 'Canada'}
+                    countryFieldName={`${namePrefix}.${index}.country` as any}
+                    label="Province"
                   />
                 </YStack>
                 
@@ -689,17 +905,17 @@ export function MultipleLocationsSection<T extends FieldValues>({
                     name={`${namePrefix}.${index}.directions` as any}
                     label="Directions"
                     placeholder="Additional directions to help people find this location"
-                    multiline
+                    rows={3}
                   />
                 </YStack>
-                
+
                 <YStack flex={1}>
                   <OptimizedTextarea
                     control={control}
                     name={`${namePrefix}.${index}.parkingInfo` as any}
                     label="Parking Information"
                     placeholder="Parking availability and instructions"
-                    multiline
+                    rows={3}
                   />
                 </YStack>
               </XStack>
@@ -707,11 +923,9 @@ export function MultipleLocationsSection<T extends FieldValues>({
           </Card>
         ))}
         
-        {fields.length === 0 && (
-          <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
+        {fields.length === 0 ? <Text color="$gray11" fontSize="$3" textAlign="center" paddingVertical="$3">
             No locations added yet. Click "Add Location" to get started.
-          </Text>
-        )}
+          </Text> : null}
       </YStack>
   )
 }

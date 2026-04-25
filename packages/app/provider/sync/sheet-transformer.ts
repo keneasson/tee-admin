@@ -1,12 +1,18 @@
-import type { 
+import type {
   MemorialServiceType,
-  SundaySchoolType, 
+  SundaySchoolType,
   BibleClassType,
   CycType,
-  ProgramTypeKeys 
+  ProgramTypeKeys,
+  ProgramsTypes,
 } from '@my/app/types'
 import type { DirectoryRecord, ContactInfo } from '@my/app/provider/dynamodb/types'
 import { googleSheetsConfig } from '@my/app/config/google-sheets'
+import {
+  combineDateWithServiceTime,
+  validateServiceDate,
+  getServiceTimeConfig,
+} from '@my/app/config/schedule-times'
 
 interface ValidationResult {
   valid: boolean
@@ -17,9 +23,10 @@ interface ValidationResult {
 export class SheetTransformer {
   /**
    * Transform schedule data from Google Sheets to DynamoDB format
+   * Now includes timezone-aware dateTime and sourceTimezone fields
    */
   transformScheduleData(
-    sheetData: any[][], 
+    sheetData: any[][],
     sheetId: string
   ): Array<{
     ecclesia: string
@@ -27,6 +34,8 @@ export class SheetTransformer {
     type: ProgramTypeKeys
     scheduleData: any
     time?: string
+    dateTime?: string       // Full ISO datetime in UTC
+    sourceTimezone?: string // IANA timezone identifier
   }> {
     const records: Array<{
       ecclesia: string
@@ -34,6 +43,8 @@ export class SheetTransformer {
       type: ProgramTypeKeys
       scheduleData: any
       time?: string
+      dateTime?: string
+      sourceTimezone?: string
     }> = []
 
     if (sheetData.length === 0) {
@@ -48,6 +59,10 @@ export class SheetTransformer {
 
     // Determine sheet type based on sheet ID (fail fast if not found)
     const sheetType = this.determineScheduleTypeBySheetId(sheetId)
+    if (!sheetType) {
+      console.error(`❌ Could not determine schedule type for sheet ${sheetId}`)
+      return records
+    }
     const ecclesia = this.extractEcclesia(sheetId, headers, rows)
 
     for (let i = 0; i < rows.length; i++) {
@@ -70,12 +85,34 @@ export class SheetTransformer {
           continue
         }
 
+        // Compute timezone-aware datetime
+        let dateTime: string | undefined
+        let sourceTimezone: string | undefined
+
+        try {
+          const serviceConfig = getServiceTimeConfig(sheetType as ProgramsTypes)
+          sourceTimezone = serviceConfig.timezone
+
+          // Combine date with service time to get UTC datetime
+          dateTime = combineDateWithServiceTime(date, sheetType as ProgramsTypes)
+
+          // Validate that the date falls on the expected day of week
+          const validation = validateServiceDate(date, sheetType as ProgramsTypes)
+          if (!validation.isValid && validation.warning) {
+            console.warn(`⚠️ Row ${i + 2}: ${validation.warning}`)
+          }
+        } catch (error) {
+          console.warn(`⚠️ Could not compute dateTime for row ${i + 2}:`, error)
+        }
+
         records.push({
           ecclesia,
           date,
           type: sheetType,
           scheduleData,
           time: this.extractTime(row, headers) || '09:00',
+          dateTime,
+          sourceTimezone,
         })
 
       } catch (error) {
@@ -263,9 +300,8 @@ export class SheetTransformer {
   }
 
   private extractEcclesia(sheetId: string, headers: string[], rows: any[][]): string {
-    // Try to extract ecclesia from sheet title or data
-    // This could be configured or detected from sheet metadata
-    return 'Toronto East' // Default for now - should be configurable
+    // Use the canonical home ecclesia name for consistency with multi-tenant queries
+    return 'Toronto East Ecclesia' // Default for now - should be configurable per sheet
   }
 
   private extractDate(row: any[], headers: string[], rowIndex: number): string | null {
@@ -308,15 +344,20 @@ export class SheetTransformer {
 
   private parseDate(value: any): string | null {
     if (!value) return null
-    
+
     try {
       const date = new Date(value)
       if (isNaN(date.getTime())) {
         return null
       }
-      
-      // Return ISO date string (YYYY-MM-DD)
-      return date.toISOString().split('T')[0]
+
+      // Return date string in local timezone (YYYY-MM-DD)
+      // Using local timezone to avoid shifting dates when converting from Google Sheets
+      // which stores dates in the user's local timezone
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
     } catch {
       return null
     }
@@ -355,7 +396,7 @@ export class SheetTransformer {
   private getValueByHeader(row: any[], headerMap: Record<string, number>, field: string): string {
     const index = headerMap[field]
     if (index !== undefined && row[index] !== undefined) {
-      return String(row[index]).trim()
+      return String(row[index]).trim().replace(/[\r\n]+/g, '')
     }
     return ''
   }

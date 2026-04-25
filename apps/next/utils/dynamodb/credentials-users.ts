@@ -1,3 +1,22 @@
+/**
+ * @deprecated This file contains legacy USER# record management.
+ *
+ * Migration to Unified People System:
+ * - createCredentialsUser -> personRepository.createFromCredentials
+ * - findCredentialsUserByEmail -> personRepository.getByEmail (uses GSI1)
+ * - findAnyUserByEmail -> personRepository.emailExists (uses GSI1, no scan)
+ * - verifyCredentialsUser -> personRepository.getCredentialsForVerification
+ * - createEmailVerificationToken -> tokenRepository.createEmailVerification
+ * - verifyEmailToken -> tokenRepository.verifyAndConsume + personRepository.markEmailVerified
+ * - createPasswordResetToken -> tokenRepository.createPasswordReset
+ * - validatePasswordResetToken -> tokenRepository.verify
+ * - resetPassword -> tokenRepository.verifyAndConsume + personRepository.updatePassword
+ * - createInvitationCode -> tokenRepository.createInvitation
+ * - validateInvitationCode -> tokenRepository.verify
+ *
+ * Set UNIFIED_PEOPLE_AUTH=true in environment to use the new system.
+ * This file will be removed once all users are migrated to PersonRecords.
+ */
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { randomUUID } from 'crypto'
@@ -62,14 +81,18 @@ export async function createCredentialsUser(data: {
   role?: string
   invitationCode?: string
 }): Promise<CredentialsUser> {
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  // DynamoDB GSI queries are case-sensitive, so we must store and query with lowercase
+  const normalizedEmail = data.email.toLowerCase().trim()
+
   // Check if ANY user already exists with this email (any provider)
-  const existingAnyUser = await findAnyUserByEmail(data.email)
+  const existingAnyUser = await findAnyUserByEmail(normalizedEmail)
   if (existingAnyUser) {
     throw new Error('User with this email already exists. Please sign in with your existing account or use a different email.')
   }
-  
+
   // Check if credentials user specifically exists
-  const existingUser = await findCredentialsUserByEmail(data.email)
+  const existingUser = await findCredentialsUserByEmail(normalizedEmail)
   if (existingUser) {
     throw new Error('User with this email already exists')
   }
@@ -77,10 +100,10 @@ export async function createCredentialsUser(data: {
   const userId = randomUUID()
   const hashedPassword = await hashPassword(data.password)
   const now = new Date()
-  
+
   const user: CredentialsUser = {
     id: userId,
-    email: data.email,
+    email: normalizedEmail, // Store normalized email
     hashedPassword,
     name: `${data.firstName} ${data.lastName}`,
     firstName: data.firstName,
@@ -92,13 +115,14 @@ export async function createCredentialsUser(data: {
   }
 
   // Store user in DynamoDB with condition to prevent duplicates
+  // GSI1 uses normalized (lowercase) email for consistent lookups
   await client.put({
     TableName: TABLE_NAME,
     Item: {
       pkey: `USER#${userId}`,
       skey: `USER#${userId}`,
-      gsi1pk: `USER#${data.email}`,
-      gsi1sk: `USER#${data.email}`,
+      gsi1pk: `USER#${normalizedEmail}`,
+      gsi1sk: `USER#${normalizedEmail}`,
       type: 'USER',
       ...user,
     },
@@ -114,13 +138,16 @@ export async function createCredentialsUser(data: {
 }
 
 export async function findCredentialsUserByEmail(email: string): Promise<CredentialsUser | null> {
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  const normalizedEmail = email.toLowerCase().trim()
+
   try {
     const result = await client.query({
       TableName: TABLE_NAME,
       IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: {
-        ':pk': `USER#${email}`,
+        ':pk': `USER#${normalizedEmail}`,
       },
     })
 
@@ -139,14 +166,23 @@ export async function findCredentialsUserByEmail(email: string): Promise<Credent
   }
 }
 
+/**
+ * @deprecated This function uses full table SCAN which is inefficient.
+ * Use personRepository.emailExists(email) instead for O(1) email existence check via GSI1.
+ */
 export async function findAnyUserByEmail(email: string): Promise<any | null> {
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  const normalizedEmail = email.toLowerCase().trim()
+
   try {
     // Use scan to find any user with this email (regardless of provider)
+    // Note: This scan checks both normalized and original case for backward compatibility
     const result = await client.scan({
       TableName: TABLE_NAME,
-      FilterExpression: 'email = :email AND #type = :userType',
+      FilterExpression: '(email = :email OR email = :normalizedEmail) AND #type = :userType',
       ExpressionAttributeValues: {
-        ':email': email,
+        ':email': email, // Original case (for legacy records)
+        ':normalizedEmail': normalizedEmail, // Normalized case (for new records)
         ':userType': 'USER'
       },
       ExpressionAttributeNames: {
@@ -155,7 +191,7 @@ export async function findAnyUserByEmail(email: string): Promise<any | null> {
     })
 
     if (result.Items && result.Items.length > 0) {
-      console.log('🔍 Found existing user with email:', email, 'provider:', result.Items[0].provider)
+      console.log('🔍 Found existing user with email:', normalizedEmail, 'provider:', result.Items[0].provider)
       return result.Items[0]
     }
     return null
@@ -166,9 +202,11 @@ export async function findAnyUserByEmail(email: string): Promise<any | null> {
 }
 
 export async function verifyCredentialsUser(email: string, password: string): Promise<CredentialsUser | null> {
-  console.log('verifyCredentialsUser: Attempting sign-in for:', email)
-  
-  const user = await findCredentialsUserByEmail(email)
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  const normalizedEmail = email.toLowerCase().trim()
+  console.log('verifyCredentialsUser: Attempting sign-in for:', normalizedEmail)
+
+  const user = await findCredentialsUserByEmail(normalizedEmail)
   if (!user) {
     console.log('verifyCredentialsUser: No user found for email:', email)
     return null
@@ -202,6 +240,8 @@ export async function verifyCredentialsUser(email: string, password: string): Pr
 }
 
 export async function createEmailVerificationToken(email: string): Promise<string> {
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  const normalizedEmail = email.toLowerCase().trim()
   const token = generateSecureToken()
   const now = new Date()
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days
@@ -213,7 +253,7 @@ export async function createEmailVerificationToken(email: string): Promise<strin
       skey: `VERIFY_TOKEN#${token}`,
       type: 'VERIFICATION_TOKEN',
       token,
-      email,
+      email: normalizedEmail, // Store normalized email
       tokenType: 'email_verification',
       createdAt: now,
       expiresAt,
@@ -248,20 +288,24 @@ export async function verifyEmailToken(token: string): Promise<{ email: string }
     }
 
     // First, get the user ID from the email
+    // Email should already be normalized when token was created, but normalize again to be safe
+    const normalizedEmail = tokenData.email.toLowerCase().trim()
     const userResult = await client.query({
       TableName: TABLE_NAME,
       IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: {
-        ':pk': `USER#${tokenData.email}`,
+        ':pk': `USER#${normalizedEmail}`,
       },
     })
 
     if (userResult.Items && userResult.Items.length > 0) {
       const userId = userResult.Items[0].id
-      console.log('verifyEmailToken: Marking user as verified:', userId, 'for email:', tokenData.email)
+      console.log('verifyEmailToken: Marking user as verified:', userId, 'for email:', normalizedEmail)
       
       // Mark user as verified using the primary key
+      // IMPORTANT: Store as ISO string, not Date object, because DynamoDB marshalling
+      // with convertClassInstanceToMap:true converts Date to {} (empty object)
       await client.update({
         TableName: TABLE_NAME,
         Key: {
@@ -270,7 +314,7 @@ export async function verifyEmailToken(token: string): Promise<{ email: string }
         },
         UpdateExpression: 'SET emailVerified = :now',
         ExpressionAttributeValues: {
-          ':now': new Date(),
+          ':now': new Date().toISOString(),
         },
       })
       
@@ -375,6 +419,8 @@ export async function markInvitationCodeAsUsed(code: string, userId: string): Pr
 }
 
 export async function createPasswordResetToken(email: string): Promise<string> {
+  // CRITICAL: Normalize email to lowercase for consistent lookups
+  const normalizedEmail = email.toLowerCase().trim()
   const token = generateSecureToken()
   const now = new Date()
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days
@@ -386,7 +432,7 @@ export async function createPasswordResetToken(email: string): Promise<string> {
       skey: `RESET_TOKEN#${token}`,
       type: 'PASSWORD_RESET_TOKEN',
       token,
-      email,
+      email: normalizedEmail, // Store normalized email
       tokenType: 'password_reset',
       createdAt: now,
       expiresAt,
@@ -437,12 +483,14 @@ export async function resetPassword(token: string, newPassword: string): Promise
     const hashedPassword = await hashPassword(newPassword)
 
     // First, get the user ID from the email
+    // Email should already be normalized when token was created, but normalize again to be safe
+    const normalizedEmail = tokenData.email.toLowerCase().trim()
     const userResult = await client.query({
       TableName: TABLE_NAME,
       IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: {
-        ':pk': `USER#${tokenData.email}`,
+        ':pk': `USER#${normalizedEmail}`,
       },
     })
 

@@ -21,18 +21,16 @@ export function BaseFormSection<T extends FieldValues>({
     <Card p="$4" borderWidth={1} borderColor="$borderColor">
       <YStack gap="$4">
         <XStack gap="$2" alignItems="center">
-          {IconComponent && <IconComponent size="$1" color="$blue10" />}
+          {IconComponent ? <IconComponent size="$1" color="$blue10" /> : null}
           <Text fontSize="$5" fontWeight="600">
             {title}
-            {required && <Text color="$red10"> *</Text>}
+            {required ? <Text color="$red10"> *</Text> : null}
           </Text>
         </XStack>
         
-        {description && (
-          <Text color="$gray11" fontSize="$3">
+        {description ? <Text color="$gray11" fontSize="$3">
             {description}
-          </Text>
-        )}
+          </Text> : null}
         
         {children}
       </YStack>

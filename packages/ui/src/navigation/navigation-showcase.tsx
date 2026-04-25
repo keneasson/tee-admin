@@ -258,7 +258,7 @@ export function NavigationShowcase() {
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
               Current User: {userRole.role || 'Not authenticated'} 
-              {userRole.isAdminOrOwner && <Text color={colors.success}> (Admin Access)</Text>}
+              {userRole.isAdminOrOwner ? <Text color={colors.success}> (Admin Access)</Text> : null}
             </Text>
             
             <YStack gap="$2">
@@ -352,11 +352,11 @@ export function NavigationShowcase() {
               </Text>
               <Button
                 size="$3"
-                variant="ghost"
+                chromeless
                 backgroundColor="transparent"
                 borderWidth={0}
               >
-                <Text fontSize="$5" color={colors.textPrimary}>☰</Text>
+                <Text fontSize={18} color={colors.textPrimary}>☰</Text>
               </Button>
             </XStack>
           </View>

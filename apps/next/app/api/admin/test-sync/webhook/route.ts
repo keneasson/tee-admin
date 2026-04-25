@@ -12,7 +12,12 @@ function verifyWebhookSignature(payload: string, signature: string): boolean {
   }
   
   const expectedSignature = `sha256=${crypto.createHmac('sha256', secret).update(payload).digest('hex')}`
-  return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature))
+  const expectedBuffer = new Uint8Array(Buffer.from(expectedSignature, 'utf8'))
+  const signatureBuffer = new Uint8Array(Buffer.from(signature, 'utf8'))
+  if (expectedBuffer.length !== signatureBuffer.length) {
+    return false
+  }
+  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
 }
 
 // Production webhook handler using proper WebhookSyncService

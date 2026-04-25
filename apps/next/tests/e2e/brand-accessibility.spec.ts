@@ -5,7 +5,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Check for accessibility indicators in contrast testing
@@ -20,7 +20,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -65,7 +65,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -83,7 +83,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -105,7 +105,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/typography')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Check for proper semantic structure
@@ -120,7 +120,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Test light mode contrast
@@ -146,7 +146,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/components')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     await page.waitForLoadState('networkidle')
@@ -169,7 +169,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/colours')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Page should still be readable and functional
@@ -181,7 +181,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/navigation')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Tab through interactive elements and verify focus is visible
@@ -200,7 +200,7 @@ test.describe('Brand System Accessibility', () => {
     await page.goto('/brand/playground')
     
     if (page.url().includes('/auth/signin')) {
-      test.skip('User not authenticated as admin')
+      test.skip(true, 'User not authenticated as admin')
     }
     
     // Check for ARIA live regions or proper announcements

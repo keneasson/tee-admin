@@ -27,7 +27,7 @@ export const ManageContacts: React.FC = () => {
           <Text>Load Contact Lists</Text>
         </Button>
       </YStack>
-      {contactLists && <ContactLists contactLists={contactLists} />}
+      {contactLists ? <ContactLists contactLists={contactLists} /> : null}
     </>
   )
 }

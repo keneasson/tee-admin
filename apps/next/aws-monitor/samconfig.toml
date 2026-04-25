@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "tee-admin-health-monitor"
+resolve_s3 = true
+s3_prefix = "tee-admin-health-monitor"
+region = "ca-central-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "AlertEmail=\"ken.easson@gmail.com\" FromEmail=\"noreply@tee-admin.com\""
+image_repositories = []
+
+[default.global.parameters]
+region = "ca-central-1"

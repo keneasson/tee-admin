@@ -42,15 +42,7 @@ export function EventPreviewModal({ isOpen, onClose, eventData }: EventPreviewMo
           bordered
           elevate
           key="content"
-          animateOnly={['transform', 'opacity']}
-          animation={[
-            'quick',
-            {
-              opacity: {
-                overshootClamping: true,
-              },
-            },
-          ]}
+          animation="quick"
           enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           gap="$3"
@@ -62,7 +54,7 @@ export function EventPreviewModal({ isOpen, onClose, eventData }: EventPreviewMo
           <XStack justifyContent="space-between" alignItems="center">
             <Dialog.Title>Event Preview</Dialog.Title>
             <Dialog.Close asChild>
-              <Button size="$2" variant="ghost" icon={X} />
+              <Button size="$2" chromeless icon={X} />
             </Dialog.Close>
           </XStack>
 

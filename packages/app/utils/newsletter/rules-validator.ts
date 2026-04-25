@@ -166,10 +166,11 @@ export class NewsletterRulesValidator {
       const validDurations = [
         'until_event_date',
         '1_week_after_event',
-        '2_weeks_after_event', 
+        '2_weeks_after_event',
         '3_weeks_after_event',
         '3_weeks_from_first_inclusion',
         '3_weeks_or_until_event_date',
+        '2_weeks_then_thursday_before',
         'custom'
       ]
       if (!validDurations.includes(rule.displayDuration)) {

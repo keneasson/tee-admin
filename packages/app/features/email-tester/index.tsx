@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useSession } from 'next-auth/react'
 
 import { Button, Checkbox, Heading, Paragraph, Text, XStack, YStack } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
@@ -9,13 +8,21 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { ManageContacts } from './manage-contacts'
-import { emailReasons } from 'next-app/utils/email/email-send'
-import { Check } from '@tamagui/lucide-icons/icons/Check'
+import { EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
+import { Check } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
 // import { setRole } from '../../provider/auth/setRole'
 
-export const EmailTester: React.FC = () => {
-  const { data: session } = useSession()
+/**
+ * Props for EmailTester component
+ * Session must be passed from platform-specific wrapper
+ */
+export interface EmailTesterProps {
+  session: AuthSession | null
+  status?: AuthStatus
+}
+
+export const EmailTester: React.FC<EmailTesterProps> = ({ session, status = 'authenticated' }) => {
 
   const [email, setEmail] = useState<any>(null)
   const [reason, setReason] = useState<string | null>(null)
@@ -68,7 +75,7 @@ export const EmailTester: React.FC = () => {
     )
   }
 
-  const getEmail = async (reason: emailReasons) => {
+  const getEmail = async (reason: EmailReasonType) => {
     console.log('getEmail - test', test)
     setReason(reason)
     const response = await sendEmail(reason, test)
@@ -121,21 +128,19 @@ export const EmailTester: React.FC = () => {
                 </Button>
               </YStack>
             )}
-            {email && (
-              <YStack borderColor={'$green9'} borderWidth={'$1'} gap={'$2'}>
+            {email ? <YStack borderColor={'$green9'} borderWidth={'$1'} gap={'$2'}>
                 <Button onPress={() => setEmail(null)}>
                   <Text>Hide Response</Text>
                 </Button>
                 <pre>{JSON.stringify(email, null, 2).replaceAll('/n', '<br />')}</pre>
-              </YStack>
-            )}
+              </YStack> : null}
           </YStack>
           <ManageContacts />
           {/* <br />
           <Button onPress={() => handleButtonPress()}>
             <Text>Add Role for Ken Easson</Text>
           </Button> */}
-          {buttonResponce && <Text>{buttonResponce}</Text>}
+          {buttonResponce ? <Text>{buttonResponce}</Text> : null}
         </YStack>
       </Section>
     </Wrapper>

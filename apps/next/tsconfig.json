@@ -16,6 +16,7 @@
       "@/types/*": ["types/*"],
       "@/lib/*": ["lib/*"],
       "@/components/*": ["components/*"],
+      "@/hooks/*": ["hooks/*"],
       "@/middleware": ["middleware.ts"]
     },
     "typeRoots": [
@@ -46,6 +47,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "nextjs15-react19-nextauth-test"
   ]
 }

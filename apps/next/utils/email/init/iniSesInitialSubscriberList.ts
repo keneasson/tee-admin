@@ -1,5 +1,5 @@
 import { addContact, getContacts, updateContact } from '../contact'
-import { ContactPrefPreferences, EmailListTypeKeys, EmailListTypes } from '@my/app/types'
+import { ContactsEmailPreferences, EmailListTypeKeys, EmailListTypes } from '@my/app/types'
 
 import * as contacts from '../../../data/contact-subscribers4.json'
 
@@ -17,17 +17,15 @@ export async function initSubscriberList() {
   const sesResponse = await Promise.all(
     contacts.map(async (contact) => {
       const email = contact.EmailAddress
-      const sesContact = {
-        email,
-        preferences: Object.keys(EmailListTypes).reduce((acc, key) => {
-          acc[key as EmailListTypeKeys] = contact.TopicPreferences.indexOf(key) !== -1
-          return acc
-        }, {} as ContactPrefPreferences),
-      }
+      const lists = Object.keys(EmailListTypes).reduce((acc, key) => {
+        acc[key as EmailListTypeKeys] = contact.TopicPreferences.indexOf(key) !== -1
+        return acc
+      }, {} as ContactsEmailPreferences)
+      const sesContact = { email, lists }
       if (emails.indexOf(email) === -1) {
-        await addContact({ listName: 'TEEConnect', contact: sesContact })
+        await addContact(sesContact)
       } else {
-        await updateContact({ listName: 'TEEConnect', contact: sesContact })
+        await updateContact(sesContact)
       }
       return email
     })

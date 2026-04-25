@@ -9,7 +9,7 @@ import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
 
 export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   constructor() {
-    super('schedules') // Uses new tee-schedules table
+    super('schedules', true) // Uses new tee-schedules table with uppercase PK/SK
   }
 
   protected buildSheetPK(sheetId: string): string {
@@ -55,17 +55,27 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     date: string,
     data: ProgramTypes,
     time: string = '09:00',
-    index: number = 0
+    index: number = 0,
+    dateTime?: string,       // Full ISO datetime in UTC
+    sourceTimezone?: string  // IANA timezone identifier
   ): Promise<ScheduleRecord> {
     const record: ScheduleRecord = {
       PK: this.buildSchedulePK(eventType),
       SK: this.buildScheduleSK(date, index),
+      // GSI1 keys for per-ecclesia queries (multi-tenant schedule support)
+      GSI1PK: this.buildEcclesiaGSI1PK(ecclesia),
+      GSI1SK: this.buildEcclesiaGSI1SK(date, eventType, time),
+      ecclesia, // Required field
+      type: eventType, // Required field
       sheetType: eventType,
       sheetId,
       date,
       data,  // Use 'data' not 'scheduleData' to match ScheduleService
       lastUpdated: new Date().toISOString(),
-      version: '1',
+      version: 1,
+      // Timezone-aware datetime fields
+      ...(dateTime && { dateTime }),
+      ...(sourceTimezone && { sourceTimezone }),
     }
 
     await this.put(record)
@@ -274,7 +284,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return this.update(
       this.buildEventPK(eventId),
       'DETAILS',
-      updates
+      updates as unknown as Partial<ScheduleRecord>
     )
   }
 
@@ -298,6 +308,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   }
 
   // Bulk operations for sheet sync - SAFE CHECKSUM-BASED APPROACH
+  // IMPORTANT: Preserves externally-managed fields (YouTube URLs) that are not in Google Sheets
   async replaceSheetSchedules(
     sheetId: string,
     schedules: Array<{
@@ -306,50 +317,90 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       type: ProgramTypeKeys
       scheduleData: ProgramTypes
       time?: string
+      dateTime?: string       // Full ISO datetime in UTC
+      sourceTimezone?: string // IANA timezone identifier
     }>
   ): Promise<{ successful: number; failed: number; errors: string[] }> {
-    
+
     // Get existing records for this sheet
     const existingResult = await this.scan({
       filterExpression: 'sheetId = :sheetId',
       expressionAttributeValues: { ':sheetId': sheetId },
     })
-    
-    
+
+
     // All schedules from the same sheet will have the same type
     const sheetType = schedules[0]?.type
     if (!sheetType) {
       return { successful: 0, failed: 0, errors: [] }
     }
-    
+
+    // Build a map of existing records by their checksum key for quick lookup
+    // This allows us to preserve externally-managed fields like YouTube URLs
+    const existingRecordsMap = new Map<string, ScheduleRecord>()
+    existingResult.items.forEach(existingRecord => {
+      const checksumKey = `${existingRecord.PK}#${existingRecord.SK}`
+      existingRecordsMap.set(checksumKey, existingRecord)
+    })
+
     // Create checksums for new data
     const newRecordsMap = new Map<string, ScheduleRecord>()
     const newRecords: ScheduleRecord[] = schedules.map((schedule, index) => {
+      const pk = this.buildSchedulePK(schedule.type)
+      const sk = this.buildScheduleSK(schedule.date, index)
+      const checksumKey = `${pk}#${sk}`
+
+      // Check if there's an existing record with externally-managed fields to preserve
+      const existingRecord = existingRecordsMap.get(checksumKey)
+      const existingData = existingRecord?.data as Record<string, any> | undefined
+
+      // Merge schedule data, preserving YouTube URL from existing record if present
+      // YouTube URLs are managed by YouTubeSyncService, not Google Sheets
+      const preserveYouTube = existingData?.YouTube && !(schedule.scheduleData as any).YouTube
+      const preserveDateTime = existingData?.DateTime && !(schedule.scheduleData as any).DateTime
+      const preserveServiceTimezone = existingData?.ServiceTimezone && !(schedule.scheduleData as any).ServiceTimezone
+
+      if (preserveYouTube) {
+        console.log(`📺 Preserving YouTube URL for ${schedule.date}: ${existingData.YouTube}`)
+      }
+
+      const mergedData = {
+        ...schedule.scheduleData,
+        // Preserve YouTube URL if it exists in the existing record and not in the new data
+        ...(preserveYouTube ? { YouTube: existingData.YouTube } : {}),
+        // Also preserve DateTime and ServiceTimezone if they exist and new data doesn't have them
+        ...(preserveDateTime ? { DateTime: existingData.DateTime } : {}),
+        ...(preserveServiceTimezone ? { ServiceTimezone: existingData.ServiceTimezone } : {}),
+      }
+
       const record: ScheduleRecord = {
-        PK: this.buildSchedulePK(schedule.type),
-        SK: this.buildScheduleSK(schedule.date, index),
+        PK: pk,
+        SK: sk,
+        // GSI1 keys for per-ecclesia queries (multi-tenant schedule support)
+        GSI1PK: this.buildEcclesiaGSI1PK(schedule.ecclesia),
+        GSI1SK: this.buildEcclesiaGSI1SK(schedule.date, schedule.type, schedule.time || '09:00'),
+        ecclesia: schedule.ecclesia, // Required field
+        type: schedule.type, // Required field
         sheetType: schedule.type,
         sheetId,
         date: schedule.date,
-        data: schedule.scheduleData,  // This is the actual schedule data
+        data: mergedData,  // Merged data preserving externally-managed fields
         lastUpdated: new Date().toISOString(),
-        version: '1',  // version should be string to match ScheduleService
+        version: 1,
+        // Timezone-aware datetime fields (Phase 3: Timezone Support)
+        ...(schedule.dateTime && { dateTime: schedule.dateTime }),
+        ...(schedule.sourceTimezone && { sourceTimezone: schedule.sourceTimezone }),
       }
-      
+
       // Create checksum key for comparison
-      const checksumKey = `${record.PK}#${record.SK}`
       newRecordsMap.set(checksumKey, record)
       return record
     })
 
     // Find records to delete (exist in DB but not in new data)
     const recordsToDelete: Array<{PK: string, SK: string}> = []
-    const existingChecksums = new Set<string>()
-    
-    existingResult.items.forEach(existingRecord => {
-      const checksumKey = `${existingRecord.PK}#${existingRecord.SK}`
-      existingChecksums.add(checksumKey)
-      
+
+    existingRecordsMap.forEach((existingRecord, checksumKey) => {
       if (!newRecordsMap.has(checksumKey)) {
         recordsToDelete.push({
           PK: existingRecord.PK,

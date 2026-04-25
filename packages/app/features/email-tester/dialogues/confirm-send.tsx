@@ -21,14 +21,7 @@ export const ConfirmSend: React.FC<ConfirmSendParams> = ({ reason, test, open })
           bordered
           elevate
           key="content"
-          animation={[
-            'quick',
-            {
-              opacity: {
-                overshootClamping: true,
-              },
-            },
-          ]}
+          animation="quick"
           enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
           exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
           x={0}

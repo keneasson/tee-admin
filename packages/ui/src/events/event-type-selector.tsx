@@ -1,5 +1,6 @@
-import { YStack, XStack, Card, Text, Button } from 'tamagui'
-import { Calendar, Heart, Users, FileText, Droplets, RefreshCw } from '@tamagui/lucide-icons'
+import { YStack, XStack, Card, Text } from 'tamagui'
+import { Button } from '../Button'
+import { Calendar, Heart, Users, FileText, Droplets, RefreshCw, Vote, CircleDot } from '@tamagui/lucide-icons'
 import { EventType } from '@my/app/types/events'
 
 interface EventTypeOption {
@@ -13,7 +14,7 @@ interface EventTypeOption {
 const eventTypeOptions: EventTypeOption[] = [
   {
     type: 'study-weekend',
-    label: 'Study Weekend',
+    label: 'Bible Study',
     description: 'Multi-day ecclesial event with speakers, meals, and activities',
     icon: Calendar,
     color: '$blue10'
@@ -31,6 +32,13 @@ const eventTypeOptions: EventTypeOption[] = [
     description: 'Marriage ceremony with reception details',
     icon: Users,
     color: '$pink10'
+  },
+  {
+    type: 'engagement',
+    label: 'Engagement',
+    description: 'Engagement announcement for the ecclesia',
+    icon: CircleDot,
+    color: '$yellow10'
   },
   {
     type: 'baptism',
@@ -52,6 +60,13 @@ const eventTypeOptions: EventTypeOption[] = [
     description: 'Regular ongoing activities like Bible seminars, weekly studies, etc.',
     icon: RefreshCw,
     color: '$purple10'
+  },
+  {
+    type: 'election-cycle',
+    label: 'Election Cycle',
+    description: 'Service brethren election period with voting window',
+    icon: Vote,
+    color: '$orange10'
   }
 ]
 
@@ -112,8 +127,7 @@ export function EventTypeSelector({ value, onSelect, disabled = false }: EventTy
                   </Text>
                 </YStack>
                 
-                {isSelected && (
-                  <YStack
+                {isSelected ? <YStack
                     width="$2"
                     height="$2"
                     alignItems="center"
@@ -122,8 +136,7 @@ export function EventTypeSelector({ value, onSelect, disabled = false }: EventTy
                     borderRadius="$10"
                   >
                     <Text color="white" fontSize="$2" fontWeight="bold">✓</Text>
-                  </YStack>
-                )}
+                  </YStack> : null}
               </XStack>
             </Card>
           )

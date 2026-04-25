@@ -117,18 +117,10 @@ export const SchedulesScreen: React.FC<{
       ) : (
         <ScrollView>
           <Stack flex={1} paddingBottom={400}>
-            {schedule?.content && schedule.type === 'memorial' && (
-              <Memorial schedule={schedule.content as MemorialServiceType[]} />
-            )}
-            {schedule?.content && schedule.type === 'sundaySchool' && (
-              <SundaySchool schedule={schedule.content as SundaySchoolType[]} />
-            )}
-            {schedule?.content && schedule.type === 'bibleClass' && (
-              <BibleClass schedule={schedule.content as BibleClassType[]} />
-            )}
-            {schedule?.content && schedule.type === 'cyc' && (
-              <Cyc schedule={schedule.content as CycType[]} />
-            )}
+            {schedule?.content && schedule.type === 'memorial' ? <Memorial schedule={schedule.content as MemorialServiceType[]} /> : null}
+            {schedule?.content && schedule.type === 'sundaySchool' ? <SundaySchool schedule={schedule.content as SundaySchoolType[]} /> : null}
+            {schedule?.content && schedule.type === 'bibleClass' ? <BibleClass schedule={schedule.content as BibleClassType[]} /> : null}
+            {schedule?.content && schedule.type === 'cyc' ? <Cyc schedule={schedule.content as CycType[]} /> : null}
           </Stack>
         </ScrollView>
       )}

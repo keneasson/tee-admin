@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../utils/auth'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
-import type { GoogleSheetTypes, GoogleSheetData } from '@my/app/types'
+import type { GoogleSheetTypes, GoogleSheetData, ProgramsTypes } from '@my/app/types'
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
+import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 
-// Configuration for schedule types (excluding directory)
-const SCHEDULE_CONFIG: Record<Exclude<GoogleSheetTypes, 'directory'>, {
-  name: string
-  defaultTime: string
-  location: string
-}> = {
-  memorial: {
-    name: 'Memorial Service',
-    defaultTime: '11:00 AM',
-    location: 'Main Hall'
-  },
-  bibleClass: {
-    name: 'Bible Class',
-    defaultTime: '7:30 PM',
-    location: 'Fellowship Hall'
-  },
-  sundaySchool: {
-    name: 'Sunday School',
-    defaultTime: '9:30 AM',
-    location: 'Classroom A'
-  },
-  cyc: {
-    name: 'CYC',
-    defaultTime: '6:30 PM',
-    location: 'Youth Room'
+// Map Google Sheet type names to schedule type keys
+const SHEET_TO_SCHEDULE_KEY: Record<string, ScheduleTypeKey> = {
+  memorial: 'memorial',
+  bibleClass: 'bibleClass',
+  sundaySchool: 'sundaySchool',
+  cyc: 'cyc',
+}
+
+// Helper to get schedule config via unified resolver
+function getScheduleConfig(type: Exclude<GoogleSheetTypes, 'directory'>, scheduleConfig?: Record<string, any>) {
+  const typeKey = SHEET_TO_SCHEDULE_KEY[type]
+  if (!typeKey) {
+    return { name: type, defaultTime: '', location: '' }
+  }
+  const resolved = resolveServiceTime(scheduleConfig, typeKey)
+  return {
+    name: resolved.name,
+    defaultTime: resolved.displayTime,
+    location: resolved.location,
   }
 }
 
@@ -110,8 +107,8 @@ function transformScheduleData(
   currentUser?: string | null,
   allScheduleData?: Record<string, any[]>
 ): EnhancedScheduleEvent[] {
-  const config = SCHEDULE_CONFIG[sheetData.type as Exclude<GoogleSheetTypes, 'directory'>]
-  if (!config) return []
+  const config = getScheduleConfig(sheetData.type as Exclude<GoogleSheetTypes, 'directory'>)
+  if (!config.name) return []
 
   return sheetData.content.map((row: any, index: number) => {
     const date = new Date(row.Date || row.date)
@@ -173,18 +170,28 @@ function transformScheduleData(
     const scheduleType = sheetData.type as Exclude<GoogleSheetTypes, 'directory'>
     
     switch (scheduleType) {
-      case 'memorial':
-        // Memorial must have at least one person assigned
-        return !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
-      
+      case 'memorial': {
+        // Memorial: keep rows with people assigned, OR rows that are "no service" with explanation
+        const hasAssignments = !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
+        if (hasAssignments) return true
+        // No assignments — only keep if Lunch or Activities has content (indicates "no service" with explanation)
+        const hasContent = !!(event.Lunch?.trim() || event.Activities?.trim())
+        if (hasContent) {
+          event.noServiceAtHall = true
+          return true
+        }
+        return false
+      }
+
       case 'bibleClass':
-        // Bible class must have presider or speaker
-        return !!(event.Presider || event.Speaker)
-      
+        // Bible class must have presider or speaker (with actual content, not just whitespace)
+        // Joint classes with only Host data but no presider/speaker are also valid
+        return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
+
       case 'sundaySchool':
         // Sunday school must have refreshments assigned
         return !!(event.Refreshments)
-      
+
       case 'cyc':
         // CYC must have speaker or topic
         return !!(event.speaker || event.topic)
@@ -245,8 +252,14 @@ function addScheduleSpecificFields(event: any, row: any, scheduleType: Exclude<G
     case 'bibleClass':
       event.Presider = row.Presider || ''
       event.Speaker = row.Speaker || ''
-      // Secondary information for bible class
       event.Topic = row.Topic || row.topic || ''
+      // Joint Bible Class fields (from Google Sheets)
+      if (row.MetaData) event.MetaData = row.MetaData
+      if (row.Host) event.Host = row.Host
+      if (row.ZoomURL) event.ZoomURL = row.ZoomURL
+      if (row.MeetingID) event.MeetingID = String(row.MeetingID)
+      if (row.MeetingPwd) event.MeetingPwd = String(row.MeetingPwd)
+      if (row.InPerson) event.InPerson = row.InPerson
       break
     
     case 'sundaySchool':
@@ -290,7 +303,7 @@ function checkForScheduleConflicts(
 function generateTabs(availableTypes: Exclude<GoogleSheetTypes, 'directory'>[]): ScheduleTab[] {
   return availableTypes.map(type => ({
     id: type,
-    name: SCHEDULE_CONFIG[type]?.name || type,
+    name: getScheduleConfig(type).name || type,
     key: type
   }))
 }
@@ -366,6 +379,38 @@ export async function GET(request: NextRequest) {
       }))
     })
     
+    // Resolve ecclesia addresses for joint Bible classes
+    if (transformedData['bibleClass']) {
+      for (const event of transformedData['bibleClass']) {
+        if (event.Host && event.InPerson === 'Yes') {
+          try {
+            const ecclesia = await getEcclesiaByName(event.Host)
+            if (ecclesia) {
+              if (ecclesia.venue) event.resolvedVenue = ecclesia.venue
+              // Avoid duplicating city if it's already in the address
+              const addressIncludesCity = ecclesia.address && ecclesia.city &&
+                ecclesia.address.toLowerCase().includes(ecclesia.city.toLowerCase())
+              const parts = [
+                ecclesia.address,
+                addressIncludesCity ? null : ecclesia.city,
+                ecclesia.province,
+                ecclesia.postalCode,
+              ].filter(Boolean)
+              event.resolvedAddress = parts.join(', ')
+              if (event.resolvedAddress) {
+                event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.resolvedAddress)}`
+              }
+            }
+          } catch (err) {
+            console.warn(`⚠️ Failed to resolve address for "${event.Host}":`, err)
+          }
+        } else if (event.Host && event.InPerson && event.InPerson !== 'Yes') {
+          event.resolvedAddress = event.InPerson
+          event.resolvedMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.InPerson)}`
+        }
+      }
+    }
+
     // Apply date filtering and pagination to each schedule type
     const filteredData: Record<string, EnhancedScheduleEvent[]> = {}
     let totalEvents = 0
