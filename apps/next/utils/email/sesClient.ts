@@ -42,6 +42,14 @@ export function getSesClient(): SESv2Client {
   return sesConnection.value as SESv2Client
 }
 
+// Deployment-scoped email kill switch. Set EMAILS_ENABLED=false on
+// non-production deployments (e.g. echadhub pre-prod) to prevent any
+// outbound mail — both bulk sends (emailSend) and transactional sends
+// (sendEmail). Default behaviour is enabled.
+export function emailsEnabled(): boolean {
+  return process.env.EMAILS_ENABLED !== 'false'
+}
+
 export interface SendEmailProps {
   to: string
   subject: string
@@ -50,8 +58,15 @@ export interface SendEmailProps {
 }
 
 export async function sendEmail({ to, subject, body, textBody }: SendEmailProps): Promise<void> {
+  if (!emailsEnabled()) {
+    console.log(
+      `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
+    )
+    return
+  }
+
   const sesClient = getSesClient()
-  
+
   const emailCmd = new SendEmailCommand({
     FromEmailAddress: '"TEE Admin" <noreply@tee-admin.com>',
     Destination: {

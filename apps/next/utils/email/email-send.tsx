@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
-import { getSesClient } from './sesClient'
+import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
@@ -130,6 +130,13 @@ export const emailSend = async function ({
   }
 
   const campaignId = randomUUID()
+
+  if (!emailsEnabled()) {
+    console.log(
+      `[emailSend] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, reason=${reason}, test=${test})`
+    )
+    return { sends: [], skips: [], campaignId }
+  }
 
   try {
     // For custom emails, use the provided list, otherwise use the default for that reason
