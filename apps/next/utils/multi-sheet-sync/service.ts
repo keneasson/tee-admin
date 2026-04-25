@@ -7,6 +7,7 @@ import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { getAwsDbConfig } from '../email/sesClient'
 import { nextAuthDynamoDb } from '../auth'
+import { getTeeServicesConfig } from '../tee-services-config'
 
 // Sheet configuration from service account
 export interface SheetConfig {
@@ -39,12 +40,11 @@ export interface MultiSheetSyncStatus {
 // Get sheet configuration from service account
 async function getSheetConfigs(): Promise<SheetConfig[]> {
   try {
-    // Import the service configuration
-    const serviceConfig = await import('../../tee-services-db47a9e534d3.json')
+    const serviceConfig = getTeeServicesConfig()
     const sheetIds = serviceConfig.sheet_ids
 
     const configs: SheetConfig[] = []
-    
+
     Object.entries(sheetIds).forEach(([type, config]: [string, any]) => {
       // Skip cyc as it's not a Google Sheet
       if (type !== 'cyc') {
