@@ -39,99 +39,69 @@ export class GoogleSheetsConfig {
   }
 
   private constructor() {
-    this.loadSheetConfiguration()
+    // Defer loadSheetConfiguration() until first method call so that
+    // simply importing this module doesn't throw if the env var is
+    // unavailable (e.g. during Next.js's build-time page-data collection).
+  }
+
+  private ensureLoaded(): void {
+    if (!this.initialized) {
+      this.loadSheetConfiguration()
+    }
   }
 
   private loadSheetConfiguration(): void {
-    // FAIL FAST: Config file is REQUIRED
-    const configFile = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE
-    
-    if (!configFile) {
+    const envValue = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+
+    if (!envValue) {
       throw new Error(
-        'CRITICAL: GOOGLE_SERVICE_ACCOUNT_KEY_FILE environment variable is not set. ' +
-        'This must point to your Google service account JSON file with sheet_ids configuration.'
+        'CRITICAL: GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set. ' +
+        'This must contain the full Google service account JSON (credentials + sheet_ids) as a single-line string. ' +
+        'For local dev, add it to apps/next/.env.local.'
       )
     }
 
+    let config: ServiceConfig
     try {
-      // Only works in Node.js environments
-      if (typeof process === 'undefined' || !process.cwd) {
-        throw new Error(
-          'CRITICAL: GoogleSheetsConfig requires Node.js environment. ' +
-          'Cannot load configuration in edge runtime.'
-        )
-      }
-
-      const fs = require('fs')
-      const path = require('path')
-      
-      // Resolve the config file path
-      const configPath = path.isAbsolute(configFile) 
-        ? configFile 
-        : path.resolve(process.cwd(), configFile)
-      
-      // FAIL FAST: File must exist
-      if (!fs.existsSync(configPath)) {
-        throw new Error(
-          `CRITICAL: Google service account file not found at: ${configPath}\n` +
-          `Expected file specified by GOOGLE_SERVICE_ACCOUNT_KEY_FILE="${configFile}"\n` +
-          `To fix:\n` +
-          `1. Copy apps/next/tee-services-db47a9e534d3.tmpt.json to ${configFile}\n` +
-          `2. Add your Google service account credentials and sheet IDs\n` +
-          `3. Ensure the file is NOT committed to git`
-        )
-      }
-
-      const configContent = fs.readFileSync(configPath, 'utf-8')
-      const config: ServiceConfig = JSON.parse(configContent)
-
-      // FAIL FAST: sheet_ids section is required
-      if (!config.sheet_ids) {
-        throw new Error(
-          `CRITICAL: No 'sheet_ids' section found in ${configPath}\n` +
-          `The configuration file must contain a 'sheet_ids' object with your Google Sheet mappings.\n` +
-          `See apps/next/tee-services-db47a9e534d3.tmpt.json for the expected format.`
-        )
-      }
-
-      // Build the mappings from the config
-      let loadedCount = 0
-      Object.entries(config.sheet_ids).forEach(([type, sheetConfig]) => {
-        const sheetId = sheetConfig.key
-        if (sheetId && !sheetId.startsWith('data/')) { // Skip non-Google Sheet entries
-          this.sheetIdToType.set(sheetId, type)
-          this.typeToSheetId.set(type, sheetId)
-          this.sheetInfoMap.set(type, {
-            id: sheetId,
-            type,
-            name: sheetConfig.name,
-            startTime: sheetConfig.startTime
-          })
-          loadedCount++
-        }
-      })
-
-      // FAIL FAST: At least one sheet must be configured
-      if (loadedCount === 0) {
-        throw new Error(
-          `CRITICAL: No valid sheet configurations found in ${configPath}\n` +
-          `At least one sheet must be configured with a valid 'key' (Google Sheet ID).`
-        )
-      }
-
-      this.initialized = true
-      console.log(`✅ Loaded ${loadedCount} sheet configurations from ${configPath}`)
-
-    } catch (error) {
-      // Re-throw with context
-      if ((error as Error).message?.includes('CRITICAL:')) {
-        throw error // Already has good context
-      }
+      config = JSON.parse(envValue) as ServiceConfig
+    } catch (e) {
       throw new Error(
-        `CRITICAL: Failed to load Google service account configuration from ${configFile}\n` +
-        `Error: ${(error as Error).message}`
+        `CRITICAL: GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON: ${(e as Error).message}`
       )
     }
+
+    if (!config.sheet_ids) {
+      throw new Error(
+        `CRITICAL: No 'sheet_ids' section found in GOOGLE_SERVICE_ACCOUNT_KEY. ` +
+        `The configuration must contain a 'sheet_ids' object with your Google Sheet mappings.`
+      )
+    }
+
+    let loadedCount = 0
+    Object.entries(config.sheet_ids).forEach(([type, sheetConfig]) => {
+      const sheetId = sheetConfig.key
+      if (sheetId && !sheetId.startsWith('data/')) {
+        this.sheetIdToType.set(sheetId, type)
+        this.typeToSheetId.set(type, sheetId)
+        this.sheetInfoMap.set(type, {
+          id: sheetId,
+          type,
+          name: sheetConfig.name,
+          startTime: sheetConfig.startTime,
+        })
+        loadedCount++
+      }
+    })
+
+    if (loadedCount === 0) {
+      throw new Error(
+        `CRITICAL: No valid sheet configurations found in GOOGLE_SERVICE_ACCOUNT_KEY. ` +
+        `At least one sheet must be configured with a valid 'key' (Google Sheet ID).`
+      )
+    }
+
+    this.initialized = true
+    console.log(`✅ Loaded ${loadedCount} sheet configurations from GOOGLE_SERVICE_ACCOUNT_KEY`)
   }
 
   // REMOVED: No hardcoded fallback - configuration file is REQUIRED
@@ -142,6 +112,7 @@ export class GoogleSheetsConfig {
    * Get sheet type from Google Sheet ID
    */
   getSheetType(sheetId: string): string | null {
+    this.ensureLoaded()
     if (!this.initialized) {
       console.error('❌ GoogleSheetsConfig not initialized')
       return null
@@ -153,6 +124,7 @@ export class GoogleSheetsConfig {
    * Get Google Sheet ID from sheet type
    */
   getSheetId(type: string): string | null {
+    this.ensureLoaded()
     if (!this.initialized) {
       console.error('❌ GoogleSheetsConfig not initialized')
       return null
@@ -164,6 +136,7 @@ export class GoogleSheetsConfig {
    * Get all configured sheets
    */
   getAllSheets(): SheetInfo[] {
+    this.ensureLoaded()
     if (!this.initialized) {
       console.error('❌ GoogleSheetsConfig not initialized')
       return []
@@ -175,6 +148,7 @@ export class GoogleSheetsConfig {
    * Check if a sheet type is configured
    */
   isSheetConfigured(type: string): boolean {
+    this.ensureLoaded()
     if (!this.initialized) {
       console.error('❌ GoogleSheetsConfig not initialized')
       return false
@@ -186,6 +160,7 @@ export class GoogleSheetsConfig {
    * Get sheet info by type
    */
   getSheetInfo(type: string): SheetInfo | null {
+    this.ensureLoaded()
     if (!this.initialized) {
       console.error('❌ GoogleSheetsConfig not initialized')
       return null
