@@ -10,6 +10,7 @@ import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ThemeToggle } from './theme-toggle'
 import { NotificationBell } from '@my/ui/src/notifications/notification-bell'
 import { Menu, X } from '@tamagui/lucide-icons'
+import { getBrand } from '@my/app/config/brand'
 
 type UserSession = {
   name?: string | null
@@ -87,6 +88,8 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   const mode = themeName.includes('dark') ? 'dark' : 'light'
   const colors = brandColors[mode]
 
+  const brand = getBrand()
+
   const navigateTo = (path: string) => () => {
     router.push(path)
     // Close mobile menu after navigation
@@ -98,9 +101,16 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
     <YStack gap="$3" flex={1}>
       {/* Header - stays fixed at top */}
       <View flexDirection="row" alignItems="center" justifyContent="space-between">
-        <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
-          TEE Portal
-        </Text>
+        <YStack>
+          <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
+            {brand.primary}
+          </Text>
+          {brand.secondary ? (
+            <Text fontSize="$2" fontWeight="500" color={colors.textSecondary}>
+              {brand.secondary}
+            </Text>
+          ) : null}
+        </YStack>
         <XStack gap="$2" alignItems="center">
           {user && onNotificationPress && notificationCount !== undefined ? (
             <NotificationBell
@@ -365,9 +375,16 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           alignItems="center"
           justifyContent="space-between"
         >
-          <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
-            TEE Portal
-          </Text>
+          <YStack>
+            <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
+              {brand.primary}
+            </Text>
+            {brand.secondary ? (
+              <Text fontSize="$1" fontWeight="500" color={colors.textSecondary}>
+                {brand.secondary}
+              </Text>
+            ) : null}
+          </YStack>
           <XStack gap="$2" alignItems="center">
             {user && onNotificationPress && notificationCount !== undefined ? (
               <NotificationBell

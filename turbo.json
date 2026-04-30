@@ -29,6 +29,7 @@
         "NEXT_PUBLIC_API_PATH",
         "NEXT_PUBLIC_AUTH_URL",
         "NEXT_PUBLIC_SECRET",
+        "NEXT_PUBLIC_BRAND",
         "TURBO_CACHE",
         "TURBO_RUN_SUMMARY"
       ],
