@@ -1,11 +1,23 @@
 import { auth } from './utils/auth'
 import { NextResponse } from 'next/server'
 import type { NextAuthRequest } from 'next-auth/lib'
+import { getTenantByHost } from '@my/app/config/tenants'
 
 const ANALYTICS_KEY = process.env.ANALYTICS_INTERNAL_KEY
 
 export default auth((req: NextAuthRequest) => {
   const { pathname } = req.nextUrl
+
+  // Resolve tenant from Host header and forward as `x-tenant-id` so
+  // downstream API routes don't need to redo the lookup. tee-admin.com
+  // → 'tee', echadhub.org / .com → 'echadhub'. Unknown hosts get no
+  // header set; consumers decide their own fallback strategy.
+  const tenant = getTenantByHost(req.headers.get('host'))
+  const forwardedHeaders = new Headers(req.headers)
+  if (tenant) {
+    forwardedHeaders.set('x-tenant-id', tenant.id)
+  }
+  const passthrough = () => NextResponse.next({ request: { headers: forwardedHeaders } })
 
   // Check if user is trying to access profile page
   if (pathname.startsWith('/profile')) {
@@ -17,7 +29,7 @@ export default auth((req: NextAuthRequest) => {
     if (!req.auth) {
       if (isFromAuth) {
         // Allow the request through - the page itself will handle auth checking
-        return NextResponse.next()
+        return passthrough()
       } else {
         return NextResponse.redirect(new URL('/auth/signin', req.url))
       }
@@ -59,7 +71,7 @@ export default auth((req: NextAuthRequest) => {
     })
   }
 
-  return NextResponse.next()
+  return passthrough()
 })
 
 export const config = {
