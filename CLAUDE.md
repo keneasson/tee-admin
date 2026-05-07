@@ -276,7 +276,7 @@ For advanced scheduling needs, see [`AWS_EVENTBRIDGE_SETUP.md`](./AWS_EVENTBRIDG
 ## Configuration Requirements
 
 ### Google Services Setup
-Copy `apps/next/tee-services-db47a9e534d3.tmpt.json` to `apps/next/tee-services-db47a9e534d3.json` and configure with Google Cloud Services credentials.
+Set `GOOGLE_SERVICE_ACCOUNT_KEY` in `apps/next/.env.local` for local dev — the full Google service account JSON (credentials + `sheet_ids` config) collapsed onto one line. The same env var is set on each Vercel project for production. There is no committed JSON file; the env var is the single source of truth.
 
 ### Environment Variables
 Configure AWS credentials, Google OAuth, and DynamoDB settings in appropriate environment files.
