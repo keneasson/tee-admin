@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import { emailReasons, emailSend } from 'next-app/utils/email/email-send'
 import { getEmailContent } from 'next-app/utils/email/get-email-content'
 import { pendingEmailNoteRepository } from '@my/app/provider/dynamodb/repositories/pending-email-note-repository'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 
 export const config = {
   maxDuration: 60, // 60 seconds
@@ -105,6 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ failed: 'Email template for ' + reason + ' not found' })
     }
     console.log('IS sending as TEST: ', { isTest, hasNote: !!note, generatedSubject })
+    const tenant = getTenantFromHeaders(req.headers) ?? resolveTenantFromEnv()
     const result = await emailSend({
       reason,
       emailHtml,
@@ -112,6 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       test: isTest,
       customList,
       customSubject: generatedSubject || customSubject, // Use generated subject if available
+      tenant,
     })
     console.log('result from AWS.SES', result)
     // Only consume pending notes on live sends — a test send should preview

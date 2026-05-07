@@ -7,8 +7,7 @@ import { chunkArray } from '../chunkArray'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
-
-const adminMailDomain = '@tee-admin.com'
+import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
 
 const SES_RATE_LIMIT = 14
 
@@ -17,64 +16,60 @@ export { type EmailReasonType as emailReasons } from '@my/app/types'
 import { type EmailReasonType, type EmailSubReason } from '@my/app/types'
 type emailReasons = EmailReasonType // Local alias for use in this file
 
-// All outbound mail uses a single From: address to concentrate sender reputation,
-// and a single Reply-To routing every reply to the Recording Brother.
-const SENDER_EMAIL = 'communications'
+// Each tenant has ONE local-part for bulk mail (concentrates sender
+// reputation per brand-domain — see feedback_multi_brand_email_senders.md).
+// The domain part comes from the resolved tenant.
+const SENDER_LOCAL_PART = 'communications'
 const REPLY_TO = 'teerecbro@gmail.com'
 
+// Per-reason display-name overrides per tenant. Anything not listed
+// falls back to the tenant's default senderDisplayName.
+function senderDisplayName(reason: emailReasons, tenant: TenantConfig): string {
+  if (tenant.id === 'tee' && reason === 'sunday-school') {
+    return 'Toronto East Sunday School'
+  }
+  return tenant.senderDisplayName
+}
+
+// Reason-specific config — sender name and domain come from the
+// resolved tenant, so this no longer carries `name` or `email`.
 const senders = {
   'sunday-school': {
-    name: 'Toronto East Sunday School',
-    email: SENDER_EMAIL,
     subject: 'Sunday School Tomorrow',
     contactList: 'sundaySchool',
     replyTo: REPLY_TO,
   },
   newsletter: {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Toronto East Christadelphian Ecclesia Newsletter',
     contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
   'bible-class': {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Bible Class Tonight!',
     contactList: 'bibleClass',
     replyTo: REPLY_TO,
   },
   recap: {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Memorial Service Tomorrow',
     contactList: 'memorial',
     replyTo: REPLY_TO,
   },
   'business-meeting': {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Business Meeting Details',
     contactList: 'members',
     replyTo: REPLY_TO,
   },
   custom: {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Toronto East Communications',
     contactList: 'testList', // Safe default - will be overridden by customList parameter
     replyTo: REPLY_TO,
   },
   'event-announcement': {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Event Announcement',
     contactList: 'newsletter', // Default - will be overridden by customList parameter
     replyTo: REPLY_TO,
   },
   'inter-ecclesia': {
-    name: 'Toronto East Ecclesia',
-    email: SENDER_EMAIL,
     subject: 'Inter-Ecclesia Announcement',
     contactList: 'interEcclesia',
     replyTo: REPLY_TO,
@@ -91,6 +86,13 @@ export type emailSendProps = {
   subReason?: EmailSubReason // Categorization for per-send tracking
   description?: string // Free-text description for the send record
   sentBy?: string // Email of the user who triggered the send
+  /**
+   * Tenant context for the From-address. When omitted, falls back to
+   * `resolveTenantFromEnv()` which reads `DEPLOYMENT_NAME` (defaulting
+   * to 'tee'). Pass explicitly from API routes that have request
+   * headers — e.g. `getTenantFromHeaders(req.headers) ?? resolveTenantFromEnv()`.
+   */
+  tenant?: TenantConfig
 }
 
 type Sends = { sends: string[]; skips: string[] }
@@ -124,11 +126,13 @@ export const emailSend = async function ({
   subReason = 'general',
   description,
   sentBy,
+  tenant,
 }: emailSendProps): Promise<SendResult | Error> {
   if (Object.keys(senders).findIndex((r) => r === reason) === -1) {
     throw new Error(`${reason} is not a valid email type`)
   }
 
+  const resolvedTenant = tenant ?? resolveTenantFromEnv()
   const campaignId = randomUUID()
 
   if (!emailsEnabled()) {
@@ -156,7 +160,7 @@ export const emailSend = async function ({
     // Format date in Toronto timezone to avoid UTC date issues when sending in evening EST
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
 
-    const from = `"${senders[reason].name}" <${senders[reason].email}${adminMailDomain}>`
+    const from = `"${senderDisplayName(reason, resolvedTenant)}" <${SENDER_LOCAL_PART}@${resolvedTenant.senderDomain}>`
     // For custom emails, use the provided subject, otherwise use the default
     const defaultSubject = customSubject || senders[reason].subject
     const subject = `${test ? '[TEST] ' : ''}${defaultSubject} ${today}`

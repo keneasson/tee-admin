@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEmailContent } from '@/utils/email/get-email-content'
 import { emailSend } from '@/utils/email/email-send'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 
 /**
  * Thursday 9:30pm Test Email
@@ -29,12 +30,14 @@ export async function GET(req: NextRequest) {
       throw new Error('Failed to generate email content')
     }
 
+    const tenant = getTenantFromHeaders(req.headers) ?? resolveTenantFromEnv()
     // Send via SES in TEST MODE
     const result = await emailSend({
       reason: 'newsletter',
       emailHtml,
       emailText,
       test: true, // Always send to test list for safety
+      tenant,
     })
 
     if (result instanceof Error) {

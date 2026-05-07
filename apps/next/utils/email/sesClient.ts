@@ -1,5 +1,6 @@
 import { SESv2Client, SESv2ClientConfig, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb'
+import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
 
 export class GlobalRef<T> {
   private readonly sym: symbol
@@ -55,9 +56,14 @@ export interface SendEmailProps {
   subject: string
   body: string
   textBody?: string
+  /**
+   * Tenant context for the From-address. When omitted, falls back to
+   * `resolveTenantFromEnv()` (DEPLOYMENT_NAME → 'tee' default).
+   */
+  tenant?: TenantConfig
 }
 
-export async function sendEmail({ to, subject, body, textBody }: SendEmailProps): Promise<void> {
+export async function sendEmail({ to, subject, body, textBody, tenant }: SendEmailProps): Promise<void> {
   if (!emailsEnabled()) {
     console.log(
       `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
@@ -65,10 +71,11 @@ export async function sendEmail({ to, subject, body, textBody }: SendEmailProps)
     return
   }
 
+  const resolvedTenant = tenant ?? resolveTenantFromEnv()
   const sesClient = getSesClient()
 
   const emailCmd = new SendEmailCommand({
-    FromEmailAddress: '"TEE Admin" <noreply@tee-admin.com>',
+    FromEmailAddress: `"${resolvedTenant.senderDisplayName}" <noreply@${resolvedTenant.senderDomain}>`,
     Destination: {
       ToAddresses: [to],
     },
