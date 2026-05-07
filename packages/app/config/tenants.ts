@@ -61,6 +61,20 @@ export function getTenantById(id: TenantId): TenantConfig {
 }
 
 /**
+ * Resolve the tenant for the current deployment from server-side env
+ * vars. Used as a fallback when no request context is available
+ * (e.g. background jobs entered without an HTTP request frame).
+ * Reads DEPLOYMENT_NAME — set per-Vercel-project. Defaults to 'tee'
+ * when unset, matching the legacy single-tenant behavior of
+ * tee-admin deploys that pre-date this env var.
+ */
+export function resolveTenantFromEnv(): TenantConfig {
+  const id = process.env.DEPLOYMENT_NAME as TenantId | undefined
+  if (id === 'echadhub') return TENANTS.echadhub
+  return TENANTS.tee
+}
+
+/**
  * Resolve a TenantConfig from headers (request or response Headers,
  * Pages-Router-style plain object, or anything with a `.get()` /
  * indexable shape). Reads `x-tenant-id` first (set by middleware),
