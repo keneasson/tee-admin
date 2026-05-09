@@ -2,10 +2,13 @@
 
 import React, { useState, useEffect } from 'react'
 import {
+  Adapt,
   Button,
   Checkbox,
   Heading,
   Paragraph,
+  Select,
+  Sheet,
   Text,
   TextArea,
   XStack,
@@ -19,10 +22,53 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, Mail, AlertCircle, Edit3 } from '@tamagui/lucide-icons'
-import { sendEmail, getContactsList } from '../../provider/get-data'
+import { sendEmail, getContactsList, savePendingNote } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
+
+interface CronScheduledEmail {
+  reason: string
+  cronExpression: string
+  nextFiringUtcMs: number
+}
+
+// "manual" is a UX-only target meaning "include with the next manual click below" —
+// it does not persist to the pending-notes table.
+type PendingNoteTargetValue = 'manual' | string
+
+interface PendingNoteTargetOption {
+  value: PendingNoteTargetValue
+  label: string
+  reason?: EmailReasonType
+  nextFiringAt?: number // ms epoch, for sort + display
+}
+
+const DISPLAY_TIMEZONE = 'America/Toronto'
+
+const REASON_LABEL: Record<string, string> = {
+  newsletter: 'Newsletter',
+  recap: 'Memorial recap',
+  'bible-class': 'Bible Class',
+  'sunday-school': 'Sunday School',
+}
+
+function formatCronFiringLabel(reason: string, firingUtcMs: number): string {
+  const typeLabel = REASON_LABEL[reason] ?? reason
+  const date = new Date(firingUtcMs)
+  const dayLabel = date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: DISPLAY_TIMEZONE,
+  })
+  const timeLabel = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: DISPLAY_TIMEZONE,
+  })
+  return `${typeLabel} — ${dayLabel} at ${timeLabel}`
+}
 
 // Confirmation dialog state type
 interface ConfirmDialogState {
@@ -49,6 +95,14 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   const [test, setTest] = useState<boolean>(true) // Default to test mode for safety
   const [sending, setSending] = useState<boolean>(false)
   const [note, setNote] = useState<string>('')
+  const [pendingTarget, setPendingTarget] = useState<PendingNoteTargetValue>('manual')
+  const [scheduleOptions, setScheduleOptions] = useState<PendingNoteTargetOption[]>([])
+  const [savingPending, setSavingPending] = useState<boolean>(false)
+  const [pendingSaveStatus, setPendingSaveStatus] = useState<
+    | { kind: 'success'; label: string }
+    | { kind: 'error'; label: string; message: string }
+    | null
+  >(null)
   const [availableLists, setAvailableLists] = useState<{ key: EmailListTypeKeys; label: string }[]>([])
   const [activeTab, setActiveTab] = useState<string>('templates')
   const [recentEvents, setRecentEvents] = useState<Event[]>([])
@@ -80,6 +134,38 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
       }
     }
     loadLists()
+  }, [])
+
+  // Load the active Vercel cron-fired emails (sourced from vercel.json on the
+  // server) so the "Attach this note to:" Select can list upcoming scheduled
+  // sends in chronological order. The DB-driven EventBridge system isn't live
+  // yet, so vercel.json is the authoritative source.
+  useEffect(() => {
+    const loadSchedules = async () => {
+      try {
+        const response = await fetch('/api/email/cron-schedules', { cache: 'no-store' })
+        if (!response.ok) return
+        const data: { schedules?: CronScheduledEmail[] } = await response.json()
+        const options: PendingNoteTargetOption[] = (data.schedules ?? []).map((s) => ({
+          value: `${s.reason}#${s.cronExpression}`,
+          label: formatCronFiringLabel(s.reason, s.nextFiringUtcMs),
+          reason: s.reason as EmailReasonType,
+          nextFiringAt: s.nextFiringUtcMs,
+        }))
+        console.info(
+          '[EmailSender] cron schedule options:',
+          options.map((o) => ({
+            value: o.value,
+            label: o.label,
+            firesAt: o.nextFiringAt ? new Date(o.nextFiringAt).toISOString() : null,
+          }))
+        )
+        setScheduleOptions(options)
+      } catch (error) {
+        console.error('[EmailSender] Failed to load cron schedules:', error)
+      }
+    }
+    loadSchedules()
   }, [])
 
   // Load recent funeral/baptism events (created within 2 weeks)
@@ -219,6 +305,59 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     } finally {
       setSending(false)
       setReason(null)
+    }
+  }
+
+  const selectedTargetOption =
+    pendingTarget === 'manual'
+      ? { value: 'manual' as const, label: 'Next manual send (default)' }
+      : scheduleOptions.find((opt) => opt.value === pendingTarget) ?? null
+
+  // Save the textarea note. For "manual" we just confirm — the textarea content
+  // is already what gets sent when an email card is clicked. For a scheduled
+  // target we persist a pending note that the cron picks up on its next firing.
+  const handleSavePendingNote = async () => {
+    if (!note.trim()) return
+    setPendingSaveStatus(null)
+
+    if (pendingTarget === 'manual') {
+      setPendingSaveStatus({
+        kind: 'success',
+        label: 'Next manual send',
+      })
+      return
+    }
+
+    const option = scheduleOptions.find((opt) => opt.value === pendingTarget)
+    if (!option || !option.reason) {
+      setPendingSaveStatus({
+        kind: 'error',
+        label: 'Selected target',
+        message: 'Could not resolve the selected schedule.',
+      })
+      return
+    }
+
+    setSavingPending(true)
+    try {
+      const result = await savePendingNote(option.reason, note)
+      if (result.ok) {
+        setPendingSaveStatus({ kind: 'success', label: option.label })
+      } else {
+        setPendingSaveStatus({
+          kind: 'error',
+          label: option.label,
+          message: result.error || 'Failed to save note',
+        })
+      }
+    } catch (error) {
+      setPendingSaveStatus({
+        kind: 'error',
+        label: option.label,
+        message: error instanceof Error ? error.message : 'Failed to save note',
+      })
+    } finally {
+      setSavingPending(false)
     }
   }
 
@@ -462,6 +601,98 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                       Clear Note
                     </Button> : null}
                 </XStack>
+
+                <Separator />
+
+                <YStack gap="$2">
+                  <Text fontSize="$3" fontWeight="600">
+                    Attach this note to:
+                  </Text>
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <Select
+                      value={pendingTarget}
+                      onValueChange={(value) => {
+                        setPendingTarget(value as PendingNoteTargetValue)
+                        setPendingSaveStatus(null)
+                      }}
+                    >
+                      <Select.Trigger minWidth={280} iconAfter={null}>
+                        <Select.Value placeholder="Select a send..." />
+                      </Select.Trigger>
+
+                      <Adapt when="sm" platform="touch">
+                        <Sheet native modal dismissOnSnapToBottom>
+                          <Sheet.Frame>
+                            <Sheet.ScrollView>
+                              <Adapt.Contents />
+                            </Sheet.ScrollView>
+                          </Sheet.Frame>
+                          <Sheet.Overlay
+                            animation="lazy"
+                            enterStyle={{ opacity: 0 }}
+                            exitStyle={{ opacity: 0 }}
+                          />
+                        </Sheet>
+                      </Adapt>
+
+                      <Select.Content zIndex={200000 as any}>
+                        <Select.ScrollUpButton />
+                        <Select.Viewport>
+                          <Select.Group>
+                            <Select.Item index={0} value="manual">
+                              <Select.ItemText>Next manual send (default)</Select.ItemText>
+                              <Select.ItemIndicator>
+                                <Check size={16} />
+                              </Select.ItemIndicator>
+                            </Select.Item>
+                            {scheduleOptions.map((opt, idx) => (
+                              <Select.Item key={opt.value} index={idx + 1} value={opt.value}>
+                                <Select.ItemText>{opt.label}</Select.ItemText>
+                                <Select.ItemIndicator>
+                                  <Check size={16} />
+                                </Select.ItemIndicator>
+                              </Select.Item>
+                            ))}
+                          </Select.Group>
+                        </Select.Viewport>
+                        <Select.ScrollDownButton />
+                      </Select.Content>
+                    </Select>
+
+                    <Button
+                      size="$3"
+                      theme="active"
+                      disabled={!note.trim() || savingPending}
+                      opacity={!note.trim() ? 0.5 : 1}
+                      onPress={handleSavePendingNote}
+                    >
+                      {savingPending ? 'Saving…' : 'Save'}
+                    </Button>
+                  </XStack>
+
+                  {pendingTarget === 'manual' ? (
+                    <Text fontSize="$2" color="$gray11">
+                      Default behaviour — your note is included with whichever email you click below.
+                    </Text>
+                  ) : (
+                    <Text fontSize="$2" color="$gray11">
+                      Saves this note to the next {selectedTargetOption?.label ?? 'scheduled'} send. The note is consumed once that email is delivered live.
+                    </Text>
+                  )}
+
+                  {pendingSaveStatus?.kind === 'success' ? (
+                    <Text fontSize="$2" color="$green10">
+                      ✅ {pendingTarget === 'manual'
+                        ? 'Ready — click an email below to send it.'
+                        : `Saved — will be included on the next ${pendingSaveStatus.label}.`}
+                    </Text>
+                  ) : null}
+                  {pendingSaveStatus?.kind === 'error' ? (
+                    <Text fontSize="$2" color="$red10">
+                      Failed to save for {pendingSaveStatus.label}: {pendingSaveStatus.message}
+                    </Text>
+                  ) : null}
+                </YStack>
               </YStack>
             </Card>
 

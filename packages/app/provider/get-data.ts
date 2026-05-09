@@ -80,6 +80,49 @@ export const sendEmail = async (
 }
 
 /**
+ * Save a brief note that will be attached to the next scheduled email of the
+ * given reason (consumed once it sends successfully). Used for cron-triggered
+ * sends like the Saturday Memorial recap or the weekly newsletter.
+ */
+export const savePendingNote = async (
+  reason: emailReasons,
+  note: string
+): Promise<{ ok: boolean; error?: string }> => {
+  const url = `${API_PATH}api/email/pending-note`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason, note }),
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return { ok: false, error: data.error || `Request failed (${response.status})` }
+  }
+  return { ok: true }
+}
+
+/**
+ * Clear any pending note for a reason without sending.
+ */
+export const clearPendingNote = async (
+  reason: emailReasons
+): Promise<{ ok: boolean; error?: string }> => {
+  const url = `${API_PATH}api/email/pending-note`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason, clear: true }),
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return { ok: false, error: data.error || `Request failed (${response.status})` }
+  }
+  return { ok: true }
+}
+
+/**
  * Get a list of all Subscriber Lists.
  */
 export const getContactsList = async (): Promise<SimplifiedContactListType> => {

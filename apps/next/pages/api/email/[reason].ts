@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { emailReasons, emailSend } from 'next-app/utils/email/email-send'
 import { getEmailContent } from 'next-app/utils/email/get-email-content'
+import { pendingEmailNoteRepository } from '@my/app/provider/dynamodb/repositories/pending-email-note-repository'
 
 export const config = {
   maxDuration: 60, // 60 seconds
@@ -19,8 +20,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(404).json({ failed: 'Json Data Not Found' })
   }
   const isTest = !!req.query.test
-  const note = typeof req.query.note === 'string' ? req.query.note : undefined
+  const queryNote = typeof req.query.note === 'string' ? req.query.note.trim() : ''
   const reason = req.query.reason as emailReasons
+
+  // If no note in query, fall back to a pending note saved for this reason
+  // (e.g. via the "Save for next scheduled send" UI). Consumed on success.
+  let note: string | undefined = queryNote || undefined
+  let consumePendingNote = false
+  if (!note) {
+    try {
+      const pending = await pendingEmailNoteRepository.getNote(reason)
+      if (pending) {
+        note = pending
+        consumePendingNote = true
+      }
+    } catch (err) {
+      console.error('[email/reason] failed to read pending note:', err)
+    }
+  }
 
   // For custom emails, we need additional parameters from the request body
   let customHtmlContent: string | undefined
@@ -97,6 +114,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       customSubject: generatedSubject || customSubject, // Use generated subject if available
     })
     console.log('result from AWS.SES', result)
+    // Only consume pending notes on live sends — a test send should preview
+    // the queued note without deleting it.
+    if (consumePendingNote && !isTest) {
+      try {
+        await pendingEmailNoteRepository.clearNote(reason)
+      } catch (err) {
+        console.error('[email/reason] failed to clear pending note:', err)
+      }
+    }
     return res.status(200).json(result)
   } catch (e) {
     console.log('email[reason] failed with error:', e)
