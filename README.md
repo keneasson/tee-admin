@@ -9,10 +9,10 @@ section: `This application is built on these open source projects` below
 
 Data comes from Google Sheets and JSON files.
 
-Google Sheets Data is configured in a git ignored file:
-`apps/next/tee-services-db47a9e534d3.json`   
-to create, copy `apps/next/tee-services-db47a9e534d3.tmpt.json`
-create your Google Cloud Services account, and update the file with your Settings from Google.
+Google Sheets credentials and sheet mappings are loaded from the `GOOGLE_SERVICE_ACCOUNT_KEY`
+environment variable, which contains the full service account JSON (credentials + a `sheet_ids`
+section) as a single-line string. For local dev, set it in `apps/next/.env.local`; for Vercel,
+configure it in the project's environment variables for Production and Preview.
 
 The sheet ID can be copied from the Google Sheet's URL from your browser.
 

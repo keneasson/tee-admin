@@ -27,8 +27,8 @@
   NEXT_PUBLIC_GOOGLE_ACCOUNT_SECRET
   WEBHOOK_SECRET
   
-  # Config file path (points to YOUR specific config file)
-  GOOGLE_SERVICE_ACCOUNT_KEY_FILE=./tee-services-db47a9e534d3.json
+  # Google service account JSON (credentials + sheet_ids) as a single-line string
+  GOOGLE_SERVICE_ACCOUNT_KEY
   ```
 
 ### DynamoDB Patterns
@@ -77,10 +77,10 @@ SK: `STATUS`
 **Sheet Types**: memorial, bibleClass, sundaySchool, directory, testSync
 
 **Configuration Requirements**:
-- **FAIL FAST**: No fallbacks, config file MUST exist
-- **ENV VAR**: `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` points to YOUR config file
-- **Template**: Copy `tee-services-db47a9e534d3.tmpt.json` and add YOUR credentials
-- **Git**: Config file must be in .gitignore (contains private data)
+- **FAIL FAST**: No fallbacks, env var MUST be set
+- **ENV VAR**: `GOOGLE_SERVICE_ACCOUNT_KEY` contains the full service account JSON (credentials + a `sheet_ids` section) as a single-line string
+- **Local dev**: set in `apps/next/.env.local`
+- **Vercel**: configure for Production and Preview environments
 
 **Access Pattern**: 
 ```typescript
