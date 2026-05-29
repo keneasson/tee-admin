@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import Link from 'next/link'
+import { Link } from 'solito/link'
 import { Card, H3, Paragraph } from 'tamagui'
 
 export type NewsPublicCardProps = {
@@ -12,7 +12,7 @@ export type NewsPublicCardProps = {
 
 export function NewsPublicCard({ id, title, body }: NewsPublicCardProps) {
   return (
-    <Link href={`/news/${id}`} style={{ textDecoration: 'none' }}>
+    <Link href={`/news/${id}`}>
       <Card
         elevate
         padded
