@@ -13,8 +13,11 @@ import { fetchReadings } from '@my/app/features/newsletter/readings/fetch-readin
 import { DailyReadings } from '@my/app/features/newsletter/readings/daily-readings'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Event, isEventActive } from '@my/app/types/events'
+import type { NewsItem } from '@my/app/types/news'
+import { isNewsActive } from '@my/app/types/news'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
+import { Paragraph } from '@my/ui'
 import { Vote } from '@tamagui/lucide-icons'
 
 // Helper function to check if an election-cycle event is currently active
@@ -52,6 +55,7 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
   const [program, setProgram] = useState<ProgramTypes[] | null>(null)
   const [readings, setReadings] = useState<[] | null>(null)
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([])
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [clearingCache, setClearingCache] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const isHydrated = useHydrated()
@@ -60,10 +64,11 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
     setRefreshing(true)
     try {
       const cacheBuster = `?_t=${Date.now()}`
-      const [newProgram, newReadings, eventsResponse] = await Promise.all([
+      const [newProgram, newReadings, eventsResponse, newsResponse] = await Promise.all([
         fetchUpcoming({ bypassCache: true }),
         fetchReadings(true),
         fetch(`/api/events/public${cacheBuster}`, { cache: 'no-store' }),
+        fetch(`/api/news${cacheBuster}`, { cache: 'no-store' }),
       ])
       setProgram(newProgram)
       setReadings(newReadings)
@@ -72,6 +77,11 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
         const data = await eventsResponse.json()
         const publishedEvents = data.filter((event: Event) => isEventActive(event))
         setUpcomingEvents(publishedEvents)
+      }
+
+      if (newsResponse.ok) {
+        const data = await newsResponse.json()
+        setNewsItems((data as NewsItem[]).filter((item) => isNewsActive(item)))
       }
     } finally {
       setRefreshing(false)
@@ -111,10 +121,23 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
       }
     }
 
+    const fetchNews = async () => {
+      try {
+        const response = await fetch('/api/news', { cache: 'no-store' })
+        if (response.ok) {
+          const data = await response.json()
+          setNewsItems((data as NewsItem[]).filter((item) => isNewsActive(item)))
+        }
+      } catch (error) {
+        console.log('error fetching news', error)
+      }
+    }
+
     Promise.all([
       fetchUpcoming({}).then(setProgram),
       fetchReadings().then(setReadings),
-      fetchEvents()
+      fetchEvents(),
+      fetchNews(),
     ]).catch(
       (error) => console.log('error fetching data', error)
     )
@@ -405,11 +428,11 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
           // Sort all events with smart sorting
           const sortedEvents = [...specialEvents].sort(smartSort)
 
-          if (sortedEvents.length === 0) return null
+          if (sortedEvents.length === 0 && newsItems.length === 0) return null
 
           return (
             <YStack gap="$3" testID="newsletter-special-announcements">
-              <H2 fontFamily="$body" fontWeight="600">Special Announcements</H2>
+              <H2 fontFamily="$body" fontWeight="600">Announcements</H2>
               {sortedEvents.map((event) => (
                 <EventSummaryCard
                   key={event.id}
@@ -419,6 +442,24 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                   userRole={userRole}
                   isMemberOrHigher={isMemberOrHigher}
                 />
+              ))}
+              {newsItems.map((item) => (
+                <Card
+                  key={item.id}
+                  elevation="$2"
+                  borderWidth={1}
+                  borderColor="$borderColor"
+                  padding="$4"
+                  borderRadius="$4"
+                  backgroundColor="$background"
+                >
+                  <YStack gap="$2">
+                    <Text fontSize="$6" fontWeight="600">
+                      {item.title}
+                    </Text>
+                    <Paragraph whiteSpace="pre-wrap">{item.body}</Paragraph>
+                  </YStack>
+                </Card>
               ))}
             </YStack>
           )

@@ -15,6 +15,7 @@ import { columnAlignTop, container, defaultText, globalCss, header, link, main, 
 import React from 'react'
 import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
+import type { NewsItem } from '@my/app/types/news'
 import { Footer } from '../components/Footer'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
@@ -679,6 +680,8 @@ interface EmailNewsletterProps {
   upcomingEvents?: Event[]
   readings?: any[]
   note?: string
+  /** Active news items (Issue #41) — rendered before events, dateless, no section heading */
+  newsItems?: NewsItem[]
   /** Per-ecclesia service times — replaces hardcoded "9:30am" / "11:00am" */
   serviceTimes?: {
     sundaySchool?: ServiceTimeDisplay
@@ -692,6 +695,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
   upcomingEvents = [],
   readings = [],
   note,
+  newsItems = [],
   serviceTimes,
 }) => {
   const todaysDate = new Date().toLocaleDateString('en-US', {
@@ -1299,7 +1303,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               return getEventDate(b).getTime() - getEventDate(a).getTime()
             })
 
-          if (specialEvents.length === 0) return null
+          if (specialEvents.length === 0 && newsItems.length === 0) return null
 
           return (
             <Container style={container} className="container">
@@ -1748,6 +1752,28 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                       >
                         View Details →
                       </Link>
+                    </Text>
+                  </Section>
+                </React.Fragment>
+              ))}
+              {/* News items (Issue #41) — appended to Announcements, no extra heading, dateless */}
+              {newsItems.map((item, index) => (
+                <React.Fragment key={item.id}>
+                  {(index > 0 || specialEvents.length > 0) && (
+                    <hr
+                      style={{
+                        borderWidth: '0',
+                        background: '#000',
+                        color: '#000',
+                        height: '2px',
+                        margin: '16px 0',
+                      }}
+                    />
+                  )}
+                  <Section style={program}>
+                    <Heading style={defaultText}>{item.title}</Heading>
+                    <Text style={{ ...defaultText, margin: 0 }}>
+                      <TextWithLineBreaks text={item.body} />
                     </Text>
                   </Section>
                 </React.Fragment>

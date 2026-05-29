@@ -307,6 +307,29 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return this.delete(this.buildEventPK(eventId), 'DETAILS')
   }
 
+  // News Manager (Issue #41) — News rides on the same tee-schedules table
+  // as Events. PK: NEWS#{newsId}, SK: DETAILS. GSI1PK: 'NEWS' for chronological
+  // listing, mirroring the Events partition.
+  private buildNewsPK(newsId: string): string {
+    return `NEWS#${newsId}`
+  }
+
+  async getNews(newsId: string): Promise<ScheduleRecord | null> {
+    return this.get(this.buildNewsPK(newsId), 'DETAILS')
+  }
+
+  async deleteNews(newsId: string): Promise<void> {
+    return this.delete(this.buildNewsPK(newsId), 'DETAILS')
+  }
+
+  async getAllNews(): Promise<ScheduleRecord[]> {
+    const result = await this.scan({
+      filterExpression: 'begins_with(PK, :prefix)',
+      expressionAttributeValues: { ':prefix': 'NEWS#' },
+    })
+    return result.items
+  }
+
   // Bulk operations for sheet sync - SAFE CHECKSUM-BASED APPROACH
   // IMPORTANT: Preserves externally-managed fields (YouTube URLs) that are not in Google Sheets
   async replaceSheetSchedules(
