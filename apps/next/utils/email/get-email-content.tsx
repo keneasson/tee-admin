@@ -20,6 +20,7 @@ import BaptismEmail from 'email-builder/emails/Baptism'
 import InterEcclesiaWrapper from 'email-builder/emails/InterEcclesiaWrapper'
 import { StudyWeekendContent } from 'email-builder/components/StudyWeekendContent'
 import { getEventById } from '@my/app/services/event-service'
+import { listNewsItems } from '@my/app/services/news-service'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
 import type { DisplayDuration } from '@my/app/types/newsletter-rules'
@@ -214,17 +215,23 @@ export const getEmailContent = async (
       }
 
       // Fetch all required data for newsletter (including per-ecclesia service times)
-      const [scheduleData, upcomingEvents, readingsData, homeEcclesia] = await Promise.all([
-        get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
-        fetchEvents(),
-        fetchBibleReadings(),
-        getEcclesiaByName(HOME_ECCLESIA.canonicalName),
-      ])
+      const [scheduleData, upcomingEvents, readingsData, homeEcclesia, newsletterNewsItems] =
+        await Promise.all([
+          get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
+          fetchEvents(),
+          fetchBibleReadings(),
+          getEcclesiaByName(HOME_ECCLESIA.canonicalName),
+          listNewsItems({ includeExpired: false }).catch((err) => {
+            console.error('Failed to fetch news for newsletter (non-fatal):', err)
+            return []
+          }),
+        ])
 
       console.log('Newsletter data fetched:', {
         scheduleData: scheduleData.length,
         upcomingEvents: upcomingEvents.length,
-        readingsData: readingsData.length
+        readingsData: readingsData.length,
+        newsItems: newsletterNewsItems.length,
       })
 
       // Resolve per-ecclesia service times (falls back to catalogue defaults)
@@ -250,6 +257,7 @@ export const getEmailContent = async (
           upcomingEvents={upcomingEvents}
           readings={readingsData}
           note={note}
+          newsItems={newsletterNewsItems}
           serviceTimes={newsletterServiceTimes}
         />
       )
@@ -259,6 +267,7 @@ export const getEmailContent = async (
           upcomingEvents={upcomingEvents}
           readings={readingsData}
           note={note}
+          newsItems={newsletterNewsItems}
           serviceTimes={newsletterServiceTimes}
         />,
         { plainText: true }

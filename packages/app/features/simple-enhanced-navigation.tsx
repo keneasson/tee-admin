@@ -54,6 +54,7 @@ const emailAdminPages: MainPageType[] = [
 const systemAdminPages: MainPageType[] = [
   { path: '/admin/youtube', label: 'YouTube' },
   { path: '/admin/events', label: 'Event Manager' },
+  { path: '/admin/news', label: 'News Manager' },
   { path: '/admin/meetings', label: 'Meeting Manager' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },

@@ -74,6 +74,11 @@ const senders = {
     contactList: 'interEcclesia',
     replyTo: REPLY_TO,
   },
+  'news-alert': {
+    subject: 'Important News',
+    contactList: 'newsletter',
+    replyTo: REPLY_TO,
+  },
 }
 
 export type emailSendProps = {
