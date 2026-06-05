@@ -142,7 +142,7 @@ export const ReplacementEventCard: React.FC<ReplacementEventCardProps> = ({
   return (
     <>
       <Text style={defaultText}>
-        <strong>There will be no Services at Toronto East in person or Online.</strong>
+        <strong>There will be no IN PERSON Services at Toronto East, Zoom and YouTube will remain unchanged.</strong>
         {explanation ? (
           <>
             <br />
