@@ -81,6 +81,11 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const note = await pendingEmailNoteRepository.getNote(reason)
-  return NextResponse.json({ reason, note: note ?? null })
+  const item = await pendingEmailNoteRepository.getNoteItem(reason)
+  return NextResponse.json({
+    reason,
+    note: item?.note ?? null,
+    createdAt: item?.createdAt ?? null,
+    createdBy: item?.createdBy ?? null,
+  })
 }
