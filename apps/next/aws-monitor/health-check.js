@@ -68,7 +68,13 @@ const ENDPOINTS = [
     name: 'Schedule API - Sunday School',
     path: '/api/enhanced-schedule?types=sundaySchool&fromDate=' + getTodayDate(),
     expectedStatus: 200,
-    validate: (body) => validateScheduleResponse(body, 'sundaySchool'),
+    validate: (body) =>
+      validateScheduleResponse(body, 'sundaySchool', {
+        // Sunday School breaks for the summer; an empty schedule is correct
+        // during the recess, so don't alert on it then.
+        allowEmpty: isSundaySchoolInRecess(),
+        emptyNote: 'Sunday School in recess — empty schedule expected',
+      }),
   },
 ];
 
@@ -76,7 +82,27 @@ function getTodayDate() {
   return new Date().toISOString().split('T')[0];
 }
 
-function validateScheduleResponse(body, expectedType) {
+// Sunday School breaks for the summer and resumes in September. While it's in
+// recess an empty sundaySchool schedule is CORRECT, not a failure, so we skip
+// the "empty array" alert during this window (other failures — non-200, bad
+// JSON, missing structure — still alert). The window recurs every year, so no
+// annual edits are needed. Override via env vars if the schedule changes
+// (format: "MM-DD", UTC).
+const SUNDAY_SCHOOL_RECESS_START = process.env.SUNDAY_SCHOOL_RECESS_START || '06-15'; // mid-June
+const SUNDAY_SCHOOL_RECESS_END = process.env.SUNDAY_SCHOOL_RECESS_END || '09-01';     // resumes early September
+
+function isSundaySchoolInRecess(date = new Date()) {
+  const [startM, startD] = SUNDAY_SCHOOL_RECESS_START.split('-').map(Number);
+  const [endM, endD] = SUNDAY_SCHOOL_RECESS_END.split('-').map(Number);
+  // Encode month/day as MMDD so the window is a simple numeric range. Recess
+  // does not wrap the year boundary, so no wrap handling is needed.
+  const md = (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
+  const start = startM * 100 + startD;
+  const end = endM * 100 + endD;
+  return md >= start && md < end; // end-exclusive: resumes on the end date
+}
+
+function validateScheduleResponse(body, expectedType, options = {}) {
   try {
     const data = JSON.parse(body);
 
@@ -92,6 +118,11 @@ function validateScheduleResponse(body, expectedType) {
     }
 
     if (events.length === 0) {
+      // An empty array is a failure unless the caller says empty is expected
+      // (e.g. Sunday School during its summer recess).
+      if (options.allowEmpty) {
+        return { ok: true, count: 0, type: expectedType, note: options.emptyNote || 'empty is expected' };
+      }
       return { ok: false, error: `Empty ${expectedType} array - no events` };
     }
 

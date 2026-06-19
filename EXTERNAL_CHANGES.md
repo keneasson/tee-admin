@@ -23,6 +23,13 @@ _(none)_
 
 ## Completed
 
+### AWS Lambda — Health monitor: Sunday School recess suppression
+- **Date**: 2026-06-18
+- **Code change**: `apps/next/aws-monitor/health-check.js` now treats an empty `sundaySchool` schedule as healthy during the summer recess window (default `06-15` → `09-01`, UTC, recurring yearly). Other failures (non-200, bad JSON, missing structure) still alert year-round.
+- **External action**: Redeployed the `tee-admin-health-check` Lambda via `sam build && sam deploy` (stack `tee-admin-health-monitor`, ca-central-1). Window is overridable without code changes via Lambda env vars `SUNDAY_SCHOOL_RECESS_START` / `SUNDAY_SCHOOL_RECESS_END` (format `MM-DD`).
+- **Status**: DONE 2026-06-18
+- **Verified**: Manual trigger returns 5/5 passed; Sunday School healthy with `count: 0` + "in recess" note; no alert email sent.
+
 ### DynamoDB — Seed service times for ecclesias
 - **Date**: 2026-03-27
 - **Code change**: Unified worship services system — service times moved from hardcoded `schedule-times.ts` to per-ecclesia `scheduleConfig` in DynamoDB (with seasonal schedule support)
