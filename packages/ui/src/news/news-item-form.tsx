@@ -1,11 +1,15 @@
 'use client'
 
 import React from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { Button, Paragraph, XStack, YStack } from 'tamagui'
 import { FormInput } from '../form/form-input'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { EventFormSelect } from '../form/event-form-select'
+import { ImageUpload } from '../form/image-upload'
+import { DocumentUpload } from '../form/document-upload'
+import type { DocumentAttachment } from '@my/app/types/events'
+import type { NewsImage } from '@my/app/types/news'
 
 export type NewsFormValues = {
   title: string
@@ -13,6 +17,8 @@ export type NewsFormValues = {
   category: '' | 'medical' | 'general' | 'announcement'
   durationWeeks: '1' | '2' | '3'
   sharingScope: 'own' | 'region' | 'global'
+  posterImage?: NewsImage
+  documents: DocumentAttachment[]
 }
 
 export type NewsItemFormProps = {
@@ -62,6 +68,8 @@ export function NewsItemForm({
       category: initialValues?.category || '',
       durationWeeks: initialValues?.durationWeeks || '1',
       sharingScope: initialValues?.sharingScope || 'own',
+      posterImage: initialValues?.posterImage,
+      documents: initialValues?.documents || [],
     },
   })
 
@@ -82,6 +90,40 @@ export function NewsItemForm({
         required
         rows={8}
         maxLength={4000}
+      />
+
+      <Controller
+        control={control}
+        name="posterImage"
+        render={({ field }) => (
+          <ImageUpload
+            label="Poster image (optional)"
+            placeholder="Add a poster or photo for the details page"
+            value={field.value}
+            onChange={field.onChange}
+            disabled={isSaving}
+          />
+        )}
+      />
+
+      <Controller
+        control={control}
+        name="documents"
+        render={({ field }) => (
+          <YStack gap="$2">
+            <Paragraph fontSize="$4" fontWeight="500" color="$gray12">
+              Attachments (optional)
+            </Paragraph>
+            <Paragraph fontSize="$3" color="$gray10">
+              PDFs or files to link from the details page.
+            </Paragraph>
+            <DocumentUpload
+              documents={field.value || []}
+              onChange={field.onChange}
+              disabled={isSaving}
+            />
+          </YStack>
+        )}
       />
 
       <EventFormSelect

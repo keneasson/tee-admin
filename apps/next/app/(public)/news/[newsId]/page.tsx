@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Button, H1, Paragraph, Spinner, YStack } from '@my/ui'
-import { ArrowLeft } from '@tamagui/lucide-icons'
+import { Button, H1, Paragraph, Spinner, Text, XStack, YStack } from '@my/ui'
+import { ArrowLeft, FileText } from '@tamagui/lucide-icons'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import type { NewsItem } from '@my/app/types/news'
 
@@ -80,6 +80,41 @@ export default function NewsDetailPage() {
       <Paragraph whiteSpace="pre-wrap" lineHeight="$6">
         {item.body}
       </Paragraph>
+
+      {item.posterImage ? (
+        <img
+          src={item.posterImage.url}
+          alt={item.posterImage.originalName || item.title}
+          style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
+        />
+      ) : null}
+
+      {item.documents && item.documents.length > 0 ? (
+        <YStack gap="$2" marginTop="$2">
+          {item.documents.map((doc) => (
+            <a
+              key={doc.id}
+              href={doc.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none' }}
+            >
+              <XStack
+                gap="$2"
+                alignItems="center"
+                padding="$3"
+                borderWidth={1}
+                borderColor="$borderColor"
+                borderRadius="$4"
+                hoverStyle={{ borderColor: '$primary' }}
+              >
+                <FileText size={18} color="$primary" />
+                <Text color="$primary">{doc.originalName || 'Attachment'}</Text>
+              </XStack>
+            </a>
+          ))}
+        </YStack>
+      ) : null}
     </YStack>
   )
 }

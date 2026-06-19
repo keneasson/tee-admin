@@ -4,6 +4,7 @@ import {
   Head,
   Heading,
   Html,
+  Link,
   Preview,
   Section,
   Text,
@@ -11,20 +12,20 @@ import {
 import React from 'react'
 import {
   container,
-  defaultText,
   globalCss,
   header,
+  link,
   main,
 } from '../styles'
 import { Footer } from '../components/Footer'
-import { AutoLinkText } from '../components/AutoLinkText'
 
 export type NewsAlertProps = {
   title: string
-  body: string
+  /** Absolute URL to the news details page (per-brand domain). */
+  detailsUrl: string
 }
 
-const NewsAlert: React.FC<NewsAlertProps> = ({ title, body }) => {
+const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl }) => {
   return (
     <Html lang="en">
       <Head>
@@ -41,10 +42,10 @@ const NewsAlert: React.FC<NewsAlertProps> = ({ title, body }) => {
             {title}
           </Heading>
 
-          <Section>
-            <Text style={{ ...defaultText, whiteSpace: 'pre-wrap' }}>
-              <AutoLinkText text={body} />
-            </Text>
+          <Section style={{ marginTop: '8px' }}>
+            <Link href={detailsUrl} style={link}>
+              Click to read →
+            </Link>
           </Section>
         </Container>
 

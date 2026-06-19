@@ -1,11 +1,22 @@
 // News Manager types — lightweight retrospective counterpart to Events.
 // See https://github.com/keneasson/tee-admin/issues/41
 
-import type { EventSharingScope } from './events'
+import type { DocumentAttachment, EventSharingScope } from './events'
 
 export type NewsCategory = 'medical' | 'general' | 'announcement'
 
 export type NewsDurationWeeks = 1 | 2 | 3
+
+/**
+ * Poster image attached to a News item (Issue #47 — v2 of #41). Matches the
+ * shape produced by the shared ImageUpload component (and Event photos).
+ */
+export interface NewsImage {
+  url: string
+  fileName: string
+  originalName: string
+  uploadedAt: Date
+}
 
 export interface NewsItem {
   id: string
@@ -14,6 +25,10 @@ export interface NewsItem {
   title: string
   body: string
   category?: NewsCategory
+  /** Optional poster image shown on the details page (Issue #47). */
+  posterImage?: NewsImage
+  /** Optional attachments (PDFs etc.) linked from the details page (Issue #47). */
+  documents?: DocumentAttachment[]
   publishedAt: Date
   expiresAt: Date
   durationWeeks: NewsDurationWeeks

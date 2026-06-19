@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       title: body.title,
       body: body.body,
       category: body.category,
+      posterImage: body.posterImage || undefined,
+      documents: Array.isArray(body.documents) ? body.documents : undefined,
       durationWeeks: body.durationWeeks,
       sharingScope: body.sharingScope || 'own',
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : undefined,
