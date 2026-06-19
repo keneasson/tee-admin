@@ -23,26 +23,21 @@ import { getEventById } from '@my/app/services/event-service'
 import { listNewsItems } from '@my/app/services/news-service'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
-import type { DisplayDuration } from '@my/app/types/newsletter-rules'
+import { EVENT_DURATION_RULES } from '@my/app/utils/newsletter/event-display-rules'
 import { syncYouTubeUrlsForEmail } from '../youtube-sync-helper'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { getEcclesiaByName } from '../dynamodb/locations'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { resolveTenantFromEnv } from '@my/app/config/tenants'
+import { resolveBrandProfile } from './resolve-brand-profile'
+import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
+import { EmailIdentityProvider } from 'email-builder/components/email-identity'
 import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
 import MeetingEmail from 'email-builder/emails/MeetingEmail'
 import { meetingRecordToEmailProps } from './meeting-email-helpers'
 
-// Event display duration rules - same as news-events.tsx
-const EVENT_DURATION_RULES: Record<string, { displayDuration: DisplayDuration; priority: number; includeInSummary: boolean; requiresCTA: boolean }> = {
-  'recurring': { displayDuration: 'until_event_date', priority: 1, includeInSummary: true, requiresCTA: false },
-  'funeral': { displayDuration: '2_weeks_then_thursday_before', priority: 2, includeInSummary: true, requiresCTA: false },
-  'engagement': { displayDuration: '3_weeks_from_publish', priority: 3, includeInSummary: true, requiresCTA: false },
-  'wedding': { displayDuration: '3_weeks_or_until_event_date', priority: 4, includeInSummary: true, requiresCTA: false },
-  'baptism': { displayDuration: '1_week_after_event', priority: 5, includeInSummary: true, requiresCTA: false },
-  'study-weekend': { displayDuration: 'until_event_date', priority: 6, includeInSummary: true, requiresCTA: true },
-  'general': { displayDuration: 'until_event_date', priority: 7, includeInSummary: true, requiresCTA: false },
-  'election-cycle': { displayDuration: 'until_event_date', priority: 8, includeInSummary: false, requiresCTA: false },
-}
+// Event display duration rules live in event-display-rules.ts (shared with the
+// web newsletter and the public Events listing so all surfaces stay in sync).
 
 function mergeSundayEvents(events: ProgramTypes[]): SundayEvents[] {
   const memorial = events.filter((e) => e.Key === 'memorial') as MemorialServiceType[]
@@ -167,12 +162,22 @@ export const getEmailContent = async (
   eventType?: string,
   meetingId?: string
 ): Promise<(string | undefined)[]> => {
+  // Tenant-scoped identity (de-biased from the former hardcoded HOME_ECCLESIA):
+  // the deployment's ecclesia drives content lookup, and the resolved brand
+  // identity brands the footer. For the TEE deploy this is Toronto East, so
+  // output is unchanged.
+  const tenant = resolveTenantFromEnv()
+  const contentEcclesiaName = tenant.homeEcclesiaName ?? HOME_ECCLESIA.canonicalName
+  const emailIdentity = emailIdentityFromProfile(await resolveBrandProfile({ tenant }))
+  const withIdentity = (el: JSX.Element) => (
+    <EmailIdentityProvider value={emailIdentity}>{el}</EmailIdentityProvider>
+  )
   switch (reason) {
     case 'sunday-school':
       const events = await get_upcoming_program(['sundaySchool'])
       console.log('events', events)
-      const htmlContent = await render(<SundaySchool events={events as SundaySchoolType[]} note={note} />)
-      const textContent = await render(<SundaySchool events={events as SundaySchoolType[]} note={note} />, {
+      const htmlContent = await render(withIdentity(<SundaySchool events={events as SundaySchoolType[]} note={note} />))
+      const textContent = await render(withIdentity(<SundaySchool events={events as SundaySchoolType[]} note={note} />), {
         plainText: true,
       })
       return [htmlContent, textContent]
@@ -190,18 +195,18 @@ export const getEmailContent = async (
       console.log('memorialEvents', memorialEvents)
       const mergeEvents = mergeSundayEvents(memorialEvents)
       console.log('mergeEvents', mergeEvents)
-      const MemorialHtmlContent = await render(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />)
-      const MemorialTextContent = await render(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />, {
+      const MemorialHtmlContent = await render(withIdentity(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />))
+      const MemorialTextContent = await render(withIdentity(<MemorialService events={mergeEvents} note={note} upcomingEvents={recapUpcomingEvents} />), {
         plainText: true,
       })
       return [MemorialHtmlContent, MemorialTextContent]
     case 'bible-class':
       const bibleClassEvents = await get_upcoming_program(['bibleClass'])
       const bibleClassHtmlContent = await render(
-        <BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />
+        withIdentity(<BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />)
       )
       const bibleClassTextContent = await render(
-        <BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />,
+        withIdentity(<BibleClass events={bibleClassEvents as BibleClassType[]} note={note} />),
         {
           plainText: true,
         }
@@ -220,7 +225,7 @@ export const getEmailContent = async (
           get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
           fetchEvents(),
           fetchBibleReadings(),
-          getEcclesiaByName(HOME_ECCLESIA.canonicalName),
+          getEcclesiaByName(contentEcclesiaName),
           listNewsItems({ includeExpired: false }).catch((err) => {
             console.error('Failed to fetch news for newsletter (non-fatal):', err)
             return []
@@ -252,24 +257,28 @@ export const getEmailContent = async (
       }
 
       const newsletterHtmlContent = await render(
-        <Newsletter
-          scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
-          upcomingEvents={upcomingEvents}
-          readings={readingsData}
-          note={note}
-          newsItems={newsletterNewsItems}
-          serviceTimes={newsletterServiceTimes}
-        />
+        withIdentity(
+          <Newsletter
+            scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
+            upcomingEvents={upcomingEvents}
+            readings={readingsData}
+            note={note}
+            newsItems={newsletterNewsItems}
+            serviceTimes={newsletterServiceTimes}
+          />
+        )
       )
       const newsletterTextContent = await render(
-        <Newsletter
-          scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
-          upcomingEvents={upcomingEvents}
-          readings={readingsData}
-          note={note}
-          newsItems={newsletterNewsItems}
-          serviceTimes={newsletterServiceTimes}
-        />,
+        withIdentity(
+          <Newsletter
+            scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
+            upcomingEvents={upcomingEvents}
+            readings={readingsData}
+            note={note}
+            newsItems={newsletterNewsItems}
+            serviceTimes={newsletterServiceTimes}
+          />
+        ),
         { plainText: true }
       )
       return [newsletterHtmlContent, newsletterTextContent]

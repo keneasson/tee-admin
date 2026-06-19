@@ -5,6 +5,15 @@ import { formatScheduleDateForEmail } from '@my/app/utils/timezone'
 import { ProgramsTypes } from '@my/app/types'
 import type { BibleClassType, ProgramTypeKeys, ProgramTypes } from '@my/app/types'
 import { getEcclesiaByName } from './dynamodb/locations'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { resolveTenantFromEnv } from '@my/app/config/tenants'
+import {
+  fetchServiceOverrides,
+  applyOverrideToProgramItem,
+  normalizeToISODate,
+  overrideKey,
+} from '@my/app/utils/service-overrides/merge'
+import type { ServiceOverrideType } from '@my/app/provider/dynamodb/service-override-types'
 
 /**
  * Get upcoming program events from DynamoDB
@@ -74,6 +83,8 @@ export async function get_upcoming_program(
             // Preserve timezone fields for downstream consumers
             DateTime: event.DateTime,
             ServiceTimezone: event.ServiceTimezone,
+            // Stable UTC date key for per-occurrence override matching
+            occurrenceDate: normalizeToISODate(event.Date || event.DateTime),
           } as ProgramTypes)
         }
 
@@ -118,6 +129,26 @@ export async function get_upcoming_program(
       } catch (error) {
         console.error(`❌ Error fetching ${sheetKey} from DynamoDB:`, error)
         // Continue with other schedule types
+      }
+    }
+
+    // Apply per-occurrence overrides (cancel / custom message / note / attend-options).
+    // Single chokepoint — this propagates to recap, bible-class, and newsletter emails.
+    const occurrenceDates = upcoming.map((e) => e.occurrenceDate || '').filter(Boolean)
+    const sortedDates = [...occurrenceDates].sort()
+    if (sortedDates.length > 0) {
+      const serviceTypes = Array.from(new Set(upcoming.map((e) => e.Key))) as ServiceOverrideType[]
+      const overrides = await fetchServiceOverrides(
+        resolveTenantFromEnv().homeEcclesiaName ?? HOME_ECCLESIA.canonicalName,
+        serviceTypes,
+        sortedDates[0],
+        sortedDates[sortedDates.length - 1]
+      )
+      for (const item of upcoming) {
+        applyOverrideToProgramItem(
+          item,
+          overrides.get(overrideKey(item.Key, item.occurrenceDate || ''))
+        )
       }
     }
 

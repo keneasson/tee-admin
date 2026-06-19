@@ -7,6 +7,8 @@ type UserSession = {
   name?: string | null
   email?: string | null
   role?: string
+  /** Signed-in user's home ecclesia, surfaced in the navigation header */
+  ecclesia?: string | null
 }
 
 type FeatureGatedNavigationProps = {

@@ -19,6 +19,21 @@ export default auth((req: NextAuthRequest) => {
   }
   const passthrough = () => NextResponse.next({ request: { headers: forwardedHeaders } })
 
+  // Hub sign-in gate: echadhub.org has no public face yet, so require sign-in
+  // for all content pages (Facebook-style). Auth flows (/auth/*) and API routes
+  // (incl. NextAuth /api/auth) stay open; static assets are excluded by the
+  // matcher. Tenant domains with a public face (tee-admin.com) are unaffected.
+  if (
+    tenant?.id === 'echadhub' &&
+    !req.auth &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/api')
+  ) {
+    const signInUrl = new URL('/auth/signin', req.url)
+    signInUrl.searchParams.set('callbackUrl', pathname)
+    return NextResponse.redirect(signInUrl)
+  }
+
   // Check if user is trying to access profile page
   if (pathname.startsWith('/profile')) {
     // If no session, redirect to sign-in

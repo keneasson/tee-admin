@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { SessionProvider, useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
+import { HeaderEcclesiaProvider } from '@my/app/provider/ecclesia/header-ecclesia-context'
 import { config } from '@my/ui'
 import { ThemeProvider, ThemeAwareProvider } from '@my/ui'
 
@@ -26,6 +27,7 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
         name: session.user.name,
         email: session.user.email,
         role: (session.user as any)?.role,
+        ecclesia: (session.user as any)?.ecclesia,
       }
     : null
 
@@ -76,7 +78,9 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
       notificationCount={featureEnabled ? notificationCount : undefined}
       onNotificationPress={featureEnabled ? handleNotificationPress : undefined}
     >
-      {children}
+      <HeaderEcclesiaProvider value={user?.ecclesia ?? null}>
+        {children}
+      </HeaderEcclesiaProvider>
     </FeatureGatedNavigation>
   )
 }

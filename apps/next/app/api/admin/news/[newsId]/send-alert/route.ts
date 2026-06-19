@@ -10,6 +10,10 @@ import {
   markNewsBlastSent,
 } from '@my/app/services/news-service'
 import { isNewsActive } from '@my/app/types/news'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
+import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
+import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
+import { EmailIdentityProvider } from 'email-builder/components/email-identity'
 
 export const config = {
   maxDuration: 60,
@@ -54,10 +58,19 @@ export async function POST(
       )
     }
 
-    const emailElement = createElement(NewsAlert as any, {
-      title: news.title,
-      body: news.body,
-    })
+    // Resolve the brand domain so the "click to read" link points at the
+    // correct surface (tee-admin.com vs echadhub.org). Falls back to the
+    // deployment's env-configured tenant when the host isn't recognized.
+    const tenant = getTenantFromHeaders(request.headers) || resolveTenantFromEnv()
+    const detailsUrl = `https://www.${tenant.senderDomain}/news/${news.id}`
+
+    // Brand the footer from the news item's owning ecclesia (per-org branding).
+    const profile = await resolveBrandProfile({ ownerEcclesiaName: news.ecclesiaId, tenant })
+    const emailElement = createElement(
+      EmailIdentityProvider,
+      { value: emailIdentityFromProfile(profile) },
+      createElement(NewsAlert as any, { title: news.title, detailsUrl })
+    )
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })
 
@@ -70,6 +83,7 @@ export async function POST(
       subReason: 'general',
       description: `News alert: ${news.title}`,
       sentBy: session.user.email,
+      tenant,
     })
 
     if (result instanceof Error) {

@@ -17,7 +17,6 @@ import type { NewsItem } from '@my/app/types/news'
 import { isNewsActive } from '@my/app/types/news'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
-import { Paragraph } from '@my/ui'
 import { Vote } from '@tamagui/lucide-icons'
 
 // Helper function to check if an election-cycle event is currently active
@@ -452,12 +451,17 @@ export const NewsletterScreen: React.FC<NewsletterScreenProps> = ({
                   padding="$4"
                   borderRadius="$4"
                   backgroundColor="$background"
+                  cursor="pointer"
+                  hoverStyle={{ borderColor: '$primary' }}
+                  onPress={() => onNavigate?.(`/news/${item.id}`)}
                 >
                   <YStack gap="$2">
                     <Text fontSize="$6" fontWeight="600">
                       {item.title}
                     </Text>
-                    <Paragraph whiteSpace="pre-wrap">{item.body}</Paragraph>
+                    <Text color="$primary" hoverStyle={{ textDecorationLine: 'underline' }}>
+                      Read details →
+                    </Text>
                   </YStack>
                 </Card>
               ))}
