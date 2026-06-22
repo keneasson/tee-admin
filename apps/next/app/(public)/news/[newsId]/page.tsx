@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button, H1, MarkdownLiteText, Paragraph, Spinner, Text, XStack, YStack } from '@my/ui'
-import { ArrowLeft, FileText } from '@tamagui/lucide-icons'
+import { ArrowLeft, Download, FileText } from '@tamagui/lucide-icons'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import type { NewsItem } from '@my/app/types/news'
 
@@ -93,26 +93,56 @@ export default function NewsDetailPage() {
           />
         ))}
 
+      {/* PDF posters: show the generated page-1 thumbnail with a caption +
+          download link (like a mail attachment), not a full embedded viewer.
+          Tapping the thumbnail or Download opens the PDF; the device decides
+          whether to view or save it. */}
       {(item.documents ?? [])
         .filter((doc) => doc.mimeType === 'application/pdf')
         .map((doc) => (
-          <YStack key={doc.id} gap="$2">
-            <iframe
-              src={doc.fileUrl}
-              title={doc.originalName || 'Poster'}
-              style={{ width: '100%', height: '80vh', minHeight: 600, border: 0, borderRadius: 8 }}
-            />
-            <a
-              href={doc.fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: 'none' }}
-            >
-              <XStack gap="$2" alignItems="center">
-                <FileText size={16} color="$primary" />
-                <Text color="$primary">Open {doc.originalName || 'PDF'} in a new tab</Text>
-              </XStack>
-            </a>
+          <YStack key={doc.id} gap="$2" maxWidth={220} marginTop="$2">
+            <XStack gap="$2" alignItems="center" justifyContent="space-between">
+              <Text fontSize="$3" color="$gray11">
+                See attached poster
+              </Text>
+              <a
+                href={doc.fileUrl}
+                download={doc.originalName || true}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}
+              >
+                <XStack gap="$1" alignItems="center">
+                  <Download size={15} color="$primary" />
+                  <Text fontSize="$3" color="$primary">
+                    Download
+                  </Text>
+                </XStack>
+              </a>
+            </XStack>
+
+            {doc.thumbnailUrl ? (
+              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={doc.thumbnailUrl}
+                  alt={doc.originalName || 'Poster preview'}
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: 8,
+                    border: '1px solid #e5e5e5',
+                    display: 'block',
+                  }}
+                />
+              </a>
+            ) : null}
+
+            <XStack gap="$2" alignItems="center">
+              <FileText size={14} color="$gray10" />
+              <Text fontSize="$2" color="$gray10" numberOfLines={1}>
+                PDF: {doc.originalName || 'poster.pdf'}
+              </Text>
+            </XStack>
           </YStack>
         ))}
 
