@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { Card, H3, Paragraph, XStack, YStack } from 'tamagui'
+import { MarkdownLiteText } from '../markdown-lite-text'
 
 export type NewsCardProps = {
   title: string
@@ -39,8 +40,6 @@ export function NewsCard({
   emailBlastSentAt,
   onPress,
 }: NewsCardProps) {
-  const snippet = body.length > 200 ? `${body.slice(0, 200)}…` : body
-
   return (
     <Card
       elevate
@@ -83,9 +82,7 @@ export function NewsCard({
           ) : null}
         </XStack>
         <H3>{title}</H3>
-        <Paragraph whiteSpace="pre-wrap" numberOfLines={3}>
-          {snippet}
-        </Paragraph>
+        <MarkdownLiteText text={body} inline numberOfLines={3} />
       </YStack>
     </Card>
   )

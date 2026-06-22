@@ -2,7 +2,8 @@
 
 import React from 'react'
 import { Link } from 'solito/link'
-import { Card, H3, Paragraph, XStack, YStack } from 'tamagui'
+import { Card, H3, XStack, YStack } from 'tamagui'
+import { MarkdownLiteText } from '../markdown-lite-text'
 
 export type NewsPublicCardProps = {
   id: string
@@ -44,9 +45,7 @@ export function NewsPublicCard({ id, title, body, previewImageUrl }: NewsPublicC
             >
               {title}
             </H3>
-            <Paragraph whiteSpace="pre-wrap" color="$color">
-              {body}
-            </Paragraph>
+            <MarkdownLiteText text={body} color="$color" />
           </YStack>
         </XStack>
       </Card>

@@ -4,6 +4,7 @@ import { Card, YStack, XStack, Text, H3, Square } from 'tamagui'
 import { Calendar, MapPin, Users } from '@tamagui/lucide-icons'
 import { Event, getPlatformDisplayName } from '@my/app/types/events'
 import { formatDate, formatLocation } from './event-utils'
+import { MarkdownLiteText } from '../markdown-lite-text'
 import {
   formatDateInTimezone,
   formatTimeInTimezone,
@@ -549,13 +550,13 @@ export function EventSummaryCard({
 
         {/* Description Preview */}
         {event.description && !isCompact ? (
-          <Text 
-            fontSize="$3" 
-            color="$gray11" 
+          <MarkdownLiteText
+            text={event.description}
+            inline
+            fontSize="$3"
+            color="$gray11"
             numberOfLines={isNewsletter ? 3 : 2}
-          >
-            {event.description}
-          </Text>
+          />
         ) : null}
 
         {/* Action Link */}

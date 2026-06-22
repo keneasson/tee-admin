@@ -7,6 +7,10 @@ const INLINE_REGEX = /\*\*(.+?)\*\*|(?:https?:\/\/|www\.)[^\s<>[\]{}|\\^`"']+/gi
 // Heading regex: matches lines starting with # (up to ###)
 const HEADING_REGEX = /^(#{1,3})\s+(.+)$/
 
+// Bullet regex: matches lines starting with - or * (kept in sync with the
+// shared web renderer, packages/ui/src/markdown-lite-text.tsx)
+const BULLET_REGEX = /^\s*[-*]\s+(.+)$/
+
 interface AutoLinkTextProps {
   text: string
   linkStyle?: React.CSSProperties
@@ -79,6 +83,10 @@ export const AutoLinkText: React.FC<AutoLinkTextProps> = ({ text, linkStyle }) =
       const content = headingMatch[2]
       return <span style={headingStyles[level]}>{...parseInline(content, style, 'h')}</span>
     }
+    const bulletMatch = text.match(BULLET_REGEX)
+    if (bulletMatch) {
+      return <span>{'•  '}{...parseInline(bulletMatch[1], style, 'b')}</span>
+    }
     const inlined = parseInline(text, style, 'i')
     return <>{inlined}</>
   }
@@ -93,12 +101,20 @@ export const AutoLinkText: React.FC<AutoLinkTextProps> = ({ text, linkStyle }) =
     }
 
     const headingMatch = line.match(HEADING_REGEX)
+    const bulletMatch = headingMatch ? null : line.match(BULLET_REGEX)
     if (headingMatch) {
       const level = headingMatch[1].length as 1 | 2 | 3
       const content = headingMatch[2]
       result.push(
         <span key={`h-${lineIdx}`} style={headingStyles[level]}>
           {...parseInline(content, style, `h${lineIdx}`)}
+        </span>
+      )
+    } else if (bulletMatch) {
+      result.push(
+        <span key={`b-${lineIdx}`}>
+          {'•  '}
+          {...parseInline(bulletMatch[1], style, `b${lineIdx}`)}
         </span>
       )
     } else {

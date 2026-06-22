@@ -97,7 +97,7 @@ export function NewsItemForm({
         control={control}
         name="body"
         label="Body"
-        placeholder="What happened? Use # for headings, **bold** for emphasis, plain URLs auto-link."
+        placeholder="What happened? Use # for headings, **bold** for emphasis, - for bullet lists, plain URLs auto-link."
         required
         rows={8}
         maxLength={4000}

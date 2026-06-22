@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Button, H1, Paragraph, Spinner, Text, XStack, YStack } from '@my/ui'
+import { Button, H1, MarkdownLiteText, Paragraph, Spinner, Text, XStack, YStack } from '@my/ui'
 import { ArrowLeft, FileText } from '@tamagui/lucide-icons'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import type { NewsItem } from '@my/app/types/news'
@@ -77,9 +77,7 @@ export default function NewsDetailPage() {
 
       <H1>{item.title}</H1>
 
-      <Paragraph whiteSpace="pre-wrap" lineHeight="$6">
-        {item.body}
-      </Paragraph>
+      <MarkdownLiteText text={item.body} lineHeight="$6" />
 
       {/* Posters (images + PDFs) render inline; everything else (docs, Google
           Doc links) becomes a link. Type is derived from the mimeType — most
