@@ -5,6 +5,7 @@ import { H1, Paragraph, Spinner, YStack } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { NewsPublicCard } from '@my/ui/src/news/news-public-card'
 import type { NewsItem } from '@my/app/types/news'
+import { getPreviewImageUrl } from '@my/app/types/events'
 
 export default function NewsListPage() {
   const isHydrated = useHydrated()
@@ -61,6 +62,7 @@ export default function NewsListPage() {
               id={item.id}
               title={item.title}
               body={item.body}
+              previewImageUrl={getPreviewImageUrl(item.documents)}
             />
           ))}
         </YStack>

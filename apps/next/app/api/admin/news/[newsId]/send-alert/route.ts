@@ -10,6 +10,7 @@ import {
   markNewsBlastSent,
 } from '@my/app/services/news-service'
 import { isNewsActive } from '@my/app/types/news'
+import { getPreviewImageUrl } from '@my/app/types/events'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
@@ -69,7 +70,11 @@ export async function POST(
     const emailElement = createElement(
       EmailIdentityProvider,
       { value: emailIdentityFromProfile(profile) },
-      createElement(NewsAlert as any, { title: news.title, detailsUrl })
+      createElement(NewsAlert as any, {
+        title: news.title,
+        detailsUrl,
+        previewImageUrl: getPreviewImageUrl(news.documents),
+      })
     )
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })

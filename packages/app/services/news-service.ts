@@ -26,9 +26,6 @@ const deserializeNews = (raw: string): NewsItem => {
   if (parsed.createdAt) parsed.createdAt = new Date(parsed.createdAt)
   if (parsed.updatedAt) parsed.updatedAt = new Date(parsed.updatedAt)
   if (parsed.emailBlastSentAt) parsed.emailBlastSentAt = new Date(parsed.emailBlastSentAt)
-  if (parsed.posterImage?.uploadedAt) {
-    parsed.posterImage.uploadedAt = new Date(parsed.posterImage.uploadedAt)
-  }
   if (Array.isArray(parsed.documents)) {
     parsed.documents = parsed.documents.map((doc: any) => ({
       ...doc,
@@ -74,7 +71,6 @@ export const createNewsItem = async (data: CreateNewsRequest): Promise<NewsItem>
     title: data.title,
     body: data.body,
     category: data.category,
-    posterImage: data.posterImage,
     documents: data.documents,
     publishedAt,
     expiresAt,

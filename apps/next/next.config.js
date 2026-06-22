@@ -37,6 +37,15 @@ module.exports = function () {
     eslint: {
       ignoreDuringBuilds: true,
     },
+    // sharp (native) + @hyzyla/pdfium (loads pdfium.wasm via fs.readFileSync)
+    // must not be bundled by webpack — require them at runtime instead. Used by
+    // the file-upload route to rasterize PDF posters into preview thumbnails.
+    serverExternalPackages: ['sharp', '@hyzyla/pdfium'],
+    // NFT can miss the dynamically-pathed .wasm; include it explicitly so it
+    // ships with the upload function on Vercel.
+    outputFileTracingIncludes: {
+      '/api/files/upload': ['../../node_modules/@hyzyla/pdfium/dist/*.wasm'],
+    },
     modularizeImports: {
       '@tamagui/lucide-icons': {
         transform: `@tamagui/lucide-icons/icons/{{member}}`,

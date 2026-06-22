@@ -4,6 +4,7 @@ import {
   Head,
   Heading,
   Html,
+  Img,
   Link,
   Preview,
   Section,
@@ -23,9 +24,11 @@ export type NewsAlertProps = {
   title: string
   /** Absolute URL to the news details page (per-brand domain). */
   detailsUrl: string
+  /** Optional poster preview (image URL or PDF page-1 thumbnail). */
+  previewImageUrl?: string
 }
 
-const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl }) => {
+const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUrl }) => {
   return (
     <Html lang="en">
       <Head>
@@ -41,6 +44,18 @@ const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl }) => {
           <Heading as="h2" style={{ margin: '0 0 16px 0' }}>
             {title}
           </Heading>
+
+          {previewImageUrl ? (
+            <Section style={{ marginBottom: '16px' }}>
+              <Link href={detailsUrl}>
+                <Img
+                  src={previewImageUrl}
+                  alt={title}
+                  style={{ width: '100%', maxWidth: '560px', height: 'auto', borderRadius: '8px' }}
+                />
+              </Link>
+            </Section>
+          ) : null}
 
           <Section style={{ marginTop: '8px' }}>
             <Link href={detailsUrl} style={link}>

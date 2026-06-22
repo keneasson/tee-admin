@@ -22,6 +22,25 @@ export interface DocumentAttachment {
   uploadedBy: string
   description?: string
   editable?: boolean // For Google Docs: whether the title can be edited in the UI
+  thumbnailUrl?: string // For PDFs: server-generated JPEG preview of page 1 (best-effort)
+}
+
+/**
+ * Pick the best "poster" preview image from a set of attachments, for cards and
+ * email where there's no room to render a full document. Prefers a real image;
+ * falls back to a PDF's generated page-1 thumbnail. Returns undefined when no
+ * attachment can stand in as a preview.
+ */
+export function getPreviewImageUrl(
+  documents: DocumentAttachment[] | undefined
+): string | undefined {
+  if (!documents?.length) return undefined
+  const image = documents.find((doc) => doc.mimeType?.startsWith('image/'))
+  if (image) return image.fileUrl
+  const pdfThumb = documents.find(
+    (doc) => doc.mimeType === 'application/pdf' && doc.thumbnailUrl
+  )
+  return pdfThumb?.thumbnailUrl
 }
 
 // Online meeting information for virtual/hybrid events

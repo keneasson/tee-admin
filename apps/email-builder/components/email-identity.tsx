@@ -1,3 +1,5 @@
+'use client'
+
 import React, { createContext, useContext } from 'react'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 

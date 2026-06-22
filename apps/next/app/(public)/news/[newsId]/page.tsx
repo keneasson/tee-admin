@@ -81,38 +81,71 @@ export default function NewsDetailPage() {
         {item.body}
       </Paragraph>
 
-      {item.posterImage ? (
-        <img
-          src={item.posterImage.url}
-          alt={item.posterImage.originalName || item.title}
-          style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
-        />
-      ) : null}
+      {/* Posters (images + PDFs) render inline; everything else (docs, Google
+          Doc links) becomes a link. Type is derived from the mimeType — most
+          posters arrive as PDFs. */}
+      {(item.documents ?? [])
+        .filter((doc) => doc.mimeType?.startsWith('image/'))
+        .map((doc) => (
+          <img
+            key={doc.id}
+            src={doc.fileUrl}
+            alt={doc.originalName || item.title}
+            style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
+          />
+        ))}
 
-      {item.documents && item.documents.length > 0 ? (
-        <YStack gap="$2" marginTop="$2">
-          {item.documents.map((doc) => (
+      {(item.documents ?? [])
+        .filter((doc) => doc.mimeType === 'application/pdf')
+        .map((doc) => (
+          <YStack key={doc.id} gap="$2">
+            <iframe
+              src={doc.fileUrl}
+              title={doc.originalName || 'Poster'}
+              style={{ width: '100%', height: '80vh', minHeight: 600, border: 0, borderRadius: 8 }}
+            />
             <a
-              key={doc.id}
               href={doc.fileUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{ textDecoration: 'none' }}
             >
-              <XStack
-                gap="$2"
-                alignItems="center"
-                padding="$3"
-                borderWidth={1}
-                borderColor="$borderColor"
-                borderRadius="$4"
-                hoverStyle={{ borderColor: '$primary' }}
-              >
-                <FileText size={18} color="$primary" />
-                <Text color="$primary">{doc.originalName || 'Attachment'}</Text>
+              <XStack gap="$2" alignItems="center">
+                <FileText size={16} color="$primary" />
+                <Text color="$primary">Open {doc.originalName || 'PDF'} in a new tab</Text>
               </XStack>
             </a>
-          ))}
+          </YStack>
+        ))}
+
+      {(item.documents ?? []).some(
+        (doc) => !doc.mimeType?.startsWith('image/') && doc.mimeType !== 'application/pdf'
+      ) ? (
+        <YStack gap="$2" marginTop="$2">
+          {(item.documents ?? [])
+            .filter((doc) => !doc.mimeType?.startsWith('image/') && doc.mimeType !== 'application/pdf')
+            .map((doc) => (
+              <a
+                key={doc.id}
+                href={doc.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}
+              >
+                <XStack
+                  gap="$2"
+                  alignItems="center"
+                  padding="$3"
+                  borderWidth={1}
+                  borderColor="$borderColor"
+                  borderRadius="$4"
+                  hoverStyle={{ borderColor: '$primary' }}
+                >
+                  <FileText size={18} color="$primary" />
+                  <Text color="$primary">{doc.originalName || 'Attachment'}</Text>
+                </XStack>
+              </a>
+            ))}
         </YStack>
       ) : null}
     </YStack>

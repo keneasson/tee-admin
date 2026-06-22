@@ -6,10 +6,23 @@ import { Button, Paragraph, XStack, YStack } from 'tamagui'
 import { FormInput } from '../form/form-input'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { EventFormSelect } from '../form/event-form-select'
-import { ImageUpload } from '../form/image-upload'
 import { DocumentUpload } from '../form/document-upload'
 import type { DocumentAttachment } from '@my/app/types/events'
-import type { NewsImage } from '@my/app/types/news'
+
+// One uploader for everything a News item can carry — images (rendered inline
+// on the details page) and documents (rendered as links). Type is derived from
+// the file itself; the user never has to pick the "right" uploader.
+const NEWS_UPLOAD_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+]
 
 export type NewsFormValues = {
   title: string
@@ -17,7 +30,6 @@ export type NewsFormValues = {
   category: '' | 'medical' | 'general' | 'announcement'
   durationWeeks: '1' | '2' | '3'
   sharingScope: 'own' | 'region' | 'global'
-  posterImage?: NewsImage
   documents: DocumentAttachment[]
 }
 
@@ -68,7 +80,6 @@ export function NewsItemForm({
       category: initialValues?.category || '',
       durationWeeks: initialValues?.durationWeeks || '1',
       sharingScope: initialValues?.sharingScope || 'own',
-      posterImage: initialValues?.posterImage,
       documents: initialValues?.documents || [],
     },
   })
@@ -94,33 +105,22 @@ export function NewsItemForm({
 
       <Controller
         control={control}
-        name="posterImage"
-        render={({ field }) => (
-          <ImageUpload
-            label="Poster image (optional)"
-            placeholder="Add a poster or photo for the details page"
-            value={field.value}
-            onChange={field.onChange}
-            disabled={isSaving}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
         name="documents"
         render={({ field }) => (
           <YStack gap="$2">
-            <Paragraph fontSize="$4" fontWeight="500" color="$gray12">
-              Attachments (optional)
+            <Paragraph fontSize="$4" fontWeight="600" color="$gray12">
+              Photos & files (optional)
             </Paragraph>
             <Paragraph fontSize="$3" color="$gray10">
-              PDFs or files to link from the details page.
+              Add anything: images and PDF posters appear on the details page;
+              other files become download links. Already online (e.g. a Google
+              Doc)? Paste its link below instead of uploading.
             </Paragraph>
             <DocumentUpload
               documents={field.value || []}
               onChange={field.onChange}
               disabled={isSaving}
+              allowedTypes={NEWS_UPLOAD_TYPES}
             />
           </YStack>
         )}

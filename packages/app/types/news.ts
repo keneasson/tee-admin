@@ -7,17 +7,6 @@ export type NewsCategory = 'medical' | 'general' | 'announcement'
 
 export type NewsDurationWeeks = 1 | 2 | 3
 
-/**
- * Poster image attached to a News item (Issue #47 — v2 of #41). Matches the
- * shape produced by the shared ImageUpload component (and Event photos).
- */
-export interface NewsImage {
-  url: string
-  fileName: string
-  originalName: string
-  uploadedAt: Date
-}
-
 export interface NewsItem {
   id: string
   ecclesiaId: string
@@ -25,9 +14,11 @@ export interface NewsItem {
   title: string
   body: string
   category?: NewsCategory
-  /** Optional poster image shown on the details page (Issue #47). */
-  posterImage?: NewsImage
-  /** Optional attachments (PDFs etc.) linked from the details page (Issue #47). */
+  /**
+   * Uploaded attachments (Issue #47). One list for everything — images are
+   * rendered inline on the details page, other files (PDFs, docs, Google Doc
+   * links) become links. Type is derived from each attachment's mimeType.
+   */
   documents?: DocumentAttachment[]
   publishedAt: Date
   expiresAt: Date
