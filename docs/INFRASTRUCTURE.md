@@ -3,6 +3,12 @@
 > **Purpose**: Infrastructure setup, email scheduling, and AWS service configuration
 > **Audience**: Developers managing deployment and infrastructure
 
+> 🧭 **For accounts, CLI scoping, and how to deploy each brand, read
+> [`CLOUD_ACCOUNTS_AND_DEPLOYMENT.md`](./CLOUD_ACCOUNTS_AND_DEPLOYMENT.md) first.**
+> It is the authoritative runbook for *which* AWS account / Vercel team / project to use
+> and how to verify scope before running anything. This file covers email scheduling and
+> service details.
+
 ---
 
 ## Current Email Scheduling System
@@ -133,13 +139,21 @@ aws scheduler delete-schedule --name tee-email-queue-processor
 
 ## Deployment
 
+> **Scope first.** `vercel switch ken-eassons-projects` and verify AWS is account
+> `911911532459` (`aws sts get-caller-identity`) before deploying. Two projects build from
+> this repo — `tee-admin` (brand `tee`, www.tee-admin.com) and `echadhub` (brand `echadhub`,
+> echadhub.org). Both auto-deploy previews on `git push` and production on merge to `main`.
+> Full details + the Echad Hub preview flow: [`CLOUD_ACCOUNTS_AND_DEPLOYMENT.md`](./CLOUD_ACCOUNTS_AND_DEPLOYMENT.md).
+
 ### Commands
 ```bash
-# Preview deployment
-vercel deploy
+vercel switch ken-eassons-projects   # ← always scope first
+
+# Preview (deploys to whatever .vercel links → tee-admin by default)
+cd apps/next && vercel deploy
 
 # Production deployment (after testing preview)
-vercel deploy --prod
+cd apps/next && vercel deploy --prod
 ```
 
 ### Environment Variables (Vercel Dashboard)
@@ -153,7 +167,8 @@ vercel deploy --prod
 | `NEXT_PUBLIC_GOOGLE_ACCOUNT_SECRET` | Google OAuth secret |
 | `WEBHOOK_SECRET` | Google Sheets webhook verification |
 | `EMAIL_SENDER_SECRET` | Email endpoint authentication |
-| `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` | Path to service account JSON |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | Full Google service-account JSON on one line (creds + `sheet_ids`); no committed file |
+| `NEXT_PUBLIC_BRAND` | `tee` or `echadhub` — selects brand at build time (set per Vercel project) |
 
 ### Build Configuration (Vercel)
 - **Root Directory**: `apps/next`
@@ -164,15 +179,29 @@ vercel deploy --prod
 
 ## AWS Services Used
 
+> **Account `911911532459`, region `ca-central-1`** (IAM user `user/tee`; local `default`
+> profile). Verify with `aws sts get-caller-identity` before any mutating command — see the
+> runbook for why scoping matters on this machine.
+
 ### DynamoDB
 - **Tables**: `tee-admin`, `tee-schedules`, `tee-sync-status`
-- **Region**: Configured via `AWS_REGION`
+- **Region**: `ca-central-1` (via `AWS_REGION`)
 - **Access**: Via repository pattern (see ARCHITECTURE.md)
+- **Shared**: one production DB across *all* domains/deploys — previews are not isolated.
 
 ### SES (Simple Email Service)
 - **Purpose**: Email delivery
 - **Templates**: React Email (`apps/email-builder/`)
 - **Configuration**: AWS credentials in environment
+- **Check sends**: `aws ses get-send-quota` → `SentLast24Hours`
+
+### S3
+- **Purpose**: File uploads (news/event attachments, generated PDF thumbnails)
+- **Bucket**: `tee-admin-files` (default; override via `FILE_STORAGE_BUCKET`)
+
+### Lambda / SAM
+- **`aws-monitor`**: API health checks, deployed from `apps/next/aws-monitor/`
+  (`sam build && sam deploy`)
 
 ### EventBridge (Future)
 - **Purpose**: Advanced email scheduling

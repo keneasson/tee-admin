@@ -293,13 +293,23 @@ Always run lint and typecheck commands after implementing new features to ensure
 
 ## Deployment
 
-Deploy to Vercel using:
-- `vercel deploy` - Deploy to preview environment
-- `vercel deploy --prod` - Deploy to production
-- Root: `apps/next`
-- Install command: `yarn set version berry && yarn install`
-- Build command: default
-- Includes automated cron jobs for email campaigns
+> **Full runbook: [`docs/CLOUD_ACCOUNTS_AND_DEPLOYMENT.md`](./docs/CLOUD_ACCOUNTS_AND_DEPLOYMENT.md)** —
+> read it before touching `aws`/`vercel`. The essentials below exist so you never have to re-derive scope.
+
+### Cloud accounts & scoping (CRITICAL — this machine holds credentials for multiple projects)
+- **AWS**: account `911911532459`, region `ca-central-1`, IAM `user/tee`, local profile `default`.
+  The other named profiles (`Kene-YourPeer`, `cruiter`, `kene-home`, `kene-docutrax`) are **other clients** — do not use them.
+  Always verify before mutating: `aws sts get-caller-identity` → expect Account `911911532459`. Unset any stray `AWS_PROFILE`.
+- **Vercel**: team/scope `ken-eassons-projects` (NOT `pharmacy-online`/`rangleio`). Run `vercel switch ken-eassons-projects` first.
+  Two projects build from this repo: **`tee-admin`** (brand `tee` → www.tee-admin.com) and **`echadhub`** (brand `echadhub` → echadhub.org).
+  `NEXT_PUBLIC_BRAND` (build-time, set per project) picks the brand; runtime tenant resolves from the `Host` header in `middleware.ts`.
+- **One shared production DynamoDB/S3 across all domains and previews** — "preview"/"staging" isolates build/env/domain only, NOT data. Test writes hit prod.
+
+### Deploy
+- Both projects **auto-deploy on `git push`** (Preview) and **on merge to `main`** (Production) via the GitHub integration.
+  To get an Echad Hub preview, just push the branch and use `https://echadhub-git-<branch>-ken-eassons-projects.vercel.app`.
+- Manual: `vercel switch ken-eassons-projects` then `cd apps/next && vercel deploy` (preview) / `vercel deploy --prod`. `.vercel` links to `tee-admin`; `.vercel-backup` is stale (ignore).
+- Root: `apps/next` · Install: `yarn set version berry && yarn install` · Build: default · Node 20.x · includes email cron jobs.
 
 ## ✅ Migration Status - COMPLETED
 
