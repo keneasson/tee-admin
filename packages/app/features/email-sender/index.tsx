@@ -22,27 +22,10 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, Mail, AlertCircle, Edit3 } from '@tamagui/lucide-icons'
-import { sendEmail, getContactsList, savePendingNote } from '../../provider/get-data'
+import { sendEmail, getContactsList, savePendingNote, getPendingNote, clearPendingNote } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
-
-interface CronScheduledEmail {
-  reason: string
-  cronExpression: string
-  nextFiringUtcMs: number
-}
-
-// "manual" is a UX-only target meaning "include with the next manual click below" —
-// it does not persist to the pending-notes table.
-type PendingNoteTargetValue = 'manual' | string
-
-interface PendingNoteTargetOption {
-  value: PendingNoteTargetValue
-  label: string
-  reason?: EmailReasonType
-  nextFiringAt?: number // ms epoch, for sort + display
-}
 
 const DISPLAY_TIMEZONE = 'America/Toronto'
 
@@ -53,21 +36,21 @@ const REASON_LABEL: Record<string, string> = {
   'sunday-school': 'Sunday School',
 }
 
-function formatCronFiringLabel(reason: string, firingUtcMs: number): string {
-  const typeLabel = REASON_LABEL[reason] ?? reason
-  const date = new Date(firingUtcMs)
-  const dayLabel = date.toLocaleDateString('en-US', {
+// Email reasons that support an attached pending note. Must stay in sync with
+// ALLOWED_REASONS in apps/next/app/api/email/pending-note/route.ts.
+const NOTE_REASONS: EmailReasonType[] = ['newsletter', 'recap', 'bible-class', 'sunday-school']
+
+function formatSavedTimestamp(iso: string): string {
+  const date = new Date(iso)
+  if (isNaN(date.getTime())) return iso
+  return date.toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    timeZone: DISPLAY_TIMEZONE,
-  })
-  const timeLabel = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: DISPLAY_TIMEZONE,
   })
-  return `${typeLabel} — ${dayLabel} at ${timeLabel}`
 }
 
 // Confirmation dialog state type
@@ -94,10 +77,19 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   const [reason, setReason] = useState<string | null>(null)
   const [test, setTest] = useState<boolean>(true) // Default to test mode for safety
   const [sending, setSending] = useState<boolean>(false)
+  // Note attaches to a specific email TYPE. Selecting a type fetches any
+  // previously-saved note so the admin can see, edit, or delete it — closing
+  // the gap where a saved note was invisible after a page refresh.
+  const [noteReason, setNoteReason] = useState<EmailReasonType | null>(null)
   const [note, setNote] = useState<string>('')
-  const [pendingTarget, setPendingTarget] = useState<PendingNoteTargetValue>('manual')
-  const [scheduleOptions, setScheduleOptions] = useState<PendingNoteTargetOption[]>([])
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const [savedMeta, setSavedMeta] = useState<{ createdAt: string | null; createdBy: string | null }>({
+    createdAt: null,
+    createdBy: null,
+  })
+  const [loadingNote, setLoadingNote] = useState<boolean>(false)
   const [savingPending, setSavingPending] = useState<boolean>(false)
+  const [deletingNote, setDeletingNote] = useState<boolean>(false)
   const [pendingSaveStatus, setPendingSaveStatus] = useState<
     | { kind: 'success'; label: string }
     | { kind: 'error'; label: string; message: string }
@@ -136,37 +128,46 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     loadLists()
   }, [])
 
-  // Load the active Vercel cron-fired emails (sourced from vercel.json on the
-  // server) so the "Attach this note to:" Select can list upcoming scheduled
-  // sends in chronological order. The DB-driven EventBridge system isn't live
-  // yet, so vercel.json is the authoritative source.
+  // When an email type is selected for note-editing, fetch any previously-saved
+  // note for it so the admin can see/edit/delete it. This is the fix for the
+  // root-cause bug where a saved note was invisible after a page refresh.
   useEffect(() => {
-    const loadSchedules = async () => {
+    if (!noteReason) {
+      setSavedNote(null)
+      setSavedMeta({ createdAt: null, createdBy: null })
+      setNote('')
+      return
+    }
+    let cancelled = false
+    const loadNote = async () => {
+      setLoadingNote(true)
+      setPendingSaveStatus(null)
       try {
-        const response = await fetch('/api/email/cron-schedules', { cache: 'no-store' })
-        if (!response.ok) return
-        const data: { schedules?: CronScheduledEmail[] } = await response.json()
-        const options: PendingNoteTargetOption[] = (data.schedules ?? []).map((s) => ({
-          value: `${s.reason}#${s.cronExpression}`,
-          label: formatCronFiringLabel(s.reason, s.nextFiringUtcMs),
-          reason: s.reason as EmailReasonType,
-          nextFiringAt: s.nextFiringUtcMs,
-        }))
-        console.info(
-          '[EmailSender] cron schedule options:',
-          options.map((o) => ({
-            value: o.value,
-            label: o.label,
-            firesAt: o.nextFiringAt ? new Date(o.nextFiringAt).toISOString() : null,
-          }))
-        )
-        setScheduleOptions(options)
-      } catch (error) {
-        console.error('[EmailSender] Failed to load cron schedules:', error)
+        const result = await getPendingNote(noteReason)
+        if (cancelled) return
+        if (result.ok) {
+          setSavedNote(result.note)
+          setSavedMeta({ createdAt: result.createdAt, createdBy: result.createdBy })
+          setNote(result.note ?? '')
+        } else {
+          setSavedNote(null)
+          setSavedMeta({ createdAt: null, createdBy: null })
+          setNote('')
+          setPendingSaveStatus({
+            kind: 'error',
+            label: REASON_LABEL[noteReason] ?? noteReason,
+            message: result.error || 'Failed to load saved note',
+          })
+        }
+      } finally {
+        if (!cancelled) setLoadingNote(false)
       }
     }
-    loadSchedules()
-  }, [])
+    loadNote()
+    return () => {
+      cancelled = true
+    }
+  }, [noteReason])
 
   // Load recent funeral/baptism events (created within 2 weeks)
   useEffect(() => {
@@ -253,12 +254,16 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     setConfirmDialog(prev => ({ ...prev, isOpen: false }))
   }
 
-  // Actually send the email (called after confirmation)
+  // Actually send the email (called after confirmation).
+  // NOTE: we deliberately do NOT pass the editor's textarea here. The note is a
+  // saved, per-email-type resource — the send handler fetches the correct note
+  // for `reason` itself. Passing the editor note would let a note authored for
+  // one email attach to a different one (the 2026-05-30 cross-wire incident).
   const doSendEmail = async (reason: EmailReasonType) => {
     setSending(true)
     setReason(reason)
     try {
-      const response = await sendEmail(reason, test, note)
+      const response = await sendEmail(reason, test)
       setEmail(response)
     } catch (error) {
       console.error('Error sending email:', error)
@@ -289,12 +294,14 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     })
   }
 
-  // Actually send event email
+  // Actually send event email.
+  // Like doSendEmail, we don't pass the pending-note editor's textarea — that
+  // note belongs to a specific regular email type, not this event announcement.
   const doSendEventEmail = async (event: Event) => {
     setSending(true)
     setReason(`${event.type}-announcement`)
     try {
-      const response = await sendEmail('event-announcement' as EmailReasonType, test, note, {
+      const response = await sendEmail('event-announcement' as EmailReasonType, test, undefined, {
         eventId: event.id,
         eventType: event.type,
       })
@@ -308,56 +315,72 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     }
   }
 
-  const selectedTargetOption =
-    pendingTarget === 'manual'
-      ? { value: 'manual' as const, label: 'Next manual send (default)' }
-      : scheduleOptions.find((opt) => opt.value === pendingTarget) ?? null
+  const noteReasonLabel = noteReason ? REASON_LABEL[noteReason] ?? noteReason : ''
+  // "Unsaved" = the textarea differs from what's persisted in the DB.
+  const hasUnsavedChanges = noteReason != null && note.trim() !== (savedNote ?? '').trim()
+  const hasSavedNote = noteReason != null && (savedNote ?? '').trim().length > 0
 
-  // Save the textarea note. For "manual" we just confirm — the textarea content
-  // is already what gets sent when an email card is clicked. For a scheduled
-  // target we persist a pending note that the cron picks up on its next firing.
+  // Persist the textarea note for the selected email type. The cron/manual send
+  // for that type picks it up automatically on its next live send.
   const handleSavePendingNote = async () => {
-    if (!note.trim()) return
+    if (!noteReason || !note.trim()) return
     setPendingSaveStatus(null)
-
-    if (pendingTarget === 'manual') {
-      setPendingSaveStatus({
-        kind: 'success',
-        label: 'Next manual send',
-      })
-      return
-    }
-
-    const option = scheduleOptions.find((opt) => opt.value === pendingTarget)
-    if (!option || !option.reason) {
-      setPendingSaveStatus({
-        kind: 'error',
-        label: 'Selected target',
-        message: 'Could not resolve the selected schedule.',
-      })
-      return
-    }
-
     setSavingPending(true)
     try {
-      const result = await savePendingNote(option.reason, note)
+      const result = await savePendingNote(noteReason, note)
       if (result.ok) {
-        setPendingSaveStatus({ kind: 'success', label: option.label })
+        setSavedNote(note)
+        // Reflect the just-saved state locally; exact server timestamp loads on
+        // next fetch but "now" is accurate enough for immediate feedback.
+        setSavedMeta({ createdAt: new Date().toISOString(), createdBy: session.user?.email ?? null })
+        setPendingSaveStatus({ kind: 'success', label: noteReasonLabel })
       } else {
         setPendingSaveStatus({
           kind: 'error',
-          label: option.label,
+          label: noteReasonLabel,
           message: result.error || 'Failed to save note',
         })
       }
     } catch (error) {
       setPendingSaveStatus({
         kind: 'error',
-        label: option.label,
+        label: noteReasonLabel,
         message: error instanceof Error ? error.message : 'Failed to save note',
       })
     } finally {
       setSavingPending(false)
+    }
+  }
+
+  // Delete the saved note for the selected email type so it will NOT attach to
+  // the next send. This is the admin's self-service path for clearing a stale
+  // or no-longer-relevant note.
+  const handleDeletePendingNote = async () => {
+    if (!noteReason) return
+    setPendingSaveStatus(null)
+    setDeletingNote(true)
+    try {
+      const result = await clearPendingNote(noteReason)
+      if (result.ok) {
+        setSavedNote(null)
+        setSavedMeta({ createdAt: null, createdBy: null })
+        setNote('')
+        setPendingSaveStatus({ kind: 'success', label: `Deleted — no note will attach to ${noteReasonLabel}` })
+      } else {
+        setPendingSaveStatus({
+          kind: 'error',
+          label: noteReasonLabel,
+          message: result.error || 'Failed to delete note',
+        })
+      }
+    } catch (error) {
+      setPendingSaveStatus({
+        kind: 'error',
+        label: noteReasonLabel,
+        message: error instanceof Error ? error.message : 'Failed to delete note',
+      })
+    } finally {
+      setDeletingNote(false)
     }
   }
 
@@ -576,123 +599,160 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
           <YStack gap="$3">
             <Heading size={4}>Resend Regular Email</Heading>
 
-            {/* Optional Note */}
+            {/* Pending Note Manager — attach-to-FIRST. Selecting an email type
+                fetches any saved note so it can be reviewed, edited, or deleted. */}
             <Card elevate bordered padding="$4" backgroundColor="$background">
               <YStack gap="$3">
-                <Heading size={3}>Include a Brief Note (Optional)</Heading>
+                <Heading size={3}>Pending Note for Next Send (Optional)</Heading>
                 <Text fontSize="$3" color="$gray11">
-                  Add a note to include at the top of the email (e.g., corrections, important updates)
+                  Choose which email this note belongs to. A saved note is automatically
+                  included at the top of that email on its next live send (manual or scheduled),
+                  then cleared.
                 </Text>
-                <TextArea
-                  placeholder="Enter your note here... (e.g., 'Links were broken in previous email, resending with correct URLs')"
-                  value={note}
-                  onChangeText={(text: string) => setNote(text.slice(0, MAX_NOTE_LENGTH))}
-                  size="$4"
-                  minHeight={100}
-                  borderColor="$gray6"
-                  borderWidth={1}
-                  backgroundColor="$background"
-                />
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize="$2" color={note.length >= MAX_NOTE_LENGTH ? '$red10' : '$gray11'}>
-                    {note.length} / {MAX_NOTE_LENGTH} characters
-                  </Text>
-                  {note.length > 0 ? <Button size="$2" variant="outlined" onPress={() => setNote('')}>
-                      Clear Note
-                    </Button> : null}
-                </XStack>
 
-                <Separator />
-
+                {/* Step 1: which email does this note attach to? */}
                 <YStack gap="$2">
                   <Text fontSize="$3" fontWeight="600">
-                    Attach this note to:
+                    This note attaches to:
                   </Text>
-                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                    <Select
-                      value={pendingTarget}
-                      onValueChange={(value) => {
-                        setPendingTarget(value as PendingNoteTargetValue)
-                        setPendingSaveStatus(null)
-                      }}
-                    >
-                      <Select.Trigger minWidth={280} iconAfter={null}>
-                        <Select.Value placeholder="Select a send..." />
-                      </Select.Trigger>
+                  <Select
+                    value={noteReason ?? ''}
+                    onValueChange={(value) => {
+                      setNoteReason(value as EmailReasonType)
+                      setPendingSaveStatus(null)
+                    }}
+                  >
+                    <Select.Trigger minWidth={280} iconAfter={null}>
+                      <Select.Value placeholder="Select an email…" />
+                    </Select.Trigger>
 
-                      <Adapt when="sm" platform="touch">
-                        <Sheet native modal dismissOnSnapToBottom>
-                          <Sheet.Frame>
-                            <Sheet.ScrollView>
-                              <Adapt.Contents />
-                            </Sheet.ScrollView>
-                          </Sheet.Frame>
-                          <Sheet.Overlay
-                            animation="lazy"
-                            enterStyle={{ opacity: 0 }}
-                            exitStyle={{ opacity: 0 }}
-                          />
-                        </Sheet>
-                      </Adapt>
+                    <Adapt when="sm" platform="touch">
+                      <Sheet native modal dismissOnSnapToBottom>
+                        <Sheet.Frame>
+                          <Sheet.ScrollView>
+                            <Adapt.Contents />
+                          </Sheet.ScrollView>
+                        </Sheet.Frame>
+                        <Sheet.Overlay
+                          animation="lazy"
+                          enterStyle={{ opacity: 0 }}
+                          exitStyle={{ opacity: 0 }}
+                        />
+                      </Sheet>
+                    </Adapt>
 
-                      <Select.Content zIndex={200000 as any}>
-                        <Select.ScrollUpButton />
-                        <Select.Viewport>
-                          <Select.Group>
-                            <Select.Item index={0} value="manual">
-                              <Select.ItemText>Next manual send (default)</Select.ItemText>
+                    <Select.Content zIndex={200000 as any}>
+                      <Select.ScrollUpButton />
+                      <Select.Viewport>
+                        <Select.Group>
+                          {NOTE_REASONS.map((r, idx) => (
+                            <Select.Item key={r} index={idx} value={r}>
+                              <Select.ItemText>{REASON_LABEL[r] ?? r}</Select.ItemText>
                               <Select.ItemIndicator>
                                 <Check size={16} />
                               </Select.ItemIndicator>
                             </Select.Item>
-                            {scheduleOptions.map((opt, idx) => (
-                              <Select.Item key={opt.value} index={idx + 1} value={opt.value}>
-                                <Select.ItemText>{opt.label}</Select.ItemText>
-                                <Select.ItemIndicator>
-                                  <Check size={16} />
-                                </Select.ItemIndicator>
-                              </Select.Item>
-                            ))}
-                          </Select.Group>
-                        </Select.Viewport>
-                        <Select.ScrollDownButton />
-                      </Select.Content>
-                    </Select>
-
-                    <Button
-                      size="$3"
-                      theme="active"
-                      disabled={!note.trim() || savingPending}
-                      opacity={!note.trim() ? 0.5 : 1}
-                      onPress={handleSavePendingNote}
-                    >
-                      {savingPending ? 'Saving…' : 'Save'}
-                    </Button>
-                  </XStack>
-
-                  {pendingTarget === 'manual' ? (
-                    <Text fontSize="$2" color="$gray11">
-                      Default behaviour — your note is included with whichever email you click below.
-                    </Text>
-                  ) : (
-                    <Text fontSize="$2" color="$gray11">
-                      Saves this note to the next {selectedTargetOption?.label ?? 'scheduled'} send. The note is consumed once that email is delivered live.
-                    </Text>
-                  )}
-
-                  {pendingSaveStatus?.kind === 'success' ? (
-                    <Text fontSize="$2" color="$green10">
-                      ✅ {pendingTarget === 'manual'
-                        ? 'Ready — click an email below to send it.'
-                        : `Saved — will be included on the next ${pendingSaveStatus.label}.`}
-                    </Text>
-                  ) : null}
-                  {pendingSaveStatus?.kind === 'error' ? (
-                    <Text fontSize="$2" color="$red10">
-                      Failed to save for {pendingSaveStatus.label}: {pendingSaveStatus.message}
-                    </Text>
-                  ) : null}
+                          ))}
+                        </Select.Group>
+                      </Select.Viewport>
+                      <Select.ScrollDownButton />
+                    </Select.Content>
+                  </Select>
                 </YStack>
+
+                {/* Step 2: the note editor — only once a type is chosen */}
+                {noteReason ? (
+                  <YStack gap="$3">
+                    <Separator />
+
+                    {loadingNote ? (
+                      <Text fontSize="$3" color="$gray10">Loading saved note…</Text>
+                    ) : (
+                      <>
+                        {/* Saved-state banner */}
+                        {hasSavedNote ? (
+                          <Card padding="$3" backgroundColor="$blue2" borderColor="$blue6" bordered>
+                            <Text fontSize="$2" color="$blue11">
+                              📌 A note is currently saved for {noteReasonLabel}
+                              {savedMeta.createdAt ? ` — saved ${formatSavedTimestamp(savedMeta.createdAt)}` : ''}
+                              {savedMeta.createdBy ? ` by ${savedMeta.createdBy}` : ''}.
+                              {' '}It will attach to the next {noteReasonLabel} send unless you delete it.
+                            </Text>
+                          </Card>
+                        ) : (
+                          <Text fontSize="$2" color="$gray10">
+                            No note is currently saved for {noteReasonLabel}.
+                          </Text>
+                        )}
+
+                        <TextArea
+                          placeholder="Enter your note here... (e.g., 'Links were broken in previous email, resending with correct URLs')"
+                          value={note}
+                          onChangeText={(text: string) => {
+                            setNote(text.slice(0, MAX_NOTE_LENGTH))
+                            setPendingSaveStatus(null)
+                          }}
+                          size="$4"
+                          minHeight={100}
+                          borderColor="$gray6"
+                          borderWidth={1}
+                          backgroundColor="$background"
+                        />
+
+                        <XStack justifyContent="space-between" alignItems="center">
+                          <Text fontSize="$2" color={note.length >= MAX_NOTE_LENGTH ? '$red10' : '$gray11'}>
+                            {note.length} / {MAX_NOTE_LENGTH} characters
+                          </Text>
+                          {hasUnsavedChanges ? (
+                            <Text fontSize="$2" color="$orange10" fontWeight="600">
+                              ● Unsaved changes
+                            </Text>
+                          ) : hasSavedNote ? (
+                            <Text fontSize="$2" color="$green10" fontWeight="600">
+                              ✓ Saved
+                            </Text>
+                          ) : null}
+                        </XStack>
+
+                        <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                          <Button
+                            size="$3"
+                            theme="active"
+                            disabled={!note.trim() || !hasUnsavedChanges || savingPending}
+                            opacity={!note.trim() || !hasUnsavedChanges ? 0.5 : 1}
+                            onPress={handleSavePendingNote}
+                          >
+                            {savingPending ? 'Saving…' : 'Save'}
+                          </Button>
+                          {hasSavedNote ? (
+                            <Button
+                              size="$3"
+                              variant="outlined"
+                              borderColor="$red8"
+                              color="$red10"
+                              hoverStyle={{ backgroundColor: '$red3', borderColor: '$red8' }}
+                              disabled={deletingNote}
+                              onPress={handleDeletePendingNote}
+                            >
+                              {deletingNote ? 'Deleting…' : 'Delete saved note'}
+                            </Button>
+                          ) : null}
+                        </XStack>
+
+                        {pendingSaveStatus?.kind === 'success' ? (
+                          <Text fontSize="$2" color="$green10">
+                            ✅ {pendingSaveStatus.label}
+                          </Text>
+                        ) : null}
+                        {pendingSaveStatus?.kind === 'error' ? (
+                          <Text fontSize="$2" color="$red10">
+                            {pendingSaveStatus.label}: {pendingSaveStatus.message}
+                          </Text>
+                        ) : null}
+                      </>
+                    )}
+                  </YStack>
+                ) : null}
               </YStack>
             </Card>
 

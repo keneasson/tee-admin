@@ -200,6 +200,10 @@ export const authOptions: NextAuthConfig = {
             if (person.displayName) {
               token.name = person.displayName
             }
+            // Home ecclesia — surfaced in the navigation header
+            if (person.ecclesia) {
+              ;(token as JWT & { ecclesia?: string }).ecclesia = person.ecclesia
+            }
             // RB is a designation, not a role — sync to JWT
             token.isRecordingBrother = !!person.isRecordingBrother
           } else if (!token.role) {
@@ -426,12 +430,14 @@ export const authOptions: NextAuthConfig = {
       // Safely add role and RB designation to the Session.User
       try {
         const userWithRole = user as (User & { role?: string }) | undefined
-        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean }) | undefined
+        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean; ecclesia?: string }) | undefined
         const finalRole = userWithRole?.role || tokenWithRole?.role || ROLES.GUEST
         console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
         ;(session.user as User & { role: string }).role = finalRole
         // RB designation: sourced from JWT (set during jwt callback from PersonRecord)
         ;(session.user as any).isRecordingBrother = tokenWithRole?.isRecordingBrother || false
+        // Home ecclesia: sourced from JWT (set during jwt callback from PersonRecord)
+        ;(session.user as any).ecclesia = tokenWithRole?.ecclesia || null
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error

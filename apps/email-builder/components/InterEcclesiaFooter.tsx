@@ -1,6 +1,7 @@
 import { defaultText, footer, footerText } from '../styles'
 import { Button, Section, Text } from '@react-email/components'
 import React from 'react'
+import { useEmailIdentity } from './email-identity'
 
 export interface InterEcclesiaFooterProps {
   /**
@@ -26,6 +27,7 @@ const primaryButton = {
 export const InterEcclesiaFooter: React.FC<InterEcclesiaFooterProps> = ({
   updateContactUrl = '{{ecclesiaUpdateUrl}}',
 }) => {
+  const identity = useEmailIdentity()
   return (
     <Section style={footer}>
       <Text style={defaultText}>
@@ -44,13 +46,13 @@ export const InterEcclesiaFooter: React.FC<InterEcclesiaFooterProps> = ({
       <Text style={footerText}>
         <strong>From:</strong>
         <br />
-        Toronto East Christadelphians
-        <br />
-        975 Cosburn Avenue
-        <br />
-        Toronto, ON M4C 2W8
-        <br />
-        Canada
+        {identity.name}
+        {(identity.addressLines ?? []).map((line, i) => (
+          <React.Fragment key={i}>
+            <br />
+            {line}
+          </React.Fragment>
+        ))}
       </Text>
 
       <Text style={{ ...footerText, marginTop: '16px', fontSize: '12px', color: '#a0aec0' }}>

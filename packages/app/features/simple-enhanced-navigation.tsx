@@ -6,7 +6,6 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Text, YStack, XStack, View, Button, useThemeName, useThemeContext, useMedia, Sheet, ScrollView } from '@my/ui'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
-import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ThemeToggle } from './theme-toggle'
 import { NotificationBell } from '@my/ui/src/notifications/notification-bell'
 import { Menu, X } from '@tamagui/lucide-icons'
@@ -16,6 +15,8 @@ type UserSession = {
   name?: string | null
   email?: string | null
   role?: string
+  /** Signed-in user's home ecclesia, shown in the header */
+  ecclesia?: string | null
 }
 
 type SimpleEnhancedNavigationProps = {
@@ -56,6 +57,7 @@ const systemAdminPages: MainPageType[] = [
   { path: '/admin/events', label: 'Event Manager' },
   { path: '/admin/news', label: 'News Manager' },
   { path: '/admin/meetings', label: 'Meeting Manager' },
+  { path: '/admin/schedule-overrides', label: 'Service Overrides' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
   { path: '/admin/metrics', label: 'Metrics' },
@@ -97,21 +99,27 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
     setMobileMenuOpen(false)
   }
 
+  // Sidebar brand mark. Brand identity and the verse live in the page header
+  // (Banner), not here. `compact` is the persistent mobile top bar.
+  const BrandHeader = ({ compact }: { compact?: boolean }) => (
+    <YStack flex={1} paddingRight="$2">
+      <Text fontSize={compact ? '$5' : '$6'} fontWeight="700" color={colors.textPrimary}>
+        {brand.primary}
+      </Text>
+      {brand.secondary ? (
+        <Text fontSize={compact ? '$1' : '$2'} fontWeight="500" color={colors.textSecondary}>
+          {brand.secondary}
+        </Text>
+      ) : null}
+    </YStack>
+  )
+
   // Navigation content component (shared between desktop and mobile)
   const NavigationContent = () => (
     <YStack gap="$3" flex={1}>
       {/* Header - stays fixed at top */}
-      <View flexDirection="row" alignItems="center" justifyContent="space-between">
-        <YStack>
-          <Text fontSize="$6" fontWeight="700" color={colors.textPrimary}>
-            {brand.primary}
-          </Text>
-          {brand.secondary ? (
-            <Text fontSize="$2" fontWeight="500" color={colors.textSecondary}>
-              {brand.secondary}
-            </Text>
-          ) : null}
-        </YStack>
+      <View flexDirection="row" alignItems="flex-start" justifyContent="space-between">
+        <BrandHeader />
         <XStack gap="$2" alignItems="center">
           {user && onNotificationPress && notificationCount !== undefined ? (
             <NotificationBell
@@ -152,7 +160,20 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               {user.role || 'Guest'}
             </Text>
           </YStack>
-        </Button> : null}
+        </Button> : <Button
+          onPress={navigateTo('/auth/signin')}
+          backgroundColor={colors.primary}
+          padding="$2"
+          borderRadius="$2"
+          justifyContent="flex-start"
+          hoverStyle={{
+            backgroundColor: colors.primaryHover,
+          }}
+        >
+          <Text fontSize="$3" fontWeight="600" color={colors.primaryForeground}>
+            Sign In
+          </Text>
+        </Button>}
 
       {/* Main Navigation */}
       <YStack gap="$1">
@@ -352,14 +373,12 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         </YStack>
       </ScrollView>
 
-      {/* Auth - stays fixed at bottom */}
-      <YStack gap="$2" paddingTop="$2" borderTopWidth={1} borderTopColor={colors.border}>
-        {user ? (
+      {/* Sign out - stays fixed at bottom (Sign In lives at the top of the menu) */}
+      {user ? (
+        <YStack gap="$2" paddingTop="$2" borderTopWidth={1} borderTopColor={colors.border}>
           <NavitemLogout onSignOut={onSignOut} />
-        ) : (
-          <LogInUser onNavigate={(path) => router.push(path)} />
-        )}
-      </YStack>
+        </YStack>
+      ) : null}
     </YStack>
   )
 
@@ -376,16 +395,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           alignItems="center"
           justifyContent="space-between"
         >
-          <YStack>
-            <Text fontSize="$5" fontWeight="700" color={colors.textPrimary}>
-              {brand.primary}
-            </Text>
-            {brand.secondary ? (
-              <Text fontSize="$1" fontWeight="500" color={colors.textSecondary}>
-                {brand.secondary}
-              </Text>
-            ) : null}
-          </YStack>
+          <BrandHeader compact />
           <XStack gap="$2" alignItems="center">
             {user && onNotificationPress && notificationCount !== undefined ? (
               <NotificationBell

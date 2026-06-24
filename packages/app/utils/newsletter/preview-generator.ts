@@ -9,6 +9,7 @@ import { ContentOrderingEngine } from './content-ordering'
 import { BibleReadingsEmail, BibleReadingsWeb, generateWeekRange, generatePlainTextReadings, bibleReadingsEmailCSS } from './bible-readings-layout'
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import newsletterRulesJson from '@my/app/config/newsletter-rules.json'
+import { resolveTenantFromEnv } from '@my/app/config/tenants'
 
 /**
  * Newsletter Preview Generator
@@ -413,19 +414,20 @@ export class NewsletterPreviewGenerator {
    * Wrap email HTML with proper structure
    */
   private wrapEmailHTML(content: string): string {
+    const tenantName = resolveTenantFromEnv().publicName
     return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Toronto East Newsletter</title>
+  <title>${tenantName} Newsletter</title>
   <style>${bibleReadingsEmailCSS}</style>
 </head>
 <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
   <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px;">
-      <h1 style="color: #333; margin: 0 0 10px 0;">Toronto East Newsletter</h1>
+      <h1 style="color: #333; margin: 0 0 10px 0;">${tenantName} Newsletter</h1>
       <p style="color: #666; margin: 0; font-size: 14px;">${new Date().toDateString()}</p>
       <p style="color: #666; margin: 10px 0 0 0; font-size: 14px; font-style: italic;">
         This email is intended for Christadelphians and friends, whether we meet in person or on Zoom.<br>
@@ -436,8 +438,7 @@ export class NewsletterPreviewGenerator {
     ${content}
     
     <div style="margin-top: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; text-align: center; font-size: 12px; color: #666;">
-      <p style="margin: 0;">Toronto East Christadelphian Ecclesia</p>
-      <p style="margin: 5px 0 0 0;">1344 Danforth Ave, Toronto, ON M4J 1M9</p>
+      <p style="margin: 0;">${tenantName}</p>
     </div>
   </div>
 </body>
@@ -449,10 +450,11 @@ export class NewsletterPreviewGenerator {
    * Wrap web HTML with proper structure
    */
   private wrapWebHTML(content: string): string {
+    const tenantName = resolveTenantFromEnv().publicName
     return `
 <div class="newsletter-web-container">
   <div class="newsletter-header">
-    <h1>Toronto East Newsletter</h1>
+    <h1>${tenantName} Newsletter</h1>
     <p class="newsletter-date">${new Date().toDateString()}</p>
     <p class="newsletter-subtitle">
       This newsletter is for Christadelphians and friends, whether we meet in person or on Zoom.<br>
@@ -582,8 +584,8 @@ export class NewsletterPreviewGenerator {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const formattedDate = `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
-    
-    return `Toronto East Newsletter - ${formattedDate}`
+
+    return `${resolveTenantFromEnv().publicName} Newsletter - ${formattedDate}`
   }
 
   // Utility methods

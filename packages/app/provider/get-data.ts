@@ -84,6 +84,39 @@ export const sendEmail = async (
  * given reason (consumed once it sends successfully). Used for cron-triggered
  * sends like the Saturday Memorial recap or the weekly newsletter.
  */
+/**
+ * Fetch any previously-saved pending note for a reason, including when/who
+ * saved it so the UI can surface and flag stale notes.
+ */
+export const getPendingNote = async (
+  reason: emailReasons
+): Promise<{
+  ok: boolean
+  note: string | null
+  createdAt: string | null
+  createdBy: string | null
+  error?: string
+}> => {
+  const url = `${API_PATH}api/email/pending-note?reason=${encodeURIComponent(reason)}`
+  const response = await fetch(url, { cache: 'no-store' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return {
+      ok: false,
+      note: null,
+      createdAt: null,
+      createdBy: null,
+      error: data.error || `Request failed (${response.status})`,
+    }
+  }
+  return {
+    ok: true,
+    note: data.note ?? null,
+    createdAt: data.createdAt ?? null,
+    createdBy: data.createdBy ?? null,
+  }
+}
+
 export const savePendingNote = async (
   reason: emailReasons,
   note: string

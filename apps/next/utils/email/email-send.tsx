@@ -31,6 +31,19 @@ function senderDisplayName(reason: emailReasons, tenant: TenantConfig): string {
   return tenant.senderDisplayName
 }
 
+// Subject line per reason, branded from the resolved tenant so it carries no
+// hardcoded ecclesia name. Reasons not listed use the static `senders` subject.
+function subjectFor(reason: emailReasons, tenant: TenantConfig): string {
+  switch (reason) {
+    case 'newsletter':
+      return `${tenant.publicName} Newsletter`
+    case 'custom':
+      return `${tenant.senderDisplayName} Communications`
+    default:
+      return senders[reason].subject
+  }
+}
+
 // Reason-specific config — sender name and domain come from the
 // resolved tenant, so this no longer carries `name` or `email`.
 const senders = {
@@ -40,7 +53,7 @@ const senders = {
     replyTo: REPLY_TO,
   },
   newsletter: {
-    subject: 'Toronto East Christadelphian Ecclesia Newsletter',
+    subject: 'Newsletter', // branded per-tenant via subjectFor()
     contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
@@ -60,7 +73,7 @@ const senders = {
     replyTo: REPLY_TO,
   },
   custom: {
-    subject: 'Toronto East Communications',
+    subject: 'Communications', // branded per-tenant via subjectFor()
     contactList: 'testList', // Safe default - will be overridden by customList parameter
     replyTo: REPLY_TO,
   },
@@ -167,7 +180,7 @@ export const emailSend = async function ({
 
     const from = `"${senderDisplayName(reason, resolvedTenant)}" <${SENDER_LOCAL_PART}@${resolvedTenant.senderDomain}>`
     // For custom emails, use the provided subject, otherwise use the default
-    const defaultSubject = customSubject || senders[reason].subject
+    const defaultSubject = customSubject || subjectFor(reason, resolvedTenant)
     const subject = `${test ? '[TEST] ' : ''}${defaultSubject} ${today}`
 
     const sendChunks = chunkArray(senderEmails, SES_RATE_LIMIT)

@@ -24,6 +24,7 @@
     "@aws-sdk/client-sesv2": "^3.750.0",
     "@aws-sdk/credential-provider-node": "^3.750.0",
     "@aws-sdk/lib-dynamodb": "^3.750.0",
+    "@hyzyla/pdfium": "^2.1.13",
     "@my/app": "0.0.1",
     "@tamagui/config": "1.144.3",
     "@tamagui/next-theme": "1.144.3",
@@ -43,6 +44,7 @@
     "react-native-web": "^0.20.0",
     "react-native-web-lite": "^1.112.4",
     "recharts": "^3.7.0",
+    "sharp": "^0.35.2",
     "vercel": "^39.2.2"
   },
   "devDependencies": {

@@ -62,6 +62,7 @@ export default function AdminNewsPage() {
         category: values.category || undefined,
         durationWeeks: Number(values.durationWeeks),
         sharingScope: values.sharingScope,
+        documents: values.documents ?? [],
       }
 
       let res: Response
@@ -151,6 +152,7 @@ export default function AdminNewsPage() {
             category: mode.item.category || ('' as const),
             durationWeeks: String(mode.item.durationWeeks) as '1' | '2' | '3',
             sharingScope: mode.item.sharingScope,
+            documents: mode.item.documents || [],
           }
         : undefined
 

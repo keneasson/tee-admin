@@ -11,6 +11,13 @@ export interface TenantConfig {
   senderDomain: string
   /** Display name used as the From-name on outbound mail */
   senderDisplayName: string
+  /** Public-facing name used in email subjects / newsletter chrome. */
+  publicName: string
+  /**
+   * The ecclesia this domain represents, used to scope newsletter/email
+   * content. `null` for the hub (echadhub.org), which has no single ecclesia.
+   */
+  homeEcclesiaName: string | null
 }
 
 const TENANTS: Record<TenantId, TenantConfig> = {
@@ -18,11 +25,15 @@ const TENANTS: Record<TenantId, TenantConfig> = {
     id: 'tee',
     senderDomain: 'tee-admin.com',
     senderDisplayName: 'Toronto East Ecclesia',
+    publicName: 'Toronto East Christadelphians',
+    homeEcclesiaName: 'Toronto East Ecclesia',
   },
   echadhub: {
     id: 'echadhub',
     senderDomain: 'echadhub.org',
     senderDisplayName: 'Echad Hub',
+    publicName: 'Echad Hub',
+    homeEcclesiaName: null,
   },
 }
 

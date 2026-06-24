@@ -1,11 +1,28 @@
 'use client'
 
 import React from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { Button, Paragraph, XStack, YStack } from 'tamagui'
 import { FormInput } from '../form/form-input'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { EventFormSelect } from '../form/event-form-select'
+import { DocumentUpload } from '../form/document-upload'
+import type { DocumentAttachment } from '@my/app/types/events'
+
+// One uploader for everything a News item can carry — images (rendered inline
+// on the details page) and documents (rendered as links). Type is derived from
+// the file itself; the user never has to pick the "right" uploader.
+const NEWS_UPLOAD_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+]
 
 export type NewsFormValues = {
   title: string
@@ -13,6 +30,7 @@ export type NewsFormValues = {
   category: '' | 'medical' | 'general' | 'announcement'
   durationWeeks: '1' | '2' | '3'
   sharingScope: 'own' | 'region' | 'global'
+  documents: DocumentAttachment[]
 }
 
 export type NewsItemFormProps = {
@@ -62,6 +80,7 @@ export function NewsItemForm({
       category: initialValues?.category || '',
       durationWeeks: initialValues?.durationWeeks || '1',
       sharingScope: initialValues?.sharingScope || 'own',
+      documents: initialValues?.documents || [],
     },
   })
 
@@ -78,10 +97,33 @@ export function NewsItemForm({
         control={control}
         name="body"
         label="Body"
-        placeholder="What happened? Use # for headings, **bold** for emphasis, plain URLs auto-link."
+        placeholder="What happened? Use # for headings, **bold** for emphasis, - for bullet lists, plain URLs auto-link."
         required
         rows={8}
         maxLength={4000}
+      />
+
+      <Controller
+        control={control}
+        name="documents"
+        render={({ field }) => (
+          <YStack gap="$2">
+            <Paragraph fontSize="$4" fontWeight="600" color="$gray12">
+              Photos & files (optional)
+            </Paragraph>
+            <Paragraph fontSize="$3" color="$gray10">
+              Add anything: images and PDF posters appear on the details page;
+              other files become download links. Already online (e.g. a Google
+              Doc)? Paste its link below instead of uploading.
+            </Paragraph>
+            <DocumentUpload
+              documents={field.value || []}
+              onChange={field.onChange}
+              disabled={isSaving}
+              allowedTypes={NEWS_UPLOAD_TYPES}
+            />
+          </YStack>
+        )}
       />
 
       <EventFormSelect

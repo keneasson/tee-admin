@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getFileStorageService } from '../../../../utils/file-storage'
+import { generatePdfThumbnail } from '../../../../utils/pdf-thumbnail'
 import { randomUUID } from 'crypto'
+
+// PDF rasterization (pdfium WASM init + render + sharp encode) adds a few
+// seconds on top of the S3 upload, so give this route headroom beyond the
+// default function timeout.
+export const maxDuration = 30
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,9 +42,13 @@ export async function POST(request: NextRequest) {
     const uniqueFileName = `${randomUUID()}.${fileExtension}`
     const fileKey = `uploads/${new Date().getFullYear()}/${new Date().getMonth() + 1}/${uniqueFileName}`
 
+    // Read the file once: we may need the bytes for both the upload and a
+    // PDF thumbnail.
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+
     // Upload to storage service
     const fileStorage = getFileStorageService()
-    const fileUrl = await fileStorage.upload(file, fileKey, {
+    const fileUrl = await fileStorage.upload(fileBuffer, fileKey, {
       contentType: file.type,
       metadata: {
         originalName: file.name,
@@ -46,6 +56,28 @@ export async function POST(request: NextRequest) {
         description: description || '',
       }
     })
+
+    // For PDFs, generate a JPEG preview of page 1 so the web/email views can
+    // show a real poster image instead of a generic file link. Best-effort —
+    // a failure here must not fail the upload.
+    let thumbnailUrl: string | undefined
+    if (file.type === 'application/pdf') {
+      try {
+        const thumb = await generatePdfThumbnail(fileBuffer)
+        if (thumb) {
+          const thumbKey = `${fileKey.replace(/\.[^/.]+$/, '')}-thumb.jpg`
+          thumbnailUrl = await fileStorage.upload(thumb, thumbKey, {
+            contentType: 'image/jpeg',
+            metadata: {
+              originalName: `${file.name} (thumbnail)`,
+              uploadedBy: session.user.id || session.user.email || 'unknown',
+            },
+          })
+        }
+      } catch (thumbError) {
+        console.error('PDF thumbnail step failed (continuing without it):', thumbError)
+      }
+    }
 
     // Return document attachment object
     const documentAttachment = {
@@ -60,6 +92,7 @@ export async function POST(request: NextRequest) {
       uploadedBy: session.user.id || session.user.email || 'unknown',
       description: description || undefined,
       editable: false, // Uploaded files have fixed names
+      thumbnailUrl,
     }
 
     return NextResponse.json({

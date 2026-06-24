@@ -15,6 +15,8 @@
     "watch": "yarn workspaces foreach --all -pi run watch",
     "vercel:install": "yarn set version 4.6.0 && yarn install",
     "web": "yarn build && cd apps/next && yarn next -p 4000",
+    "web:tee": "NEXT_PUBLIC_BRAND=tee yarn web",
+    "web:echad": "NEXT_PUBLIC_BRAND=echadhub yarn web",
     "web:extract": "DISABLE_EXTRACTION=false yarn workspace next-app dev",
     "web:prod": "yarn workspace next-app build",
     "web:prod:serve": "yarn workspace next-app serve",

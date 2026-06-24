@@ -1,8 +1,10 @@
 import { defaultText, footer, footerLink, footerText } from '../styles'
 import { Link, Section, Text } from '@react-email/components'
 import React from 'react'
+import { useEmailIdentity } from './email-identity'
 
 export const Footer = () => {
+  const identity = useEmailIdentity()
   return (
     <Section style={footer}>
       <Text style={defaultText}>
@@ -15,13 +17,13 @@ export const Footer = () => {
       <Text style={footerText}>
         <strong>Our address is:</strong>
         <br />
-        Toronto East Christadelphians
-        <br />
-        975 Cosburn Avenue
-        <br />
-        Toronto, On M4C 2W8
-        <br />
-        Canada
+        {identity.name}
+        {(identity.addressLines ?? []).map((line, i) => (
+          <React.Fragment key={i}>
+            <br />
+            {line}
+          </React.Fragment>
+        ))}
       </Text>
     </Section>
   )

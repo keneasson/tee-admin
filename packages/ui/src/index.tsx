@@ -4,6 +4,7 @@ export * from 'tamagui'
 export { Spinner } from './Spinner'
 // Override Tamagui's Button with proper hover/press/focus states
 export { Button } from './Button'
+export * from './markdown-lite-text'
 export * from '@tamagui/toast'
 export * from './CustomToast'
 export * from './ext-link'

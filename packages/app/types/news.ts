@@ -1,7 +1,7 @@
 // News Manager types — lightweight retrospective counterpart to Events.
 // See https://github.com/keneasson/tee-admin/issues/41
 
-import type { EventSharingScope } from './events'
+import type { DocumentAttachment, EventSharingScope } from './events'
 
 export type NewsCategory = 'medical' | 'general' | 'announcement'
 
@@ -14,6 +14,12 @@ export interface NewsItem {
   title: string
   body: string
   category?: NewsCategory
+  /**
+   * Uploaded attachments (Issue #47). One list for everything — images are
+   * rendered inline on the details page, other files (PDFs, docs, Google Doc
+   * links) become links. Type is derived from each attachment's mimeType.
+   */
+  documents?: DocumentAttachment[]
   publishedAt: Date
   expiresAt: Date
   durationWeeks: NewsDurationWeeks
