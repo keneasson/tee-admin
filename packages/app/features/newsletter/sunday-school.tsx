@@ -7,13 +7,20 @@ export type NextSundaySchoolProps = {
   event: SundaySchoolType
 }
 export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => {
-  if (!event.Refreshments) {
+  // Override precedence: 'cancelled' forces no-class (with optional message);
+  // 'active' forces the class to show; otherwise infer from Refreshments.
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const noClass = isCancelled || (!isForcedActive && !event.Refreshments)
+
+  if (noClass) {
     return (
       <YStack borderTopColor="$gray1Dark" borderWidth={1} borderTopWidth={2} padding="$size.1">
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
-        <Paragraph>No Sunday School this week</Paragraph>
+        <Paragraph>{event.overrideMessage || 'No Sunday School this week'}</Paragraph>
+        {event.overrideNote ? <Paragraph>{event.overrideNote}</Paragraph> : null}
       </YStack>
     )
   }
@@ -25,6 +32,9 @@ export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => 
       <Paragraph size={'$5'} fontWeight={600}>
         Sunday School at 9:30am
       </Paragraph>
+      {event.overrideNote ? (
+        <Paragraph fontWeight={600} color="$blue11">{event.overrideNote}</Paragraph>
+      ) : null}
       <Paragraph>Refreshments provided by: {event.Refreshments}</Paragraph>
     </Section>
   )

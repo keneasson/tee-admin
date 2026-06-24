@@ -47,7 +47,12 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.json(event, {
         headers: {
-          'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
+          // Do NOT let the browser/CDN hold a long-lived copy. Server-side
+          // caching is handled by unstable_cache + tag invalidation above; a
+          // downstream max-age copy would survive that invalidation and serve
+          // stale data (an edited event "disappearing" on normal loads while
+          // a cache-busted refresh shows it).
+          'Cache-Control': 'no-store, max-age=0, must-revalidate',
           'X-Data-Source': 'dynamodb-cache',
           'X-Cache-Tags': [CACHE_TAGS.EVENTS_PUBLIC, CACHE_TAGS.EVENTS_ALL].join(','),
         }
@@ -58,7 +63,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(events, {
       headers: {
-        'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
+        // Do NOT let the browser/CDN hold a long-lived copy. Server-side caching
+        // is handled by unstable_cache + tag invalidation above; a downstream
+        // max-age copy would survive that invalidation and serve stale data (an
+        // edited event "disappearing" on normal loads while a cache-busted
+        // refresh shows it).
+        'Cache-Control': 'no-store, max-age=0, must-revalidate',
         'X-Data-Source': 'dynamodb-cache',
         'X-Event-Count': events.length.toString(),
         'X-Cache-Tags': [CACHE_TAGS.EVENTS_PUBLIC, CACHE_TAGS.EVENTS_ALL].join(','),

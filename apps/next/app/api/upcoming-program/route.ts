@@ -4,6 +4,14 @@ import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { ProgramTypeKeys } from '@my/app/types'
 import { CACHE_TAGS } from '../../../utils/cache'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import {
+  fetchServiceOverrides,
+  applyOverrideToProgramItem,
+  normalizeToISODate,
+  overrideKey,
+} from '@my/app/utils/service-overrides/merge'
+import type { ServiceOverrideType } from '@my/app/provider/dynamodb/service-override-types'
 
 // Cache for 15 minutes in production (shorter for faster updates when debugging)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -54,11 +62,24 @@ export async function GET(request: NextRequest) {
     
     console.log(`✅ Served upcoming program from DynamoDB cache (${upcomingEvents.length} events)`)
 
+    // Per-occurrence overrides (cancel / custom message / note / attend-options).
+    // Applied OUTSIDE getCachedUpcomingProgram so admin edits show promptly rather
+    // than being trapped behind the 15-minute schedule cache.
+    const occurrenceDates = upcomingEvents.map(e => normalizeToISODate(e.date)).filter(Boolean)
+    const sortedDates = [...occurrenceDates].sort()
+    const serviceTypes = Array.from(new Set(upcomingEvents.map(e => e.type))) as ServiceOverrideType[]
+    const overrides = await fetchServiceOverrides(
+      HOME_ECCLESIA.canonicalName,
+      serviceTypes,
+      sortedDates[0] ?? '',
+      sortedDates[sortedDates.length - 1] ?? ''
+    )
+
     // Transform to match the original Google Sheets format that newsletter expects
     const responseData = upcomingEvents.map(event => {
       // The newsletter expects human-readable formatted date strings like "Sunday, August 31, 2025"
       const dateValue = event.date instanceof Date ? event.date : new Date(event.date)
-      
+
       // Format date to match production format: "Sunday, August 31, 2025"
       // Use UTC timezone to ensure consistent formatting across environments
       const formattedDate = dateValue.toLocaleDateString('en-US', {
@@ -68,17 +89,22 @@ export async function GET(request: NextRequest) {
         day: 'numeric',
         timeZone: 'UTC'
       })
-      
+
       // Extract Date from details to avoid override, then spread the rest
       const { Date: _, ...detailsWithoutDate } = event.details
-      
+
       // Build the result object explicitly to ensure Date field is properly set
       const result: any = {
         ...detailsWithoutDate, // Flatten all the detail fields except Date
         Key: event.type, // Override with the correct Key field
         Date: formattedDate, // Set the Date field with human-readable format
       }
-      
+
+      // Merge any per-occurrence override (matched on the UTC date key).
+      const occurrenceDate = normalizeToISODate(event.date)
+      result.occurrenceDate = occurrenceDate
+      applyOverrideToProgramItem(result, overrides.get(overrideKey(event.type, occurrenceDate)))
+
       return result
     })
 

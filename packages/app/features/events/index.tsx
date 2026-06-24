@@ -9,6 +9,7 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { EventDetailView } from '@my/ui/src/events/event-detail-view'
 import { Event, isEventActive } from '@my/app/types/events'
+import { shouldDisplayEvent } from '@my/app/utils/newsletter/event-display-rules'
 
 export type BackLink = {
   href: string
@@ -60,8 +61,14 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
           throw new Error('Failed to fetch events')
         }
         const data = await response.json()
-        // Only show active events on public page
-        const publishedEvents = data.filter((event: Event) => isEventActive(event))
+        // Only show active events that are still within their display window.
+        // Applying the newsletter duration rules here keeps the Events list in
+        // sync with the newsletter (e.g. an engagement expires 3 weeks after
+        // publish instead of lingering indefinitely).
+        const now = new Date()
+        const publishedEvents = data.filter(
+          (event: Event) => isEventActive(event) && shouldDisplayEvent(event, now)
+        )
         setEvents(publishedEvents)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')

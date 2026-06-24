@@ -27,6 +27,7 @@ import type { BibleClassType, NextBibleClassProps } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
 import { AutoLinkText } from '../components/AutoLinkText'
+import { AttendOptions } from '../components/AttendOptions'
 
 const mockEvents: BibleClassType[] = [
   {
@@ -48,7 +49,11 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   const bibleClassEvents = events || mockEvents
   const currentEvent = bibleClassEvents[0]
   const nextEvent = bibleClassEvents[1]
-  const hasNoClass = currentEvent && isNoClass(currentEvent)
+  // Override precedence: 'cancelled' forces no-class; 'active' forces the class to
+  // show; otherwise fall back to the Speaker/Topic heuristic.
+  const isCancelled = currentEvent?.overrideStatus === 'cancelled'
+  const isForcedActive = currentEvent?.overrideStatus === 'active'
+  const hasNoClass = isCancelled || (!isForcedActive && !!currentEvent && isNoClass(currentEvent))
   // Find the next actual class (skipping any "no class" entries)
   const nextActualClass = hasNoClass && nextEvent && !isNoClass(nextEvent) ? nextEvent : undefined
 
@@ -62,6 +67,8 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
   const showHostZoom = hasCustomZoom
   // Hide all Zoom only when InPerson is set but no custom Zoom
   const hideZoom = hasInPerson && !hasCustomZoom
+  // Per-occurrence attend-options supersede the hardcoded in-person + Zoom blocks
+  const hasAttendOptions = !!currentEvent?.attendOptions && currentEvent.attendOptions.length > 0
 
   const headingText = isJoint
     ? (currentEvent.MetaData || `Special Joint Bible Class with ${currentEvent.Host}`)
@@ -147,8 +154,11 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
             <>
               <Section style={program}>
                 <Text style={{ ...defaultText, fontWeight: 'bold', fontSize: '18px' }}>
-                  There is no scheduled Bible class tonight.
+                  {currentEvent?.overrideMessage || 'There is no scheduled Bible class tonight.'}
                 </Text>
+                {currentEvent?.overrideNote ? (
+                  <Text style={defaultText}>{currentEvent.overrideNote}</Text>
+                ) : null}
               </Section>
               {nextActualClass ? (
                 <Section style={{ marginTop: '24px' }}>
@@ -188,8 +198,15 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
           )}
         </Container>
 
+        {/* Per-occurrence "ways to attend" supersede the hardcoded blocks below */}
+        {!hasNoClass && hasAttendOptions ? (
+          <Container style={container} className="container">
+            <AttendOptions options={currentEvent?.attendOptions} />
+          </Container>
+        ) : null}
+
         {/* In-Person Location Section */}
-        {!hasNoClass && hasInPerson ? (
+        {!hasNoClass && !hasAttendOptions && hasInPerson ? (
           <Container style={container} className="container">
             <Section style={{
               backgroundColor: '#e8f5e9',
@@ -217,7 +234,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
         ) : null}
 
         {/* Host Zoom Section (custom Zoom from host ecclesia) */}
-        {!hasNoClass && showHostZoom ? (
+        {!hasNoClass && !hasAttendOptions && showHostZoom ? (
           <Container style={container} className="container zoom-info">
             <Section style={{
               backgroundColor: '#e3f2fd',
@@ -255,7 +272,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
         ) : null}
 
         {/* Default Toronto East Zoom Section */}
-        {!hasNoClass && !hideZoom && showDefaultZoom && !showHostZoom ? (
+        {!hasNoClass && !hasAttendOptions && !hideZoom && showDefaultZoom && !showHostZoom ? (
           <Container style={container} className="container zoom-info">
             <Text style={defaultText}>
               <Link

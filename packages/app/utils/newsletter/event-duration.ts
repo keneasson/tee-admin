@@ -314,6 +314,23 @@ export class EventDurationCalculator {
     const twoNewsletterCutoff = new Date(publishDate)
     twoNewsletterCutoff.setDate(twoNewsletterCutoff.getDate() + 14)
 
+    // Celebration of life: a memorial-style event with no visitation whose service
+    // is scheduled well after the announcement (beyond the 2-newsletter window).
+    // Unlike a near-term funeral, there is no blackout-then-final-reminder cadence —
+    // it should be announced continuously from now until the event date (e.g. a
+    // celebration of life held a few weeks out). Without this, the event vanishes
+    // from the newsletter between the 2-week window and the Thursday before service.
+    if (serviceDate && this.isCelebrationOfLife(event, twoNewsletterCutoff, serviceDate)) {
+      const shouldInclude = this.isUserDateOnOrBefore(currentDate, serviceDate)
+      return {
+        shouldInclude,
+        displayUntilDate: serviceDate,
+        reason: shouldInclude
+          ? `Celebration of life - showing continuously until ${serviceDate.toDateString()}`
+          : `Celebration of life on ${serviceDate.toDateString()} has passed`
+      }
+    }
+
     // Within 2-newsletter window (14 days) - ALWAYS include, even if service has passed
     if (currentDate <= twoNewsletterCutoff) {
       return {
@@ -352,6 +369,27 @@ export class EventDurationCalculator {
       shouldInclude: false,
       reason: '2-newsletter window ended, waiting for Thursday before service'
     }
+  }
+
+  /**
+   * Whether a funeral-type event includes a visitation/viewing component.
+   * Celebrations of life typically have none.
+   */
+  private static hasVisitation(event: any): boolean {
+    return Boolean(event.visitationDate || event.viewingDate)
+  }
+
+  /**
+   * A "celebration of life" is a memorial-style funeral event with no visitation,
+   * scheduled beyond the 2-newsletter window (i.e. weeks out rather than a
+   * near-term funeral). These are announced continuously until the event date
+   * instead of using the funeral blackout-then-reminder cadence.
+   */
+  private static isCelebrationOfLife(event: any, twoNewsletterCutoff: Date, serviceDate: Date): boolean {
+    if (this.hasVisitation(event)) return false
+    // Service scheduled beyond the 2-newsletter window → treat as a far-out
+    // celebration of life rather than a near-term funeral.
+    return serviceDate > twoNewsletterCutoff
   }
 
   /**

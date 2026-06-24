@@ -5,17 +5,10 @@ import { Event, isEventActive } from '@my/app/types/events'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { Loading } from '@my/app/provider/loading'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
-import type { DisplayDuration } from '@my/app/types/newsletter-rules'
+import { EVENT_DURATION_RULES } from '@my/app/utils/newsletter/event-display-rules'
 
 type EventTypeOrder = {
   [key: string]: number
-}
-
-type EventTypeRule = {
-  displayDuration: DisplayDuration
-  priority: number
-  includeInSummary: boolean
-  requiresCTA: boolean
 }
 
 const EVENT_TYPE_ORDER: EventTypeOrder = {
@@ -40,57 +33,8 @@ const EVENT_TYPE_LABELS: { [key: string]: string } = {
   'election-cycle': 'Election Cycles'
 }
 
-// Event display duration rules
-const EVENT_DURATION_RULES: Record<string, EventTypeRule> = {
-  'recurring': {
-    displayDuration: 'until_event_date',
-    priority: 1,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'funeral': {
-    displayDuration: '2_weeks_then_thursday_before',
-    priority: 2,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'engagement': {
-    displayDuration: '3_weeks_from_publish',
-    priority: 3,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'wedding': {
-    displayDuration: '3_weeks_or_until_event_date',
-    priority: 4,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'baptism': {
-    displayDuration: '1_week_after_event',
-    priority: 5,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'study-weekend': {
-    displayDuration: 'until_event_date',
-    priority: 6,
-    includeInSummary: true,
-    requiresCTA: true,
-  },
-  'general': {
-    displayDuration: 'until_event_date',
-    priority: 7,
-    includeInSummary: true,
-    requiresCTA: false,
-  },
-  'election-cycle': {
-    displayDuration: 'until_event_date',
-    priority: 8,
-    includeInSummary: false, // Election cycle triggers a message, not shown as an event
-    requiresCTA: false,
-  },
-}
+// Event display duration rules live in event-display-rules.ts (shared with the
+// public Events listing so the two surfaces stay in sync).
 
 // Fresh event threshold - events created within this time are sorted by creation date
 const FRESH_EVENT_DAYS = 7
