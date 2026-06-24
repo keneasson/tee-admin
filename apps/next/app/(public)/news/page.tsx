@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { H1, Paragraph, Spinner, YStack } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { NewsPublicCard } from '@my/ui/src/news/news-public-card'
+import { NewsCard } from '@my/ui/src/news/news-card'
 import type { NewsItem } from '@my/app/types/news'
 import { getPreviewImageUrl } from '@my/app/types/events'
 
@@ -57,8 +57,9 @@ export default function NewsListPage() {
       ) : (
         <YStack gap="$3">
           {items.map((item) => (
-            <NewsPublicCard
+            <NewsCard
               key={item.id}
+              variant="public"
               id={item.id}
               title={item.title}
               body={item.body}
