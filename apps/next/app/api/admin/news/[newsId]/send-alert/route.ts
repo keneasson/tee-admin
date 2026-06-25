@@ -15,6 +15,8 @@ import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenan
 import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
 import { EmailIdentityProvider } from 'email-builder/components/email-identity'
+import { canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 export const config = {
   maxDuration: 60,
@@ -36,9 +38,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const role = (session.user as any).role || ROLES.GUEST
-    if (role !== ROLES.ADMIN && role !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const { newsId } = await params
     const { searchParams } = new URL(request.url)
@@ -48,6 +47,17 @@ export async function POST(
     const news = await getNewsItemById(newsId)
     if (!news) {
       return NextResponse.json({ error: 'News item not found' }, { status: 404 })
+    }
+
+    // Ecclesia-scoped authorization — only someone who manages this item's
+    // owning ecclesia may blast an alert for it.
+    const alertOwner = news.ecclesiaId || HOME_ECCLESIA.canonicalName
+    const canSend = await canAuthorForEcclesia(session.user.email, role, alertOwner)
+    if (!canSend) {
+      return NextResponse.json(
+        { error: `You do not have permission to manage content for ${alertOwner}.` },
+        { status: 403 }
+      )
     }
     if (!isNewsActive(news)) {
       return NextResponse.json({ error: 'News item has expired' }, { status: 400 })

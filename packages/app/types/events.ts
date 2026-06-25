@@ -369,6 +369,14 @@ export interface Event extends BaseEvent {
 
   // Multi-tenant event sharing
   sharingScope?: EventSharingScope
+
+  /**
+   * Ecclesia that OWNS this event for authorization (who may edit/delete it).
+   * Distinct from `hostingEcclesia` (a display field). Set server-side from the
+   * validated authoring context on create; legacy events without it fall back to
+   * hostingEcclesia?.name then the home ecclesia.
+   */
+  ownerEcclesia?: string
 }
 
 // Type-specific event aliases for use in type-narrowed contexts

@@ -11,6 +11,8 @@ import {
 import { isEventActive } from '@my/app/types/events'
 import { invalidateEventsCache } from '@/utils/cache'
 import { notifyRBsOfSharedEvent } from '@/utils/notify-rbs-of-shared-event'
+import { authorizeContentEcclesia, canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 // Helper functions to extract date/time for sorting
 const extractEventDate = (event: any): string => {
@@ -140,12 +142,22 @@ export async function POST(request: NextRequest) {
     }
 
     const postCallerRole = (session.user as any).role as string || ROLES.GUEST
-    if (postCallerRole !== ROLES.ADMIN && postCallerRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const eventData = await request.json()
     eventData.createdBy = session.user.email
+
+    // Ecclesia-scoped authorization — validate/derive the owning ecclesia and
+    // stamp it server-side (never trust the raw client value). OWNER may author
+    // for any ecclesia; scoped roles only for their own / managed region.
+    const postAuthz = await authorizeContentEcclesia(
+      session.user.email,
+      postCallerRole,
+      eventData.ownerEcclesia || eventData.hostingEcclesia?.name
+    )
+    if (!postAuthz.ok) {
+      return NextResponse.json({ error: postAuthz.error }, { status: postAuthz.status })
+    }
+    eventData.ownerEcclesia = postAuthz.ecclesia
 
     // Determine if this is a draft save or full create
     let event
@@ -183,9 +195,6 @@ export async function PUT(request: NextRequest) {
     }
 
     const putCallerRole = (session.user as any).role as string || ROLES.GUEST
-    if (putCallerRole !== ROLES.ADMIN && putCallerRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const eventData = await request.json()
 
@@ -193,9 +202,36 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Event ID required for update' }, { status: 400 })
     }
 
-    // Fetch old event to detect activation transitions
+    // Fetch old event to detect activation transitions + check ownership
     const oldEvent = await getEventById(eventData.id)
     const wasActive = oldEvent ? isEventActive(oldEvent) : false
+
+    // Ecclesia-scoped authorization: must be allowed to manage the event's
+    // current owner; if reassigning ownership, must also be allowed for the new one.
+    const currentOwner =
+      oldEvent?.ownerEcclesia || oldEvent?.hostingEcclesia?.name || HOME_ECCLESIA.canonicalName
+    if (oldEvent) {
+      const canEditExisting = await canAuthorForEcclesia(
+        session.user.email,
+        putCallerRole,
+        currentOwner
+      )
+      if (!canEditExisting) {
+        return NextResponse.json(
+          { error: `You do not have permission to manage content for ${currentOwner}.` },
+          { status: 403 }
+        )
+      }
+    }
+    const putAuthz = await authorizeContentEcclesia(
+      session.user.email,
+      putCallerRole,
+      eventData.ownerEcclesia || eventData.hostingEcclesia?.name || currentOwner
+    )
+    if (!putAuthz.ok) {
+      return NextResponse.json({ error: putAuthz.error }, { status: putAuthz.status })
+    }
+    eventData.ownerEcclesia = putAuthz.ecclesia
 
     // Update uses saveEventDraft which handles both draft and published updates
     const event = await saveEventDraft(eventData)
@@ -230,15 +266,31 @@ export async function DELETE(request: NextRequest) {
     }
 
     const deleteCallerRole = (session.user as any).role as string || ROLES.GUEST
-    if (deleteCallerRole !== ROLES.ADMIN && deleteCallerRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('id')
 
     if (!eventId) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 })
+    }
+
+    // Ecclesia-scoped authorization against the event's owner.
+    const existing = await getEventById(eventId)
+    if (!existing) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    }
+    const deleteOwner =
+      existing.ownerEcclesia || existing.hostingEcclesia?.name || HOME_ECCLESIA.canonicalName
+    const canDelete = await canAuthorForEcclesia(
+      session.user.email,
+      deleteCallerRole,
+      deleteOwner
+    )
+    if (!canDelete) {
+      return NextResponse.json(
+        { error: `You do not have permission to manage content for ${deleteOwner}.` },
+        { status: 403 }
+      )
     }
 
     const success = await deleteEvent(eventId)

@@ -4,6 +4,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
+import { authorizeContentEcclesia, canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
 
 /**
  * GET /api/admin/meetings/[meetingId] - Fetch a single meeting
@@ -62,9 +63,6 @@ export async function PATCH(
     }
 
     const userRole = (session.user as any).role || ROLES.GUEST
-    if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
     if (!showMultiTenant) {
@@ -72,6 +70,24 @@ export async function PATCH(
     }
 
     const { meetingId } = await params
+
+    // Ecclesia-scoped authorization against the meeting's current owner.
+    const existing = await meetingRepository.getById(meetingId)
+    if (!existing) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    }
+    if (existing.ownerType === 'ecclesia') {
+      const canEdit = await canAuthorForEcclesia(session.user.email, userRole, existing.ownerName)
+      if (!canEdit) {
+        return NextResponse.json(
+          { error: `You do not have permission to manage content for ${existing.ownerName}.` },
+          { status: 403 }
+        )
+      }
+    } else if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     // Remove immutable fields
@@ -85,6 +101,23 @@ export async function PATCH(
       createdBy: _createdBy,
       ...updateFields
     } = body
+
+    // If reassigning to a different ecclesia, the caller must also be permitted there.
+    if (
+      updateFields.ownerType === 'ecclesia' &&
+      updateFields.ownerName &&
+      updateFields.ownerName !== existing.ownerName
+    ) {
+      const authz = await authorizeContentEcclesia(
+        session.user.email,
+        userRole,
+        updateFields.ownerName
+      )
+      if (!authz.ok) {
+        return NextResponse.json({ error: authz.error }, { status: authz.status })
+      }
+      updateFields.ownerName = authz.ecclesia
+    }
 
     const updated = await meetingRepository.updateMeeting(meetingId, updateFields)
     if (!updated) {
@@ -116,9 +149,6 @@ export async function DELETE(
     }
 
     const userRole = (session.user as any).role || ROLES.GUEST
-    if (userRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Owner access required' }, { status: 403 })
-    }
 
     const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
     if (!showMultiTenant) {
@@ -126,6 +156,26 @@ export async function DELETE(
     }
 
     const { meetingId } = await params
+
+    // Ecclesia-scoped authorization against the meeting's owner. Ecclesia-owned
+    // meetings can be deleted by anyone who manages that ecclesia; organization-
+    // owned meetings remain owner-only until org permissions are modelled.
+    const existing = await meetingRepository.getById(meetingId)
+    if (!existing) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    }
+    if (existing.ownerType === 'ecclesia') {
+      const canDelete = await canAuthorForEcclesia(session.user.email, userRole, existing.ownerName)
+      if (!canDelete) {
+        return NextResponse.json(
+          { error: `You do not have permission to manage content for ${existing.ownerName}.` },
+          { status: 403 }
+        )
+      }
+    } else if (userRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Owner access required' }, { status: 403 })
+    }
+
     const deleted = await meetingRepository.deleteMeeting(meetingId)
     if (!deleted) {
       return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })

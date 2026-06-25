@@ -4,6 +4,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
+import { authorizeContentEcclesia } from '@/utils/ecclesia-permissions'
 
 /**
  * GET /api/admin/meetings - List meetings
@@ -65,9 +66,6 @@ export async function POST(request: NextRequest) {
     }
 
     const userRole = (session.user as any).role || ROLES.GUEST
-    if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
     if (!showMultiTenant) {
@@ -103,11 +101,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Ecclesia-scoped authorization. Ecclesia-owned meetings are gated by the
+    // owning ecclesia; organization-owned meetings keep the global admin gate
+    // until organization-level permissions are modelled.
+    let resolvedOwnerName = ownerName
+    if (ownerType === 'ecclesia') {
+      const authz = await authorizeContentEcclesia(session.user.email, userRole, ownerName)
+      if (!authz.ok) {
+        return NextResponse.json({ error: authz.error }, { status: authz.status })
+      }
+      resolvedOwnerName = authz.ecclesia
+    } else if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
     const meeting = await meetingRepository.create({
       title,
       meetingType,
       ownerType,
-      ownerName,
+      ownerName: resolvedOwnerName,
       recurrence,
       oneOffDate,
       startTime,
