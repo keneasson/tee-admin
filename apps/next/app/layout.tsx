@@ -28,6 +28,7 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
         email: session.user.email,
         role: (session.user as any)?.role,
         ecclesia: (session.user as any)?.ecclesia,
+        isRecordingBrother: (session.user as any)?.isRecordingBrother,
       }
     : null
 

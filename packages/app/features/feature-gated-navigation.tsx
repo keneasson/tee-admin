@@ -9,6 +9,8 @@ type UserSession = {
   role?: string
   /** Signed-in user's home ecclesia, surfaced in the navigation header */
   ecclesia?: string | null
+  /** Recording Brother designation — grants content-manager nav access */
+  isRecordingBrother?: boolean
 }
 
 type FeatureGatedNavigationProps = {

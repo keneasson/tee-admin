@@ -17,6 +17,8 @@ type UserSession = {
   role?: string
   /** Signed-in user's home ecclesia, shown in the header */
   ecclesia?: string | null
+  /** Recording Brother designation — grants content-manager nav access */
+  isRecordingBrother?: boolean
 }
 
 type SimpleEnhancedNavigationProps = {
@@ -51,12 +53,17 @@ const emailAdminPages: MainPageType[] = [
   { path: '/admin/email/schedule', label: 'Schedule Emails to Send' },
 ]
 
-// Admin Tools - System Management
-const systemAdminPages: MainPageType[] = [
-  { path: '/admin/youtube', label: 'YouTube' },
+// Content managers — available to content authors (admin/owner + rep/recorder/RB).
+// Per-ecclesia scoping is enforced by the routes themselves.
+const contentManagerPages: MainPageType[] = [
   { path: '/admin/events', label: 'Event Manager' },
   { path: '/admin/news', label: 'News Manager' },
   { path: '/admin/meetings', label: 'Meeting Manager' },
+]
+
+// Admin Tools - System Management (admin/owner only)
+const systemAdminPages: MainPageType[] = [
+  { path: '/admin/youtube', label: 'YouTube' },
   { path: '/admin/schedule-overrides', label: 'Service Overrides' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
@@ -291,6 +298,49 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               </Button>
               )
             })}
+          </YStack> : null}
+
+      {/* Content Managers — admin/owner + rep/recorder/RB (routes enforce ecclesia scope) */}
+      {user &&
+        (user.role === ROLES.ADMIN ||
+          user.role === ROLES.OWNER ||
+          user.role === ROLES.REP ||
+          user.role === ROLES.RECORDER ||
+          user.isRecordingBrother) ? <YStack gap="$1">
+            <Text
+              fontSize="$2"
+              fontWeight="600"
+              color={colors.textSecondary}
+              textTransform="uppercase"
+            >
+              Content
+            </Text>
+            {contentManagerPages.map((page) => (
+              <Button
+                key={page.path}
+                onPress={navigateTo(page.path)}
+                backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
+                borderRadius="$2"
+                justifyContent="flex-start"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                hoverStyle={{
+                  backgroundColor: currentPath === page.path ? colors.primaryHover : colors.backgroundSecondary,
+                }}
+              >
+                <Text
+                  color={
+                    currentPath === page.path ? colors.primaryForeground : colors.textPrimary
+                  }
+                  fontWeight={currentPath === page.path ? '600' : '400'}
+                  hoverStyle={{
+                    color: currentPath === page.path ? colors.primaryForeground : colors.textSecondary,
+                  }}
+                >
+                  {page.label}
+                </Text>
+              </Button>
+            ))}
           </YStack> : null}
 
       {/* System Admin Tools */}

@@ -16,9 +16,15 @@ export function useAdminAccess() {
   const isRecordingBrother = !!(session?.user as any)?.isRecordingBrother
   const isRecorderOrRep = isRecordingBrother || role === ROLES.RECORDER || role === ROLES.REP
 
-  // Recorder/Rep can access /admin/community/* pages only
+  // Recorder/Rep/RB can access the community pages AND the content managers
+  // (events / news / meetings) — the routes themselves enforce per-ecclesia scoping.
   const isCommunityPage = pathname?.startsWith('/admin/community')
-  const hasAccess = isAdminOrOwner || (isRecorderOrRep && isCommunityPage)
+  const isContentManagerPage =
+    pathname?.startsWith('/admin/events') ||
+    pathname?.startsWith('/admin/news') ||
+    pathname?.startsWith('/admin/meetings')
+  const hasAccess =
+    isAdminOrOwner || (isRecorderOrRep && (isCommunityPage || isContentManagerPage))
 
   useEffect(() => {
     if (status === 'loading') return // Still loading
