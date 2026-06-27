@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { createNewsItem, listNewsItems } from '@my/app/services/news-service'
-import { authorizeContentEcclesia } from '@/utils/ecclesia-permissions'
+import {
+  authorizeContentEcclesia,
+  canManageEcclesia,
+  listManageableEcclesias,
+} from '@/utils/ecclesia-permissions'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 /**
  * Admin News API — News Manager (Issue #41)
@@ -18,11 +23,19 @@ export async function GET() {
     }
 
     const role = (session.user as any).role || ROLES.GUEST
-    if (role !== ROLES.ADMIN && role !== ROLES.OWNER) {
+
+    // Ecclesia-scoped read access.
+    const manageable = await listManageableEcclesias(session.user.email, role)
+    if (!manageable.all && manageable.ecclesias.size === 0) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const items = await listNewsItems({ includeExpired: true })
+    const all = await listNewsItems({ includeExpired: true })
+    const items = manageable.all
+      ? all
+      : all.filter((n) =>
+          canManageEcclesia(manageable, n.ecclesiaId || HOME_ECCLESIA.canonicalName)
+        )
     return NextResponse.json(items)
   } catch (error) {
     console.error('Error listing news (admin):', error)

@@ -1,7 +1,7 @@
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { getDefaultRegion } from '@my/app/config/regions'
-import { getEcclesiaByName } from './dynamodb/locations'
+import { getEcclesiaByName, getAllEcclesia } from './dynamodb/locations'
 
 /**
  * Check if a user can edit a given ecclesia.
@@ -185,4 +185,54 @@ export async function authorizeContentEcclesia(
   }
 
   return { ok: true, ecclesia: target }
+}
+
+/**
+ * The set of ecclesias whose content a user may manage (for READ-side scoping of
+ * admin lists). `{ all: true }` means no filter — OWNER sees everything. Mirrors
+ * {@link canAuthorForEcclesia}: own ecclesia for staff/RB, plus ecclesias covered
+ * by an ADMIN/REP/RECORDER's managedRegions.
+ */
+export type ManageableEcclesias = { all: true } | { all: false; ecclesias: Set<string> }
+
+export async function listManageableEcclesias(
+  userEmail: string,
+  userRole: string
+): Promise<ManageableEcclesias> {
+  if (userRole === ROLES.OWNER) {
+    return { all: true }
+  }
+
+  const person = await personRepository.getByEmail(userEmail)
+  const ecclesias = new Set<string>()
+  if (!person) {
+    return { all: false, ecclesias }
+  }
+
+  const isStaff =
+    userRole === ROLES.ADMIN || userRole === ROLES.RECORDER || userRole === ROLES.REP
+
+  if (person.ecclesia && (isStaff || person.isRecordingBrother)) {
+    ecclesias.add(person.ecclesia)
+  }
+
+  if (isStaff && person.managedRegions && person.managedRegions.length > 0) {
+    const all = await getAllEcclesia()
+    for (const e of all) {
+      const region = e.region || (e.country ? getDefaultRegion(e.country, e.province) : null)
+      if (region && person.managedRegions.includes(region)) {
+        ecclesias.add(e.name)
+      }
+    }
+  }
+
+  return { all: false, ecclesias }
+}
+
+/** True if the given manageable set covers `ecclesiaName`. */
+export function canManageEcclesia(
+  manageable: ManageableEcclesias,
+  ecclesiaName: string
+): boolean {
+  return manageable.all || manageable.ecclesias.has(ecclesiaName)
 }
