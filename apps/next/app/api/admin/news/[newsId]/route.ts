@@ -6,7 +6,7 @@ import {
   getNewsItemById,
   updateNewsItem,
 } from '@my/app/services/news-service'
-import { canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
+import { authorizeContentEcclesia, canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
 async function requireAuth() {
@@ -78,9 +78,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'durationWeeks must be 1, 2, or 3' }, { status: 400 })
     }
 
-    // Ecclesia-scoped authorization against the item's owner.
+    // Ecclesia-scoped authorization against the item's current owner.
     const authz = await authorizeNewsItem(guard.session, newsId)
     if ('error' in authz) return authz.error
+
+    // If reassigning to a different ecclesia, the caller must also be permitted
+    // there (mirrors events PUT / meetings PATCH). Stamp the validated value.
+    if (body.ecclesiaId && body.ecclesiaId !== authz.news.ecclesiaId) {
+      const role = (guard.session.user as any).role || ROLES.GUEST
+      const target = await authorizeContentEcclesia(
+        guard.session.user!.email!,
+        role,
+        body.ecclesiaId
+      )
+      if (!target.ok) {
+        return NextResponse.json({ error: target.error }, { status: target.status })
+      }
+      body.ecclesiaId = target.ecclesia
+    }
 
     const updated = await updateNewsItem({
       ...body,
