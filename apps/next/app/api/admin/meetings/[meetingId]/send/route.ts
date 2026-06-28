@@ -9,6 +9,7 @@ import { createElement } from 'react'
 import MeetingEmail from 'email-builder/emails/MeetingEmail'
 import { emailSend } from '@/utils/email/email-send'
 import { meetingRecordToEmailProps } from '@/utils/email/meeting-email-helpers'
+import { canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
 
 export const config = {
   maxDuration: 60,
@@ -29,9 +30,6 @@ export async function POST(
     }
 
     const userRole = (session.user as any).role || ROLES.GUEST
-    if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
     if (!showMultiTenant) {
@@ -45,6 +43,19 @@ export async function POST(
     const meeting = await meetingRepository.getById(meetingId)
     if (!meeting) {
       return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    }
+
+    // Ecclesia-scoped authorization against the meeting's owner.
+    if (meeting.ownerType === 'ecclesia') {
+      const canSend = await canAuthorForEcclesia(session.user.email, userRole, meeting.ownerName)
+      if (!canSend) {
+        return NextResponse.json(
+          { error: `You do not have permission to manage content for ${meeting.ownerName}.` },
+          { status: 403 }
+        )
+      }
+    } else if (userRole !== ROLES.ADMIN && userRole !== ROLES.OWNER) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
     // Map MeetingRecord to MeetingEmail props

@@ -6,24 +6,48 @@ import {
   getNewsItemById,
   updateNewsItem,
 } from '@my/app/services/news-service'
+import { authorizeContentEcclesia, canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
-async function requireAdmin() {
+async function requireAuth() {
   const session = await auth()
   if (!session?.user?.email) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
-  const role = (session.user as any).role || ROLES.GUEST
-  if (role !== ROLES.ADMIN && role !== ROLES.OWNER) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
-  }
   return { session }
+}
+
+/**
+ * Authorize the caller to manage a specific news item, scoped to its owning
+ * ecclesia. Returns the item on success, or a NextResponse error (404/403).
+ */
+async function authorizeNewsItem(
+  session: NonNullable<Awaited<ReturnType<typeof auth>>>,
+  newsId: string
+) {
+  const news = await getNewsItemById(newsId)
+  if (!news) {
+    return { error: NextResponse.json({ error: 'News item not found' }, { status: 404 }) }
+  }
+  const role = (session.user as any).role || ROLES.GUEST
+  const owner = news.ecclesiaId || HOME_ECCLESIA.canonicalName
+  const allowed = await canAuthorForEcclesia(session.user!.email!, role, owner)
+  if (!allowed) {
+    return {
+      error: NextResponse.json(
+        { error: `You do not have permission to manage content for ${owner}.` },
+        { status: 403 }
+      ),
+    }
+  }
+  return { news }
 }
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ newsId: string }> }
 ) {
-  const guard = await requireAdmin()
+  const guard = await requireAuth()
   if ('error' in guard) return guard.error
 
   try {
@@ -43,7 +67,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ newsId: string }> }
 ) {
-  const guard = await requireAdmin()
+  const guard = await requireAuth()
   if ('error' in guard) return guard.error
 
   try {
@@ -52,6 +76,25 @@ export async function PATCH(
 
     if (body.durationWeeks !== undefined && ![1, 2, 3].includes(body.durationWeeks)) {
       return NextResponse.json({ error: 'durationWeeks must be 1, 2, or 3' }, { status: 400 })
+    }
+
+    // Ecclesia-scoped authorization against the item's current owner.
+    const authz = await authorizeNewsItem(guard.session, newsId)
+    if ('error' in authz) return authz.error
+
+    // If reassigning to a different ecclesia, the caller must also be permitted
+    // there (mirrors events PUT / meetings PATCH). Stamp the validated value.
+    if (body.ecclesiaId && body.ecclesiaId !== authz.news.ecclesiaId) {
+      const role = (guard.session.user as any).role || ROLES.GUEST
+      const target = await authorizeContentEcclesia(
+        guard.session.user!.email!,
+        role,
+        body.ecclesiaId
+      )
+      if (!target.ok) {
+        return NextResponse.json({ error: target.error }, { status: target.status })
+      }
+      body.ecclesiaId = target.ecclesia
     }
 
     const updated = await updateNewsItem({
@@ -72,11 +115,16 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ newsId: string }> }
 ) {
-  const guard = await requireAdmin()
+  const guard = await requireAuth()
   if ('error' in guard) return guard.error
 
   try {
     const { newsId } = await params
+
+    // Ecclesia-scoped authorization against the item's owner.
+    const authz = await authorizeNewsItem(guard.session, newsId)
+    if ('error' in authz) return authz.error
+
     const ok = await deleteNewsItem(newsId)
     if (!ok) {
       return NextResponse.json({ error: 'News item not found' }, { status: 404 })

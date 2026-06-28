@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { createNewsItem, listNewsItems } from '@my/app/services/news-service'
-import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
-import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { authorizeContentEcclesia } from '@/utils/ecclesia-permissions'
 
 /**
  * Admin News API — News Manager (Issue #41)
@@ -39,9 +38,6 @@ export async function POST(request: NextRequest) {
     }
 
     const role = (session.user as any).role || ROLES.GUEST
-    if (role !== ROLES.ADMIN && role !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     const body = await request.json()
     if (!body.title || !body.body) {
@@ -51,9 +47,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'durationWeeks must be 1, 2, or 3' }, { status: 400 })
     }
 
-    // Resolve author's ecclesia (falls back to home ecclesia for single-tenant deploy)
-    const person = await personRepository.getByEmail(session.user.email)
-    const ecclesiaId = body.ecclesiaId || person?.ecclesia || HOME_ECCLESIA.canonicalName
+    // Ecclesia-scoped authorization — validate/derive the owning ecclesia
+    // (defaults to the author's home ecclesia when not supplied).
+    const authz = await authorizeContentEcclesia(session.user.email, role, body.ecclesiaId)
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status })
+    }
+    const ecclesiaId = authz.ecclesia
 
     const news = await createNewsItem({
       ecclesiaId,
