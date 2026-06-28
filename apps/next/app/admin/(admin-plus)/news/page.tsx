@@ -23,9 +23,15 @@ export default function AdminNewsPage() {
   const [saving, setSaving] = useState(false)
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [ecclesiaOptions, setEcclesiaOptions] = useState<string[]>([])
 
   useEffect(() => {
-    if (hasAccess) loadItems()
+    if (!hasAccess) return
+    loadItems()
+    fetch('/api/admin/manageable-ecclesias')
+      .then((r) => (r.ok ? r.json() : { ecclesias: [] }))
+      .then((d) => setEcclesiaOptions(Array.isArray(d.ecclesias) ? d.ecclesias : []))
+      .catch(() => setEcclesiaOptions([]))
   }, [hasAccess])
 
   const loadItems = async () => {
@@ -63,6 +69,8 @@ export default function AdminNewsPage() {
         durationWeeks: Number(values.durationWeeks),
         sharingScope: values.sharingScope,
         documents: values.documents ?? [],
+        // Only sent when the picker was shown; server validates + falls back to home.
+        ecclesiaId: values.ecclesiaId || undefined,
       }
 
       let res: Response
@@ -153,6 +161,7 @@ export default function AdminNewsPage() {
             durationWeeks: String(mode.item.durationWeeks) as '1' | '2' | '3',
             sharingScope: mode.item.sharingScope,
             documents: mode.item.documents || [],
+            ecclesiaId: mode.item.ecclesiaId,
           }
         : undefined
 
@@ -165,6 +174,7 @@ export default function AdminNewsPage() {
           isSaving={saving}
           isExisting={mode.kind === 'edit'}
           alertAlreadySent={mode.kind === 'edit' && !!mode.item.emailBlastSentAt}
+          ecclesiaOptions={ecclesiaOptions}
           onSave={handleSave}
           onCancel={() => setMode({ kind: 'list' })}
           onDelete={handleDelete}
