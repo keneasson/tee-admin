@@ -11,8 +11,18 @@ import {
 import { isEventActive } from '@my/app/types/events'
 import { invalidateEventsCache } from '@/utils/cache'
 import { notifyRBsOfSharedEvent } from '@/utils/notify-rbs-of-shared-event'
-import { authorizeContentEcclesia, canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
+import {
+  authorizeContentEcclesia,
+  canAuthorForEcclesia,
+  canManageEcclesia,
+  listManageableEcclesias,
+} from '@/utils/ecclesia-permissions'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import type { Event } from '@my/app/types/events'
+
+/** Ecclesia that owns an event for authz/scoping (display field + legacy fallback). */
+const eventOwner = (event: Pick<Event, 'ownerEcclesia' | 'hostingEcclesia'>): string =>
+  event.ownerEcclesia || event.hostingEcclesia?.name || HOME_ECCLESIA.canonicalName
 
 // Helper functions to extract date/time for sorting
 const extractEventDate = (event: any): string => {
@@ -90,7 +100,11 @@ export async function GET(request: NextRequest) {
     }
 
     const callerRole = (session.user as any).role as string || ROLES.GUEST
-    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
+
+    // Ecclesia-scoped read access: OWNER sees all; staff/RB see their own +
+    // managed-region ecclesias. Anyone with no manageable ecclesias is denied.
+    const manageable = await listManageableEcclesias(session.user.email, callerRole)
+    if (!manageable.all && manageable.ecclesias.size === 0) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
@@ -102,11 +116,17 @@ export async function GET(request: NextRequest) {
       if (!event) {
         return NextResponse.json({ error: 'Event not found' }, { status: 404 })
       }
+      if (!canManageEcclesia(manageable, eventOwner(event))) {
+        return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+      }
       return NextResponse.json(event)
     }
 
-    // Return all events for admin, sorted by start date/time ascending
-    const events = await getAllEvents(false)
+    // Return events the caller may manage, sorted by start date/time ascending
+    const allEvents = await getAllEvents(false)
+    const events = manageable.all
+      ? allEvents
+      : allEvents.filter((e) => canManageEcclesia(manageable, eventOwner(e)))
 
     // Sort by start date/time in ascending order (earliest first)
     const sortedEvents = events.sort((a, b) => {
