@@ -7,6 +7,7 @@ import {
   UpdateNewsRequest,
   computeNewsExpiresAt,
   isNewsActive,
+  blastedAudiences,
 } from '@my/app/types/news'
 
 /**
@@ -143,6 +144,9 @@ export const listNewsItems = async (
   )
 }
 
-export const markNewsBlastSent = async (id: string): Promise<NewsItem> => {
-  return updateNewsItem({ id, emailBlastSentAt: new Date() })
+export const markNewsBlastSent = async (id: string, audienceKey: string): Promise<NewsItem> => {
+  const existing = await getNewsItemById(id)
+  if (!existing) throw new Error(`News item ${id} not found`)
+  const emailBlastAudiences = Array.from(new Set([...blastedAudiences(existing), audienceKey]))
+  return updateNewsItem({ id, emailBlastSentAt: new Date(), emailBlastAudiences })
 }

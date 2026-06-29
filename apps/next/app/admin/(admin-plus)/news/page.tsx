@@ -11,7 +11,10 @@ import {
   type NewsFormValues,
 } from '@my/ui/src/news/news-item-form'
 import type { NewsItem } from '@my/app/types/news'
-import { isNewsActive } from '@my/app/types/news'
+import { isNewsActive, blastedAudiences } from '@my/app/types/news'
+import { getContactsList } from '@my/app/provider/get-data'
+
+type Audience = { key: string; label: string }
 
 type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; item: NewsItem }
 
@@ -24,6 +27,7 @@ export default function AdminNewsPage() {
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [ecclesiaOptions, setEcclesiaOptions] = useState<string[]>([])
+  const [audiences, setAudiences] = useState<Audience[]>([])
 
   useEffect(() => {
     if (!hasAccess) return
@@ -32,6 +36,17 @@ export default function AdminNewsPage() {
       .then((r) => (r.ok ? r.json() : { ecclesias: [] }))
       .then((d) => setEcclesiaOptions(Array.isArray(d.ecclesias) ? d.ecclesias : []))
       .catch(() => setEcclesiaOptions([]))
+    // Email audiences for the alert sender — same source as the Email Sender.
+    // The test list is excluded (the "Send test alert" button covers it).
+    getContactsList()
+      .then((d) =>
+        setAudiences(
+          (d.lists ?? [])
+            .filter((l) => l.key !== 'testList')
+            .map((l) => ({ key: l.key, label: l.displayName }))
+        )
+      )
+      .catch(() => setAudiences([]))
   }, [hasAccess])
 
   const loadItems = async () => {
@@ -120,22 +135,25 @@ export default function AdminNewsPage() {
     }
   }
 
-  const handleSendAlert = async (test: boolean) => {
+  const handleSendAlert = async (test: boolean, audience: string) => {
     if (mode.kind !== 'edit') return
+    const audienceLabel = audiences.find((a) => a.key === audience)?.label ?? audience
     const confirmMsg = test
-      ? 'Send a test alert to the test list?'
-      : 'Send this alert to all newsletter subscribers? This can only be done once.'
+      ? `Send a TEST alert to the test list? (Live target would be: ${audienceLabel})`
+      : `Send this alert to "${audienceLabel}"? This can only be done once for this audience.`
     if (!confirm(confirmMsg)) return
 
     setSaving(true)
     try {
-      const url = `/api/admin/news/${mode.item.id}/send-alert${test ? '?test=true' : ''}`
+      const params = new URLSearchParams({ list: audience })
+      if (test) params.set('test', 'true')
+      const url = `/api/admin/news/${mode.item.id}/send-alert?${params.toString()}`
       const res = await fetch(url, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Alert send failed')
       alert(
         `Alert sent. ${data.sentCount} delivered, ${data.skippedCount} skipped.${
-          test ? ' (Test list)' : ''
+          test ? ' (Test list)' : ` (${audienceLabel})`
         }`
       )
       if (!test) {
@@ -173,7 +191,8 @@ export default function AdminNewsPage() {
           initialValues={initial}
           isSaving={saving}
           isExisting={mode.kind === 'edit'}
-          alertAlreadySent={mode.kind === 'edit' && !!mode.item.emailBlastSentAt}
+          sentAudiences={mode.kind === 'edit' ? blastedAudiences(mode.item) : []}
+          audiences={audiences}
           ecclesiaOptions={ecclesiaOptions}
           onSave={handleSave}
           onCancel={() => setMode({ kind: 'list' })}

@@ -35,11 +35,22 @@ export type NewsFormValues = {
   ecclesiaId?: string
 }
 
+export type AudienceOption = { key: string; label: string }
+
 export type NewsItemFormProps = {
   initialValues?: Partial<NewsFormValues>
   isSaving?: boolean
   isExisting?: boolean
-  alertAlreadySent?: boolean
+  /**
+   * Audiences (EmailListTypes keys) this item has already been blasted to live.
+   * The "Send alert" button disables only for the currently-selected audience,
+   * so the same post can still go to a different list.
+   */
+  sentAudiences?: string[]
+  /** Selectable send audiences ({ key, label }), e.g. Newsletter, Inter-Ecclesia Leaders. */
+  audiences?: AudienceOption[]
+  /** Default selected audience key. Falls back to 'newsletter'. */
+  defaultAudience?: string
   /**
    * Ecclesias the signed-in user may post for. When more than one, a picker is
    * shown so an owner / regional admin can choose which ecclesia owns the item.
@@ -49,7 +60,7 @@ export type NewsItemFormProps = {
   onSave: (values: NewsFormValues) => void | Promise<void>
   onCancel: () => void
   onDelete?: () => void | Promise<void>
-  onSendAlert?: (test: boolean) => void | Promise<void>
+  onSendAlert?: (test: boolean, audience: string) => void | Promise<void>
 }
 
 const CATEGORY_OPTIONS = [
@@ -75,13 +86,17 @@ export function NewsItemForm({
   initialValues,
   isSaving = false,
   isExisting = false,
-  alertAlreadySent = false,
+  sentAudiences = [],
+  audiences = [],
+  defaultAudience = 'newsletter',
   ecclesiaOptions,
   onSave,
   onCancel,
   onDelete,
   onSendAlert,
 }: NewsItemFormProps) {
+  const [selectedAudience, setSelectedAudience] = React.useState(defaultAudience)
+  const alertAlreadySent = sentAudiences.includes(selectedAudience)
   const { control, handleSubmit, formState } = useForm<NewsFormValues>({
     defaultValues: {
       title: initialValues?.title || '',
@@ -172,6 +187,36 @@ export function NewsItemForm({
         required
       />
 
+      {isExisting && onSendAlert && audiences.length > 0 ? (
+        <YStack gap="$2" marginTop="$2">
+          <Paragraph fontSize="$3" fontWeight="600" color="$gray12">
+            Send alert to
+          </Paragraph>
+          <XStack gap="$2" flexWrap="wrap">
+            {audiences.map((a) => {
+              const selected = a.key === selectedAudience
+              const sent = sentAudiences.includes(a.key)
+              return (
+                <Button
+                  key={a.key}
+                  size="$2"
+                  backgroundColor={selected ? '$info' : '$backgroundStrong'}
+                  color={selected ? 'white' : '$color'}
+                  borderColor={selected ? '$info' : '$borderColor'}
+                  hoverStyle={{
+                    backgroundColor: selected ? '$infoHover' : '$backgroundHover',
+                    borderColor: '$textSecondary',
+                  }}
+                  onPress={() => setSelectedAudience(a.key)}
+                >
+                  {sent ? `${a.label} ✓` : a.label}
+                </Button>
+              )
+            })}
+          </XStack>
+        </YStack>
+      ) : null}
+
       <XStack gap="$3" flexWrap="wrap" marginTop="$2">
         <Button
           theme="active"
@@ -198,7 +243,7 @@ export function NewsItemForm({
               backgroundColor="$info"
               color="white"
               hoverStyle={{ backgroundColor: '$infoHover' }}
-              onPress={() => onSendAlert(true)}
+              onPress={() => onSendAlert(true, selectedAudience)}
               disabled={isSaving}
             >
               Send test alert
@@ -207,10 +252,10 @@ export function NewsItemForm({
               backgroundColor={alertAlreadySent ? '$gray8' : '$warning'}
               color="white"
               hoverStyle={{ backgroundColor: alertAlreadySent ? '$gray8' : '$warningHover' }}
-              onPress={() => onSendAlert(false)}
+              onPress={() => onSendAlert(false, selectedAudience)}
               disabled={isSaving || alertAlreadySent}
             >
-              {alertAlreadySent ? 'Alert already sent' : 'Send alert to subscribers'}
+              {alertAlreadySent ? 'Already sent to this list' : 'Send alert to subscribers'}
             </Button>
           </>
         ) : null}
@@ -230,8 +275,8 @@ export function NewsItemForm({
 
       {alertAlreadySent ? (
         <Paragraph color="$textSecondary" fontSize="$3">
-          An email alert has already been sent for this news item. Sending again is disabled to
-          prevent duplicates.
+          An alert has already been sent to this audience. Sending to it again is disabled to
+          prevent duplicates — pick a different audience above to reach another list.
         </Paragraph>
       ) : null}
     </YStack>

@@ -25,13 +25,27 @@ export interface NewsItem {
   durationWeeks: NewsDurationWeeks
   sharingScope: EventSharingScope
   emailBlastSentAt?: Date
+  /**
+   * Email audiences (EmailListTypes keys, e.g. 'newsletter', 'interEcclesia')
+   * this item has been blasted to live. Lets the same post go to multiple
+   * audiences without the one-shot guard falsely blocking a second, different
+   * send. Legacy items predating this field are treated as having gone to
+   * 'newsletter' when `emailBlastSentAt` is set.
+   */
+  emailBlastAudiences?: string[]
   createdAt: Date
   updatedAt: Date
 }
 
 export type CreateNewsRequest = Omit<
   NewsItem,
-  'id' | 'createdAt' | 'updatedAt' | 'expiresAt' | 'publishedAt' | 'emailBlastSentAt'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'expiresAt'
+  | 'publishedAt'
+  | 'emailBlastSentAt'
+  | 'emailBlastAudiences'
 > & {
   publishedAt?: Date
 }
@@ -47,3 +61,14 @@ export function computeNewsExpiresAt(publishedAt: Date, durationWeeks: NewsDurat
 export function isNewsActive(item: Pick<NewsItem, 'expiresAt'>, now: Date = new Date()): boolean {
   return new Date(item.expiresAt).getTime() > now.getTime()
 }
+
+/**
+ * Email audiences (EmailListTypes keys) a News item has been blasted to live.
+ * Treats a legacy item (only `emailBlastSentAt`, predating per-audience
+ * tracking) as having gone to the newsletter, so the one-shot guard stays
+ * correct after upgrade. Pure — single source of truth for both the server
+ * send route and the client editor.
+ */
+export const blastedAudiences = (
+  item: Pick<NewsItem, 'emailBlastAudiences' | 'emailBlastSentAt'>
+): string[] => item.emailBlastAudiences ?? (item.emailBlastSentAt ? ['newsletter'] : [])

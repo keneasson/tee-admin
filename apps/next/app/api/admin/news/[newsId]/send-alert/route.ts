@@ -9,7 +9,8 @@ import {
   getNewsItemById,
   markNewsBlastSent,
 } from '@my/app/services/news-service'
-import { isNewsActive } from '@my/app/types/news'
+import { isNewsActive, blastedAudiences } from '@my/app/types/news'
+import { EmailListTypes } from '@my/app/types'
 import { getPreviewImageUrl } from '@my/app/types/events'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
@@ -44,6 +45,19 @@ export async function POST(
     const isTest = searchParams.get('test') === 'true'
     const force = searchParams.get('force') === 'true'
 
+    // Which audience to blast to. Defaults to 'newsletter' (the historical
+    // behaviour); 'interEcclesia' and the other lists are now selectable.
+    // Test sends always go to the test list regardless (enforced in emailSend).
+    const DEFAULT_AUDIENCE = EmailListTypes.newsletter
+    const requestedList = searchParams.get('list')
+    if (requestedList && !(Object.values(EmailListTypes) as string[]).includes(requestedList)) {
+      return NextResponse.json(
+        { error: `Unknown audience '${requestedList}'.` },
+        { status: 400 }
+      )
+    }
+    const audienceKey = requestedList || DEFAULT_AUDIENCE
+
     const news = await getNewsItemById(newsId)
     if (!news) {
       return NextResponse.json({ error: 'News item not found' }, { status: 404 })
@@ -62,9 +76,11 @@ export async function POST(
     if (!isNewsActive(news)) {
       return NextResponse.json({ error: 'News item has expired' }, { status: 400 })
     }
-    if (news.emailBlastSentAt && !force && !isTest) {
+    // One-shot guard is now per-audience: a prior blast to one list never
+    // blocks a fresh send to a different list.
+    if (!isTest && !force && blastedAudiences(news).includes(audienceKey)) {
       return NextResponse.json(
-        { error: 'Alert already sent for this news item' },
+        { error: `Alert already sent to '${audienceKey}' for this news item.` },
         { status: 409 }
       )
     }
@@ -94,9 +110,10 @@ export async function POST(
       emailHtml,
       emailText,
       test: isTest,
+      customList: audienceKey,
       customSubject: news.title,
       subReason: 'general',
-      description: `News alert: ${news.title}`,
+      description: `News alert: ${news.title} → ${audienceKey}`,
       sentBy: session.user.email,
       tenant,
     })
@@ -106,7 +123,7 @@ export async function POST(
     }
 
     if (!isTest) {
-      await markNewsBlastSent(newsId)
+      await markNewsBlastSent(newsId, audienceKey)
     }
 
     return NextResponse.json({
