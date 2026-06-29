@@ -7,6 +7,7 @@ import {
   UpdateNewsRequest,
   computeNewsExpiresAt,
   isNewsActive,
+  blastedAudiences,
 } from '@my/app/types/news'
 
 /**
@@ -142,13 +143,6 @@ export const listNewsItems = async (
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
   )
 }
-
-/**
- * Treat a legacy item (blasted before per-audience tracking existed) as having
- * gone to the newsletter, so the one-shot guard stays correct after upgrade.
- */
-export const blastedAudiences = (item: Pick<NewsItem, 'emailBlastAudiences' | 'emailBlastSentAt'>): string[] =>
-  item.emailBlastAudiences ?? (item.emailBlastSentAt ? ['newsletter'] : [])
 
 export const markNewsBlastSent = async (id: string, audienceKey: string): Promise<NewsItem> => {
   const existing = await getNewsItemById(id)

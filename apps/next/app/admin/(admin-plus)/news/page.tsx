@@ -11,18 +11,10 @@ import {
   type NewsFormValues,
 } from '@my/ui/src/news/news-item-form'
 import type { NewsItem } from '@my/app/types/news'
-import { isNewsActive } from '@my/app/types/news'
+import { isNewsActive, blastedAudiences } from '@my/app/types/news'
 import { getContactsList } from '@my/app/provider/get-data'
 
 type Audience = { key: string; label: string }
-
-/**
- * Audiences this item has been blasted to live. Mirrors the server's
- * `blastedAudiences` helper, treating a legacy `emailBlastSentAt` as a
- * newsletter send so the per-audience "already sent" state stays correct.
- */
-const sentAudiencesOf = (item: NewsItem): string[] =>
-  item.emailBlastAudiences ?? (item.emailBlastSentAt ? ['newsletter'] : [])
 
 type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; item: NewsItem }
 
@@ -199,7 +191,7 @@ export default function AdminNewsPage() {
           initialValues={initial}
           isSaving={saving}
           isExisting={mode.kind === 'edit'}
-          sentAudiences={mode.kind === 'edit' ? sentAudiencesOf(mode.item) : []}
+          sentAudiences={mode.kind === 'edit' ? blastedAudiences(mode.item) : []}
           audiences={audiences}
           ecclesiaOptions={ecclesiaOptions}
           onSave={handleSave}

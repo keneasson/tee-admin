@@ -8,9 +8,8 @@ import { emailSend } from '@/utils/email/email-send'
 import {
   getNewsItemById,
   markNewsBlastSent,
-  blastedAudiences,
 } from '@my/app/services/news-service'
-import { isNewsActive } from '@my/app/types/news'
+import { isNewsActive, blastedAudiences } from '@my/app/types/news'
 import { EmailListTypes } from '@my/app/types'
 import { getPreviewImageUrl } from '@my/app/types/events'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'

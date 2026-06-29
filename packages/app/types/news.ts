@@ -61,3 +61,14 @@ export function computeNewsExpiresAt(publishedAt: Date, durationWeeks: NewsDurat
 export function isNewsActive(item: Pick<NewsItem, 'expiresAt'>, now: Date = new Date()): boolean {
   return new Date(item.expiresAt).getTime() > now.getTime()
 }
+
+/**
+ * Email audiences (EmailListTypes keys) a News item has been blasted to live.
+ * Treats a legacy item (only `emailBlastSentAt`, predating per-audience
+ * tracking) as having gone to the newsletter, so the one-shot guard stays
+ * correct after upgrade. Pure — single source of truth for both the server
+ * send route and the client editor.
+ */
+export const blastedAudiences = (
+  item: Pick<NewsItem, 'emailBlastAudiences' | 'emailBlastSentAt'>
+): string[] => item.emailBlastAudiences ?? (item.emailBlastSentAt ? ['newsletter'] : [])
