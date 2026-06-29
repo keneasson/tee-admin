@@ -31,6 +31,8 @@ export type NewsFormValues = {
   durationWeeks: '1' | '2' | '3'
   sharingScope: 'own' | 'region' | 'global'
   documents: DocumentAttachment[]
+  /** Owning ecclesia ("operating as"). Only meaningful when ecclesiaOptions > 1. */
+  ecclesiaId?: string
 }
 
 export type NewsItemFormProps = {
@@ -38,6 +40,12 @@ export type NewsItemFormProps = {
   isSaving?: boolean
   isExisting?: boolean
   alertAlreadySent?: boolean
+  /**
+   * Ecclesias the signed-in user may post for. When more than one, a picker is
+   * shown so an owner / regional admin can choose which ecclesia owns the item.
+   * When 0–1, no picker is rendered (the server defaults to the user's home).
+   */
+  ecclesiaOptions?: string[]
   onSave: (values: NewsFormValues) => void | Promise<void>
   onCancel: () => void
   onDelete?: () => void | Promise<void>
@@ -68,6 +76,7 @@ export function NewsItemForm({
   isSaving = false,
   isExisting = false,
   alertAlreadySent = false,
+  ecclesiaOptions,
   onSave,
   onCancel,
   onDelete,
@@ -81,11 +90,24 @@ export function NewsItemForm({
       durationWeeks: initialValues?.durationWeeks || '1',
       sharingScope: initialValues?.sharingScope || 'own',
       documents: initialValues?.documents || [],
+      ecclesiaId: initialValues?.ecclesiaId || ecclesiaOptions?.[0] || '',
     },
   })
 
+  const showEcclesiaPicker = (ecclesiaOptions?.length ?? 0) > 1
+
   return (
     <YStack gap="$4" padding="$4">
+      {showEcclesiaPicker ? (
+        <EventFormSelect
+          control={control}
+          name="ecclesiaId"
+          label="Posting for ecclesia"
+          options={ecclesiaOptions!.map((name) => ({ value: name, label: name }))}
+          required
+        />
+      ) : null}
+
       <FormInput
         control={control}
         name="title"

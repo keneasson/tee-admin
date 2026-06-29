@@ -236,3 +236,32 @@ export function canManageEcclesia(
 ): boolean {
   return manageable.all || manageable.ecclesias.has(ecclesiaName)
 }
+
+/**
+ * Concrete, sorted list of ecclesia NAMES a user may author for — for the
+ * content-form ecclesia picker (the "operating as" selector). Resolves the
+ * `{ all: true }` OWNER case to every ecclesia name. The caller's home ecclesia
+ * (when present) sorts first as the natural default.
+ */
+export async function listSelectableEcclesias(
+  userEmail: string,
+  userRole: string
+): Promise<string[]> {
+  const manageable = await listManageableEcclesias(userEmail, userRole)
+  let names: string[]
+  if (manageable.all) {
+    names = (await getAllEcclesia()).map((e) => e.name).filter(Boolean)
+  } else {
+    names = Array.from(manageable.ecclesias)
+  }
+
+  const person = await personRepository.getByEmail(userEmail)
+  const home = person?.ecclesia
+  return names.sort((a, b) => {
+    if (home) {
+      if (a === home) return -1
+      if (b === home) return 1
+    }
+    return a.localeCompare(b)
+  })
+}
