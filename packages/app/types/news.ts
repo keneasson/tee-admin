@@ -25,13 +25,27 @@ export interface NewsItem {
   durationWeeks: NewsDurationWeeks
   sharingScope: EventSharingScope
   emailBlastSentAt?: Date
+  /**
+   * Email audiences (EmailListTypes keys, e.g. 'newsletter', 'interEcclesia')
+   * this item has been blasted to live. Lets the same post go to multiple
+   * audiences without the one-shot guard falsely blocking a second, different
+   * send. Legacy items predating this field are treated as having gone to
+   * 'newsletter' when `emailBlastSentAt` is set.
+   */
+  emailBlastAudiences?: string[]
   createdAt: Date
   updatedAt: Date
 }
 
 export type CreateNewsRequest = Omit<
   NewsItem,
-  'id' | 'createdAt' | 'updatedAt' | 'expiresAt' | 'publishedAt' | 'emailBlastSentAt'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'expiresAt'
+  | 'publishedAt'
+  | 'emailBlastSentAt'
+  | 'emailBlastAudiences'
 > & {
   publishedAt?: Date
 }

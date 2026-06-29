@@ -143,6 +143,16 @@ export const listNewsItems = async (
   )
 }
 
-export const markNewsBlastSent = async (id: string): Promise<NewsItem> => {
-  return updateNewsItem({ id, emailBlastSentAt: new Date() })
+/**
+ * Treat a legacy item (blasted before per-audience tracking existed) as having
+ * gone to the newsletter, so the one-shot guard stays correct after upgrade.
+ */
+export const blastedAudiences = (item: Pick<NewsItem, 'emailBlastAudiences' | 'emailBlastSentAt'>): string[] =>
+  item.emailBlastAudiences ?? (item.emailBlastSentAt ? ['newsletter'] : [])
+
+export const markNewsBlastSent = async (id: string, audienceKey: string): Promise<NewsItem> => {
+  const existing = await getNewsItemById(id)
+  if (!existing) throw new Error(`News item ${id} not found`)
+  const emailBlastAudiences = Array.from(new Set([...blastedAudiences(existing), audienceKey]))
+  return updateNewsItem({ id, emailBlastSentAt: new Date(), emailBlastAudiences })
 }
