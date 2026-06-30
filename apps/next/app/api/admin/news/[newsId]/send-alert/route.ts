@@ -133,9 +133,10 @@ export async function POST(
       skippedCount: result.skips.length,
     })
   } catch (error) {
-    console.error('Error sending news alert:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Error sending news alert:', message, error instanceof Error ? error.stack : error)
     return NextResponse.json(
-      { success: false, error: 'Failed to send news alert' },
+      { success: false, error: `Failed to send news alert: ${message}` },
       { status: 500 }
     )
   }
