@@ -18,7 +18,7 @@ import {
   link,
   main,
 } from '../styles'
-import { Footer } from '../components/Footer'
+import { FooterContent } from '../components/FooterContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type NewsAlertProps = {
@@ -74,7 +74,7 @@ const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUr
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer identity={identity} />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )
