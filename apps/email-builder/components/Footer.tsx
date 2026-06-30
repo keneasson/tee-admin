@@ -2,9 +2,16 @@ import { defaultText, footer, footerLink, footerText } from '../styles'
 import { Link, Section, Text } from '@react-email/components'
 import React from 'react'
 import { useEmailIdentity } from './email-identity'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
-export const Footer = () => {
-  const identity = useEmailIdentity()
+/**
+ * Footer identity defaults to the {@link EmailIdentityProvider} context.
+ * Callers rendering from an App Router server route — where the `'use client'`
+ * provider can't be used as an element — can pass `identity` directly instead.
+ */
+export const Footer = ({ identity: identityProp }: { identity?: EmailIdentity } = {}) => {
+  const contextIdentity = useEmailIdentity()
+  const identity = identityProp ?? contextIdentity
   return (
     <Section style={footer}>
       <Text style={defaultText}>

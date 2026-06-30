@@ -19,6 +19,7 @@ import {
   main,
 } from '../styles'
 import { Footer } from '../components/Footer'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type NewsAlertProps = {
   title: string
@@ -26,9 +27,15 @@ export type NewsAlertProps = {
   detailsUrl: string
   /** Optional poster preview (image URL or PDF page-1 thumbnail). */
   previewImageUrl?: string
+  /**
+   * Brand identity for the footer. Passed as a prop (not via the
+   * EmailIdentityProvider context) so this template renders from an App Router
+   * server route without invoking the `'use client'` provider element.
+   */
+  identity?: EmailIdentity
 }
 
-const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUrl }) => {
+const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUrl, identity }) => {
   return (
     <Html lang="en">
       <Head>
@@ -67,7 +74,7 @@ const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUr
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <Footer identity={identity} />
       </Body>
     </Html>
   )
