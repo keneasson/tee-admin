@@ -15,7 +15,6 @@ import { getPreviewImageUrl } from '@my/app/types/events'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
-import { EmailIdentityProvider } from 'email-builder/components/email-identity'
 import { canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
@@ -92,16 +91,17 @@ export async function POST(
     const detailsUrl = `https://www.${tenant.senderDomain}/news/${news.id}`
 
     // Brand the footer from the news item's owning ecclesia (per-org branding).
+    // Identity is passed as a prop rather than via EmailIdentityProvider: that
+    // provider is a `'use client'` component and can't be rendered as an element
+    // from this App Router server route (react-dom/server can't invoke a client
+    // reference). See NewsAlert/Footer `identity` prop.
     const profile = await resolveBrandProfile({ ownerEcclesiaName: news.ecclesiaId, tenant })
-    const emailElement = createElement(
-      EmailIdentityProvider,
-      { value: emailIdentityFromProfile(profile) },
-      createElement(NewsAlert as any, {
-        title: news.title,
-        detailsUrl,
-        previewImageUrl: getPreviewImageUrl(news.documents),
-      })
-    )
+    const emailElement = createElement(NewsAlert as any, {
+      title: news.title,
+      detailsUrl,
+      previewImageUrl: getPreviewImageUrl(news.documents),
+      identity: emailIdentityFromProfile(profile),
+    })
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })
 
