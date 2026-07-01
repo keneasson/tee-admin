@@ -43,6 +43,8 @@ export type NewsAlertProps = {
    * Driven by the selected audience, so it applies to test sends too.
    */
   interEcclesia?: boolean
+  /** Sending ecclesia's display name, shown as "From {fromEcclesia}" in the inter-ecclesia header. */
+  fromEcclesia?: string
 }
 
 const interEcclesiaHeaderStyle = {
@@ -59,6 +61,7 @@ const NewsAlert: React.FC<NewsAlertProps> = ({
   previewImageUrl,
   identity,
   interEcclesia = false,
+  fromEcclesia,
 }) => {
   const previewText = interEcclesia ? `Please share with your ecclesia: ${title}` : title
   return (
@@ -79,7 +82,7 @@ const NewsAlert: React.FC<NewsAlertProps> = ({
                 letterSpacing: '1px',
               }}
             >
-              Inter-Ecclesia Communication
+              From {fromEcclesia ?? identity?.name ?? 'Toronto East Ecclesia'}
             </Text>
             <Heading style={{ color: 'white', margin: '0', fontSize: '24px', fontWeight: '600' }}>
               Please Share With Your Ecclesia
@@ -114,9 +117,9 @@ const NewsAlert: React.FC<NewsAlertProps> = ({
             </Section>
           ) : null}
 
-          <Section style={{ marginTop: '8px' }}>
+          <Section style={{ marginTop: '28px' }}>
             <Link href={detailsUrl} style={link}>
-              View this on the web (with any attachments) →
+              View this on the web →
             </Link>
           </Section>
         </Container>
