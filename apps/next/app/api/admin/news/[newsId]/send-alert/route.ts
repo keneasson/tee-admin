@@ -98,9 +98,13 @@ export async function POST(
     const profile = await resolveBrandProfile({ ownerEcclesiaName: news.ecclesiaId, tenant })
     const emailElement = createElement(NewsAlert as any, {
       title: news.title,
+      body: news.body,
       detailsUrl,
       previewImageUrl: getPreviewImageUrl(news.documents),
       identity: emailIdentityFromProfile(profile),
+      // "Please share with your ecclesia" framing is driven by the selected
+      // audience (not the send mode), so it also applies to test sends.
+      interEcclesia: audienceKey === EmailListTypes.interEcclesia,
     })
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })

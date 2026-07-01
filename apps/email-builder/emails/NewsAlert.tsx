@@ -13,16 +13,20 @@ import {
 import React from 'react'
 import {
   container,
+  defaultText,
   globalCss,
   header,
   link,
   main,
 } from '../styles'
 import { FooterContent } from '../components/FooterContent'
+import { AutoLinkText } from '../components/AutoLinkText'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type NewsAlertProps = {
   title: string
+  /** The news item body — the actual information. Supports #/##, **bold**, - bullets, auto-linked URLs. */
+  body?: string
   /** Absolute URL to the news details page (per-brand domain). */
   detailsUrl: string
   /** Optional poster preview (image URL or PDF page-1 thumbnail). */
@@ -33,19 +37,59 @@ export type NewsAlertProps = {
    * server route without invoking the `'use client'` provider element.
    */
   identity?: EmailIdentity
+  /**
+   * When true, the audience is other ecclesias' leaders — render the
+   * "Please share with your ecclesia" framing instead of the standard header.
+   * Driven by the selected audience, so it applies to test sends too.
+   */
+  interEcclesia?: boolean
 }
 
-const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUrl, identity }) => {
+const interEcclesiaHeaderStyle = {
+  backgroundColor: '#4a5568',
+  textAlign: 'center' as const,
+  padding: '20px 24px',
+  color: 'white',
+}
+
+const NewsAlert: React.FC<NewsAlertProps> = ({
+  title,
+  body,
+  detailsUrl,
+  previewImageUrl,
+  identity,
+  interEcclesia = false,
+}) => {
+  const previewText = interEcclesia ? `Please share with your ecclesia: ${title}` : title
   return (
     <Html lang="en">
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>{title}</Preview>
+      <Preview>{previewText}</Preview>
       <Body style={main}>
-        <Section style={header}>
-          <Heading>Toronto East Communications</Heading>
-        </Section>
+        {interEcclesia ? (
+          <Section style={interEcclesiaHeaderStyle}>
+            <Text
+              style={{
+                fontSize: '12px',
+                margin: '0 0 4px 0',
+                color: '#e2e8f0',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+              }}
+            >
+              Inter-Ecclesia Communication
+            </Text>
+            <Heading style={{ color: 'white', margin: '0', fontSize: '24px', fontWeight: '600' }}>
+              Please Share With Your Ecclesia
+            </Heading>
+          </Section>
+        ) : (
+          <Section style={header}>
+            <Heading>{identity?.name ?? 'Toronto East Christadelphians'}</Heading>
+          </Section>
+        )}
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Heading as="h2" style={{ margin: '0 0 16px 0' }}>
@@ -64,9 +108,15 @@ const NewsAlert: React.FC<NewsAlertProps> = ({ title, detailsUrl, previewImageUr
             </Section>
           ) : null}
 
+          {body ? (
+            <Section style={{ ...defaultText, marginBottom: '8px' }}>
+              <AutoLinkText text={body} linkStyle={link} />
+            </Section>
+          ) : null}
+
           <Section style={{ marginTop: '8px' }}>
             <Link href={detailsUrl} style={link}>
-              Click to read →
+              View this on the web (with any attachments) →
             </Link>
           </Section>
         </Container>
