@@ -105,6 +105,9 @@ export async function POST(
       // "Please share with your ecclesia" framing is driven by the selected
       // audience (not the send mode), so it also applies to test sends.
       interEcclesia: audienceKey === EmailListTypes.interEcclesia,
+      // "From {ecclesia}" — the sending ecclesia's display name (e.g. "Toronto
+      // East Ecclesia"), distinct from the footer's public name.
+      fromEcclesia: profile.displayName,
     })
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })
