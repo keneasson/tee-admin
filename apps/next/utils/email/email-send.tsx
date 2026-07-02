@@ -359,18 +359,19 @@ async function chunkSend({
       }
 
       // Universal one-click login link (when the flag is on, loginUrls is set).
-      // The sweep is scoped to this path so output is unchanged when the flag is
-      // off — it only guards against an unsubstituted {{loginUrl}} (e.g. a
-      // recipient missing from the token map, or a stray placeholder pasted into
-      // custom HTML) ever shipping literally.
+      // Scoped to this path so output is unchanged when the flag is off.
       if (loginUrls) {
         const loginUrl = loginUrls.get(recipientEmail.toLowerCase())
         if (loginUrl) {
           personalizedHtml = personalizedHtml.replace(/\{\{loginUrl\}\}/g, loginUrl)
           personalizedText = personalizedText.replace(/\{\{loginUrl\}\}/g, loginUrl)
         }
-        personalizedHtml = personalizedHtml.replace(/\{\{[^}]+\}\}/g, '')
-        personalizedText = personalizedText.replace(/\{\{[^}]+\}\}/g, '')
+        // Strip ONLY our known tokens if they went unsubstituted (e.g. a
+        // recipient missing from the token map) — never a blanket {{...}} sweep,
+        // which could eat legitimate braces a user pasted into a custom email.
+        const KNOWN_TOKENS = /\{\{(loginUrl|ecclesiaUpdateUrl)\}\}/g
+        personalizedHtml = personalizedHtml.replace(KNOWN_TOKENS, '')
+        personalizedText = personalizedText.replace(KNOWN_TOKENS, '')
       }
 
       // Add UTM tracking parameters to all tee-admin.com links

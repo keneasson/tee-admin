@@ -138,7 +138,7 @@ export default function SigninTokenPage() {
         color="white"
         hoverStyle={{ backgroundColor: '$primaryHover' }}
         disabled={signingIn}
-        icon={signingIn ? <Spinner color="white" /> : undefined}
+        icon={signingIn ? <Spinner size="small" width={16} height={16} color="white" /> : undefined}
         onPress={handleSignIn}
       >
         {signingIn ? 'Signing you in…' : 'Sign in'}
