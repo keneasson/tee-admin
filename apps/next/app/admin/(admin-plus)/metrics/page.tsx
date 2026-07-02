@@ -10,14 +10,20 @@ import {
   Tabs,
   Card,
   Button,
+  Input,
   ScrollView,
   useThemeName,
 } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw } from '@tamagui/lucide-icons'
-import type { WebMetricsSummary, EmailMetricsSummary, EmailSendRecord } from '@my/app/types/analytics'
+import { RefreshCw, X } from '@tamagui/lucide-icons'
+import type {
+  WebMetricsSummary,
+  EmailMetricsSummary,
+  EmailSendRecord,
+  CampaignRecipient,
+} from '@my/app/types/analytics'
 import {
   LineChart,
   Line,
@@ -273,6 +279,7 @@ function EmailMetricsView({
   mode: 'light' | 'dark'
 }) {
   const textColor = mode === 'dark' ? '#e0e0e0' : '#333333'
+  const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null)
 
   return (
     <YStack gap="$4">
@@ -395,7 +402,21 @@ function EmailMetricsView({
 
       {/* Recent Email Performance (per-send tracking) */}
       {metrics.recentSends && metrics.recentSends.length > 0 ? (
-        <RecentSendsTable sends={metrics.recentSends} colors={colors} />
+        <RecentSendsTable
+          sends={metrics.recentSends}
+          colors={colors}
+          selectedCampaign={selectedCampaign}
+          onSelect={(id) => setSelectedCampaign((cur) => (cur === id ? null : id))}
+        />
+      ) : null}
+
+      {/* Per-recipient drill-down for the selected campaign */}
+      {selectedCampaign ? (
+        <RecipientDrilldown
+          campaignId={selectedCampaign}
+          colors={colors}
+          onClose={() => setSelectedCampaign(null)}
+        />
       ) : null}
     </YStack>
   )
@@ -422,14 +443,21 @@ function formatDate(iso: string): string {
 function RecentSendsTable({
   sends,
   colors,
+  onSelect,
+  selectedCampaign,
 }: {
   sends: EmailSendRecord[]
   colors: BrandColorsType
+  onSelect: (campaignId: string) => void
+  selectedCampaign: string | null
 }) {
   return (
     <Card padding="$4" backgroundColor={colors.backgroundTertiary}>
-      <Text fontSize="$4" fontWeight="600" color={colors.textPrimary} marginBottom="$3">
+      <Text fontSize="$4" fontWeight="600" color={colors.textPrimary} marginBottom="$1">
         Recent Email Performance
+      </Text>
+      <Text fontSize="$2" color={colors.textSecondary} marginBottom="$3">
+        Click a send to see exactly who received it and who opened / clicked / bounced.
       </Text>
       <YStack gap="$1">
         {/* Header row */}
@@ -471,6 +499,12 @@ function RecentSendsTable({
             borderBottomWidth={1}
             borderBottomColor={colors.border}
             alignItems="center"
+            cursor="pointer"
+            backgroundColor={
+              selectedCampaign === send.campaignId ? colors.backgroundSecondary : 'transparent'
+            }
+            hoverStyle={{ backgroundColor: colors.backgroundSecondary }}
+            onPress={() => onSelect(send.campaignId)}
           >
             <Text flex={2} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
               {formatDate(send.sentAt)}
@@ -526,6 +560,161 @@ function RecentSendsTable({
           </XStack>
         ))}
       </YStack>
+    </Card>
+  )
+}
+
+function fmtEventDate(iso?: string): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-CA', {
+    timeZone: 'America/Toronto',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+// Per-recipient drill-down for one campaign (who received / opened / clicked / bounced)
+function RecipientDrilldown({
+  campaignId,
+  colors,
+  onClose,
+}: {
+  campaignId: string
+  colors: BrandColorsType
+  onClose: () => void
+}) {
+  const [recipients, setRecipients] = useState<CampaignRecipient[]>([])
+  const [enrichedEcclesia, setEnrichedEcclesia] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch(`/api/admin/metrics/email/${campaignId}/recipients`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to load recipients'))))
+      .then((d) => {
+        if (cancelled) return
+        setRecipients(d.data.recipients ?? [])
+        setEnrichedEcclesia(!!d.data.enrichedEcclesia)
+      })
+      .catch((e) => !cancelled && setError(e.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [campaignId])
+
+  const q = filter.trim().toLowerCase()
+  const rows = q
+    ? recipients.filter(
+        (r) => r.email.toLowerCase().includes(q) || (r.ecclesia ?? '').toLowerCase().includes(q)
+      )
+    : recipients
+
+  const summary = {
+    total: recipients.length,
+    delivered: recipients.filter((r) => r.deliveredAt).length,
+    opened: recipients.filter((r) => r.opens > 0).length,
+    clicked: recipients.filter((r) => r.clicks > 0).length,
+    bounced: recipients.filter((r) => r.bouncedAt).length,
+  }
+
+  return (
+    <Card padding="$4" backgroundColor={colors.backgroundTertiary}>
+      <XStack justifyContent="space-between" alignItems="center" marginBottom="$2">
+        <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
+          Recipients — who received this send
+        </Text>
+        <Button size="$2" icon={X} onPress={onClose} backgroundColor="transparent" />
+      </XStack>
+
+      {loading ? (
+        <YStack alignItems="center" padding="$4">
+          <Spinner />
+        </YStack>
+      ) : error ? (
+        <Text color={colors.error}>{error}</Text>
+      ) : recipients.length === 0 ? (
+        <Text color={colors.textSecondary} fontSize="$3">
+          No per-recipient data for this send. (Only sends after per-recipient tracking was enabled
+          are captured.)
+        </Text>
+      ) : (
+        <YStack gap="$3">
+          <Text fontSize="$2" color={colors.textSecondary}>
+            {summary.total} recipients · {summary.delivered} delivered · {summary.opened} opened ·{' '}
+            {summary.clicked} clicked · {summary.bounced} bounced
+            {enrichedEcclesia ? '' : ' · (ecclesia not shown for large sends)'}
+          </Text>
+
+          <Input
+            size="$3"
+            placeholder="Filter by ecclesia or email…"
+            value={filter}
+            onChangeText={setFilter}
+            backgroundColor={colors.background}
+          />
+
+          {/* Header */}
+          <XStack paddingHorizontal="$2" paddingVertical="$1" borderBottomWidth={1} borderBottomColor={colors.border}>
+            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Ecclesia</Text>
+            <Text flex={3} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Email</Text>
+            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Delivered</Text>
+            <Text flex={1} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Opens</Text>
+            <Text flex={1} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Clicks</Text>
+            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Status</Text>
+          </XStack>
+
+          {rows.map((r) => {
+            const bounced = !!r.bouncedAt
+            const complained = !!r.complainedAt
+            const failed = r.status === 'failed'
+            const statusText = complained
+              ? 'Complaint'
+              : bounced
+                ? `Bounced${r.bounceType ? ` (${r.bounceType})` : ''}`
+                : failed
+                  ? 'Send failed'
+                  : r.deliveredAt
+                    ? 'Delivered'
+                    : 'Sent'
+            const statusColor =
+              complained || bounced || failed ? '#ef4444' : r.deliveredAt ? '#22c55e' : colors.textSecondary
+            return (
+              <XStack key={r.email} paddingHorizontal="$2" paddingVertical="$1.5" borderBottomWidth={1} borderBottomColor={colors.border} alignItems="center">
+                <Text flex={2} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                  {r.ecclesia ?? '—'}
+                </Text>
+                <Text flex={3} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                  {r.email}
+                </Text>
+                <Text flex={2} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
+                  {fmtEventDate(r.deliveredAt)}
+                </Text>
+                <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
+                  {r.opens}
+                </Text>
+                <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
+                  {r.clicks}
+                </Text>
+                <Text flex={2} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
+                  {statusText}
+                </Text>
+              </XStack>
+            )
+          })}
+          {rows.length === 0 ? (
+            <Text color={colors.textSecondary} fontSize="$2" padding="$2">
+              No recipients match “{filter}”.
+            </Text>
+          ) : null}
+        </YStack>
+      )}
     </Card>
   )
 }
