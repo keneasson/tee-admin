@@ -7,6 +7,7 @@ import { chunkArray } from '../chunkArray'
 import { generateEcclesiaUpdateUrl } from './ecclesia-token'
 import { addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
+import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
 
 const SES_RATE_LIMIT = 14
@@ -222,6 +223,21 @@ export const emailSend = async function ({
       })
     } catch (recordError) {
       console.error('Failed to create send record (non-fatal):', recordError)
+    }
+
+    // Per-recipient roster snapshot — the send-time record of exactly who this
+    // campaign went to. SES delivery/open/click/bounce events fill in the rest
+    // per recipient (see the SES webhook). Best-effort; killable per-deployment
+    // with RECIPIENT_TRACKING_ENABLED=false (newsletter = thousands of writes).
+    if (process.env.RECIPIENT_TRACKING_ENABLED !== 'false') {
+      try {
+        await sendRecipientRepository.snapshotRoster(campaignId, [
+          ...allSent.sends.map((email) => ({ email, status: 'sent' as const })),
+          ...allSent.skips.map((email) => ({ email, status: 'failed' as const })),
+        ])
+      } catch (rosterError) {
+        console.error('Failed to snapshot recipient roster (non-fatal):', rosterError)
+      }
     }
 
     return { ...allSent, campaignId }

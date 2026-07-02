@@ -57,6 +57,49 @@ export interface EmailSendRecord {
   clickRate: number
 }
 
+/**
+ * Per-recipient send record — one per (campaign, email). Enables Mailchimp-style
+ * drill-down: exactly who was sent to and, from SES events, who was delivered /
+ * opened / clicked / bounced. Stored under the same partition as the campaign's
+ * METADATA record (pkey SEND#{campaignId}, skey RECIPIENT#{email}).
+ */
+export interface EmailRecipientRecord {
+  pkey: string // SEND#{campaignId}
+  skey: string // RECIPIENT#{email-lowercased}
+  campaignId: string
+  email: string
+  ecclesia?: string
+  status: 'sent' | 'failed'
+  sentAt: string // ISO
+  deliveredAt?: string
+  opens: number
+  lastOpenAt?: string
+  clicks: number
+  lastClickAt?: string
+  bouncedAt?: string
+  bounceType?: string
+  complainedAt?: string
+  ttl: number
+  lastUpdated?: string
+  version?: number
+}
+
+/** API-facing per-recipient row for a campaign report */
+export interface CampaignRecipient {
+  email: string
+  ecclesia?: string
+  status: 'sent' | 'failed'
+  sentAt: string
+  deliveredAt?: string
+  opens: number
+  lastOpenAt?: string
+  clicks: number
+  lastClickAt?: string
+  bouncedAt?: string
+  bounceType?: string
+  complainedAt?: string
+}
+
 export interface EmailMetricsSummary {
   totals: {
     sends: number
