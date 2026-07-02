@@ -2,7 +2,10 @@
 
 import React from 'react'
 import { Controller, useForm } from 'react-hook-form'
-import { Button, Paragraph, XStack, YStack } from 'tamagui'
+import { Paragraph, XStack, YStack } from 'tamagui'
+// Project Button (not raw tamagui): disables hoverTheme so a colored button's
+// background doesn't swap to the page background on hover (white-on-white).
+import { Button } from '../Button'
 import { FormInput } from '../form/form-input'
 import { OptimizedTextarea } from '../form/optimized-textarea'
 import { EventFormSelect } from '../form/event-form-select'
@@ -249,9 +252,11 @@ export function NewsItemForm({
               Send test alert
             </Button>
             <Button
-              backgroundColor={alertAlreadySent ? '$gray8' : '$warning'}
-              color="white"
-              hoverStyle={{ backgroundColor: alertAlreadySent ? '$gray8' : '$warningHover' }}
+              backgroundColor={alertAlreadySent ? '$gray4' : '$warning'}
+              color={alertAlreadySent ? '$gray11' : 'white'}
+              borderColor={alertAlreadySent ? '$gray6' : undefined}
+              hoverStyle={{ backgroundColor: alertAlreadySent ? '$gray4' : '$warningHover' }}
+              disabledStyle={{ opacity: 1 }}
               onPress={() => onSendAlert(false, selectedAudience)}
               disabled={isSaving || alertAlreadySent}
             >
