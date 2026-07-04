@@ -3,6 +3,23 @@ import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aw
 import { getSesClient } from '@/utils/email/sesClient'
 import { inputTemplate } from '@/utils/email/contact-lists'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+
+/** Serving-tenant brand, so the page reads as a clear entrypoint into tee-admin.com OR echadhub.org. */
+function tenantBrand(request: NextRequest) {
+  const t = getTenantFromHeaders(request.headers) ?? resolveTenantFromEnv()
+  return { id: t.id, publicName: t.publicName, senderDomain: t.senderDomain }
+}
+
+async function firstNameForEmail(email: string): Promise<string | null> {
+  try {
+    const person = await personRepository.getByEmailForAuth(email)
+    return person?.firstName || null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Self-serve subscription management (Issue #75).
@@ -46,14 +63,22 @@ export async function GET(request: NextRequest) {
       label: PUBLIC_TOPIC_LABELS[t],
       subscribed: prefs.get(t) === SubscriptionStatus.OPT_IN,
     }))
-    return NextResponse.json({ email, subscriptions, unsubscribedAll: !!contact.UnsubscribeAll })
+    return NextResponse.json({
+      email,
+      name: await firstNameForEmail(email),
+      subscriptions,
+      unsubscribedAll: !!contact.UnsubscribeAll,
+      tenant: tenantBrand(request),
+    })
   } catch (error: any) {
     if (error?.name === 'NotFoundException') {
       // Not yet a contact — show everything as not-subscribed.
       return NextResponse.json({
         email,
+        name: await firstNameForEmail(email),
         subscriptions: PUBLIC_TOPICS.map((t) => ({ topic: t, label: PUBLIC_TOPIC_LABELS[t], subscribed: false })),
         unsubscribedAll: false,
+        tenant: tenantBrand(request),
       })
     }
     console.error('subscribe GET failed:', error)
