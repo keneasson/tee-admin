@@ -4,6 +4,7 @@ import { getSesClient } from '@/utils/email/sesClient'
 import { inputTemplate } from '@/utils/email/contact-lists'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
 import { auth } from '@/utils/auth'
+import { maskEmail } from '@/utils/mask-email'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
@@ -51,21 +52,38 @@ async function emailForToken(token: string | null): Promise<string | null> {
  * session (authenticated — e.g. arriving from the profile page). This is why a
  * signed-in user can manage preferences without a token.
  */
-async function resolveEmail(token: string | null): Promise<string | null> {
+async function resolveIdentity(
+  token: string | null
+): Promise<{ email: string; authenticated: boolean } | null> {
   const fromToken = await emailForToken(token)
-  if (fromToken) return fromToken
+  if (fromToken) return { email: fromToken, authenticated: false } // recognized
   const session = await auth()
   const em = session?.user?.email
-  return em ? em.toLowerCase() : null
+  if (em) return { email: em.toLowerCase(), authenticated: true } // authenticated
+  return null
+}
+
+/**
+ * PRIVACY: only expose the FULL address to a confirmed (authenticated) caller.
+ * A recognized (token-only) caller might be a forward recipient, so we return
+ * just the masked form — enough to know "which identity" without revealing it.
+ */
+function identityFields(id: { email: string; authenticated: boolean }) {
+  return {
+    email: id.authenticated ? id.email : null,
+    emailMasked: maskEmail(id.email),
+    authenticated: id.authenticated,
+  }
 }
 
 /** GET /api/subscribe?token=… (or a session) → current opt-in state for the public topics. */
 export async function GET(request: NextRequest) {
   const token = new URL(request.url).searchParams.get('token')
-  const email = await resolveEmail(token)
-  if (!email) {
+  const id = await resolveIdentity(token)
+  if (!id) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
   }
+  const email = id.email
   try {
     const contact = await getSesClient().send(
       new GetContactCommand({ ...inputTemplate, EmailAddress: email })
@@ -79,7 +97,7 @@ export async function GET(request: NextRequest) {
       subscribed: prefs.get(t) === SubscriptionStatus.OPT_IN,
     }))
     return NextResponse.json({
-      email,
+      ...identityFields(id),
       name: await firstNameForEmail(email),
       subscriptions,
       unsubscribedAll: !!contact.UnsubscribeAll,
@@ -89,7 +107,7 @@ export async function GET(request: NextRequest) {
     if (error?.name === 'NotFoundException') {
       // Not yet a contact — show everything as not-subscribed.
       return NextResponse.json({
-        email,
+        ...identityFields(id),
         name: await firstNameForEmail(email),
         subscriptions: PUBLIC_TOPICS.map((t) => ({ topic: t, label: PUBLIC_TOPIC_LABELS[t], subscribed: false })),
         unsubscribedAll: false,
@@ -112,10 +130,11 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 })
   }
-  const email = await resolveEmail(body?.token ?? null)
-  if (!email) {
+  const id = await resolveIdentity(body?.token ?? null)
+  if (!id) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
   }
+  const email = id.email
   const requested: Record<string, boolean> = body?.subscriptions ?? {}
 
   try {

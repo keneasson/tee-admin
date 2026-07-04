@@ -24,7 +24,15 @@ import { Check, Mail } from '@tamagui/lucide-icons'
 
 type Sub = { topic: string; label: string; subscribed: boolean }
 type Tenant = { id: string; publicName: string; senderDomain: string }
-type Data = { email: string; name: string | null; subscriptions: Sub[]; unsubscribedAll: boolean; tenant: Tenant }
+type Data = {
+  email: string | null // full address — present only when authenticated
+  emailMasked: string // always present; the "which identity" hint
+  authenticated: boolean
+  name: string | null
+  subscriptions: Sub[]
+  unsubscribedAll: boolean
+  tenant: Tenant
+}
 
 // High-contrast input styling that reads as a real field in BOTH themes: a
 // surface (white in light) fill, a primary-coloured 2px border (navy in light,
@@ -141,12 +149,16 @@ export default function SubscribePage() {
   // (proving they know it, not just that they hold a forwarded link) → send code.
   const confirmStepUp = async () => {
     if (!data) return
-    if (stepUpEmail.trim().toLowerCase() !== data.email.toLowerCase()) {
-      setStepUpError(`That doesn’t match ${maskEmail(data.email)}.`)
+    const typed = stepUpEmail.trim().toLowerCase()
+    // Match against the mask (we never receive the full address until confirmed).
+    // The code/link is delivered to whatever they typed, so only the true owner
+    // can complete it regardless.
+    if (maskEmail(typed) !== data.emailMasked) {
+      setStepUpError(`That doesn’t match ${data.emailMasked}.`)
       return
     }
     setStepUpError(null)
-    await startSignin(data.email)
+    await startSignin(typed)
   }
 
   const verifyCode = async () => {
@@ -190,6 +202,17 @@ export default function SubscribePage() {
   // one we don't know the tenant, so show a purposeful prompt instead of
   // repeating the "Email preferences" heading.
   const eyebrow = data?.tenant?.publicName ?? 'Please confirm your email'
+
+  // Escape hatch for anyone who isn't the person this link was addressed to
+  // (a forward recipient, a different account, a helpful third party).
+  const notYou = (
+    <Paragraph fontSize="$2" color="$textSecondary" textAlign="center">
+      Not you?{' '}
+      <Anchor href="/auth/register" color="$primary">Create a new account</Anchor>
+      {', or '}
+      <Anchor href="/auth/signin" color="$primary">sign in with a different email</Anchor>.
+    </Paragraph>
+  )
 
   return (
     <YStack flex={1} justifyContent="center" alignItems="center" padding="$4" backgroundColor="$background">
@@ -244,6 +267,7 @@ export default function SubscribePage() {
                 Use a different email
               </Text>
             </XStack>
+            {notYou}
           </YStack>
         ) : !data ? (
           /* No identity yet (no token, not signed in) → collect an email, send a code */
@@ -276,7 +300,11 @@ export default function SubscribePage() {
               <Paragraph fontWeight="700">
                 {data.name ? `Hi ${data.name},` : 'Manage your subscriptions'}
               </Paragraph>
-              <Paragraph fontSize="$2" color="$textSecondary">{maskEmail(data.email)}</Paragraph>
+              {/* Signed in → full address (the API only sends it when confirmed).
+                  Recognized (token) → masked hint, since you're not confirmed yet. */}
+              <Paragraph fontSize="$2" color="$textSecondary">
+                {data.email ?? data.emailMasked}
+              </Paragraph>
             </YStack>
 
             <YStack gap="$3">
@@ -324,7 +352,7 @@ export default function SubscribePage() {
               <YStack gap="$2">
                 <Paragraph fontSize="$3" color="$textSecondary">
                   Re-enter your email address{' '}
-                  <Text fontWeight="700">{maskEmail(data.email)}</Text> to get a sign-in link.
+                  <Text fontWeight="700">{data.emailMasked}</Text> to get a sign-in link.
                 </Paragraph>
                 <Input
                   {...INPUT_STYLE}
@@ -348,6 +376,7 @@ export default function SubscribePage() {
                 >
                   Email My Link
                 </Button>
+                {notYou}
               </YStack>
             )}
           </YStack>
