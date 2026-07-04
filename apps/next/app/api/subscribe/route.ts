@@ -55,11 +55,13 @@ async function emailForToken(token: string | null): Promise<string | null> {
 async function resolveIdentity(
   token: string | null
 ): Promise<{ email: string; authenticated: boolean } | null> {
-  const fromToken = await emailForToken(token)
-  if (fromToken) return { email: fromToken, authenticated: false } // recognized
+  // Session wins: a signed-in user is authenticated even if a token is still in
+  // the URL. Only fall back to the token (recognized) when there's no session.
   const session = await auth()
   const em = session?.user?.email
   if (em) return { email: em.toLowerCase(), authenticated: true } // authenticated
+  const fromToken = await emailForToken(token)
+  if (fromToken) return { email: fromToken, authenticated: false } // recognized
   return null
 }
 
@@ -133,6 +135,14 @@ export async function POST(request: NextRequest) {
   const id = await resolveIdentity(body?.token ?? null)
   if (!id) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+  }
+  // Saving is a protected action: a recognized (token-only) caller must confirm
+  // it's them (sign in) before we mutate anything. See #80.
+  if (!id.authenticated) {
+    return NextResponse.json(
+      { error: "Please confirm it's you to save changes.", stepUpRequired: true },
+      { status: 403 }
+    )
   }
   const email = id.email
   const requested: Record<string, boolean> = body?.subscriptions ?? {}

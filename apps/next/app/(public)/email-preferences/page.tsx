@@ -307,12 +307,15 @@ export default function SubscribePage() {
               </Paragraph>
             </YStack>
 
-            <YStack gap="$3">
+            {/* Recognized (not confirmed) → the toggles are read-only. Changing
+                them is a protected action; confirm first (below). */}
+            <YStack gap="$3" opacity={data.authenticated ? 1 : 0.6}>
               {data.subscriptions.map((s) => (
                 <XStack key={s.topic} gap="$3" alignItems="center">
                   <Checkbox
                     id={s.topic}
                     checked={!!subs[s.topic]}
+                    disabled={!data.authenticated}
                     onCheckedChange={(v) => setSubs((cur) => ({ ...cur, [s.topic]: !!v }))}
                     size="$5"
                   >
@@ -320,29 +323,38 @@ export default function SubscribePage() {
                       <Check />
                     </Checkbox.Indicator>
                   </Checkbox>
-                  <Text flex={1} onPress={() => setSubs((cur) => ({ ...cur, [s.topic]: !cur[s.topic] }))}>
+                  <Text
+                    flex={1}
+                    onPress={
+                      data.authenticated
+                        ? () => setSubs((cur) => ({ ...cur, [s.topic]: !cur[s.topic] }))
+                        : undefined
+                    }
+                  >
                     {s.label}
                   </Text>
                 </XStack>
               ))}
             </YStack>
 
-            <Button
-              backgroundColor="$primary"
-              color="white"
-              hoverStyle={{ backgroundColor: '$primaryHover' }}
-              disabled={saving}
-              icon={saving ? <Spinner size="small" color="white" /> : saved ? Check : undefined}
-              onPress={save}
-            >
-              {saving ? 'Saving…' : saved ? 'Saved' : 'Save preferences'}
-            </Button>
+            {data.authenticated ? (
+              <Button
+                backgroundColor="$primary"
+                color="white"
+                hoverStyle={{ backgroundColor: '$primaryHover' }}
+                disabled={saving}
+                icon={saving ? <Spinner size="small" color="white" /> : saved ? Check : undefined}
+                onPress={save}
+              >
+                {saving ? 'Saving…' : saved ? 'Saved' : 'Save preferences'}
+              </Button>
+            ) : null}
 
             <Separator />
 
-            {/* Already signed in → point at the full profile. Otherwise offer
-                step-up: the shared code-entry step (above) does the work. */}
-            {status === 'authenticated' ? (
+            {/* Confirmed → link to the full profile. Recognized → they must
+                confirm it's them before they can change anything. */}
+            {data.authenticated ? (
               <XStack justifyContent="center">
                 <Anchor href="/profile" color="$textSecondary" fontSize="$3">
                   Manage everything in your profile →
@@ -351,8 +363,8 @@ export default function SubscribePage() {
             ) : (
               <YStack gap="$2">
                 <Paragraph fontSize="$3" color="$textSecondary">
-                  Re-enter your email address{' '}
-                  <Text fontWeight="700">{data.emailMasked}</Text> to get a sign-in link.
+                  To change your subscriptions, confirm it’s you — re-enter your email
+                  address <Text fontWeight="700">{data.emailMasked}</Text> to get a sign-in link.
                 </Paragraph>
                 <Input
                   {...INPUT_STYLE}
