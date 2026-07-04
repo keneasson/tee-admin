@@ -54,6 +54,11 @@ export default function SubscribePage() {
   const [verifying, setVerifying] = useState(false)
   const [signinError, setSigninError] = useState<string | null>(null)
 
+  // Step-up confirm on the toggles view: re-enter your (recognized) email to
+  // prove it's you before we send a sign-in link.
+  const [stepUpEmail, setStepUpEmail] = useState('')
+  const [stepUpError, setStepUpError] = useState<string | null>(null)
+
   // Load preferences for whoever we can identify: a ?token= (from an email) OR
   // a live session (e.g. arriving signed-in from the profile page). With
   // neither we fall through to the "email me a code" form.
@@ -120,6 +125,18 @@ export default function SubscribePage() {
     setCode('')
     setSigninPhase('code')
     await sendLink(em, () => {})
+  }
+
+  // Step-up from the toggles view: they must re-type their recognized email
+  // (proving they know it, not just that they hold a forwarded link) → send code.
+  const confirmStepUp = async () => {
+    if (!data) return
+    if (stepUpEmail.trim().toLowerCase() !== data.email.toLowerCase()) {
+      setStepUpError(`That doesn’t match ${maskEmail(data.email)}.`)
+      return
+    }
+    setStepUpError(null)
+    await startSignin(data.email)
   }
 
   const verifyCode = async () => {
@@ -224,7 +241,7 @@ export default function SubscribePage() {
           /* No identity yet (no token, not signed in) → collect an email, send a code */
           <YStack gap="$3">
             <Paragraph color="$textSecondary" textAlign="center">
-              Enter your email address and we’ll send you a secure code to manage your subscriptions.
+              Enter your email address to get a sign-in link.
             </Paragraph>
             <Input
               placeholder="you@example.com"
@@ -297,17 +314,29 @@ export default function SubscribePage() {
             ) : (
               <YStack gap="$2">
                 <Paragraph fontSize="$3" color="$textSecondary">
-                  Want to view your profile and manage everything in one place?
+                  Re-enter your email address{' '}
+                  <Text fontWeight="700">{maskEmail(data.email)}</Text> to get a sign-in link.
                 </Paragraph>
+                <Input
+                  placeholder="you@example.com"
+                  value={stepUpEmail}
+                  onChangeText={(t) => { setStepUpEmail(t); setStepUpError(null) }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+                {stepUpError ? (
+                  <Paragraph color="$error" fontSize="$2">{stepUpError}</Paragraph>
+                ) : null}
                 <Button
                   variant="outlined"
                   borderColor="$primary"
                   color="$primary"
                   icon={Mail}
                   hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$primary' }}
-                  onPress={() => startSignin(data.email)}
+                  disabled={!stepUpEmail.includes('@')}
+                  onPress={confirmStepUp}
                 >
-                  Sign in
+                  Email My Link
                 </Button>
               </YStack>
             )}
