@@ -12,6 +12,11 @@ export interface OtpEmailOptions {
   brandName?: string
   /** Organisation shown in the footer. */
   orgName?: string
+  /**
+   * Same-site path to return to after the magic link verifies (e.g.
+   * "/email-preferences"). Defaults to the otp-callback's own default (/profile).
+   */
+  redirectPath?: string
 }
 
 export async function sendOtpEmail(
@@ -27,7 +32,12 @@ export async function sendOtpEmail(
   ).replace(/\/$/, '')
   const brandName = opts.brandName || 'TEE Admin'
   const orgName = opts.orgName || 'Toronto East Christadelphian Ecclesia'
-  const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}`
+  // Only carry a safe same-site return path (no open redirects).
+  const redirect =
+    opts.redirectPath && opts.redirectPath.startsWith('/') && !opts.redirectPath.startsWith('//')
+      ? `&redirect=${encodeURIComponent(opts.redirectPath)}`
+      : ''
+  const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}${redirect}`
 
   const subject = `Your ${brandName} verification code`
 

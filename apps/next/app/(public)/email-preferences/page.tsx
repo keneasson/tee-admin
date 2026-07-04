@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, useSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { maskEmail } from '@/utils/mask-email'
 import { Loading } from '@my/app/provider/loading'
@@ -35,6 +35,7 @@ type Data = { email: string; name: string | null; subscriptions: Sub[]; unsubscr
 export default function SubscribePage() {
   const isHydrated = useHydrated()
   const token = useSearchParams()?.get('token') ?? null
+  const { status } = useSession() // 'loading' | 'authenticated' | 'unauthenticated'
 
   const [data, setData] = useState<Data | null>(null)
   const [subs, setSubs] = useState<Record<string, boolean>>({})
@@ -43,22 +44,28 @@ export default function SubscribePage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [emailInput, setEmailInput] = useState('')
-  const [linkSent, setLinkSent] = useState(false)
 
   // Sign-in (step-up) flow: idle → 'code' once the OTP email is sent. The email
   // carries both a magic link and a 6-digit code; this lets them type the code.
+  // Shared by the no-token "email me a link" path and the token "Sign in" path.
   const [signinPhase, setSigninPhase] = useState<'idle' | 'code'>('idle')
+  const [signinEmail, setSigninEmail] = useState('')
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [signinError, setSigninError] = useState<string | null>(null)
 
+  // Load preferences for whoever we can identify: a ?token= (from an email) OR
+  // a live session (e.g. arriving signed-in from the profile page). With
+  // neither we fall through to the "email me a code" form.
   useEffect(() => {
-    if (!isHydrated || !token) {
-      if (isHydrated) setLoading(false)
+    if (!isHydrated || status === 'loading') return
+    if (!token && status !== 'authenticated') {
+      setLoading(false)
       return
     }
     let cancelled = false
-    fetch(`/api/subscribe?token=${encodeURIComponent(token)}`)
+    const url = token ? `/api/subscribe?token=${encodeURIComponent(token)}` : '/api/subscribe'
+    fetch(url)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('This link is invalid or has expired.'))))
       .then((d: Data) => {
         if (cancelled) return
@@ -70,7 +77,7 @@ export default function SubscribePage() {
     return () => {
       cancelled = true
     }
-  }, [isHydrated, token])
+  }, [isHydrated, token, status])
 
   const save = async () => {
     if (!token) return
@@ -96,23 +103,27 @@ export default function SubscribePage() {
     await fetch('/api/auth/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      // Return here after the magic link verifies (not the default /profile).
+      body: JSON.stringify({ email: email.trim().toLowerCase(), redirectPath: '/email-preferences' }),
     })
     onDone() // always succeeds (anti-enumeration)
   }
 
-  // Step-up: send the OTP, then let them either click the emailed link or type
-  // the 6-digit code here. Verifying the code establishes a full session.
-  const startSignin = async () => {
-    if (!data?.email) return
+  // Step-up: send the OTP to `targetEmail`, then let them either click the
+  // emailed link or type the 6-digit code here. Shared by both entry points —
+  // the no-token "email me a link" flow and the token view's "Sign in".
+  const startSignin = async (targetEmail: string) => {
+    const em = (targetEmail || '').trim().toLowerCase()
+    if (!em.includes('@')) return
+    setSigninEmail(em)
     setSigninError(null)
     setCode('')
     setSigninPhase('code')
-    await sendLink(data.email, () => {})
+    await sendLink(em, () => {})
   }
 
   const verifyCode = async () => {
-    if (!data?.email || code.length !== 6) {
+    if (!signinEmail || code.length !== 6) {
       setSigninError('Enter the 6-digit code from your email.')
       return
     }
@@ -122,19 +133,21 @@ export default function SubscribePage() {
       const vr = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, code }),
+        body: JSON.stringify({ email: signinEmail, code }),
       })
       if (!vr.ok) {
         const j = await vr.json().catch(() => ({}))
         setSigninError(j.error || 'That code didn’t work — check it and try again.')
         return
       }
-      const res = await signIn('otp', { email: data.email, otpToken: code, redirect: false })
+      const res = await signIn('otp', { email: signinEmail, otpToken: code, redirect: false })
       if (res?.error) {
         setSigninError('Sign in failed. Please try again.')
         return
       }
-      window.location.href = '/profile'
+      // Return to this page — now signed in, it loads their preferences via the
+      // session (rather than dropping them on /profile).
+      window.location.href = '/email-preferences'
     } catch {
       setSigninError('Something went wrong. Please try again.')
     } finally {
@@ -164,38 +177,74 @@ export default function SubscribePage() {
 
         {error ? <Paragraph color="$error" textAlign="center">{error}</Paragraph> : null}
 
-        {/* No token → let them request a link */}
-        {!token ? (
-          linkSent ? (
-            <Paragraph textAlign="center">
-              If that address is on file, we’ve sent a link to{' '}
-              <Text fontWeight="700">{maskEmail(emailInput)}</Text>. Check your inbox.
+        {/* Shared code-entry step — both the no-token "email me a link" flow and
+            the token "Sign in" flow funnel here so there's always a place to
+            type the 6-digit code (or click the emailed link). */}
+        {signinPhase === 'code' ? (
+          <YStack gap="$3">
+            <Paragraph fontSize="$3" textAlign="center">
+              We emailed a 6-digit code to{' '}
+              <Text fontWeight="700">{maskEmail(signinEmail)}</Text>. Enter it below, or
+              click the link in that email.
             </Paragraph>
-          ) : (
-            <YStack gap="$3">
-              <Paragraph color="$textSecondary" textAlign="center">
-                Enter your email address and we’ll send you a secure link to manage your subscriptions.
-              </Paragraph>
-              <Input
-                placeholder="you@example.com"
-                value={emailInput}
-                onChangeText={setEmailInput}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              <Button
-                backgroundColor="$primary"
-                color="white"
-                icon={Mail}
-                hoverStyle={{ backgroundColor: '$primaryHover' }}
-                disabled={!emailInput.includes('@')}
-                onPress={() => sendLink(emailInput, () => setLinkSent(true))}
-              >
-                Email My Link
-              </Button>
-            </YStack>
-          )
-        ) : data ? (
+            <Input
+              value={code}
+              onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              keyboardType="number-pad"
+              autoComplete="one-time-code"
+              textAlign="center"
+              fontSize="$8"
+              letterSpacing={10}
+              maxLength={6}
+            />
+            {signinError ? (
+              <Paragraph color="$error" fontSize="$2" textAlign="center">{signinError}</Paragraph>
+            ) : null}
+            <Button
+              backgroundColor="$primary"
+              color="white"
+              hoverStyle={{ backgroundColor: '$primaryHover' }}
+              disabled={verifying || code.length !== 6}
+              icon={verifying ? <Spinner size="small" color="white" /> : undefined}
+              onPress={verifyCode}
+            >
+              {verifying ? 'Verifying…' : 'Verify & sign in'}
+            </Button>
+            <XStack justifyContent="center" gap="$4">
+              <Text color="$textSecondary" fontSize="$2" cursor="pointer" onPress={() => startSignin(signinEmail)}>
+                Resend code
+              </Text>
+              <Text color="$textSecondary" fontSize="$2" cursor="pointer" onPress={() => { setSigninPhase('idle'); setCode(''); setSigninError(null) }}>
+                Use a different email
+              </Text>
+            </XStack>
+          </YStack>
+        ) : !data ? (
+          /* No identity yet (no token, not signed in) → collect an email, send a code */
+          <YStack gap="$3">
+            <Paragraph color="$textSecondary" textAlign="center">
+              Enter your email address and we’ll send you a secure code to manage your subscriptions.
+            </Paragraph>
+            <Input
+              placeholder="you@example.com"
+              value={emailInput}
+              onChangeText={setEmailInput}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <Button
+              backgroundColor="$primary"
+              color="white"
+              icon={Mail}
+              hoverStyle={{ backgroundColor: '$primaryHover' }}
+              disabled={!emailInput.includes('@')}
+              onPress={() => startSignin(emailInput)}
+            >
+              Email My Link
+            </Button>
+          </YStack>
+        ) : (
           <YStack gap="$4">
             <YStack gap="$1">
               <Paragraph fontWeight="700">
@@ -237,69 +286,33 @@ export default function SubscribePage() {
 
             <Separator />
 
-            {/* Sign-in (step-up): send a code+link to the on-file address, then
-                accept the 6-digit code here OR let them click the emailed link. */}
-            <YStack gap="$2">
-              <Paragraph fontSize="$3" color="$textSecondary">
-                Want to view your profile and manage everything in one place?
-              </Paragraph>
-              {signinPhase === 'idle' ? (
+            {/* Already signed in → point at the full profile. Otherwise offer
+                step-up: the shared code-entry step (above) does the work. */}
+            {status === 'authenticated' ? (
+              <XStack justifyContent="center">
+                <Anchor href="/profile" color="$textSecondary" fontSize="$3">
+                  Manage everything in your profile →
+                </Anchor>
+              </XStack>
+            ) : (
+              <YStack gap="$2">
+                <Paragraph fontSize="$3" color="$textSecondary">
+                  Want to view your profile and manage everything in one place?
+                </Paragraph>
                 <Button
                   variant="outlined"
                   borderColor="$primary"
                   color="$primary"
                   icon={Mail}
                   hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$primary' }}
-                  onPress={startSignin}
+                  onPress={() => startSignin(data.email)}
                 >
                   Sign in
                 </Button>
-              ) : (
-                <YStack gap="$3">
-                  <Paragraph fontSize="$3">
-                    We emailed{' '}
-                    <Text fontWeight="700">{maskEmail(data.email)}</Text>. Click the link in that
-                    email, or enter the 6-digit code below.
-                  </Paragraph>
-                  <Input
-                    value={code}
-                    onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
-                    keyboardType="number-pad"
-                    autoComplete="one-time-code"
-                    textAlign="center"
-                    fontSize="$8"
-                    letterSpacing={10}
-                    maxLength={6}
-                  />
-                  {signinError ? (
-                    <Paragraph color="$error" fontSize="$2">{signinError}</Paragraph>
-                  ) : null}
-                  <Button
-                    backgroundColor="$primary"
-                    color="white"
-                    hoverStyle={{ backgroundColor: '$primaryHover' }}
-                    disabled={verifying || code.length !== 6}
-                    icon={verifying ? <Spinner size="small" color="white" /> : undefined}
-                    onPress={verifyCode}
-                  >
-                    {verifying ? 'Verifying…' : 'Verify & sign in'}
-                  </Button>
-                  <XStack justifyContent="center">
-                    <Text
-                      color="$textSecondary"
-                      fontSize="$2"
-                      cursor="pointer"
-                      onPress={startSignin}
-                    >
-                      Resend code
-                    </Text>
-                  </XStack>
-                </YStack>
-              )}
-            </YStack>
+              </YStack>
+            )}
           </YStack>
-        ) : null}
+        )}
 
         {homeUrl ? (
           <XStack justifyContent="center">

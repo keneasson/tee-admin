@@ -3,6 +3,7 @@ import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aw
 import { getSesClient } from '@/utils/email/sesClient'
 import { inputTemplate } from '@/utils/email/contact-lists'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
+import { auth } from '@/utils/auth'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
@@ -44,10 +45,24 @@ async function emailForToken(token: string | null): Promise<string | null> {
   return res.valid && res.email ? res.email.toLowerCase() : null
 }
 
-/** GET /api/subscribe?token=… → current opt-in state for the public topics. */
+/**
+ * Resolve who this request is for. Two accepted identities, both fine for the
+ * PUBLIC topics: an ecclesia token (recognized — from an email link) OR a live
+ * session (authenticated — e.g. arriving from the profile page). This is why a
+ * signed-in user can manage preferences without a token.
+ */
+async function resolveEmail(token: string | null): Promise<string | null> {
+  const fromToken = await emailForToken(token)
+  if (fromToken) return fromToken
+  const session = await auth()
+  const em = session?.user?.email
+  return em ? em.toLowerCase() : null
+}
+
+/** GET /api/subscribe?token=… (or a session) → current opt-in state for the public topics. */
 export async function GET(request: NextRequest) {
   const token = new URL(request.url).searchParams.get('token')
-  const email = await emailForToken(token)
+  const email = await resolveEmail(token)
   if (!email) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
   }
@@ -97,7 +112,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 })
   }
-  const email = await emailForToken(body?.token ?? null)
+  const email = await resolveEmail(body?.token ?? null)
   if (!email) {
     return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
   }

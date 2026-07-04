@@ -60,7 +60,13 @@ function OtpCallbackContent() {
           setError('Sign in failed. Please try again.')
         } else if (signInResult?.ok) {
           setStatus('success')
-          router.push('/profile')
+          // Honor a return path if one was carried through the magic link, but
+          // only a safe same-site path (no open redirects). Default: /profile.
+          const requested = searchParams?.get('redirect')
+          const dest = requested && requested.startsWith('/') && !requested.startsWith('//')
+            ? requested
+            : '/profile'
+          router.push(dest)
         }
       } catch (err) {
         console.error('OTP callback error:', err)

@@ -20,7 +20,7 @@ function originFromRequest(request: Request): string | undefined {
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json()
+    const { email, redirectPath } = await request.json()
 
     if (!email || typeof email !== 'string') {
       // Always return success to prevent email enumeration
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
         baseUrl: originFromRequest(request),
         brandName: tenant.senderDisplayName || tenant.publicName,
         orgName: tenant.homeEcclesiaName || tenant.publicName,
+        redirectPath: typeof redirectPath === 'string' ? redirectPath : undefined,
       })
     } catch (emailError) {
       console.error('Failed to send OTP email:', emailError)
