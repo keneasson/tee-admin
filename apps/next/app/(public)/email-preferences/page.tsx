@@ -26,6 +26,16 @@ type Sub = { topic: string; label: string; subscribed: boolean }
 type Tenant = { id: string; publicName: string; senderDomain: string }
 type Data = { email: string; name: string | null; subscriptions: Sub[]; unsubscribedAll: boolean; tenant: Tenant }
 
+// High-contrast input styling that reads as a real field in BOTH themes: a
+// surface (white in light) fill, a primary-coloured 2px border (navy in light,
+// bright blue in dark), and full-contrast text — so what you type is visible.
+const INPUT_STYLE = {
+  backgroundColor: '$backgroundStrong',
+  borderColor: '$primary',
+  borderWidth: 2,
+  color: '$color',
+} as const
+
 /**
  * Public self-serve subscription page (#75). Replaces SES's hosted preference
  * page (which exposed every topic). Shows ONLY the public topics, greets the
@@ -200,14 +210,12 @@ export default function SubscribePage() {
         {signinPhase === 'code' ? (
           <YStack gap="$3">
             <Paragraph fontSize="$3" textAlign="center">
-              We emailed a 6-digit code to{' '}
-              <Text fontWeight="700">{maskEmail(signinEmail)}</Text>. Enter it below, or
-              click the link in that email.
+              Please check your email for your code.
             </Paragraph>
             <Input
+              {...INPUT_STYLE}
               value={code}
               onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
               keyboardType="number-pad"
               autoComplete="one-time-code"
               textAlign="center"
@@ -244,6 +252,7 @@ export default function SubscribePage() {
               Enter your email address to get a sign-in link.
             </Paragraph>
             <Input
+              {...INPUT_STYLE}
               placeholder="you@example.com"
               value={emailInput}
               onChangeText={setEmailInput}
@@ -318,6 +327,7 @@ export default function SubscribePage() {
                   <Text fontWeight="700">{maskEmail(data.email)}</Text> to get a sign-in link.
                 </Paragraph>
                 <Input
+                  {...INPUT_STYLE}
                   placeholder="you@example.com"
                   value={stepUpEmail}
                   onChangeText={(t) => { setStepUpEmail(t); setStepUpError(null) }}
