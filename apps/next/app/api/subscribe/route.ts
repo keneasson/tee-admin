@@ -5,6 +5,7 @@ import { inputTemplate } from '@/utils/email/contact-lists'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
 import { auth } from '@/utils/auth'
 import { maskEmail } from '@/utils/mask-email'
+import { PUBLIC_TOPICS, PUBLIC_TOPIC_LABELS } from '@/utils/email/public-topics'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
@@ -32,14 +33,6 @@ async function firstNameForEmail(email: string): Promise<string | null> {
  * this endpoint — they're set by role/membership, not self-serve. This is the
  * fix for the SES hosted page exposing every topic.
  */
-const PUBLIC_TOPICS = ['newsletter', 'memorial', 'bibleClass', 'sundaySchool'] as const
-const PUBLIC_TOPIC_LABELS: Record<string, string> = {
-  newsletter: 'Newsletter',
-  memorial: 'Memorial (Sunday service reminder)',
-  bibleClass: 'Bible Class',
-  sundaySchool: 'Sunday School',
-}
-
 async function emailForToken(token: string | null): Promise<string | null> {
   if (!token) return null
   const res = await verifyEcclesiaToken(token)

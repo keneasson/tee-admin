@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
 import { Button } from '../Button'
-import { Mail, Plus, Trash2, GripVertical, Check, AlertCircle, Send, ExternalLink } from '@tamagui/lucide-icons'
+import { Mail, Plus, Trash2, GripVertical, Check, AlertCircle, Send, Bell } from '@tamagui/lucide-icons'
 
 export interface EmailEntry {
   id: string
@@ -9,6 +9,7 @@ export interface EmailEntry {
   verified: boolean
   verificationSentAt?: string
   subscribed?: boolean // Whether subscribed to communications
+  subscriptionCount?: number // How many mailing lists this address is opted into
   isPrimary?: boolean // Primary login email (cannot be removed)
 }
 
@@ -232,19 +233,21 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
 
                   {emailEntry.verified && (
                     <>
-                      {emailEntry.subscribed !== undefined && (
-                        <XStack gap="$1" alignItems="center">
-                          <Text fontSize="$2" theme="alt2">
-                            {emailEntry.subscribed ? 'Subscribed' : 'Unsubscribed'}
-                          </Text>
-                        </XStack>
+                      {emailEntry.subscriptionCount !== undefined && (
+                        <Text fontSize="$2" theme="alt2">
+                          {emailEntry.subscriptionCount === 0
+                            ? 'You are not currently signed up to any emails'
+                            : `You are currently signed up to ${emailEntry.subscriptionCount} email${emailEntry.subscriptionCount === 1 ? '' : 's'}`}
+                        </Text>
                       )}
                       <Button
                         size="$1"
-                        icon={ExternalLink}
-                        onPress={() => window.open(emailPreferencesUrl, '_blank')}
+                        icon={Bell}
+                        onPress={() => {
+                          if (typeof window !== 'undefined') window.location.href = emailPreferencesUrl
+                        }}
                       >
-                        Email Preferences
+                        Manage my Email Notifications
                       </Button>
                     </>
                   )}

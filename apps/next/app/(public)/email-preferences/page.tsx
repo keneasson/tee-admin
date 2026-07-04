@@ -307,6 +307,10 @@ export default function SubscribePage() {
               </Paragraph>
             </YStack>
 
+            {/* Grouped by ecclesia/organization. For now every public list
+                belongs to Toronto East, so there's a single group. */}
+            <Text fontSize="$3" fontWeight="700">Toronto East Christadelphians</Text>
+
             {/* Recognized (not confirmed) → the toggles are read-only. Changing
                 them is a protected action; confirm first (below). */}
             <YStack gap="$3" opacity={data.authenticated ? 1 : 0.6}>
