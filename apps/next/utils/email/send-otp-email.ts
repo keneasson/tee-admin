@@ -1,13 +1,35 @@
 import { sendEmail } from './sesClient'
 
+export interface OtpEmailOptions {
+  /**
+   * Absolute origin the magic link should point at (e.g. https://echadhub.org,
+   * a preview deployment, or http://localhost:3000). Derived from the request
+   * so links resolve to the domain the user is actually on — required for
+   * multi-domain, preview, and E2E. Falls back to the TEE production URL.
+   */
+  baseUrl?: string
+  /** Brand shown in the subject/heading (e.g. "Echad Hub"). */
+  brandName?: string
+  /** Organisation shown in the footer. */
+  orgName?: string
+}
+
 export async function sendOtpEmail(
   email: string,
   otpCode: string,
-  magicLinkToken: string
+  magicLinkToken: string,
+  opts: OtpEmailOptions = {}
 ): Promise<void> {
-  const magicLinkUrl = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/auth/otp-callback?token=${magicLinkToken}`
+  const baseUrl = (
+    opts.baseUrl ||
+    process.env.NEXT_PUBLIC_AUTH_URL ||
+    'https://tee-admin.com'
+  ).replace(/\/$/, '')
+  const brandName = opts.brandName || 'TEE Admin'
+  const orgName = opts.orgName || 'Toronto East Christadelphian Ecclesia'
+  const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}`
 
-  const subject = 'Your TEE Admin verification code'
+  const subject = `Your ${brandName} verification code`
 
   const htmlBody = `
     <!DOCTYPE html>
@@ -21,7 +43,7 @@ export async function sendOtpEmail(
           <h2 style="color: #333; margin-bottom: 20px;">Your Verification Code</h2>
 
           <p style="color: #666; line-height: 1.6;">
-            Enter this code to verify your email address and sign in to TEE Admin:
+            Enter this code to verify your email address and sign in to ${brandName}:
           </p>
 
           <div style="text-align: center; margin: 30px 0;">
@@ -56,7 +78,7 @@ export async function sendOtpEmail(
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
           <p style="color: #999; font-size: 12px; text-align: center;">
-            Toronto East Christadelphian Ecclesia<br>
+            ${orgName}<br>
             This is an automated message, please do not reply to this email.
           </p>
         </div>
@@ -65,7 +87,7 @@ export async function sendOtpEmail(
   `
 
   const textBody = `
-Your TEE Admin Verification Code
+Your ${brandName} Verification Code
 
 Enter this code to verify your email address:
 
@@ -76,7 +98,7 @@ ${magicLinkUrl}
 
 This code expires in 10 minutes. If you didn't request this code, you can safely ignore this email.
 
-Toronto East Christadelphian Ecclesia
+${orgName}
   `.trim()
 
   await sendEmail({
