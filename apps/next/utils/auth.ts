@@ -78,6 +78,8 @@ export const authOptions: NextAuthConfig = {
             name: user.name,
             role: user.role,
             provider: 'credentials',
+            // Password is a freshly-proven credential → full authority.
+            assurance: 'authenticated',
           }
         }
 
@@ -141,6 +143,10 @@ export const authOptions: NextAuthConfig = {
             name: person.displayName || person.primaryEmail,
             role,
             provider: 'otp',
+            // Ecclesia token is a long-lived, forwardable bearer credential
+            // embedded in bulk email. It proves recognition, NOT authority —
+            // the holder may be a forward recipient, not the addressee. See #80.
+            assurance: 'recognized',
           }
         }
 
@@ -163,6 +169,9 @@ export const authOptions: NextAuthConfig = {
             name: person.displayName || person.primaryEmail,
             role,
             provider: 'otp',
+            // A completed OTP (single-use, 10-min, sent to the on-file address)
+            // is a fresh proof of inbox control → full authority.
+            assurance: 'authenticated',
           }
         }
 
@@ -183,6 +192,21 @@ export const authOptions: NextAuthConfig = {
         if (userRole) {
           token.role = userRole
         }
+
+        // Assurance level (#80). Fresh sign-in stamps the trust tier + auth time.
+        // Credentials/OTP/ecclesia paths set `assurance` explicitly; Google (no
+        // authorize step) and any credential that omits it default to
+        // 'authenticated' — only the forwardable ecclesia-token path is
+        // downgraded to 'recognized'.
+        const userAssurance = (user as User & { assurance?: string }).assurance
+        ;(token as JWT & { assuranceLevel?: string }).assuranceLevel =
+          userAssurance === 'recognized' ? 'recognized' : 'authenticated'
+        ;(token as JWT & { authTime?: number }).authTime = Date.now()
+      } else if (!(token as JWT & { assuranceLevel?: string }).assuranceLevel) {
+        // Grandfather sessions minted before #80: treat as authenticated so we
+        // don't lock out anyone currently signed in. Going forward, only the
+        // ecclesia-token path mints 'recognized', so this default is safe.
+        ;(token as JWT & { assuranceLevel?: string }).assuranceLevel = 'authenticated'
       }
 
       // Always refresh name, role, and RB designation from PersonRecord.
@@ -430,7 +454,7 @@ export const authOptions: NextAuthConfig = {
       // Safely add role and RB designation to the Session.User
       try {
         const userWithRole = user as (User & { role?: string }) | undefined
-        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean; ecclesia?: string }) | undefined
+        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean; ecclesia?: string; assuranceLevel?: string; authTime?: number }) | undefined
         const finalRole = userWithRole?.role || tokenWithRole?.role || ROLES.GUEST
         console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
         ;(session.user as User & { role: string }).role = finalRole
@@ -438,6 +462,10 @@ export const authOptions: NextAuthConfig = {
         ;(session.user as any).isRecordingBrother = tokenWithRole?.isRecordingBrother || false
         // Home ecclesia: sourced from JWT (set during jwt callback from PersonRecord)
         ;(session.user as any).ecclesia = tokenWithRole?.ecclesia || null
+        // Assurance level + auth time (#80). 'recognized' = forwardable bearer
+        // token; 'authenticated' = a freshly-proven credential.
+        ;(session.user as any).assuranceLevel = tokenWithRole?.assuranceLevel || 'authenticated'
+        ;(session.user as any).authTime = tokenWithRole?.authTime ?? null
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error
