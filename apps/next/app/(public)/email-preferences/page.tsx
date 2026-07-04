@@ -146,6 +146,10 @@ export default function SubscribePage() {
 
   const brand = data?.tenant?.publicName ?? 'Email Preferences'
   const homeUrl = data?.tenant?.senderDomain ? `https://www.${data.tenant.senderDomain}` : undefined
+  // Eyebrow above the heading. With a token we show the tenant brand; without
+  // one we don't know the tenant, so show a purposeful prompt instead of
+  // repeating the "Email preferences" heading.
+  const eyebrow = data?.tenant?.publicName ?? 'Please confirm your email'
 
   return (
     <YStack flex={1} justifyContent="center" alignItems="center" padding="$4" backgroundColor="$background">
@@ -153,7 +157,7 @@ export default function SubscribePage() {
         {/* Brand header — the clear entrypoint into whichever site serves this */}
         <YStack gap="$1" alignItems="center">
           <Text fontSize="$2" color="$textSecondary" textTransform="uppercase" letterSpacing={1}>
-            {brand}
+            {eyebrow}
           </Text>
           <H2 textAlign="center">Email preferences</H2>
         </YStack>
@@ -164,12 +168,13 @@ export default function SubscribePage() {
         {!token ? (
           linkSent ? (
             <Paragraph textAlign="center">
-              If that email is on file, we’ve sent a link to manage your preferences. Check your inbox.
+              If that address is on file, we’ve sent a link to{' '}
+              <Text fontWeight="700">{maskEmail(emailInput)}</Text>. Check your inbox.
             </Paragraph>
           ) : (
             <YStack gap="$3">
               <Paragraph color="$textSecondary" textAlign="center">
-                Enter your email and we’ll send you a secure link to manage your subscriptions.
+                Enter your email address and we’ll send you a secure link to manage your subscriptions.
               </Paragraph>
               <Input
                 placeholder="you@example.com"
@@ -186,7 +191,7 @@ export default function SubscribePage() {
                 disabled={!emailInput.includes('@')}
                 onPress={() => sendLink(emailInput, () => setLinkSent(true))}
               >
-                Email me a link
+                Email My Link
               </Button>
             </YStack>
           )
