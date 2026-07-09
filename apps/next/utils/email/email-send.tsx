@@ -4,7 +4,12 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
-import { generateEcclesiaUpdateUrl, generateSigninTokens, buildSigninUrl } from './ecclesia-token'
+import {
+  generateEcclesiaUpdateUrl,
+  generateEmailPreferencesUrl,
+  generateSigninTokens,
+  buildSigninUrl,
+} from './ecclesia-token'
 import { addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
@@ -347,15 +352,26 @@ async function chunkSend({
     for (let i = 0; i < toArray.length; i++) {
       const recipientEmail = toArray[i]
 
-      // Personalize email content for inter-ecclesia emails
+      // Per-recipient tokenized links. Each placeholder is substituted only when
+      // the template actually contains it, so a token is minted lazily and
+      // templates without the placeholder are byte-for-byte unchanged. Applies to
+      // EVERY reason (not just inter-ecclesia) — this is what lets the shared
+      // footer's "manage preferences" link work on the newsletter, alerts, etc.
       let personalizedHtml = emailHtml
       let personalizedText = emailText
 
-      if (reason === 'inter-ecclesia') {
-        // Generate token URL for this recipient (token maps to email → PersonRecord)
-        const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
-        personalizedHtml = personalizedHtml.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
-        personalizedText = personalizedText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+      // {{ecclesiaUpdateUrl}} → /ecclesia-contact (inter-ecclesia contact update).
+      // Runs for EVERY reason now (was inter-ecclesia only) so the shared footer
+      // link resolves wherever the placeholder appears; a token is minted only
+      // when the placeholder is present.
+      if (personalizedHtml.includes('{{ecclesiaUpdateUrl}}') || personalizedText.includes('{{ecclesiaUpdateUrl}}')) {
+        try {
+          const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
+          personalizedHtml = personalizedHtml.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+          personalizedText = personalizedText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+        } catch (err) {
+          console.error('emailSend: failed to mint ecclesiaUpdateUrl for', recipientEmail, err)
+        }
       }
 
       // Universal one-click login link (when the flag is on, loginUrls is set).
@@ -366,13 +382,31 @@ async function chunkSend({
           personalizedHtml = personalizedHtml.replace(/\{\{loginUrl\}\}/g, loginUrl)
           personalizedText = personalizedText.replace(/\{\{loginUrl\}\}/g, loginUrl)
         }
-        // Strip ONLY our known tokens if they went unsubstituted (e.g. a
-        // recipient missing from the token map) — never a blanket {{...}} sweep,
-        // which could eat legitimate braces a user pasted into a custom email.
-        const KNOWN_TOKENS = /\{\{(loginUrl|ecclesiaUpdateUrl)\}\}/g
-        personalizedHtml = personalizedHtml.replace(KNOWN_TOKENS, '')
-        personalizedText = personalizedText.replace(KNOWN_TOKENS, '')
       }
+
+      // {{emailPreferencesUrl}} → /email-preferences (self-serve subscriptions, #75).
+      if (personalizedHtml.includes('{{emailPreferencesUrl}}') || personalizedText.includes('{{emailPreferencesUrl}}')) {
+        try {
+          const prefsUrl = await generateEmailPreferencesUrl(recipientEmail)
+          personalizedHtml = personalizedHtml.replace(/\{\{emailPreferencesUrl\}\}/g, prefsUrl)
+          personalizedText = personalizedText.replace(/\{\{emailPreferencesUrl\}\}/g, prefsUrl)
+        } catch (err) {
+          console.error('emailSend: failed to mint emailPreferencesUrl for', recipientEmail, err)
+        }
+      }
+
+      // Safety net: never ship a literal {{…}} placeholder if minting failed or
+      // the flag path left one unfilled. Preferences falls back to the tokenless
+      // page (the reader can self-identify); login / ecclesia tokens strip to
+      // nothing. Only our KNOWN tokens — never a blanket {{...}} sweep, which
+      // could eat legitimate braces a user pasted into a custom email.
+      const prefsFallback = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/email-preferences`
+      const stripKnownTokens = (s: string) =>
+        s
+          .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
+          .replace(/\{\{(loginUrl|ecclesiaUpdateUrl)\}\}/g, '')
+      personalizedHtml = stripKnownTokens(personalizedHtml)
+      personalizedText = stripKnownTokens(personalizedText)
 
       // Add UTM tracking parameters to all tee-admin.com links
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })

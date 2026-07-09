@@ -168,7 +168,12 @@ export const getEmailContent = async (
   // output is unchanged.
   const tenant = resolveTenantFromEnv()
   const contentEcclesiaName = tenant.homeEcclesiaName ?? HOME_ECCLESIA.canonicalName
-  const emailIdentity = emailIdentityFromProfile(await resolveBrandProfile({ tenant }))
+  const emailIdentity = {
+    ...emailIdentityFromProfile(await resolveBrandProfile({ tenant })),
+    // Header link back to the sending site (tee-admin.com / echadhub.org).
+    homeUrl: `https://${tenant.senderDomain}`,
+    homeLabel: tenant.publicName,
+  }
   const withIdentity = (el: JSX.Element) => (
     <EmailIdentityProvider value={emailIdentity}>{el}</EmailIdentityProvider>
   )

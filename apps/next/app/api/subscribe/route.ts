@@ -1,0 +1,165 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
+import { getSesClient } from '@/utils/email/sesClient'
+import { getContact } from '@/utils/email/contact'
+import { inputTemplate } from '@/utils/email/contact-lists'
+import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
+import { auth } from '@/utils/auth'
+import { maskEmail } from '@/utils/mask-email'
+import { PUBLIC_TOPICS, PUBLIC_TOPIC_LABELS } from '@/utils/email/public-topics'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+
+/** Serving-tenant brand, so the page reads as a clear entrypoint into tee-admin.com OR echadhub.org. */
+function tenantBrand(request: NextRequest) {
+  const t = getTenantFromHeaders(request.headers) ?? resolveTenantFromEnv()
+  return { id: t.id, publicName: t.publicName, senderDomain: t.senderDomain }
+}
+
+async function firstNameForEmail(email: string): Promise<string | null> {
+  try {
+    const person = await personRepository.getByEmailForAuth(email)
+    return person?.firstName || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Self-serve subscription management (Issue #75).
+ *
+ * SECURITY: only the PUBLIC, self-manageable topics are exposed here. Office /
+ * membership topics (`interEcclesia` = conferred by the Recording-Brother
+ * office; `members` = TEE membership; `testList`) are NEVER shown or changed by
+ * this endpoint — they're set by role/membership, not self-serve. This is the
+ * fix for the SES hosted page exposing every topic.
+ */
+async function emailForToken(token: string | null): Promise<string | null> {
+  if (!token) return null
+  const res = await verifyEcclesiaToken(token)
+  return res.valid && res.email ? res.email.toLowerCase() : null
+}
+
+/**
+ * Resolve who this request is for. Two accepted identities, both fine for the
+ * PUBLIC topics: an ecclesia token (recognized — from an email link) OR a live
+ * session (authenticated — e.g. arriving from the profile page). This is why a
+ * signed-in user can manage preferences without a token.
+ */
+async function resolveIdentity(
+  token: string | null
+): Promise<{ email: string; authenticated: boolean } | null> {
+  // Session wins: a signed-in user is authenticated even if a token is still in
+  // the URL. Only fall back to the token (recognized) when there's no session.
+  const session = await auth()
+  const em = session?.user?.email
+  if (em) return { email: em.toLowerCase(), authenticated: true } // authenticated
+  const fromToken = await emailForToken(token)
+  if (fromToken) return { email: fromToken, authenticated: false } // recognized
+  return null
+}
+
+/**
+ * PRIVACY: only expose the FULL address to a confirmed (authenticated) caller.
+ * A recognized (token-only) caller might be a forward recipient, so we return
+ * just the masked form — enough to know "which identity" without revealing it.
+ */
+function identityFields(id: { email: string; authenticated: boolean }) {
+  return {
+    email: id.authenticated ? id.email : null,
+    emailMasked: maskEmail(id.email),
+    authenticated: id.authenticated,
+  }
+}
+
+/** GET /api/subscribe?token=… (or a session) → current opt-in state for the public topics. */
+export async function GET(request: NextRequest) {
+  const token = new URL(request.url).searchParams.get('token')
+  const id = await resolveIdentity(token)
+  if (!id) {
+    return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+  }
+  const email = id.email
+  try {
+    // getContact() returns null when the address isn't a contact yet (it
+    // swallows NotFoundException), so an absent contact reads as "opted into
+    // nothing" with no special-case branch.
+    const contact = await getContact(email)
+    const prefs = new Map(
+      (contact?.TopicPreferences ?? []).map((p) => [p.TopicName, p.SubscriptionStatus])
+    )
+    const subscriptions = PUBLIC_TOPICS.map((t) => ({
+      topic: t,
+      label: PUBLIC_TOPIC_LABELS[t],
+      subscribed: prefs.get(t) === SubscriptionStatus.OPT_IN,
+    }))
+    return NextResponse.json({
+      ...identityFields(id),
+      name: await firstNameForEmail(email),
+      subscriptions,
+      unsubscribedAll: !!contact?.UnsubscribeAll,
+      tenant: tenantBrand(request),
+    })
+  } catch (error) {
+    console.error('subscribe GET failed:', error)
+    return NextResponse.json({ error: 'Could not load your preferences' }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/subscribe { token, subscriptions: { newsletter?: boolean, … } }
+ * Updates ONLY the public topics; preserves every other topic exactly.
+ */
+export async function POST(request: NextRequest) {
+  let body: any
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+  }
+  const id = await resolveIdentity(body?.token ?? null)
+  if (!id) {
+    return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 })
+  }
+  // Saving is a protected action: a recognized (token-only) caller must confirm
+  // it's them (sign in) before we mutate anything. See #80.
+  if (!id.authenticated) {
+    return NextResponse.json(
+      { error: "Please confirm it's you to save changes.", stepUpRequired: true },
+      { status: 403 }
+    )
+  }
+  const email = id.email
+  const requested: Record<string, boolean> = body?.subscriptions ?? {}
+
+  try {
+    // Reuse getContact() (null when not yet a contact) for the existing-prefs
+    // read — no bespoke NotFoundException handling.
+    const existing = await getContact(email)
+
+    // Start from existing prefs so non-public topics are preserved verbatim.
+    const current = new Map<string, SubscriptionStatus>(
+      (existing?.TopicPreferences ?? []).map((p) => [
+        p.TopicName as string,
+        p.SubscriptionStatus as SubscriptionStatus,
+      ])
+    )
+    for (const t of PUBLIC_TOPICS) {
+      if (t in requested) {
+        current.set(t, requested[t] ? SubscriptionStatus.OPT_IN : SubscriptionStatus.OPT_OUT)
+      }
+    }
+    const TopicPreferences = Array.from(current.entries()).map(([TopicName, SubscriptionStatus]) => ({
+      TopicName,
+      SubscriptionStatus,
+    }))
+
+    await getSesClient().send(
+      new UpdateContactCommand({ ...inputTemplate, EmailAddress: email, TopicPreferences })
+    )
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('subscribe POST failed:', error)
+    return NextResponse.json({ error: 'Could not save your preferences' }, { status: 500 })
+  }
+}

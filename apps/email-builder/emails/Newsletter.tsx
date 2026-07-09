@@ -17,6 +17,7 @@ import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } 
 import { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
@@ -840,6 +841,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             <br />
             All plans are subject to God's will.
           </Text>
+          <EmailBrandLink />
         </Section>
 
         {/* Optional Note Section */}

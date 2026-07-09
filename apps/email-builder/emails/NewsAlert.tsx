@@ -20,6 +20,7 @@ import {
   main,
 } from '../styles'
 import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 
@@ -91,6 +92,7 @@ const NewsAlert: React.FC<NewsAlertProps> = ({
         ) : (
           <Section style={header}>
             <Heading>{identity?.name ?? 'Toronto East Christadelphians'}</Heading>
+            <EmailBrandLinkContent identity={identity} />
           </Section>
         )}
 

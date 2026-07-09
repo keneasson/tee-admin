@@ -20,6 +20,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 
@@ -148,6 +149,7 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
           <Text style={{ fontSize: '16px', margin: '4px 0 12px', color: textColor }}>
             Rejoice with the angels in heaven!
           </Text>
+          <EmailBrandLink />
         </Section>
 
         <Container style={container}>

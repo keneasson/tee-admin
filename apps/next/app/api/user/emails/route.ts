@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { auth } from '../../../../utils/auth'
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { sendEmail } from '../../../../utils/email/sesClient'
+import { getPublicOptInCount } from '../../../../utils/email/public-topics'
 
 // Generate a simple unique ID
 function generateEmailId(): string {
@@ -41,16 +42,20 @@ export async function GET() {
 
     // Sort by order and transform to client format
     // Always include the primary login email
-    const emails = result.items
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map(email => ({
+    const sorted = result.items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const emails = await Promise.all(
+      sorted.map(async (email) => ({
         id: email.emailId,
         email: email.email,
         verified: email.verified,
         verificationSentAt: email.verificationSentAt,
         subscribed: email.subscribed,
+        // How many public mailing lists this address is opted into (verified
+        // addresses only — no point querying SES for an unverified one).
+        subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
         isPrimary: email.isPrimary,
       }))
+    )
 
     // If no emails stored, create entry for primary login email
     if (emails.length === 0) {
@@ -59,6 +64,7 @@ export async function GET() {
         email: session.user.email,
         verified: true, // Login email is verified by definition
         subscribed: true, // Assume subscribed by default
+        subscriptionCount: await getPublicOptInCount(session.user.email),
         isPrimary: true,
       }
       return NextResponse.json({

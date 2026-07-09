@@ -19,6 +19,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 
 export type BusinessMeetingProps = {
@@ -37,6 +38,7 @@ const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note }) => {
           <Heading>Toronto East Christadelphians</Heading>
           <Text style={defaultText}>Business Meeting</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
+          <EmailBrandLink />
         </Section>
 
         {/* Optional Note Section */}
