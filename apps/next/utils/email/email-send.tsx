@@ -4,11 +4,18 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
-import { generateEcclesiaUpdateUrl, generateEmailPreferencesUrl } from './ecclesia-token'
+import {
+  generateEcclesiaUpdateUrl,
+  generateEmailPreferencesUrl,
+  generateSigninTokens,
+  buildSigninUrl,
+} from './ecclesia-token'
 import { addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
+import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 const SES_RATE_LIMIT = 14
 
@@ -135,6 +142,25 @@ async function getAllContacts({
   return contacts.Contacts
 }
 
+// Per-recipient one-click sign-in footer. The {{loginUrl}} placeholder is
+// substituted per recipient in chunkSend; any unsubstituted token is swept
+// before send so literal {{...}} can never ship.
+const LOGIN_FOOTER_HTML = `
+<table role="presentation" width="100%" style="margin-top:24px;border-top:1px solid #e5e7eb"><tr><td align="center" style="font-family:Arial,Helvetica,sans-serif;padding:16px 8px 4px">
+<a href="{{loginUrl}}" style="color:#2563eb;font-size:14px;text-decoration:underline">Open this in the app, already signed in →</a>
+</td></tr><tr><td align="center" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#9ca3af;padding:0 8px 12px">
+This one-click link signs in only you. Forwarded emails will ask the new reader to request their own login.
+</td></tr></table>`
+const LOGIN_FOOTER_TEXT =
+  '\n\n— — —\nOpen this in the app, already signed in: {{loginUrl}}\n(This one-click link signs in only you. Forwarded emails will ask the new reader to request their own login.)'
+
+/** Insert the login footer just inside </body> (HTML) and at the end (text). */
+function withLoginFooter(html: string, text: string): { html: string; text: string } {
+  const idx = html.toLowerCase().lastIndexOf('</body>')
+  const nextHtml = idx >= 0 ? html.slice(0, idx) + LOGIN_FOOTER_HTML + html.slice(idx) : html + LOGIN_FOOTER_HTML
+  return { html: nextHtml, text: text + LOGIN_FOOTER_TEXT }
+}
+
 export const emailSend = async function ({
   reason,
   emailHtml,
@@ -176,6 +202,26 @@ export const emailSend = async function ({
       .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
       .map((contact) => contact.EmailAddress as string)
 
+    // Universal one-click login (feature-flagged). Read globally with a null
+    // session, so it is active only when the flag is set to 'everyone'. When
+    // off, html/text are untouched and no tokens are generated — byte-for-byte
+    // identical to before.
+    let baseHtml = emailHtml
+    let baseText = emailText
+    let loginUrls: Map<string, string> | undefined
+    if (await checkFeatureFlagFromDB(FEATURE_FLAGS.UNIVERSAL_EMAIL_LOGIN, null)) {
+      const withFooter = withLoginFooter(emailHtml, emailText)
+      baseHtml = withFooter.html
+      baseText = withFooter.text
+      // One batched pass for all recipients (BatchWriteItem), then a synchronous
+      // map lookup per recipient in the send loop — no per-email await.
+      const tokens = await generateSigninTokens(senderEmails)
+      loginUrls = new Map<string, string>()
+      for (const [email, token] of tokens) {
+        loginUrls.set(email, buildSigninUrl(token))
+      }
+    }
+
     // Format date in Toronto timezone to avoid UTC date issues when sending in evening EST
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
 
@@ -193,12 +239,13 @@ export const emailSend = async function ({
         from,
         subject,
         listTopic,
-        emailText,
-        emailHtml,
+        emailText: baseText,
+        emailHtml: baseHtml,
         reason,
         sesClient,
         replyTo,
         campaignId,
+        loginUrls,
       })
       allSent = {
         sends: [...allSent.sends, ...sends.sends],
@@ -258,6 +305,8 @@ type SingleSendProps = {
   sesClient: SESv2Client
   replyTo?: string
   campaignId: string
+  /** Per-recipient one-click login URLs (lowercased email → URL). */
+  loginUrls?: Map<string, string>
 }
 
 /**
@@ -296,6 +345,7 @@ async function chunkSend({
   sesClient,
   replyTo,
   campaignId,
+  loginUrls,
 }: SingleSendProps): Promise<string[]> {
   const sent = []
   try {
@@ -311,6 +361,9 @@ async function chunkSend({
       let personalizedText = emailText
 
       // {{ecclesiaUpdateUrl}} → /ecclesia-contact (inter-ecclesia contact update).
+      // Runs for EVERY reason now (was inter-ecclesia only) so the shared footer
+      // link resolves wherever the placeholder appears; a token is minted only
+      // when the placeholder is present.
       if (personalizedHtml.includes('{{ecclesiaUpdateUrl}}') || personalizedText.includes('{{ecclesiaUpdateUrl}}')) {
         try {
           const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
@@ -318,6 +371,16 @@ async function chunkSend({
           personalizedText = personalizedText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
         } catch (err) {
           console.error('emailSend: failed to mint ecclesiaUpdateUrl for', recipientEmail, err)
+        }
+      }
+
+      // Universal one-click login link (when the flag is on, loginUrls is set).
+      // Scoped to this path so output is unchanged when the flag is off.
+      if (loginUrls) {
+        const loginUrl = loginUrls.get(recipientEmail.toLowerCase())
+        if (loginUrl) {
+          personalizedHtml = personalizedHtml.replace(/\{\{loginUrl\}\}/g, loginUrl)
+          personalizedText = personalizedText.replace(/\{\{loginUrl\}\}/g, loginUrl)
         }
       }
 
@@ -332,16 +395,18 @@ async function chunkSend({
         }
       }
 
-      // Safety net: never ship a literal {{…}} placeholder if minting failed.
-      // Fall back to the tokenless preferences page (it asks the reader to
-      // identify themselves) rather than a broken link.
+      // Safety net: never ship a literal {{…}} placeholder if minting failed or
+      // the flag path left one unfilled. Preferences falls back to the tokenless
+      // page (the reader can self-identify); login / ecclesia tokens strip to
+      // nothing. Only our KNOWN tokens — never a blanket {{...}} sweep, which
+      // could eat legitimate braces a user pasted into a custom email.
       const prefsFallback = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/email-preferences`
-      personalizedHtml = personalizedHtml
-        .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
-        .replace(/\{\{ecclesiaUpdateUrl\}\}/g, prefsFallback)
-      personalizedText = personalizedText
-        .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
-        .replace(/\{\{ecclesiaUpdateUrl\}\}/g, prefsFallback)
+      const stripKnownTokens = (s: string) =>
+        s
+          .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
+          .replace(/\{\{(loginUrl|ecclesiaUpdateUrl)\}\}/g, '')
+      personalizedHtml = stripKnownTokens(personalizedHtml)
+      personalizedText = stripKnownTokens(personalizedText)
 
       // Add UTM tracking parameters to all tee-admin.com links
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
