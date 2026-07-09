@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { signIn, useSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Loading } from '@my/app/provider/loading'
 import { YStack, XStack, Text, Button, Input, Card, H2, H3, Paragraph, Checkbox, Separator, View } from 'tamagui'
@@ -28,7 +27,6 @@ interface ContactInfo {
 export default function EcclesiaContactPage() {
   const isHydrated = useHydrated()
   const searchParams = useSearchParams()
-  const { data: session, status: sessionStatus } = useSession()
   const token = searchParams?.get('token') ?? null
 
   const [loading, setLoading] = useState(true)
@@ -36,8 +34,6 @@ export default function EcclesiaContactPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
-  const signInAttempted = useRef(false)
 
   // Form state
   const [firstName, setFirstName] = useState('')
@@ -52,46 +48,12 @@ export default function EcclesiaContactPage() {
   const [newMemberIsRecordingBrother, setNewMemberIsRecordingBrother] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
 
-  // Auto-sign-in: When token is present and user has no session, create a session
-  useEffect(() => {
-    if (!isHydrated || !token || sessionStatus === 'loading' || signInAttempted.current) return
-
-    // Only attempt sign-in if no active session
-    if (sessionStatus === 'unauthenticated') {
-      signInAttempted.current = true
-      setSigningIn(true)
-
-      // First fetch contact info to get the email, then sign in
-      const autoSignIn = async () => {
-        try {
-          const res = await fetch(`/api/ecclesia-contact?token=${encodeURIComponent(token)}`)
-          const data = await res.json()
-
-          if (data.error || !data.email) {
-            setSigningIn(false)
-            return
-          }
-
-          // Sign in via OTP provider with ecclesia token
-          const result = await signIn('otp', {
-            email: data.email,
-            ecclesiaToken: token,
-            redirect: false,
-          })
-
-          if (result?.error) {
-            console.error('Ecclesia auto-sign-in failed:', result.error)
-          }
-        } catch (err) {
-          console.error('Ecclesia auto-sign-in error:', err)
-        } finally {
-          setSigningIn(false)
-        }
-      }
-
-      autoSignIn()
-    }
-  }, [isHydrated, token, sessionStatus])
+  // NOTE (#80): This page deliberately does NOT sign the visitor in. The
+  // `?token=` is a forwardable bearer credential embedded in bulk email —
+  // possession proves *recognition*, not *authority*. It authorizes only the
+  // token-scoped contact edits below; it must never mint an app session. To
+  // actually sign in, the visitor uses the OTP flow (link sent to the on-file
+  // address, which a forward recipient cannot receive).
 
   const fetchContactInfo = async () => {
     if (!token) {
@@ -207,15 +169,6 @@ export default function EcclesiaContactPage() {
 
   if (!isHydrated) {
     return <Loading />
-  }
-
-  if (signingIn) {
-    return (
-      <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
-        <Loading />
-        <Text marginTop="$4">Setting up your session...</Text>
-      </YStack>
-    )
   }
 
   if (loading) {
