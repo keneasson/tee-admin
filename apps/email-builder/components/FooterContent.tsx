@@ -29,8 +29,12 @@ export const FooterContent = ({
       <Text style={defaultText}>
         To change your email preferences or unsubscribe please follow this link:
       </Text>
-      <Link href="{{amazonSESUnsubscribeUrl}}" style={footerLink}>
-        {'Unsubscribe & Email Preferences'}
+      {/* Recipient-scoped self-serve page (#75). {{emailPreferencesUrl}} is
+          replaced per recipient at send time with a tokenized link to
+          /email-preferences; it shows only the public topics — never the full
+          SES topic list the hosted page exposed. */}
+      <Link href="{{emailPreferencesUrl}}" style={footerLink}>
+        {'Manage Email Preferences'}
       </Link>
 
       <Text style={footerText}>

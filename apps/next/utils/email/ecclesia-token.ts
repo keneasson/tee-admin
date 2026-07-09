@@ -139,3 +139,21 @@ export async function generateEcclesiaUpdateUrl(email: string, baseUrl?: string)
   const base = baseUrl || process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
   return `${base}/ecclesia-contact?token=${token}`
 }
+
+/**
+ * Generate a token and return the full URL for the self-serve email-preferences
+ * page (Issue #75). This is the recipient-scoped link placed in every email
+ * footer: the token identifies who the email was sent to, so /email-preferences
+ * can show *their* subscriptions without a sign-in. It replaces SES's hosted
+ * preference page (which exposed every topic). Same TOKEN# record + 30-day TTL
+ * as {@link generateEcclesiaUpdateUrl}; only the destination path differs.
+ *
+ * @param email - The recipient address to mint a token for
+ * @param baseUrl - Optional base URL (defaults to NEXT_PUBLIC_AUTH_URL)
+ * @returns Full URL with token for managing email subscriptions
+ */
+export async function generateEmailPreferencesUrl(email: string, baseUrl?: string): Promise<string> {
+  const token = await generateEcclesiaToken(email)
+  const base = baseUrl || process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
+  return `${base}/email-preferences?token=${token}`
+}

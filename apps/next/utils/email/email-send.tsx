@@ -4,7 +4,7 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { chunkArray } from '../chunkArray'
-import { generateEcclesiaUpdateUrl } from './ecclesia-token'
+import { generateEcclesiaUpdateUrl, generateEmailPreferencesUrl } from './ecclesia-token'
 import { addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
@@ -302,16 +302,46 @@ async function chunkSend({
     for (let i = 0; i < toArray.length; i++) {
       const recipientEmail = toArray[i]
 
-      // Personalize email content for inter-ecclesia emails
+      // Per-recipient tokenized links. Each placeholder is substituted only when
+      // the template actually contains it, so a token is minted lazily and
+      // templates without the placeholder are byte-for-byte unchanged. Applies to
+      // EVERY reason (not just inter-ecclesia) — this is what lets the shared
+      // footer's "manage preferences" link work on the newsletter, alerts, etc.
       let personalizedHtml = emailHtml
       let personalizedText = emailText
 
-      if (reason === 'inter-ecclesia') {
-        // Generate token URL for this recipient (token maps to email → PersonRecord)
-        const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
-        personalizedHtml = emailHtml.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
-        personalizedText = emailText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+      // {{ecclesiaUpdateUrl}} → /ecclesia-contact (inter-ecclesia contact update).
+      if (personalizedHtml.includes('{{ecclesiaUpdateUrl}}') || personalizedText.includes('{{ecclesiaUpdateUrl}}')) {
+        try {
+          const updateUrl = await generateEcclesiaUpdateUrl(recipientEmail)
+          personalizedHtml = personalizedHtml.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+          personalizedText = personalizedText.replace(/\{\{ecclesiaUpdateUrl\}\}/g, updateUrl)
+        } catch (err) {
+          console.error('emailSend: failed to mint ecclesiaUpdateUrl for', recipientEmail, err)
+        }
       }
+
+      // {{emailPreferencesUrl}} → /email-preferences (self-serve subscriptions, #75).
+      if (personalizedHtml.includes('{{emailPreferencesUrl}}') || personalizedText.includes('{{emailPreferencesUrl}}')) {
+        try {
+          const prefsUrl = await generateEmailPreferencesUrl(recipientEmail)
+          personalizedHtml = personalizedHtml.replace(/\{\{emailPreferencesUrl\}\}/g, prefsUrl)
+          personalizedText = personalizedText.replace(/\{\{emailPreferencesUrl\}\}/g, prefsUrl)
+        } catch (err) {
+          console.error('emailSend: failed to mint emailPreferencesUrl for', recipientEmail, err)
+        }
+      }
+
+      // Safety net: never ship a literal {{…}} placeholder if minting failed.
+      // Fall back to the tokenless preferences page (it asks the reader to
+      // identify themselves) rather than a broken link.
+      const prefsFallback = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/email-preferences`
+      personalizedHtml = personalizedHtml
+        .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
+        .replace(/\{\{ecclesiaUpdateUrl\}\}/g, prefsFallback)
+      personalizedText = personalizedText
+        .replace(/\{\{emailPreferencesUrl\}\}/g, prefsFallback)
+        .replace(/\{\{ecclesiaUpdateUrl\}\}/g, prefsFallback)
 
       // Add UTM tracking parameters to all tee-admin.com links
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
