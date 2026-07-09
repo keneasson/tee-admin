@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GetContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
+import { UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
 import { getSesClient } from '@/utils/email/sesClient'
+import { getContact } from '@/utils/email/contact'
 import { inputTemplate } from '@/utils/email/contact-lists'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
 import { auth } from '@/utils/auth'
@@ -80,11 +81,12 @@ export async function GET(request: NextRequest) {
   }
   const email = id.email
   try {
-    const contact = await getSesClient().send(
-      new GetContactCommand({ ...inputTemplate, EmailAddress: email })
-    )
+    // getContact() returns null when the address isn't a contact yet (it
+    // swallows NotFoundException), so an absent contact reads as "opted into
+    // nothing" with no special-case branch.
+    const contact = await getContact(email)
     const prefs = new Map(
-      (contact.TopicPreferences ?? []).map((p) => [p.TopicName, p.SubscriptionStatus])
+      (contact?.TopicPreferences ?? []).map((p) => [p.TopicName, p.SubscriptionStatus])
     )
     const subscriptions = PUBLIC_TOPICS.map((t) => ({
       topic: t,
@@ -95,20 +97,10 @@ export async function GET(request: NextRequest) {
       ...identityFields(id),
       name: await firstNameForEmail(email),
       subscriptions,
-      unsubscribedAll: !!contact.UnsubscribeAll,
+      unsubscribedAll: !!contact?.UnsubscribeAll,
       tenant: tenantBrand(request),
     })
-  } catch (error: any) {
-    if (error?.name === 'NotFoundException') {
-      // Not yet a contact — show everything as not-subscribed.
-      return NextResponse.json({
-        ...identityFields(id),
-        name: await firstNameForEmail(email),
-        subscriptions: PUBLIC_TOPICS.map((t) => ({ topic: t, label: PUBLIC_TOPIC_LABELS[t], subscribed: false })),
-        unsubscribedAll: false,
-        tenant: tenantBrand(request),
-      })
-    }
+  } catch (error) {
     console.error('subscribe GET failed:', error)
     return NextResponse.json({ error: 'Could not load your preferences' }, { status: 500 })
   }
@@ -141,17 +133,16 @@ export async function POST(request: NextRequest) {
   const requested: Record<string, boolean> = body?.subscriptions ?? {}
 
   try {
-    const client = getSesClient()
-    let existing: GetContactCommand extends never ? never : Awaited<ReturnType<typeof client.send>> | null = null
-    try {
-      existing = await client.send(new GetContactCommand({ ...inputTemplate, EmailAddress: email })) as any
-    } catch (e: any) {
-      if (e?.name !== 'NotFoundException') throw e
-    }
+    // Reuse getContact() (null when not yet a contact) for the existing-prefs
+    // read — no bespoke NotFoundException handling.
+    const existing = await getContact(email)
 
     // Start from existing prefs so non-public topics are preserved verbatim.
     const current = new Map<string, SubscriptionStatus>(
-      ((existing as any)?.TopicPreferences ?? []).map((p: any) => [p.TopicName, p.SubscriptionStatus])
+      (existing?.TopicPreferences ?? []).map((p) => [
+        p.TopicName as string,
+        p.SubscriptionStatus as SubscriptionStatus,
+      ])
     )
     for (const t of PUBLIC_TOPICS) {
       if (t in requested) {
@@ -163,7 +154,7 @@ export async function POST(request: NextRequest) {
       SubscriptionStatus,
     }))
 
-    await client.send(
+    await getSesClient().send(
       new UpdateContactCommand({ ...inputTemplate, EmailAddress: email, TopicPreferences })
     )
     return NextResponse.json({ success: true })

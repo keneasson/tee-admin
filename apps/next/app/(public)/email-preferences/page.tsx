@@ -103,7 +103,9 @@ export default function SubscribePage() {
   }, [isHydrated, token, status])
 
   const save = async () => {
-    if (!token) return
+    // A loaded `data` means we resolved a valid identity — token OR session.
+    // Session-authenticated users have no token; the API uses their cookie.
+    if (!data) return
     setSaving(true)
     setSaved(false)
     setError(null)
