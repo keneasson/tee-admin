@@ -27,6 +27,7 @@ import React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 
 const mockEvents: SundaySchoolType[] = [
@@ -56,6 +57,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
         <Section style={header}>
           <Heading>Toronto East Sunday School</Heading>
           <Text style={defaultText}>2024/2025 News and Reminders</Text>
+          <EmailBrandLink />
         </Section>
 
         {/* Optional Note Section */}

@@ -28,6 +28,7 @@ import type { MemorialServiceType, NextMemorialServiceProps, SundaySchoolType } 
 import { ProgramsTypes } from '@my/app/types'
 import type { Event } from '@my/app/types/events'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
@@ -145,6 +146,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upc
           <Heading>Toronto East Christadelphians</Heading>
           <Text style={defaultText}>{sundaysDateString}</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
+          <EmailBrandLink />
         </Section>
 
         {/* Optional Note Section */}

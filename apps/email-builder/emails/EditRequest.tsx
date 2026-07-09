@@ -19,6 +19,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 
 export type EditRequestEmailProps = {
   targetName: string
@@ -68,6 +69,7 @@ const EditRequestEmail: React.FC<EditRequestEmailProps> = ({
           <Text style={defaultText}>
             Toronto East Christadelphian Ecclesia
           </Text>
+          <EmailBrandLink />
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }}>

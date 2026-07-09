@@ -11,6 +11,8 @@ import type { EmailIdentity } from '@my/app/types/brand-profile'
 export const DEFAULT_EMAIL_IDENTITY: EmailIdentity = {
   name: 'Toronto East Christadelphians',
   addressLines: ['975 Cosburn Avenue', 'Toronto, On M4C 2W8', 'Canada'],
+  homeUrl: 'https://tee-admin.com',
+  homeLabel: 'Toronto East Christadelphians',
 }
 
 /**

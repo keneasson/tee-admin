@@ -101,7 +101,12 @@ export async function POST(
       body: news.body,
       detailsUrl,
       previewImageUrl: getPreviewImageUrl(news.documents),
-      identity: emailIdentityFromProfile(profile),
+      identity: {
+        ...emailIdentityFromProfile(profile),
+        // Header link back to the sending site (tee-admin.com / echadhub.org).
+        homeUrl: `https://${tenant.senderDomain}`,
+        homeLabel: tenant.publicName,
+      },
       // "Please share with your ecclesia" framing is driven by the selected
       // audience (not the send mode), so it also applies to test sends.
       interEcclesia: audienceKey === EmailListTypes.interEcclesia,

@@ -32,6 +32,10 @@ export interface BrandProfile {
 export interface EmailIdentity {
   name: string
   addressLines?: string[]
+  /** Sender's home URL for the header link (e.g. https://tee-admin.com). */
+  homeUrl?: string
+  /** Label for the header link (e.g. "Toronto East Christadelphians"). */
+  homeLabel?: string
 }
 
 export function emailIdentityFromProfile(profile: BrandProfile): EmailIdentity {

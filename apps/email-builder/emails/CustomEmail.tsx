@@ -19,6 +19,7 @@ import {
 } from '../styles'
 import React from 'react'
 import { Footer } from '../components/Footer'
+import { EmailBrandLink } from '../components/EmailBrandLink'
 import { AutoLinkText } from '../components/AutoLinkText'
 
 export type CustomEmailProps = {
@@ -76,6 +77,7 @@ const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note })
             <br />
             All plans are subject to God&apos;s will.
           </Text>
+          <EmailBrandLink />
         </Section>
 
         {/* Optional Note Section */}
