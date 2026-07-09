@@ -3,6 +3,7 @@
 export const FEATURE_FLAGS = {
   MULTI_TENANT_INIT: 'multi_tenant_init',
   IN_APP_NOTIFICATIONS: 'in_app_notifications',
+  UNIVERSAL_EMAIL_LOGIN: 'universal_email_login',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -30,6 +31,14 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
   [FEATURE_FLAGS.IN_APP_NOTIFICATIONS]: {
     description: 'In-app notification bell and notifications page',
     visibleTo: 'owner',
+    users: [],
+  },
+  [FEATURE_FLAGS.UNIVERSAL_EMAIL_LOGIN]: {
+    // Send-path behaviour gate. Read globally with a null session, so it is ON
+    // only when set to 'everyone'. Default 'off' → emails render byte-for-byte
+    // as before until deliberately enabled.
+    description: 'Add a per-recipient one-click sign-in link to the footer of every outgoing email',
+    visibleTo: 'off',
     users: [],
   },
 }

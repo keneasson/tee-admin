@@ -5,6 +5,7 @@ import {
   PutCommand,
   GetCommand,
   DeleteCommand,
+  BatchWriteCommand,
 } from '@aws-sdk/lib-dynamodb'
 
 // Token validity period (30 days)
@@ -138,4 +139,65 @@ export async function generateEcclesiaUpdateUrl(email: string, baseUrl?: string)
   const token = await generateEcclesiaToken(email)
   const base = baseUrl || process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
   return `${base}/ecclesia-contact?token=${token}`
+}
+
+// Max items per DynamoDB BatchWriteItem request.
+const BATCH_WRITE_LIMIT = 25
+
+/**
+ * Generate one sign-in token per email in a single pass, writing them with
+ * DynamoDB BatchWriteItem (25 per request) instead of one PutItem per email —
+ * so a 2000-recipient send costs ~80 batched writes, not 2000 serial awaits.
+ *
+ * Tokens share the same `TOKEN#{token}` record shape as {@link generateEcclesiaToken},
+ * so {@link verifyEcclesiaToken} validates them unchanged.
+ *
+ * @param emails - recipient addresses (deduplicated + lowercased internally)
+ * @returns Map keyed by lowercased email → token
+ */
+export async function generateSigninTokens(emails: string[]): Promise<Map<string, string>> {
+  const docClient = getDocClient()
+  const now = Date.now()
+  const expiresAt = now + TOKEN_VALIDITY_MS
+  const ttl = Math.floor(expiresAt / 1000)
+
+  const tokenByEmail = new Map<string, string>()
+  const requests = Array.from(new Set(emails.map((e) => e.toLowerCase()))).map((email) => {
+    const token = generateRandomToken()
+    tokenByEmail.set(email, token)
+    return {
+      PutRequest: {
+        Item: { pkey: `TOKEN#${token}`, skey: 'TOKEN', email, createdAt: now, expiresAt, ttl },
+      },
+    }
+  })
+
+  for (let i = 0; i < requests.length; i += BATCH_WRITE_LIMIT) {
+    let batch = requests.slice(i, i + BATCH_WRITE_LIMIT)
+    // BatchWriteItem can return UnprocessedItems under throttling — retry with backoff.
+    for (let attempt = 0; batch.length > 0 && attempt < 3; attempt++) {
+      const resp = await docClient.send(
+        new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: batch } })
+      )
+      batch = (resp.UnprocessedItems?.[TABLE_NAME] as typeof batch) ?? []
+      if (batch.length > 0) {
+        await new Promise((r) => setTimeout(r, 100 * (attempt + 1)))
+      }
+    }
+  }
+
+  return tokenByEmail
+}
+
+/**
+ * Build a one-click sign-in URL for a token. Points at the /auth/signin-token
+ * landing page, which presents an explicit "sign in" button (never an
+ * unconditional auto-login) and preserves any existing session.
+ */
+export function buildSigninUrl(token: string, redirectTo?: string): string {
+  const base = process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
+  const url = new URL('/auth/signin-token', base)
+  url.searchParams.set('token', token)
+  if (redirectTo) url.searchParams.set('redirect', redirectTo)
+  return url.toString()
 }
