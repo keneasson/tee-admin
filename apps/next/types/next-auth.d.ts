@@ -10,6 +10,10 @@ declare module 'next-auth' {
       /** The user's postal address. */
       role?: string
       ecclesia?: string
+      /** Assurance tier (#80): a forwardable token confers only 'recognized'. */
+      assuranceLevel?: 'recognized' | 'authenticated'
+      /** Epoch ms of the last fresh authentication (for step-up freshness checks). */
+      authTime?: number
     } & DefaultSession['user']
   }
 

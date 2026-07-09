@@ -47,11 +47,11 @@ export function meetsAssurance(trust: Trust, min: Trust): boolean {
 export async function getTrust(opts?: { ecclesiaToken?: string | null }): Promise<TrustContext> {
   const session = await auth()
   if (session?.user?.email) {
-    const level = ((session.user as any).assuranceLevel as Trust) || 'authenticated'
+    const level: Trust = session.user.assuranceLevel ?? 'authenticated'
     return {
       trust: level === 'recognized' ? 'recognized' : 'authenticated',
       email: session.user.email.toLowerCase(),
-      authTime: ((session.user as any).authTime as number) ?? null,
+      authTime: session.user.authTime ?? null,
       session,
     }
   }
