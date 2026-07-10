@@ -19,13 +19,27 @@ export default auth((req: NextAuthRequest) => {
   }
   const passthrough = () => NextResponse.next({ request: { headers: forwardedHeaders } })
 
-  // Hub sign-in gate: echadhub.org has no public face yet, so require sign-in
-  // for all content pages (Facebook-style). Auth flows (/auth/*) and API routes
-  // (incl. NextAuth /api/auth) stay open; static assets are excluded by the
-  // matcher. Tenant domains with a public face (tee-admin.com) are unaffected.
+  // Assurance model (#80): a session is `authenticated`; a tokenized email link
+  // (?token=) makes the visitor `recognized` — partially verified, allowed to
+  // VIEW anything an email points them at (their preferences, "more details",
+  // etc.). Only mutations / sensitive pages step up to `authenticated` (the
+  // Verify flow), enforced at the route/data layer via getTrust().
+  //
+  // The edge can't reach DynamoDB to cryptographically verify the token, so this
+  // treats *presence* as recognized for the VIEW gate only — the page/API
+  // re-validates it before exposing any real data, so a bogus token gets past
+  // this gate but sees nothing. The middleware is a UX gate, not the auth
+  // boundary; getTrust() remains authoritative.
+  const recognized = !!req.auth || !!req.nextUrl.searchParams.get('token')
+
+  // Hub sign-in gate: echadhub.org has no public face yet, so require at least a
+  // recognized visitor for content pages (Facebook-style). Auth flows (/auth/*)
+  // and API routes (incl. NextAuth /api/auth) stay open; static assets are
+  // excluded by the matcher. Tenant domains with a public face (tee-admin.com)
+  // are unaffected.
   if (
     tenant?.id === 'echadhub' &&
-    !req.auth &&
+    !recognized &&
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/api')
   ) {
