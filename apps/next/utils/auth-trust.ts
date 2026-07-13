@@ -121,3 +121,44 @@ export async function requireAssurance(
 export function isRecentlyAuthenticated(ctx: TrustContext, maxAgeMs: number): boolean {
   return ctx.trust === 'authenticated' && ctx.authTime != null && Date.now() - ctx.authTime <= maxAgeMs
 }
+
+/**
+ * Verify guard (Epic #84, slice B). The one call a sensitive *action* makes:
+ * require `authenticated`, and — when `maxAgeMs` is given — require the login to
+ * be fresh. Any failure returns a ready-to-send response the client can detect:
+ *
+ *   - anonymous          → 401
+ *   - recognized         → 403 `{ stepUpRequired: true }`      (never verified)
+ *   - authenticated+stale→ 403 `{ stepUpRequired: true, stale: true }`
+ *
+ * The client mounts `<Verify>` on any `stepUpRequired` 403, then retries.
+ *
+ *   const gate = await requireVerified({ maxAgeMs: 15 * 60_000 })
+ *   if (!gate.ok) return gate.response
+ *   // gate.ctx.email is freshly proven — safe to mutate as
+ */
+export async function requireVerified(opts?: {
+  ecclesiaToken?: string | null
+  maxAgeMs?: number
+}): Promise<AssuranceGuard> {
+  const gate = await requireAssurance('authenticated', opts)
+  if (!gate.ok) return gate
+
+  if (opts?.maxAgeMs != null && !isRecentlyAuthenticated(gate.ctx, opts.maxAgeMs)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "Please confirm it's you to continue.",
+          trust: gate.ctx.trust,
+          required: 'authenticated',
+          stepUpRequired: true,
+          stale: true,
+        },
+        { status: 403 }
+      ),
+    }
+  }
+
+  return gate
+}
