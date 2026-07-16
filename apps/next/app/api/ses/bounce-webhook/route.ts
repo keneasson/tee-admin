@@ -18,8 +18,28 @@ interface SNSMessage {
   UnsubscribeURL?: string
 }
 
+type SESEventType =
+  | 'Bounce'
+  | 'Complaint'
+  | 'Delivery'
+  | 'Open'
+  | 'Click'
+  | 'Send'
+  | 'Reject'
+  | 'DeliveryDelay'
+  | 'Subscription'
+  | 'Rendering Failure'
+
 interface SESBounceNotification {
-  notificationType: 'Bounce' | 'Complaint' | 'Delivery' | 'Open' | 'Click'
+  /**
+   * SES event *publishing* (Configuration Set → SNS) keys the event on
+   * `eventType`; the legacy identity-feedback path keys it on `notificationType`.
+   * This account uses event publishing, so `eventType` is the one that's set —
+   * `notificationType` is kept only for backward compatibility. The sub-objects
+   * (`bounce`/`complaint`/`open`/`click`/`mail`) are identically named in both.
+   */
+  eventType?: SESEventType
+  notificationType?: SESEventType
   bounce?: {
     bounceType: 'Permanent' | 'Transient' | 'Undetermined'
     bounceSubType: string
@@ -102,7 +122,12 @@ export async function POST(request: NextRequest) {
     if (snsMessage.Type === 'Notification') {
       const sesNotification: SESBounceNotification = JSON.parse(snsMessage.Message)
 
-      console.log('📬 SES notification type:', sesNotification.notificationType)
+      // Normalize the discriminator: event publishing uses `eventType`, legacy
+      // identity feedback uses `notificationType`. Without this, every branch
+      // below tests an `undefined` field and silently drops the event.
+      const eventType = sesNotification.eventType ?? sesNotification.notificationType
+
+      console.log('📬 SES event type:', eventType)
 
       // Extract campaign ID from SES message tags (best-effort)
       const campaignId = sesNotification.mail.tags?.Campaign?.[0]
@@ -111,7 +136,7 @@ export async function POST(request: NextRequest) {
       const eventRecipients = sesNotification.mail.destination ?? []
 
       // Handle Open events — update send record metrics
-      if (sesNotification.notificationType === 'Open') {
+      if (eventType === 'Open') {
         console.log('📬 Open event received')
         if (campaignId) {
           await sendRecordRepository.incrementMetric(campaignId, 'opens')
@@ -121,7 +146,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Handle Click events — update send record metrics
-      if (sesNotification.notificationType === 'Click') {
+      if (eventType === 'Click') {
         console.log('📬 Click event received:', sesNotification.click?.link)
         if (campaignId) {
           await sendRecordRepository.incrementMetric(campaignId, 'clicks')
@@ -131,7 +156,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Handle bounces
-      if (sesNotification.notificationType === 'Bounce' && sesNotification.bounce) {
+      if (eventType === 'Bounce' && sesNotification.bounce) {
         const { bounceType, bounceSubType, bouncedRecipients } = sesNotification.bounce
 
         console.log(`📬 Bounce received: ${bounceType} (${bounceSubType})`)
@@ -179,7 +204,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Handle complaints (spam reports)
-      if (sesNotification.notificationType === 'Complaint' && sesNotification.complaint) {
+      if (eventType === 'Complaint' && sesNotification.complaint) {
         const { complainedRecipients, complaintFeedbackType } = sesNotification.complaint
 
         console.log(`📬 Complaint received: ${complaintFeedbackType || 'unknown type'}`)
@@ -218,7 +243,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Delivery notifications — update send record delivery count
-      if (sesNotification.notificationType === 'Delivery') {
+      if (eventType === 'Delivery') {
         console.log('📬 Delivery confirmation received')
         if (campaignId) {
           await sendRecordRepository.incrementMetric(campaignId, 'deliveries', eventRecipients.length)
