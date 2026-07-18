@@ -232,6 +232,29 @@ export const emailSend = async function ({
 
     const sendChunks = chunkArray(senderEmails, SES_RATE_LIMIT)
     const replyTo = senders[reason].replyTo
+
+    // Create the send record BEFORE the send loop. SES Delivery/Bounce events fire
+    // within seconds of each send — i.e. before the loop finishes — so the record
+    // must exist for the webhook to increment against. createSendRecord is a
+    // non-destructive upsert that never writes the engagement counters, so an event
+    // that still races ahead survives. Final sent/failed tallies are written after
+    // the loop via finalizeSendCounts. Best-effort; never fail the send.
+    try {
+      await sendRecordRepository.createSendRecord({
+        campaignId,
+        reason,
+        subReason,
+        subject,
+        description,
+        recipientCount: senderEmails.length,
+        sentCount: 0,
+        failedCount: 0,
+        sentBy,
+      })
+    } catch (recordError) {
+      console.error('Failed to create send record (non-fatal):', recordError)
+    }
+
     let allSent: Sends = { sends: [], skips: [] }
     for (let i = 0; i < sendChunks.length; i++) {
       const sends = await sendDeferred({
@@ -255,21 +278,15 @@ export const emailSend = async function ({
 
     console.log('total sent', allSent.sends.length)
 
-    // Create send record for per-email tracking (best-effort, don't fail the send)
+    // Finalize the sent/failed tallies now the loop is done. Targeted update of
+    // those two counts only — never touches the webhook-owned engagement counters.
     try {
-      await sendRecordRepository.createSendRecord({
-        campaignId,
-        reason,
-        subReason,
-        subject,
-        description,
-        recipientCount: senderEmails.length,
+      await sendRecordRepository.finalizeSendCounts(campaignId, {
         sentCount: allSent.sends.length,
         failedCount: allSent.skips.length,
-        sentBy,
       })
     } catch (recordError) {
-      console.error('Failed to create send record (non-fatal):', recordError)
+      console.error('Failed to finalize send counts (non-fatal):', recordError)
     }
 
     // Per-recipient roster snapshot — the send-time record of exactly who this

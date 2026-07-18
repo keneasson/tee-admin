@@ -30,27 +30,73 @@ class SendRecipientRepository extends BaseRepository<EmailRecipientRecord> {
     return `RECIPIENT#${email.toLowerCase()}`
   }
 
-  /** Persist the intended-recipient roster for a campaign (best-effort, batched). */
+  /**
+   * Persist the intended-recipient roster for a campaign (best-effort).
+   *
+   * **Non-destructive upsert**, NOT a batch put. Each row is written with
+   * `if_not_exists` on identity/status/sentAt, and `opens`/`clicks`/`deliveredAt`
+   * are never set here. This is critical: SES Delivery/Open events for early
+   * recipients arrive (via the webhook's `recordDelivery/Open`) *before or during*
+   * this snapshot. The previous `batchWrite` PutRequest overwrote those rows —
+   * erasing `deliveredAt` and resetting `opens` to 0 (the write-ordering bug that
+   * made deliveries under-count). An `if_not_exists` upsert leaves any
+   * event-written fields intact regardless of ordering.
+   *
+   * Runs one UpdateItem per recipient (bounded concurrency). For very large lists
+   * this is more writes than a batch; the `RECIPIENT_TRACKING_ENABLED=false` kill
+   * switch remains the escape hatch for thousands-of-recipients sends.
+   */
   async snapshotRoster(
     campaignId: string,
     recipients: Array<{ email: string; status: 'sent' | 'failed'; ecclesia?: string }>
   ): Promise<void> {
     if (recipients.length === 0) return
-    const sentAt = new Date().toISOString()
+    const now = new Date().toISOString()
     const ttl = Math.floor(Date.now() / 1000) + TTL_SECONDS
-    const items: EmailRecipientRecord[] = recipients.map((r) => ({
-      pkey: `SEND#${campaignId}`,
-      skey: SendRecipientRepository.skey(r.email),
-      campaignId,
-      email: r.email.toLowerCase(),
-      ...(r.ecclesia ? { ecclesia: r.ecclesia } : {}),
-      status: r.status,
-      sentAt,
-      opens: 0,
-      clicks: 0,
-      ttl,
-    }))
-    await this.batchWrite(items)
+
+    const writeOne = (r: { email: string; status: 'sent' | 'failed'; ecclesia?: string }) => {
+      const setParts = [
+        'campaignId = if_not_exists(campaignId, :cid)',
+        'email = if_not_exists(email, :em)',
+        '#status = if_not_exists(#status, :st)',
+        'sentAt = if_not_exists(sentAt, :now)',
+        '#ttl = if_not_exists(#ttl, :ttl)',
+      ]
+      const values: Record<string, any> = {
+        ':cid': campaignId,
+        ':em': r.email.toLowerCase(),
+        ':st': r.status,
+        ':now': now,
+        ':ttl': ttl,
+      }
+      if (r.ecclesia) {
+        setParts.push('ecclesia = if_not_exists(ecclesia, :ecc)')
+        values[':ecc'] = r.ecclesia
+      }
+      return docClient.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: { pkey: `SEND#${campaignId}`, skey: SendRecipientRepository.skey(r.email) },
+          UpdateExpression: `SET ${setParts.join(', ')}`,
+          ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
+          ExpressionAttributeValues: values,
+        })
+      )
+    }
+
+    // Bounded concurrency so a large roster doesn't fan out unboundedly.
+    const CHUNK = 25
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+      const results = await Promise.allSettled(recipients.slice(i, i + CHUNK).map(writeOne))
+      const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
+      if (failed.length > 0) {
+        // Best-effort roster — log but never throw (never fail a send over tracking).
+        console.error(
+          `snapshotRoster: ${failed.length} recipient write(s) failed for ${campaignId}:`,
+          failed[0].reason
+        )
+      }
+    }
   }
 
   /** Shared upsert: ensures identity fields exist, then applies event-specific changes. */
