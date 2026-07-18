@@ -44,7 +44,18 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
   }
 
   /**
-   * Create a new send record when an email batch is sent
+   * Create the send record. **Non-destructive by design** — this is an UpdateItem
+   * (upsert) that writes ONLY metadata + roster counts, and NEVER the engagement
+   * counters (opens/clicks/bounces/deliveries/complaints).
+   *
+   * Why: SES fires Delivery/Bounce events within seconds of each send — before the
+   * send loop finishes. Those land via the webhook's `incrementMetric`
+   * (`if_not_exists(:zero) + amount`), creating/updating the counters first. A full
+   * `put()` here would reset them to 0 (the original write-ordering bug). By never
+   * touching the counter attributes — and because reads default missing counters to
+   * 0 — an early event survives regardless of ordering. Call this BEFORE the send
+   * loop (see email-send.tsx) so the record exists when events arrive, then call
+   * `finalizeSendCounts` after the loop for the final sent/failed tallies.
    */
   async createSendRecord(data: {
     campaignId: string
@@ -57,14 +68,11 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
     failedCount: number
     sentBy?: string
   }): Promise<void> {
-    const now = new Date()
-    const sentAt = now.toISOString()
+    const sentAt = new Date().toISOString()
     // 180-day TTL for send records
-    const ttl = Math.floor(now.getTime() / 1000) + 180 * 24 * 60 * 60
+    const ttl = Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60
 
-    const record: SendRecordItem = {
-      pkey: `SEND#${data.campaignId}`,
-      skey: 'METADATA',
+    await this.update(`SEND#${data.campaignId}`, 'METADATA', {
       gsi1pk: `SENDS#${data.reason}`,
       gsi1sk: sentAt,
       gsi2pk: 'SENDS#ALL',
@@ -73,23 +81,29 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
       reason: data.reason,
       subReason: data.subReason,
       subject: data.subject,
-      ...(data.description && { description: data.description }),
+      ...(data.description ? { description: data.description } : {}),
       recipientCount: data.recipientCount,
       sentCount: data.sentCount,
       failedCount: data.failedCount,
       sentAt,
-      ...(data.sentBy && { sentBy: data.sentBy }),
-      opens: 0,
-      clicks: 0,
-      bounces: 0,
-      deliveries: 0,
-      complaints: 0,
+      ...(data.sentBy ? { sentBy: data.sentBy } : {}),
       ttl,
-      lastUpdated: sentAt,
-      version: 0,
-    }
+    } as Partial<SendRecordItem>)
+  }
 
-    await this.put(record)
+  /**
+   * Update just the sent/failed tallies after the send loop completes. Targeted
+   * SET of `sentCount`/`failedCount` only — never touches the webhook-owned
+   * engagement counters, so events that arrived during the send are preserved.
+   */
+  async finalizeSendCounts(
+    campaignId: string,
+    counts: { sentCount: number; failedCount: number }
+  ): Promise<void> {
+    await this.update(`SEND#${campaignId}`, 'METADATA', {
+      sentCount: counts.sentCount,
+      failedCount: counts.failedCount,
+    } as Partial<SendRecordItem>)
   }
 
   /**

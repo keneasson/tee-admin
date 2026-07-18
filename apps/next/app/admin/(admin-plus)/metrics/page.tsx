@@ -16,7 +16,7 @@ import {
 } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { RefreshCw, X } from '@tamagui/lucide-icons'
 import type {
   WebMetricsSummary,
@@ -400,22 +400,14 @@ function EmailMetricsView({
         </Card>
       ) : null}
 
-      {/* Recent Email Performance (per-send tracking) */}
+      {/* Recent Email Performance (per-send tracking). The per-recipient drill-down
+          renders inline beneath the clicked row, inside this component. */}
       {metrics.recentSends && metrics.recentSends.length > 0 ? (
         <RecentSendsTable
           sends={metrics.recentSends}
           colors={colors}
           selectedCampaign={selectedCampaign}
           onSelect={(id) => setSelectedCampaign((cur) => (cur === id ? null : id))}
-        />
-      ) : null}
-
-      {/* Per-recipient drill-down for the selected campaign */}
-      {selectedCampaign ? (
-        <RecipientDrilldown
-          campaignId={selectedCampaign}
-          colors={colors}
-          onClose={() => setSelectedCampaign(null)}
         />
       ) : null}
     </YStack>
@@ -490,10 +482,12 @@ function RecentSendsTable({
           </Text>
         </XStack>
 
-        {/* Data rows */}
+        {/* Data rows — each row renders its per-recipient drill-down inline
+            directly beneath it when selected (so the result appears at the cursor,
+            not off-screen at the bottom of the page). */}
         {sends.map((send) => (
+          <Fragment key={send.campaignId}>
           <XStack
-            key={send.campaignId}
             paddingHorizontal="$3"
             paddingVertical="$2"
             borderBottomWidth={1}
@@ -558,6 +552,14 @@ function RecentSendsTable({
               {send.bounces}
             </Text>
           </XStack>
+          {selectedCampaign === send.campaignId ? (
+            <RecipientDrilldown
+              campaignId={send.campaignId}
+              colors={colors}
+              onClose={() => onSelect(send.campaignId)}
+            />
+          ) : null}
+          </Fragment>
         ))}
       </YStack>
     </Card>
