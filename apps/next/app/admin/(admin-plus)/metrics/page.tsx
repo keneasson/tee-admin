@@ -500,10 +500,10 @@ function RecentSendsTable({
             hoverStyle={{ backgroundColor: colors.backgroundSecondary }}
             onPress={() => onSelect(send.campaignId)}
           >
-            <Text flex={2} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+            <Text flex={2} minWidth={0} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
               {formatDate(send.sentAt)}
             </Text>
-            <XStack flex={1} gap="$1" flexWrap="wrap">
+            <XStack flex={1} minWidth={0} gap="$1" flexWrap="wrap">
               <Text
                 fontSize="$1"
                 fontWeight="600"
@@ -526,7 +526,7 @@ function RecentSendsTable({
                 </Text>
               ) : null}
             </XStack>
-            <Text flex={3} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+            <Text flex={3} minWidth={0} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
               {send.subject}
             </Text>
             <Text flex={1} color={colors.textPrimary} fontSize="$2" textAlign="right">
@@ -689,13 +689,13 @@ function RecipientDrilldown({
               complained || bounced || failed ? '#ef4444' : r.deliveredAt ? '#22c55e' : colors.textSecondary
             return (
               <XStack key={r.email} paddingHorizontal="$2" paddingVertical="$1.5" borderBottomWidth={1} borderBottomColor={colors.border} alignItems="center">
-                <Text flex={2} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                <Text flex={2} minWidth={0} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
                   {r.ecclesia ?? '—'}
                 </Text>
-                <Text flex={3} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                <Text flex={3} minWidth={0} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
                   {r.email}
                 </Text>
-                <Text flex={2} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
+                <Text flex={2} minWidth={0} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
                   {fmtEventDate(r.deliveredAt)}
                 </Text>
                 <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
@@ -704,7 +704,7 @@ function RecipientDrilldown({
                 <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
                   {r.clicks}
                 </Text>
-                <Text flex={2} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
+                <Text flex={2} minWidth={0} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
                   {statusText}
                 </Text>
               </XStack>
