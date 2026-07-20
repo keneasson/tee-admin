@@ -7,6 +7,8 @@ import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
+import { redactScheduleData } from '@my/app/utils/redact-schedule'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 
 // Map Google Sheet type names to schedule type keys
 const SHEET_TO_SCHEDULE_KEY: Record<string, ScheduleTypeKey> = {
@@ -488,8 +490,14 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // Public (CDN-cached) schedule endpoint → anonymous tier. Reduce role-assignment
+    // names to first-name-only and drop precise host addresses BEFORE caching, so the
+    // shared cache can't serve full names to anon. Member-tier schedule (full names)
+    // is rendered into the newsletter email via the server-side path, not this route.
+    const safeData = redactScheduleData(responseData, ANONYMOUS_VIEWER, 'public-web')
+
     // Set cache headers
-    const response = NextResponse.json(responseData)
+    const response = NextResponse.json(safeData)
     response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=600') // 5min client, 10min CDN
     response.headers.set('X-Data-Source', 'enhanced-schedule-api')
     response.headers.set('X-Schedule-Source', 'dynamodb-only')

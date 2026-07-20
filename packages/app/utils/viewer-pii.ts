@@ -191,6 +191,21 @@ export function shapeLocation(
   return shaped
 }
 
+const NAME_TITLE_RE = /^(bro\.?|brother|sis\.?|sister|bre\.?|mr\.?|mrs\.?|ms\.?|dr\.?)\s+/i
+
+/**
+ * Reduce a free-text FULL NAME string ("Bro. John Smith", "Brad Stephens") to its
+ * FIRST NAME ("John", "Brad") — the anon floor for name-string fields that aren't
+ * structured `{firstName,lastName}` (e.g. schedule Presider/Speaker). Strips a
+ * leading honorific, then takes the first token. First name only is sufficiently
+ * non-identifying even for unusual names; two "Peter"s stay indistinguishable.
+ */
+export function firstNameOf(fullName: string | undefined): string {
+  if (!fullName) return fullName ?? ''
+  const stripped = fullName.trim().replace(NAME_TITLE_RE, '')
+  return stripped.split(/\s+/)[0] || fullName.trim()
+}
+
 /**
  * Bio-class text (obituary, testimony, "about the candidate") — shown only to a
  * reveal-tier viewer/channel, otherwise dropped. Returns `undefined` when hidden

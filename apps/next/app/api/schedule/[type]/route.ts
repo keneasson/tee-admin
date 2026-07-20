@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
+import { redactScheduleData } from '@my/app/utils/redact-schedule'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 
 // Cache for 5 minutes in production, disabled in development
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 300 : 0
@@ -34,8 +36,8 @@ export async function GET(
       try {
         const { get_google_sheet } = await import('../../../../utils/get-google-sheets')
         const googleSheetData = await get_google_sheet(type as any)
-        
-        return NextResponse.json(googleSheetData, {
+
+        return NextResponse.json(redactScheduleData(googleSheetData, ANONYMOUS_VIEWER, 'public-web'), {
           headers: {
             'Cache-Control': `public, max-age=60, stale-while-revalidate=30`,
             'X-Data-Source': 'google-sheets-fallback',
@@ -63,7 +65,7 @@ export async function GET(
 
     console.log(`✅ Served ${type} schedule from DynamoDB cache`)
 
-    return NextResponse.json(scheduleData, {
+    return NextResponse.json(redactScheduleData(scheduleData, ANONYMOUS_VIEWER, 'public-web'), {
       headers: {
         'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=60`,
         'X-Data-Source': 'dynamodb-cache',
