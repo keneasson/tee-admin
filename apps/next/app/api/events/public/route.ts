@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { getPublishedEvents } from '@my/app/services/event-service'
+import { redactEventsForViewer } from '@my/app/utils/redact-event'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 import { CACHE_TAGS } from '@/utils/cache'
 
 // Cache duration: revalidate daily at midnight (86400 seconds = 24 hours)
@@ -11,7 +13,13 @@ const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 86400 : false
 const getCachedPublishedEvents = unstable_cache(
   async () => {
     console.log('🔄 Cache miss - fetching fresh events from DynamoDB')
-    return await getPublishedEvents()
+    const events = await getPublishedEvents()
+    // This endpoint is unauthenticated → anonymous tier. Redact PII server-side
+    // BEFORE it enters the response cache, so the cache literally cannot hold (and
+    // this route cannot leak) last names, street addresses, bios, or contact
+    // details. Full data is served to members via authenticated endpoints; the
+    // newsletter EMAIL renders member-tier via its own channel (see redact-event).
+    return redactEventsForViewer(events, ANONYMOUS_VIEWER, 'public-web')
   },
   ['published-events'],
   {

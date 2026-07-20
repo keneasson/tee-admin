@@ -86,12 +86,43 @@ export interface NamedPerson {
 }
 
 /**
- * A full name is revealed only to a *verified* member-or-greater. `target` is
- * accepted for a future tenant-relative refinement (e.g. same-ecclesia only) but
- * the baseline gate is assurance + effective role.
+ * PII classification for a field. The unified post model tags every PII-bearing
+ * field with one of these so redaction is a single pass over typed fields rather
+ * than an audit of every interpolation site. See docs/UNIFIED_POST_MODEL_DESIGN.md.
  */
-export function canRevealFullName(viewer: Viewer, _target?: NamedPerson): boolean {
+export type PiiClass = 'none' | 'name' | 'bio' | 'location-precise' | 'contact'
+
+/**
+ * Delivery channel. Redaction is channel-aware (design §8.2, decided 2026-07-20):
+ * the curated newsletter email goes to an opted-in member audience, so it renders
+ * at member tier (full names + full location) even though recipients are only
+ * `recognized`. Every other surface (the public web page, the anonymous
+ * "view in browser") uses the viewer's real tier.
+ */
+export type Channel = 'public-web' | 'newsletter-email'
+
+/**
+ * THE gate: may this (viewer, channel) see un-redacted PII (full names, precise
+ * location, bios)? True for a verified member-or-greater, OR for anything sent
+ * through the curated `newsletter-email` channel. Name/location/bio shaping all
+ * key off this one predicate.
+ */
+export function canRevealPii(viewer: Viewer, channel: Channel = 'public-web'): boolean {
+  if (channel === 'newsletter-email') return true
   return viewer.assurance === 'authenticated' && roleAtLeast(viewer.role, 'member')
+}
+
+/**
+ * A full name is revealed only to a *verified* member-or-greater (or via the
+ * newsletter-email channel). `target` is accepted for a future tenant-relative
+ * refinement (e.g. same-ecclesia only).
+ */
+export function canRevealFullName(
+  viewer: Viewer,
+  _target?: NamedPerson,
+  channel: Channel = 'public-web'
+): boolean {
+  return canRevealPii(viewer, channel)
 }
 
 /**
@@ -99,8 +130,8 @@ export function canRevealFullName(viewer: Viewer, _target?: NamedPerson): boolea
  * disambiguating initial. Two "Peter"s must stay indistinguishable in the
  * public view; that ambiguity is the privacy feature, not a bug.
  */
-export function renderName(target: NamedPerson, viewer: Viewer): string {
-  if (canRevealFullName(viewer, target)) {
+export function renderName(target: NamedPerson, viewer: Viewer, channel: Channel = 'public-web'): string {
+  if (canRevealFullName(viewer, target, channel)) {
     return [target.firstName, target.lastName].filter(Boolean).join(' ')
   }
   return target.firstName
@@ -114,9 +145,62 @@ export function renderName(target: NamedPerson, viewer: Viewer): string {
  */
 export function shapePersonName<T extends NamedPerson>(
   target: T,
-  viewer: Viewer
+  viewer: Viewer,
+  channel: Channel = 'public-web'
 ): { firstName: string; lastName?: string } {
-  return canRevealFullName(viewer, target)
+  return canRevealFullName(viewer, target, channel)
     ? { firstName: target.firstName, lastName: target.lastName }
     : { firstName: target.firstName }
+}
+
+/**
+ * A location as the model reasons about it. `venueName`/`city`/`province` are the
+ * anon-safe floor; `address`/`postalCode`/`lat`/`lng` are `location-precise`.
+ */
+export interface LocationLike {
+  venueName?: string
+  city?: string
+  province?: string
+  address?: string
+  postalCode?: string
+  lat?: number
+  lng?: number
+  /** A private residence (e.g. a funeral visitation at a home) is hidden entirely for anon. */
+  privateResidence?: boolean
+}
+
+/**
+ * Server-side location shape. Full location for a reveal-tier viewer/channel;
+ * otherwise the anon floor — `venueName` + `city` (+ `province`) ONLY, with the
+ * precise street/postal/geo dropped from the object entirely (no View-Source
+ * leak). A private-residence location is omitted whole for non-reveal viewers.
+ * Decision 2026-07-20 (design §8.1).
+ */
+export function shapeLocation(
+  loc: LocationLike | undefined,
+  viewer: Viewer,
+  channel: Channel = 'public-web'
+): LocationLike | undefined {
+  if (!loc) return undefined
+  if (canRevealPii(viewer, channel)) return loc
+  if (loc.privateResidence) return undefined
+  const shaped: LocationLike = {}
+  if (loc.venueName) shaped.venueName = loc.venueName
+  if (loc.city) shaped.city = loc.city
+  if (loc.province) shaped.province = loc.province
+  return shaped
+}
+
+/**
+ * Bio-class text (obituary, testimony, "about the candidate") — shown only to a
+ * reveal-tier viewer/channel, otherwise dropped. Returns `undefined` when hidden
+ * so the field is simply absent from the serialized response.
+ */
+export function revealBio(
+  value: string | undefined,
+  viewer: Viewer,
+  channel: Channel = 'public-web'
+): string | undefined {
+  if (!value) return undefined
+  return canRevealPii(viewer, channel) ? value : undefined
 }
