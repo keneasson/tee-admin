@@ -15,7 +15,11 @@
 import { canRevealPii, firstNameOf, type Viewer, type Channel } from './viewer-pii'
 
 // Keys whose value is a person's full-name string (across memorial/bibleClass/
-// sundaySchool/cyc rows). Verified against live schedule data.
+// sundaySchool/cyc rows). Verified against the live raw sheet data (tee-schedules).
+// NB: 'Reader 1/2' are PEOPLE; 'Reading 1/2' are Bible passages — do NOT add those.
+// (Reader/Prayer roles are usually filled live at the service, so often blank — but
+// they still carry a full name when set, hence redacted.) This denylist is
+// inherently sheet-specific; the name→member resolver will make it structural.
 const PERSON_KEYS = new Set([
   'Preside',
   'Exhort',
@@ -28,6 +32,13 @@ const PERSON_KEYS = new Set([
   'Speaker',
   'Refreshments',
   'speaker', // cyc
+  'Reader 1',
+  'Reader 2',
+  'Prayer - Bread',
+  'Prayer - Wine',
+  'Prayer - closing',
+  'Organize slides',
+  'Hall Sound (Youtube)',
 ])
 
 // Precise-location keys → dropped for anon (host ecclesia street address / map link).
