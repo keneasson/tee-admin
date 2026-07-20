@@ -13,6 +13,8 @@ import {
   Input,
   ScrollView,
   useThemeName,
+  TableRow,
+  TableCell,
 } from '@my/ui'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { brandColors } from '@my/ui/src/branding/brand-colors'
@@ -414,13 +416,6 @@ function EmailMetricsView({
   )
 }
 
-// Tamagui's `flex={n}` only sets flex-grow and leaves flex-basis:auto, so each
-// table column is sized to its CONTENT (header "Subject" vs a long data subject
-// get different widths) and columns drift out of alignment. Forcing flexBasis:0
-// makes every column proportional to its flex value — a real grid. Spread on every
-// header AND data cell so the two rows share identical column widths.
-const COL = { flexBasis: 0, minWidth: 0 } as const
-
 /** Color-code open rate: green >= 20%, orange 10-20%, red < 10% */
 function rateColor(rate: number): string {
   if (rate >= 20) return '#22c55e'
@@ -460,46 +455,45 @@ function RecentSendsTable({
       </Text>
       <YStack gap="$1">
         {/* Header row */}
-        <XStack
+        <TableRow
           paddingHorizontal="$3"
           paddingVertical="$2"
           borderBottomWidth={1}
           borderBottomColor={colors.border}
         >
-          <Text flex={2} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
-            Date
-          </Text>
-          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
-            Type
-          </Text>
-          <Text flex={3} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
-            Subject
-          </Text>
-          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
-            Sent
-          </Text>
-          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
-            Opens
-          </Text>
-          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
-            Clicks
-          </Text>
-          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
-            Bounces
-          </Text>
-        </XStack>
+          <TableCell flex={2}>
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Date</Text>
+          </TableCell>
+          <TableCell flex={1}>
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Type</Text>
+          </TableCell>
+          <TableCell flex={3}>
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Subject</Text>
+          </TableCell>
+          <TableCell flex={1} align="right">
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Sent</Text>
+          </TableCell>
+          <TableCell flex={1} align="right">
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Opens</Text>
+          </TableCell>
+          <TableCell flex={1} align="right">
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Clicks</Text>
+          </TableCell>
+          <TableCell flex={1} align="right">
+            <Text fontWeight="600" color={colors.textSecondary} fontSize="$2">Bounces</Text>
+          </TableCell>
+        </TableRow>
 
         {/* Data rows — each row renders its per-recipient drill-down inline
             directly beneath it when selected (so the result appears at the cursor,
             not off-screen at the bottom of the page). */}
         {sends.map((send) => (
           <Fragment key={send.campaignId}>
-          <XStack
+          <TableRow
             paddingHorizontal="$3"
             paddingVertical="$2"
             borderBottomWidth={1}
             borderBottomColor={colors.border}
-            alignItems="center"
             cursor="pointer"
             backgroundColor={
               selectedCampaign === send.campaignId ? colors.backgroundSecondary : 'transparent'
@@ -507,58 +501,72 @@ function RecentSendsTable({
             hoverStyle={{ backgroundColor: colors.backgroundSecondary }}
             onPress={() => onSelect(send.campaignId)}
           >
-            <Text flex={2} {...COL} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
-              {formatDate(send.sentAt)}
-            </Text>
-            <XStack flex={1} {...COL} gap="$1" flexWrap="wrap">
-              <Text
-                fontSize="$1"
-                fontWeight="600"
-                color={colors.primary}
-                backgroundColor={colors.backgroundTertiary}
-                paddingHorizontal="$1"
-                borderRadius="$1"
-              >
-                {send.reason}
+            <TableCell flex={2}>
+              <Text color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+                {formatDate(send.sentAt)}
               </Text>
-              {send.subReason !== 'general' ? (
+            </TableCell>
+            <TableCell flex={1}>
+              <XStack gap="$1" flexWrap="wrap">
                 <Text
                   fontSize="$1"
-                  color={colors.textSecondary}
+                  fontWeight="600"
+                  color={colors.primary}
                   backgroundColor={colors.backgroundTertiary}
                   paddingHorizontal="$1"
                   borderRadius="$1"
                 >
-                  {send.subReason}
+                  {send.reason}
                 </Text>
-              ) : null}
-            </XStack>
-            <Text flex={3} {...COL} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
-              {send.subject}
-            </Text>
-            <Text flex={1} {...COL} color={colors.textPrimary} fontSize="$2" textAlign="right">
-              {send.sentCount}
-            </Text>
-            <YStack flex={1} {...COL} alignItems="flex-end">
-              <Text fontSize="$2" color={rateColor(send.openRate)} fontWeight="600">
-                {send.openRate}%
+                {send.subReason !== 'general' ? (
+                  <Text
+                    fontSize="$1"
+                    color={colors.textSecondary}
+                    backgroundColor={colors.backgroundTertiary}
+                    paddingHorizontal="$1"
+                    borderRadius="$1"
+                  >
+                    {send.subReason}
+                  </Text>
+                ) : null}
+              </XStack>
+            </TableCell>
+            <TableCell flex={3}>
+              <Text color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+                {send.subject}
               </Text>
-              <Text fontSize="$1" color={colors.textSecondary}>
-                {send.opens}
+            </TableCell>
+            <TableCell flex={1} align="right">
+              <Text color={colors.textPrimary} fontSize="$2">
+                {send.sentCount}
               </Text>
-            </YStack>
-            <YStack flex={1} {...COL} alignItems="flex-end">
-              <Text fontSize="$2" color={rateColor(send.clickRate)} fontWeight="600">
-                {send.clickRate}%
+            </TableCell>
+            <TableCell flex={1} align="right">
+              <YStack alignItems="flex-end">
+                <Text fontSize="$2" color={rateColor(send.openRate)} fontWeight="600">
+                  {send.openRate}%
+                </Text>
+                <Text fontSize="$1" color={colors.textSecondary}>
+                  {send.opens}
+                </Text>
+              </YStack>
+            </TableCell>
+            <TableCell flex={1} align="right">
+              <YStack alignItems="flex-end">
+                <Text fontSize="$2" color={rateColor(send.clickRate)} fontWeight="600">
+                  {send.clickRate}%
+                </Text>
+                <Text fontSize="$1" color={colors.textSecondary}>
+                  {send.clicks}
+                </Text>
+              </YStack>
+            </TableCell>
+            <TableCell flex={1} align="right">
+              <Text color={colors.textPrimary} fontSize="$2">
+                {send.bounces}
               </Text>
-              <Text fontSize="$1" color={colors.textSecondary}>
-                {send.clicks}
-              </Text>
-            </YStack>
-            <Text flex={1} {...COL} color={colors.textPrimary} fontSize="$2" textAlign="right">
-              {send.bounces}
-            </Text>
-          </XStack>
+            </TableCell>
+          </TableRow>
           {selectedCampaign === send.campaignId ? (
             <RecipientDrilldown
               campaignId={send.campaignId}
@@ -678,14 +686,14 @@ function RecipientDrilldown({
           />
 
           {/* Header */}
-          <XStack paddingHorizontal="$2" paddingVertical="$1" borderBottomWidth={1} borderBottomColor={colors.border}>
-            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Ecclesia</Text>
-            <Text flex={3} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Email</Text>
-            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Delivered</Text>
-            <Text flex={1} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Opens</Text>
-            <Text flex={1} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Clicks</Text>
-            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Status</Text>
-          </XStack>
+          <TableRow paddingHorizontal="$2" paddingVertical="$1" borderBottomWidth={1} borderBottomColor={colors.border}>
+            <TableCell flex={2}><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Ecclesia</Text></TableCell>
+            <TableCell flex={3}><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Email</Text></TableCell>
+            <TableCell flex={2}><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Delivered</Text></TableCell>
+            <TableCell flex={1} align="right"><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Opens</Text></TableCell>
+            <TableCell flex={1} align="right"><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Clicks</Text></TableCell>
+            <TableCell flex={2} align="right"><Text fontSize="$1" fontWeight="600" color={colors.textSecondary}>Status</Text></TableCell>
+          </TableRow>
 
           {rows.map((r) => {
             const bounced = !!r.bouncedAt
@@ -703,26 +711,26 @@ function RecipientDrilldown({
             const statusColor =
               complained || bounced || failed ? '#ef4444' : r.deliveredAt ? '#22c55e' : colors.textSecondary
             return (
-              <XStack key={r.email} paddingHorizontal="$2" paddingVertical="$1.5" borderBottomWidth={1} borderBottomColor={colors.border} alignItems="center">
-                <Text flex={2} {...COL} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
-                  {r.ecclesia ?? '—'}
-                </Text>
-                <Text flex={3} {...COL} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
-                  {r.email}
-                </Text>
-                <Text flex={2} {...COL} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
-                  {fmtEventDate(r.deliveredAt)}
-                </Text>
-                <Text flex={1} {...COL} fontSize="$2" color={colors.textPrimary} textAlign="right">
-                  {r.opens}
-                </Text>
-                <Text flex={1} {...COL} fontSize="$2" color={colors.textPrimary} textAlign="right">
-                  {r.clicks}
-                </Text>
-                <Text flex={2} {...COL} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
-                  {statusText}
-                </Text>
-              </XStack>
+              <TableRow key={r.email} paddingHorizontal="$2" paddingVertical="$1.5" borderBottomWidth={1} borderBottomColor={colors.border}>
+                <TableCell flex={2}>
+                  <Text fontSize="$2" color={colors.textPrimary} numberOfLines={1}>{r.ecclesia ?? '—'}</Text>
+                </TableCell>
+                <TableCell flex={3}>
+                  <Text fontSize="$2" color={colors.textPrimary} numberOfLines={1}>{r.email}</Text>
+                </TableCell>
+                <TableCell flex={2}>
+                  <Text fontSize="$2" color={colors.textSecondary} numberOfLines={1}>{fmtEventDate(r.deliveredAt)}</Text>
+                </TableCell>
+                <TableCell flex={1} align="right">
+                  <Text fontSize="$2" color={colors.textPrimary}>{r.opens}</Text>
+                </TableCell>
+                <TableCell flex={1} align="right">
+                  <Text fontSize="$2" color={colors.textPrimary}>{r.clicks}</Text>
+                </TableCell>
+                <TableCell flex={2} align="right">
+                  <Text fontSize="$2" color={statusColor} numberOfLines={1}>{statusText}</Text>
+                </TableCell>
+              </TableRow>
             )
           })}
           {rows.length === 0 ? (
