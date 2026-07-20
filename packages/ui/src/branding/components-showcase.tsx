@@ -16,6 +16,7 @@ import { Picture } from '../picture'
 import { ProgramElement } from '../program-element'
 import { TableBody } from '../table-body'
 import { TableHead } from '../table-head'
+import { TableRow, TableCell } from '../table'
 import { FormFieldset } from '../form/form-fieldset'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
 import { FormInput } from '../form/form-input'
@@ -360,6 +361,43 @@ function MyForm() {
 <TableBody past={isPast}>
   Body Content
 </TableBody>`}
+        />
+
+        <ComponentShowcase
+          title="TableRow / TableCell (aligned columns)"
+          description="Flex-grid row + cell primitives. TableCell forces flex-basis:0 so columns are proportional to `flex` and header/data always line up (Tamagui's raw `flex` leaves flex-basis:auto, which content-sizes columns and misaligns them). Long content truncates instead of widening the column. Use align='right' for numeric columns."
+          variants={[
+            {
+              name: 'Aligned header + rows',
+              component: (
+                <YStack width={420}>
+                  <TableRow paddingVertical="$2" borderBottomWidth={1} borderColor="$borderColor">
+                    <TableCell flex={3}><Text fontWeight="600" fontSize="$2">Subject</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontWeight="600" fontSize="$2">Sent</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontWeight="600" fontSize="$2">Opens</Text></TableCell>
+                  </TableRow>
+                  <TableRow paddingVertical="$2" borderBottomWidth={1} borderColor="$borderColor">
+                    <TableCell flex={3}><Text fontSize="$2" numberOfLines={1}>A rather long subject line that truncates</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontSize="$2">124</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontSize="$2">86</Text></TableCell>
+                  </TableRow>
+                  <TableRow paddingVertical="$2">
+                    <TableCell flex={3}><Text fontSize="$2" numberOfLines={1}>Short one</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontSize="$2">83</Text></TableCell>
+                    <TableCell flex={1} align="right"><Text fontSize="$2">8</Text></TableCell>
+                  </TableRow>
+                </YStack>
+              ),
+            },
+          ]}
+          code={`<TableRow>
+  <TableCell flex={3}>
+    <Text numberOfLines={1}>{subject}</Text>
+  </TableCell>
+  <TableCell flex={1} align="right">
+    <Text>{count}</Text>
+  </TableCell>
+</TableRow>`}
         />
       </ComponentGroup>
       
