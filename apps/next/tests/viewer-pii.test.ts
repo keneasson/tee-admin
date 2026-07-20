@@ -2,13 +2,17 @@ import { describe, it, expect } from 'vitest'
 import {
   effectiveRole,
   canRevealFullName,
+  canRevealPii,
   renderName,
   shapePersonName,
+  shapeLocation,
+  revealBio,
   roleAtLeast,
   ANONYMOUS_VIEWER,
   type Assurance,
   type Role,
   type Viewer,
+  type LocationLike,
 } from '@my/app/utils/viewer-pii'
 
 const peter = { firstName: 'Peter', lastName: 'Skariah', ecclesia: 'Toronto East' }
@@ -91,5 +95,64 @@ describe('renderName / shapePersonName — server-side redaction', () => {
   it('two Peters stay indistinguishable in the public view (no initial)', () => {
     const peter2 = { firstName: 'Peter', lastName: 'Thomas' }
     expect(renderName(peter, ANONYMOUS_VIEWER)).toBe(renderName(peter2, ANONYMOUS_VIEWER))
+  })
+})
+
+describe('canRevealPii — channel-aware (design §8.2)', () => {
+  it('public-web follows the viewer tier', () => {
+    expect(canRevealPii(ANONYMOUS_VIEWER, 'public-web')).toBe(false)
+    expect(canRevealPii(viewer('recognized', 'member'), 'public-web')).toBe(false)
+    expect(canRevealPii(viewer('authenticated', 'member'), 'public-web')).toBe(true)
+  })
+  it('newsletter-email always reveals — curated member audience', () => {
+    expect(canRevealPii(ANONYMOUS_VIEWER, 'newsletter-email')).toBe(true)
+    expect(canRevealPii(viewer('recognized', 'member'), 'newsletter-email')).toBe(true)
+  })
+  it('defaults to public-web when channel omitted', () => {
+    expect(canRevealPii(viewer('recognized', 'member'))).toBe(false)
+  })
+})
+
+describe('name/bio via the newsletter-email channel show full', () => {
+  it('full name in the newsletter even for a recognized recipient', () => {
+    const v = viewer('recognized', 'member')
+    expect(renderName(peter, v, 'newsletter-email')).toBe('Peter Skariah')
+    expect(shapePersonName(peter, v, 'newsletter-email')).toEqual({ firstName: 'Peter', lastName: 'Skariah' })
+  })
+  it('bio shown in newsletter, hidden on public web', () => {
+    const v = viewer('recognized', 'member')
+    expect(revealBio('An obituary', v, 'newsletter-email')).toBe('An obituary')
+    expect(revealBio('An obituary', v, 'public-web')).toBeUndefined()
+    expect(revealBio('An obituary', viewer('authenticated', 'member'), 'public-web')).toBe('An obituary')
+  })
+})
+
+describe('shapeLocation — anon floor is venue + city (design §8.1)', () => {
+  const hall: LocationLike = {
+    venueName: 'Toronto East Hall', city: 'Toronto', province: 'ON',
+    address: '123 Main St', postalCode: 'M1M 1M1', lat: 43.7, lng: -79.3,
+  }
+  it('anon gets venue + city + province only, no street/postal/geo', () => {
+    expect(shapeLocation(hall, ANONYMOUS_VIEWER)).toEqual({
+      venueName: 'Toronto East Hall', city: 'Toronto', province: 'ON',
+    })
+  })
+  it('redacted shape NEVER carries address/postal/geo (no ship-then-hide)', () => {
+    const shaped = shapeLocation(hall, ANONYMOUS_VIEWER)!
+    expect(shaped).not.toHaveProperty('address')
+    expect(shaped).not.toHaveProperty('postalCode')
+    expect(shaped).not.toHaveProperty('lat')
+    expect(shaped).not.toHaveProperty('lng')
+  })
+  it('authenticated member gets the full location', () => {
+    expect(shapeLocation(hall, viewer('authenticated', 'member'))).toEqual(hall)
+  })
+  it('newsletter-email gets the full location even for a recognized recipient', () => {
+    expect(shapeLocation(hall, viewer('recognized', 'member'), 'newsletter-email')).toEqual(hall)
+  })
+  it('a private residence is hidden entirely for anon, shown for member+', () => {
+    const home: LocationLike = { venueName: 'The Smith residence', city: 'Toronto', address: '5 Elm St', privateResidence: true }
+    expect(shapeLocation(home, ANONYMOUS_VIEWER)).toBeUndefined()
+    expect(shapeLocation(home, viewer('authenticated', 'member'))).toEqual(home)
   })
 })
