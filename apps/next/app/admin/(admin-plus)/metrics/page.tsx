@@ -414,6 +414,13 @@ function EmailMetricsView({
   )
 }
 
+// Tamagui's `flex={n}` only sets flex-grow and leaves flex-basis:auto, so each
+// table column is sized to its CONTENT (header "Subject" vs a long data subject
+// get different widths) and columns drift out of alignment. Forcing flexBasis:0
+// makes every column proportional to its flex value — a real grid. Spread on every
+// header AND data cell so the two rows share identical column widths.
+const COL = { flexBasis: 0, minWidth: 0 } as const
+
 /** Color-code open rate: green >= 20%, orange 10-20%, red < 10% */
 function rateColor(rate: number): string {
   if (rate >= 20) return '#22c55e'
@@ -459,25 +466,25 @@ function RecentSendsTable({
           borderBottomWidth={1}
           borderBottomColor={colors.border}
         >
-          <Text flex={2} fontWeight="600" color={colors.textSecondary} fontSize="$2">
+          <Text flex={2} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
             Date
           </Text>
-          <Text flex={1} fontWeight="600" color={colors.textSecondary} fontSize="$2">
+          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
             Type
           </Text>
-          <Text flex={3} fontWeight="600" color={colors.textSecondary} fontSize="$2">
+          <Text flex={3} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2">
             Subject
           </Text>
-          <Text flex={1} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
+          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
             Sent
           </Text>
-          <Text flex={1} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
+          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
             Opens
           </Text>
-          <Text flex={1} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
+          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
             Clicks
           </Text>
-          <Text flex={1} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
+          <Text flex={1} {...COL} fontWeight="600" color={colors.textSecondary} fontSize="$2" textAlign="right">
             Bounces
           </Text>
         </XStack>
@@ -500,10 +507,10 @@ function RecentSendsTable({
             hoverStyle={{ backgroundColor: colors.backgroundSecondary }}
             onPress={() => onSelect(send.campaignId)}
           >
-            <Text flex={2} minWidth={0} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+            <Text flex={2} {...COL} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
               {formatDate(send.sentAt)}
             </Text>
-            <XStack flex={1} minWidth={0} gap="$1" flexWrap="wrap">
+            <XStack flex={1} {...COL} gap="$1" flexWrap="wrap">
               <Text
                 fontSize="$1"
                 fontWeight="600"
@@ -526,13 +533,13 @@ function RecentSendsTable({
                 </Text>
               ) : null}
             </XStack>
-            <Text flex={3} minWidth={0} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
+            <Text flex={3} {...COL} color={colors.textPrimary} fontSize="$2" numberOfLines={1}>
               {send.subject}
             </Text>
-            <Text flex={1} color={colors.textPrimary} fontSize="$2" textAlign="right">
+            <Text flex={1} {...COL} color={colors.textPrimary} fontSize="$2" textAlign="right">
               {send.sentCount}
             </Text>
-            <YStack flex={1} alignItems="flex-end">
+            <YStack flex={1} {...COL} alignItems="flex-end">
               <Text fontSize="$2" color={rateColor(send.openRate)} fontWeight="600">
                 {send.openRate}%
               </Text>
@@ -540,7 +547,7 @@ function RecentSendsTable({
                 {send.opens}
               </Text>
             </YStack>
-            <YStack flex={1} alignItems="flex-end">
+            <YStack flex={1} {...COL} alignItems="flex-end">
               <Text fontSize="$2" color={rateColor(send.clickRate)} fontWeight="600">
                 {send.clickRate}%
               </Text>
@@ -548,7 +555,7 @@ function RecentSendsTable({
                 {send.clicks}
               </Text>
             </YStack>
-            <Text flex={1} color={colors.textPrimary} fontSize="$2" textAlign="right">
+            <Text flex={1} {...COL} color={colors.textPrimary} fontSize="$2" textAlign="right">
               {send.bounces}
             </Text>
           </XStack>
@@ -627,7 +634,15 @@ function RecipientDrilldown({
   }
 
   return (
-    <Card padding="$4" backgroundColor={colors.backgroundTertiary}>
+    <Card
+      padding="$4"
+      marginVertical="$2"
+      backgroundColor={colors.background}
+      borderColor={colors.border}
+      borderWidth={1}
+      borderLeftColor={colors.primary}
+      borderLeftWidth={4}
+    >
       <XStack justifyContent="space-between" alignItems="center" marginBottom="$2">
         <Text fontSize="$4" fontWeight="600" color={colors.textPrimary}>
           Recipients — who received this send
@@ -664,12 +679,12 @@ function RecipientDrilldown({
 
           {/* Header */}
           <XStack paddingHorizontal="$2" paddingVertical="$1" borderBottomWidth={1} borderBottomColor={colors.border}>
-            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Ecclesia</Text>
-            <Text flex={3} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Email</Text>
-            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Delivered</Text>
-            <Text flex={1} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Opens</Text>
-            <Text flex={1} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Clicks</Text>
-            <Text flex={2} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Status</Text>
+            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Ecclesia</Text>
+            <Text flex={3} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Email</Text>
+            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary}>Delivered</Text>
+            <Text flex={1} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Opens</Text>
+            <Text flex={1} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Clicks</Text>
+            <Text flex={2} {...COL} fontSize="$1" fontWeight="600" color={colors.textSecondary} textAlign="right">Status</Text>
           </XStack>
 
           {rows.map((r) => {
@@ -689,22 +704,22 @@ function RecipientDrilldown({
               complained || bounced || failed ? '#ef4444' : r.deliveredAt ? '#22c55e' : colors.textSecondary
             return (
               <XStack key={r.email} paddingHorizontal="$2" paddingVertical="$1.5" borderBottomWidth={1} borderBottomColor={colors.border} alignItems="center">
-                <Text flex={2} minWidth={0} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                <Text flex={2} {...COL} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
                   {r.ecclesia ?? '—'}
                 </Text>
-                <Text flex={3} minWidth={0} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
+                <Text flex={3} {...COL} fontSize="$2" color={colors.textPrimary} numberOfLines={1}>
                   {r.email}
                 </Text>
-                <Text flex={2} minWidth={0} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
+                <Text flex={2} {...COL} fontSize="$2" color={colors.textSecondary} numberOfLines={1}>
                   {fmtEventDate(r.deliveredAt)}
                 </Text>
-                <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
+                <Text flex={1} {...COL} fontSize="$2" color={colors.textPrimary} textAlign="right">
                   {r.opens}
                 </Text>
-                <Text flex={1} fontSize="$2" color={colors.textPrimary} textAlign="right">
+                <Text flex={1} {...COL} fontSize="$2" color={colors.textPrimary} textAlign="right">
                   {r.clicks}
                 </Text>
-                <Text flex={2} minWidth={0} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
+                <Text flex={2} {...COL} fontSize="$2" color={statusColor} textAlign="right" numberOfLines={1}>
                   {statusText}
                 </Text>
               </XStack>
