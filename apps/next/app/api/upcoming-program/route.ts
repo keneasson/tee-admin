@@ -4,6 +4,8 @@ import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { ProgramTypeKeys } from '@my/app/types'
 import { CACHE_TAGS } from '../../../utils/cache'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
+import { redactScheduleData } from '@my/app/utils/redact-schedule'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 
 // Cache for 15 minutes in production (shorter for faster updates when debugging)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -111,7 +113,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(responseData, {
+    // Only live consumer is the anonymous web newsletter screen → anonymous tier.
+    // First-name-only role assignments, drop host addresses, BEFORE the shared
+    // `public` cache. The member-tier newsletter EMAIL sources full names via the
+    // server-side get_upcoming_program() path, not this route (see get-email-content).
+    const safeData = redactScheduleData(responseData, ANONYMOUS_VIEWER, 'public-web')
+
+    return NextResponse.json(safeData, {
       headers: {
         'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
         'X-Data-Source': 'dynamodb-cache',
