@@ -18,17 +18,20 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type CustomEmailProps = {
   htmlContent: string
   subject?: string
   note?: string
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
-const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note }) => {
+const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note, identity }) => {
   const todaysDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -77,7 +80,7 @@ const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note })
             <br />
             All plans are subject to God&apos;s will.
           </Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -119,7 +122,7 @@ const CustomEmail: React.FC<CustomEmailProps> = ({ htmlContent, subject, note })
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

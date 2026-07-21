@@ -18,8 +18,9 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type EditRequestEmailProps = {
   targetName: string
@@ -32,6 +33,8 @@ export type EditRequestEmailProps = {
   approveUrl: string
   rejectUrl: string
   viewAllUrl: string
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
 const fieldLabels: Record<string, string> = {
@@ -52,6 +55,7 @@ const EditRequestEmail: React.FC<EditRequestEmailProps> = ({
   approveUrl,
   rejectUrl,
   viewAllUrl,
+  identity,
 }) => {
   const fieldLabel = fieldLabels[field] || field
 
@@ -69,7 +73,7 @@ const EditRequestEmail: React.FC<EditRequestEmailProps> = ({
           <Text style={defaultText}>
             Toronto East Christadelphian Ecclesia
           </Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }}>
@@ -232,7 +236,7 @@ const EditRequestEmail: React.FC<EditRequestEmailProps> = ({
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

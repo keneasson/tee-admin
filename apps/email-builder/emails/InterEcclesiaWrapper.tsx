@@ -15,7 +15,8 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { InterEcclesiaFooter } from '../components/InterEcclesiaFooter'
+import { InterEcclesiaFooterContent } from '../components/InterEcclesiaFooterContent'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export interface InterEcclesiaWrapperProps {
   /**
@@ -53,6 +54,9 @@ export interface InterEcclesiaWrapperProps {
    * Token-based URL for updating contact info (optional)
    */
   updateContactUrl?: string
+
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
 // Mock data for preview
@@ -74,6 +78,7 @@ const InterEcclesiaWrapper: React.FC<InterEcclesiaWrapperProps> = ({
   children,
   innerHtml,
   updateContactUrl,
+  identity,
 }) => {
   return (
     <Html lang="en">
@@ -120,7 +125,7 @@ const InterEcclesiaWrapper: React.FC<InterEcclesiaWrapperProps> = ({
         </Container>
 
         {/* Inter-Ecclesia Footer */}
-        <InterEcclesiaFooter updateContactUrl={updateContactUrl} />
+        <InterEcclesiaFooterContent updateContactUrl={updateContactUrl} identity={identity} />
       </Body>
     </Html>
   )

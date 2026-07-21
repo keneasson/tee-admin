@@ -18,15 +18,18 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type BusinessMeetingProps = {
   note?: string
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
-const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note }) => {
+const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note, identity }) => {
   return (
     <Html lang="en">
       <Head>
@@ -38,7 +41,7 @@ const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note }) => {
           <Heading>Toronto East Christadelphians</Heading>
           <Text style={defaultText}>Business Meeting</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -173,7 +176,7 @@ const BusinessMeeting: React.FC<BusinessMeetingProps> = ({ note }) => {
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

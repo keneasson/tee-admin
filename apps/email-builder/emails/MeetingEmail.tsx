@@ -18,9 +18,10 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 export type MeetingEmailProps = {
   // Header
@@ -46,6 +47,9 @@ export type MeetingEmailProps = {
 
   // Note (conditional — yellow banner)
   note?: string
+
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
 const defaultProps: MeetingEmailProps = {
@@ -83,6 +87,7 @@ const MeetingEmail: React.FC<MeetingEmailProps> = (props) => {
   const locationAddress = src.locationAddress
   const documents = src.documents
   const note = src.note
+  const identity = src.identity
 
   const hasZoomSection = !!(zoomLink || meetingId)
   const hasLocationSection = !!(locationName || locationAddress)
@@ -101,7 +106,7 @@ const MeetingEmail: React.FC<MeetingEmailProps> = (props) => {
           <Heading>{ownerName}</Heading>
           <Text style={defaultText}>{title}</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -231,7 +236,7 @@ const MeetingEmail: React.FC<MeetingEmailProps> = (props) => {
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

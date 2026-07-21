@@ -25,8 +25,9 @@ import {
 import React from 'react'
 import type { BibleClassType, NextBibleClassProps } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 
 const mockEvents: BibleClassType[] = [
@@ -45,7 +46,9 @@ const isNoClass = (event: BibleClassType): boolean => {
   return !event.Speaker || event.Topic.toLowerCase().includes('no class')
 }
 
-const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
+// `identity` is passed as a prop (not via the client EmailIdentityProvider) so this
+// renders from an App Router server route (the email-queue cron processor).
+const BibleClass: React.FC<NextBibleClassProps & { identity?: EmailIdentity }> = ({ events, note, identity }) => {
   const bibleClassEvents = events || mockEvents
   const currentEvent = bibleClassEvents[0]
   const nextEvent = bibleClassEvents[1]
@@ -114,7 +117,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
         ) : (
           <Section style={header}>
             <Heading>{headingText}</Heading>
-            <EmailBrandLink />
+            <EmailBrandLinkContent identity={identity} />
           </Section>
         )}
 
@@ -280,7 +283,7 @@ const BibleClass: React.FC<NextBibleClassProps> = ({ events, note }) => {
             </Text>
           </Container>
         ) : null}
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

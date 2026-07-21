@@ -27,9 +27,10 @@ import React from 'react'
 import type { MemorialServiceType, NextMemorialServiceProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import type { Event } from '@my/app/types/events'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
@@ -127,7 +128,8 @@ function formatEventDate(dateStr: string | Date | undefined): string {
   return formatDateToronto(dateStr)
 }
 
-const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upcomingEvents }) => {
+/** identity: Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+const MemorialService: React.FC<NextMemorialServiceProps & { identity?: EmailIdentity }> = ({ events, note, upcomingEvents, identity }) => {
   const sundayEvents = events || mockEvents
 
   // Use the actual dates from the events data instead of calculating them
@@ -146,7 +148,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upc
           <Heading>Toronto East Christadelphians</Heading>
           <Text style={defaultText}>{sundaysDateString}</Text>
           <Text style={defaultText}>All arrangements are subject to God&apos;s will.</Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -310,7 +312,7 @@ const MemorialService: React.FC<NextMemorialServiceProps> = ({ events, note, upc
         <Container>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )
