@@ -8,7 +8,7 @@ import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { NavitemLogout } from '@my/app/provider/auth/navItem-logout'
 import { ThemeToggle } from './theme-toggle'
 import { NotificationBell } from '@my/ui/src/notifications/notification-bell'
-import { Menu, X } from '@tamagui/lucide-icons'
+import { Menu, X, LogIn } from '@tamagui/lucide-icons'
 import { getBrand } from '@my/app/config/brand'
 
 type UserSession = {
@@ -170,14 +170,20 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         </Button> : <Button
           onPress={navigateTo('/auth/signin')}
           backgroundColor={colors.primary}
-          padding="$2"
-          borderRadius="$2"
-          justifyContent="flex-start"
+          paddingVertical="$3"
+          paddingHorizontal="$3"
+          borderRadius="$3"
+          justifyContent="center"
+          gap="$2"
+          icon={<LogIn color={colors.primaryForeground} size={20} />}
           hoverStyle={{
             backgroundColor: colors.primaryHover,
           }}
+          pressStyle={{
+            backgroundColor: colors.primaryHover,
+          }}
         >
-          <Text fontSize="$3" fontWeight="600" color={colors.primaryForeground}>
+          <Text fontSize="$5" fontWeight="700" color={colors.primaryForeground}>
             Sign In
           </Text>
         </Button>}
