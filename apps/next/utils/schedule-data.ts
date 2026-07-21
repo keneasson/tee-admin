@@ -202,27 +202,32 @@ const cacheOptions = (tag: string) => ({
   revalidate: 300, // 5 min fallback
 })
 
+// NOTE: the `pii-v2` key suffix intentionally abandons the pre-redaction cache
+// entries. `fetchScheduleTab` now redacts to the anonymous tier, but Vercel's
+// Data Cache persists `unstable_cache` entries across deployments — the old keys
+// still held full names. Bumping the key forces a fresh, redacted entry. Bump
+// again if the cached shape ever changes in a way that could re-leak.
 export const getMemorialData = unstable_cache(
   () => fetchScheduleTab('memorial'),
-  ['schedule', 'memorial'],
+  ['schedule', 'memorial', 'pii-v2'],
   cacheOptions(CACHE_TAGS.SCHEDULES_MEMORIAL)
 )
 
 export const getBibleClassData = unstable_cache(
   () => fetchScheduleTab('bibleClass'),
-  ['schedule', 'bibleClass'],
+  ['schedule', 'bibleClass', 'pii-v2'],
   cacheOptions(CACHE_TAGS.SCHEDULES_BIBLE_CLASS)
 )
 
 export const getSundaySchoolData = unstable_cache(
   () => fetchScheduleTab('sundaySchool'),
-  ['schedule', 'sundaySchool'],
+  ['schedule', 'sundaySchool', 'pii-v2'],
   cacheOptions(CACHE_TAGS.SCHEDULES_SUNDAY_SCHOOL)
 )
 
 export const getCycData = unstable_cache(
   () => fetchScheduleTab('cyc'),
-  ['schedule', 'cyc'],
+  ['schedule', 'cyc', 'pii-v2'],
   cacheOptions(CACHE_TAGS.SCHEDULES_CYC)
 )
 

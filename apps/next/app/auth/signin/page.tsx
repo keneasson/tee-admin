@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signIn, getSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
+import { getBrand } from '@my/app/config/brand'
 import type { GestureResponderEvent } from 'react-native'
 
 import {
@@ -37,6 +38,11 @@ function SignInPageContent() {
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
   const [resendCooldown, setResendCooldown] = useState(0)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  // Domain-aware portal name, baked per deployment via NEXT_PUBLIC_BRAND (same
+  // source the nav uses): echadhub → "Echad Hub", tee → "TEE Portal". Build-time
+  // so there's no hydration flash.
+  const portalName = getBrand().secondary ?? getBrand().primary
 
   // Resend cooldown timer
   useEffect(() => {
@@ -325,7 +331,7 @@ function SignInPageContent() {
       <YStack gap="$2" alignItems="center">
         <Heading size="$8">Welcome Back</Heading>
         <Paragraph color="$gray11" textAlign="center">
-          Sign in to the TEE Portal
+          Sign in to {portalName}
         </Paragraph>
       </YStack>
 
