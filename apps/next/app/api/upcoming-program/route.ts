@@ -5,7 +5,8 @@ import { ProgramTypeKeys } from '@my/app/types'
 import { CACHE_TAGS } from '../../../utils/cache'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
-import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
+import { resolveViewer } from '../../../utils/resolve-viewer'
+import { piiAwareCacheControl } from '../../../utils/pii-response'
 
 // Cache for 15 minutes in production (shorter for faster updates when debugging)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -113,15 +114,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Only live consumer is the anonymous web newsletter screen → anonymous tier.
-    // First-name-only role assignments, drop host addresses, BEFORE the shared
-    // `public` cache. The member-tier newsletter EMAIL sources full names via the
-    // server-side get_upcoming_program() path, not this route (see get-email-content).
-    const safeData = redactScheduleData(responseData, ANONYMOUS_VIEWER, 'public-web')
+    // Redact per viewer: a signed-in member sees full names, anonymous visitors get
+    // first-name-only role assignments and no host addresses. The unstable_cache
+    // above holds RAW data; redaction happens here per request. PII-bearing
+    // (authenticated) responses are marked private/no-store so the shared/CDN cache
+    // only ever holds the anonymous-safe copy.
+    const viewer = await resolveViewer()
+    const safeData = redactScheduleData(responseData, viewer, 'public-web')
 
     return NextResponse.json(safeData, {
       headers: {
-        'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
+        'Cache-Control': piiAwareCacheControl(viewer, `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`),
+        'Vary': 'Cookie',
         'X-Data-Source': 'dynamodb-cache',
         'X-Event-Count': upcomingEvents.length.toString(),
         'X-Cache-Tags': [CACHE_TAGS.UPCOMING_PROGRAM, CACHE_TAGS.ALL_SCHEDULE_DATA, CACHE_TAGS.ALL_API_RESPONSES].join(','),

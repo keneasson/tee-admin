@@ -8,7 +8,8 @@ import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
-import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
+import { resolveViewer } from '../../../utils/resolve-viewer'
+import { piiAwareCacheControl } from '../../../utils/pii-response'
 
 // Map Google Sheet type names to schedule type keys
 const SHEET_TO_SCHEDULE_KEY: Record<string, ScheduleTypeKey> = {
@@ -492,13 +493,17 @@ export async function GET(request: NextRequest) {
     
     // Public (CDN-cached) schedule endpoint → anonymous tier. Reduce role-assignment
     // names to first-name-only and drop precise host addresses BEFORE caching, so the
-    // shared cache can't serve full names to anon. Member-tier schedule (full names)
-    // is rendered into the newsletter email via the server-side path, not this route.
-    const safeData = redactScheduleData(responseData, ANONYMOUS_VIEWER, 'public-web')
+    // Redact per viewer: a signed-in member sees full names; anonymous visitors get
+    // first-name-only role assignments and no precise host addresses. PII-bearing
+    // (authenticated) responses are private/no-store so the shared/CDN cache only
+    // ever holds the anonymous-safe copy.
+    const viewer = await resolveViewer()
+    const safeData = redactScheduleData(responseData, viewer, 'public-web')
 
     // Set cache headers
     const response = NextResponse.json(safeData)
-    response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=600') // 5min client, 10min CDN
+    response.headers.set('Cache-Control', piiAwareCacheControl(viewer, 'public, max-age=300, s-maxage=600')) // anon: 5min client, 10min CDN
+    response.headers.set('Vary', 'Cookie')
     response.headers.set('X-Data-Source', 'enhanced-schedule-api')
     response.headers.set('X-Schedule-Source', 'dynamodb-only')
     
