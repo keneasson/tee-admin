@@ -19,10 +19,11 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 
 export interface BaptismEmailProps {
@@ -56,6 +57,8 @@ export interface BaptismEmailProps {
   senderEcclesia?: string
   note?: string
   eventUrl?: string
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
 // Mock data for preview
@@ -109,6 +112,7 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
   senderEcclesia,
   note,
   eventUrl = mockBaptismData.eventUrl,
+  identity,
 }) => {
   const candidateName = candidate
     ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim()
@@ -149,7 +153,7 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
           <Text style={{ fontSize: '16px', margin: '4px 0 12px', color: textColor }}>
             Rejoice with the angels in heaven!
           </Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         <Container style={container}>
@@ -342,7 +346,7 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
         <Container style={{ marginTop: '24px' }}>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

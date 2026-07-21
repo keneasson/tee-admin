@@ -77,4 +77,25 @@ export default [
       }],
     },
   },
+
+  // Email templates must render from App Router SERVER routes (the email-queue
+  // cron processor). The hook-based Footer/EmailBrandLink/InterEcclesiaFooter read
+  // the `'use client'` EmailIdentityProvider context, which throws when rendered
+  // from a server route ("Attempted to call EmailIdentityProvider() from the
+  // server"). Templates must take `identity` as a PROP and use the server-safe
+  // *Content components instead. This rule stops the class of bug from recurring.
+  {
+    files: ['apps/email-builder/emails/**/*.{js,jsx,ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['**/Footer', '**/EmailBrandLink', '**/InterEcclesiaFooter', '**/email-identity'],
+            message:
+              'Email templates must be server-safe: take `identity` as a prop and use FooterContent / EmailBrandLinkContent / InterEcclesiaFooterContent instead of the hook-based components (which use the client EmailIdentityProvider and throw when rendered from an App Router server route).',
+          },
+        ],
+      }],
+    },
+  },
 ]

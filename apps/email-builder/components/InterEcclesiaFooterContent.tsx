@@ -1,15 +1,23 @@
 import { defaultText, footer, footerText } from '../styles'
 import { Button, Section, Text } from '@react-email/components'
 import React from 'react'
-import { useEmailIdentity } from './email-identity'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
+import { DEFAULT_EMAIL_IDENTITY } from './FooterContent'
 
-export interface InterEcclesiaFooterProps {
+/**
+ * Pure, presentational inter-ecclesia footer. Identity is a plain PROP (no React
+ * context / hook) so this renders from any server context — including App Router
+ * server routes — mirroring {@link FooterContent} / {@link EmailBrandLinkContent}.
+ * The hook-based {@link InterEcclesiaFooter} is retired in favour of this.
+ */
+export interface InterEcclesiaFooterContentProps {
   /**
    * Token-based URL for updating ecclesia contact info
-   * Format: /ecclesia-contact?token=xxx
-   * If not provided, uses placeholder that will be replaced at send time
+   * (/ecclesia-contact?token=xxx). Defaults to the placeholder replaced at send time.
    */
   updateContactUrl?: string
+  /** Brand identity for the "From" block. Defaults to Toronto East. */
+  identity?: EmailIdentity
 }
 
 const primaryButton = {
@@ -24,15 +32,13 @@ const primaryButton = {
   textAlign: 'center' as const,
 }
 
-export const InterEcclesiaFooter: React.FC<InterEcclesiaFooterProps> = ({
+export const InterEcclesiaFooterContent: React.FC<InterEcclesiaFooterContentProps> = ({
   updateContactUrl = '{{ecclesiaUpdateUrl}}',
+  identity = DEFAULT_EMAIL_IDENTITY,
 }) => {
-  const identity = useEmailIdentity()
   return (
     <Section style={footer}>
-      <Text style={defaultText}>
-        To update your ecclesia's contact information:
-      </Text>
+      <Text style={defaultText}>To update your ecclesia's contact information:</Text>
       <Button href={updateContactUrl} style={primaryButton}>
         Update Contact Info
       </Button>

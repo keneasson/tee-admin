@@ -21,8 +21,9 @@ import {
   main,
 } from '../styles'
 import React from 'react'
-import { Footer } from '../components/Footer'
+import { FooterContent } from '../components/FooterContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 interface LocationInfo {
   name: string
@@ -74,6 +75,8 @@ export interface FuneralEmailProps {
   note?: string
   eventUrl?: string
   obituaryUrl?: string // URL to external obituary (e.g., funeral home website)
+  /** Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+  identity?: EmailIdentity
 }
 
 // Mock data for preview
@@ -258,6 +261,7 @@ const FuneralEmail: React.FC<FuneralEmailProps> = (props) => {
   const timezoneCityName = getTimezoneCityName(eventTimezone)
 
   const note = props.note
+  const identity = props.identity
   const eventUrl = props.eventUrl ?? (isPreview ? mockFuneralData.eventUrl : undefined)
   const obituaryUrl = props.obituaryUrl ?? (isPreview ? mockFuneralData.obituaryUrl : undefined)
 
@@ -538,7 +542,7 @@ const FuneralEmail: React.FC<FuneralEmailProps> = (props) => {
         <Container style={{ marginTop: '24px' }}>
           <Text>&nbsp;</Text>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )

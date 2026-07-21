@@ -1,4 +1,5 @@
 import { get_upcoming_program } from 'next-app/utils/get-upcoming-program'
+import { cloneElement } from 'react'
 import { render } from '@react-email/render'
 import SundaySchool from 'email-builder/emails/SundaySchool'
 import {
@@ -31,7 +32,6 @@ import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { resolveTenantFromEnv } from '@my/app/config/tenants'
 import { resolveBrandProfile } from './resolve-brand-profile'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
-import { EmailIdentityProvider } from 'email-builder/components/email-identity'
 import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
 import MeetingEmail from 'email-builder/emails/MeetingEmail'
 import { meetingRecordToEmailProps } from './meeting-email-helpers'
@@ -174,9 +174,12 @@ export const getEmailContent = async (
     homeUrl: `https://${tenant.senderDomain}`,
     homeLabel: tenant.publicName,
   }
-  const withIdentity = (el: JSX.Element) => (
-    <EmailIdentityProvider value={emailIdentity}>{el}</EmailIdentityProvider>
-  )
+  // Inject the resolved (tenant-scoped) brand identity as a PROP, not via the
+  // client EmailIdentityProvider context — so every template renders from this
+  // App Router server route. Templates take an optional `identity` prop (server-
+  // safe FooterContent/EmailBrandLinkContent); cloneElement adds it uniformly.
+  const withIdentity = (el: JSX.Element): JSX.Element =>
+    cloneElement(el, { identity: emailIdentity })
   switch (reason) {
     case 'sunday-school':
       const events = await get_upcoming_program(['sundaySchool'])

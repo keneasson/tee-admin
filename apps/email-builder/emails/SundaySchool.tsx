@@ -26,9 +26,10 @@ import {
 import React from 'react'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 
 const mockEvents: SundaySchoolType[] = [
   {
@@ -44,7 +45,8 @@ const mockEvents: SundaySchoolType[] = [
   },
 ]
 
-const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
+/** identity: Brand identity for footer/header — passed as a prop (not the client EmailIdentityProvider) so this renders from an App Router server route. */
+const SundaySchool: React.FC<NextSundaySchoolProps & { identity?: EmailIdentity }> = ({ events, note, identity }) => {
   const sundaySchoolEvents = events || mockEvents
 
   return (
@@ -57,7 +59,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
         <Section style={header}>
           <Heading>Toronto East Sunday School</Heading>
           <Text style={defaultText}>2024/2025 News and Reminders</Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -119,7 +121,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps> = ({ events, note }) => {
             </Text>
           </Section>
         </Container>
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )
