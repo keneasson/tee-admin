@@ -10,7 +10,10 @@ type BannerProps = {
 export const Banner: React.FC<BannerProps> = ({ pageTitle }) => {
   const media = useMedia()
   const brand = getBrand()
-  const ecclesia = useHeaderEcclesia()
+  const rawEcclesia = useHeaderEcclesia()
+  // 'Unknown' is the stored sentinel for "no ecclesia set" (see person-repository);
+  // treat it as unset so it never surfaces as a title.
+  const ecclesia = rawEcclesia && rawEcclesia !== 'Unknown' ? rawEcclesia : null
   // Signed-in user's home ecclesia wins; otherwise the brand's default title
   // (Toronto East Ecclesia for tee, Echad Hub for the generic hub).
   const title = ecclesia || brand.headerTitle
