@@ -72,6 +72,10 @@ interface ContactRequest {
   createdAt: string
 }
 
+/** 'Unknown' is the stored placeholder for an unset ecclesia; treat it as empty. */
+const normalizeEcclesia = (value?: string): string =>
+  value && value !== 'Unknown' ? value : ''
+
 export const UserProfile: React.FC<UserProfileProps> = ({
   userEmail,
   userName,
@@ -92,7 +96,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([])
   const [activeTab, setActiveTab] = useState('contact')
   const [displayName, setDisplayName] = useState<string>(userName || '')
-  const [ecclesia, setEcclesia] = useState<string>(userEcclesia || '')
+  // 'Unknown' is the stored sentinel for "no ecclesia set" — normalize it (and
+  // any empty value) to '' everywhere so it never renders as a real ecclesia in
+  // the header, the display card, or the edit field.
+  const [ecclesia, setEcclesia] = useState<string>(normalizeEcclesia(userEcclesia))
   const [editingEcclesia, setEditingEcclesia] = useState(false)
   const [ecclesiaInput, setEcclesiaInput] = useState('')
   const [ecclesiaSuggestions, setEcclesiaSuggestions] = useState<Array<{ name: string; city: string; province: string }>>([])
@@ -178,7 +185,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           setLastName(data.user.lastName)
         }
         if (data.user?.ecclesia) {
-          setEcclesia(data.user.ecclesia)
+          setEcclesia(normalizeEcclesia(data.user.ecclesia))
         }
       }
     } catch (error) {
@@ -602,18 +609,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <YStack gap="$3">
                   {editingName ? (
                     <Card padding="$3" backgroundColor="$backgroundHover">
-                      <YStack gap="$2">
-                        <Input
-                          value={firstNameInput}
-                          onChangeText={(text) => { setFirstNameInput(text); setNameError('') }}
-                          placeholder="First name"
-                          autoFocus
-                        />
-                        <Input
-                          value={lastNameInput}
-                          onChangeText={(text) => { setLastNameInput(text); setNameError('') }}
-                          placeholder="Last name"
-                        />
+                      <YStack gap="$3">
+                        <YStack gap="$1">
+                          <Text fontSize="$2" fontWeight="600">First name</Text>
+                          <Input
+                            value={firstNameInput}
+                            onChangeText={(text) => { setFirstNameInput(text); setNameError('') }}
+                            placeholder="e.g. Jane"
+                            aria-label="First name"
+                            autoFocus
+                          />
+                        </YStack>
+                        <YStack gap="$1">
+                          <Text fontSize="$2" fontWeight="600">Last name</Text>
+                          <Input
+                            value={lastNameInput}
+                            onChangeText={(text) => { setLastNameInput(text); setNameError('') }}
+                            placeholder="e.g. Smith"
+                            aria-label="Last name"
+                          />
+                        </YStack>
                         {nameError ? (
                           <Text fontSize="$2" color="$red10">{nameError}</Text>
                         ) : null}
@@ -653,12 +668,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   {editingEcclesia ? (
                     <Card padding="$3" backgroundColor="$backgroundHover">
                       <YStack gap="$2" position="relative">
+                        <YStack gap="$1">
+                          <Text fontSize="$2" fontWeight="600">Home ecclesia</Text>
+                          <Text fontSize="$2" theme="alt2">Start typing to search the directory and select your ecclesia.</Text>
+                        </YStack>
                         <XStack position="relative">
                           <Input
                             flex={1}
                             value={ecclesiaInput}
                             onChangeText={handleEcclesiaInput}
-                            placeholder="Type ecclesia name..."
+                            placeholder="e.g. Toronto East"
+                            aria-label="Home ecclesia"
                             autoComplete="off"
                             autoFocus
                             onFocus={() => {
