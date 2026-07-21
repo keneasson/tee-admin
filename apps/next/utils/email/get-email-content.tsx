@@ -261,31 +261,21 @@ export const getEmailContent = async (
         },
       }
 
-      const newsletterHtmlContent = await render(
-        withIdentity(
-          <Newsletter
-            scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
-            upcomingEvents={upcomingEvents}
-            readings={readingsData}
-            note={note}
-            newsItems={newsletterNewsItems}
-            serviceTimes={newsletterServiceTimes}
-          />
-        )
+      // Identity passed as a PROP (not the client EmailIdentityProvider context) so
+      // this renders from an App Router server route (the email-queue cron processor).
+      const newsletterEl = (
+        <Newsletter
+          scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
+          upcomingEvents={upcomingEvents}
+          readings={readingsData}
+          note={note}
+          newsItems={newsletterNewsItems}
+          serviceTimes={newsletterServiceTimes}
+          identity={emailIdentity}
+        />
       )
-      const newsletterTextContent = await render(
-        withIdentity(
-          <Newsletter
-            scheduleEvents={scheduleData as (MemorialServiceType | BibleClassType | SundaySchoolType)[]}
-            upcomingEvents={upcomingEvents}
-            readings={readingsData}
-            note={note}
-            newsItems={newsletterNewsItems}
-            serviceTimes={newsletterServiceTimes}
-          />
-        ),
-        { plainText: true }
-      )
+      const newsletterHtmlContent = await render(newsletterEl)
+      const newsletterTextContent = await render(newsletterEl, { plainText: true })
       return [newsletterHtmlContent, newsletterTextContent]
     case 'business-meeting':
       // If meetingId is provided, use the new MeetingEmail template
