@@ -26,7 +26,8 @@ describe('redactScheduleData — anon (public web)', () => {
         {
           date: '2026-07-26', Preside: 'Brad Stephens', Exhort: 'Desmond Amos', Organist: 'Joan Curry',
           Steward: 'Zaiden Easson', Doorkeeper: 'Ken Easson', Lunch: 'The Smith family',
-          Reading1: 'Genesis 1', Reading2: 'Matthew 5', 'Hymn-opening': '158',
+          'Reader 1': 'Peter Skariah', 'Reader 2': 'John Vance', 'Prayer - Wine': 'Gord Easson',
+          'Reading 1': 'Genesis 1', 'Reading 2': 'Matthew 5', 'Hymn-opening': '158',
         },
       ],
       bibleClass: [
@@ -48,10 +49,17 @@ describe('redactScheduleData — anon (public web)', () => {
     expect(b.Speaker).toBe('John')
   })
 
-  it('leaves non-name fields (readings, hymns, topic, date) untouched', () => {
+  it('first-names the reader + prayer roles (people)', () => {
     const m = r.data.memorial[0] as any
-    expect(m.Reading1).toBe('Genesis 1')
-    expect(m.Reading2).toBe('Matthew 5')
+    expect(m['Reader 1']).toBe('Peter')
+    expect(m['Reader 2']).toBe('John')
+    expect(m['Prayer - Wine']).toBe('Gord')
+  })
+
+  it('leaves non-name fields (readings passages, hymns, topic, date) untouched', () => {
+    const m = r.data.memorial[0] as any
+    expect(m['Reading 1']).toBe('Genesis 1') // passage, NOT a person
+    expect(m['Reading 2']).toBe('Matthew 5')
     expect(m['Hymn-opening']).toBe('158')
     expect(m.date).toBe('2026-07-26')
     expect((r.data.bibleClass[0] as any).Topic).toBe('Daily readings')
