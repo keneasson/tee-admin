@@ -6,6 +6,8 @@ import { getEcclesiaByName } from './dynamodb/locations'
 import type { GoogleSheetTypes, GoogleSheetData } from '@my/app/types'
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import { CACHE_TAGS } from './cache'
+import { redactScheduleData } from '@my/app/utils/redact-schedule'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 
 // ── Helpers ──
 
@@ -183,7 +185,14 @@ async function fetchScheduleTab(tab: string): Promise<{
   const futureEvents = events.filter((e) => e.date >= todayStr)
   const hasOlder = futureEvents.length < events.length
 
-  return { events: futureEvents, hasOlder, lastUpdated: data.lastUpdated || new Date().toISOString() }
+  // The public /schedule page SERVER-RENDERS these events (the only consumer of
+  // getScheduleData). Redact to anonymous tier — first-name-only role assignments,
+  // drop host addresses — BEFORE they enter the unstable_cache wrapper, so the
+  // SSR'd HTML an anonymous visitor sees can't leak full names. (The /api/enhanced
+  // -schedule client re-fetch is already redacted; this closes the SSR path.)
+  const safeEvents = redactScheduleData(futureEvents, ANONYMOUS_VIEWER, 'public-web')
+
+  return { events: safeEvents, hasOlder, lastUpdated: data.lastUpdated || new Date().toISOString() }
 }
 
 // ── Cached variants — one per tab for independent invalidation ──
