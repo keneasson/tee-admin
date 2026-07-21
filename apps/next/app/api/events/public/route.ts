@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { getPublishedEvents } from '@my/app/services/event-service'
 import { redactEventsForViewer } from '@my/app/utils/redact-event'
-import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
+import { resolveViewer } from '@/utils/resolve-viewer'
+import { piiAwareCacheControl } from '@/utils/pii-response'
 import { CACHE_TAGS } from '@/utils/cache'
 
 // Cache duration: revalidate daily at midnight (86400 seconds = 24 hours)
@@ -13,15 +14,16 @@ const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 86400 : false
 const getCachedPublishedEvents = unstable_cache(
   async () => {
     console.log('🔄 Cache miss - fetching fresh events from DynamoDB')
-    const events = await getPublishedEvents()
-    // This endpoint is unauthenticated → anonymous tier. Redact PII server-side
-    // BEFORE it enters the response cache, so the cache literally cannot hold (and
-    // this route cannot leak) last names, street addresses, bios, or contact
-    // details. Full data is served to members via authenticated endpoints; the
-    // newsletter EMAIL renders member-tier via its own channel (see redact-event).
-    return redactEventsForViewer(events, ANONYMOUS_VIEWER, 'public-web')
+    // Cache the RAW events; redaction is applied PER REQUEST in the handler so a
+    // signed-in member sees full names while anonymous visitors are scrubbed. The
+    // shared Data Cache holds full data (server-side only, never served directly),
+    // and every response goes through redactEventsForViewer before it leaves. PII-
+    // bearing (authenticated) responses are marked private/no-store so the CDN
+    // never caches a full-name copy. Key bumped to 'raw-v1' to abandon the old
+    // pre-redacted entries that Vercel's Data Cache persists across deploys.
+    return getPublishedEvents()
   },
-  ['published-events'],
+  ['published-events', 'raw-v1'],
   {
     tags: [
       CACHE_TAGS.EVENTS_PUBLIC,
@@ -46,7 +48,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const eventId = searchParams.get('id')
 
-    const events = await getCachedPublishedEvents()
+    // Redact per viewer: signed-in members see full names, anonymous visitors are
+    // scrubbed. `Vary: Cookie` + private/no-store on PII responses keeps the shared
+    // cache anonymous-only.
+    const viewer = await resolveViewer()
+    const rawEvents = await getCachedPublishedEvents()
+    const events = redactEventsForViewer(rawEvents, viewer, 'public-web')
+    const publicCache = `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`
 
     if (eventId) {
       const event = events.find(e => e.id === eventId)
@@ -55,7 +63,8 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.json(event, {
         headers: {
-          'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
+          'Cache-Control': piiAwareCacheControl(viewer, publicCache),
+          'Vary': 'Cookie',
           'X-Data-Source': 'dynamodb-cache',
           'X-Cache-Tags': [CACHE_TAGS.EVENTS_PUBLIC, CACHE_TAGS.EVENTS_ALL].join(','),
         }
@@ -66,7 +75,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(events, {
       headers: {
-        'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=300`,
+        'Cache-Control': piiAwareCacheControl(viewer, publicCache),
+        'Vary': 'Cookie',
         'X-Data-Source': 'dynamodb-cache',
         'X-Event-Count': events.length.toString(),
         'X-Cache-Tags': [CACHE_TAGS.EVENTS_PUBLIC, CACHE_TAGS.EVENTS_ALL].join(','),
