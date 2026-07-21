@@ -16,8 +16,9 @@ import React from 'react'
 import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
-import { Footer } from '../components/Footer'
-import { EmailBrandLink } from '../components/EmailBrandLink'
+import { FooterContent } from '../components/FooterContent'
+import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
+import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 
@@ -689,6 +690,12 @@ interface EmailNewsletterProps {
     memorial?: ServiceTimeDisplay
     bibleClass?: ServiceTimeDisplay
   }
+  /**
+   * Brand identity for the footer/header links. Passed as a PROP (not via the
+   * `'use client'` EmailIdentityProvider context) so this template renders from an
+   * App Router server route (the email-queue cron processor) — mirrors NewsAlert.
+   */
+  identity?: EmailIdentity
 }
 
 const Newsletter: React.FC<EmailNewsletterProps> = ({
@@ -698,6 +705,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
   note,
   newsItems = [],
   serviceTimes,
+  identity,
 }) => {
   const todaysDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -841,7 +849,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             <br />
             All plans are subject to God's will.
           </Text>
-          <EmailBrandLink />
+          <EmailBrandLinkContent identity={identity} />
         </Section>
 
         {/* Optional Note Section */}
@@ -2361,7 +2369,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
           </Container>
         )}
 
-        <Footer />
+        <FooterContent identity={identity} />
       </Body>
     </Html>
   )
