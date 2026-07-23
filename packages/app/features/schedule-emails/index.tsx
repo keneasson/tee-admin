@@ -483,7 +483,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                           {schedule.enabled ? 'Auto Send: On' : 'Auto Send: Off'}
                         </Text>
                         <Switch
-                          checked={schedule.enabled}
+                          checked={!!schedule.enabled}
                           onCheckedChange={() => toggleSchedule(schedule.emailType)}
                           size="$4"
                           backgroundColor={schedule.enabled ? colors.success : colors.backgroundTertiary}
@@ -494,7 +494,7 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                             backgroundColor={colors.background}
                             borderWidth={1}
                             borderColor={schedule.enabled ? colors.success : colors.textSecondary}
-                            animation="bouncy"
+                            animation="quick"
                           />
                         </Switch>
                       </YStack>

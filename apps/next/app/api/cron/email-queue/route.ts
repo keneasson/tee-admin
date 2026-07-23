@@ -34,6 +34,15 @@ export async function GET(req: NextRequest) {
 
     console.log(`🕐 Cron job running at ${currentDate} ${currentTime} (${currentDay}) Toronto time`)
 
+    // How early the queue entry may be materialized, and how late a missed/
+    // backed-up cron may still catch up. The send gate itself NEVER fires before
+    // the scheduled minute (see Step 3) — a 2:00 PM schedule sends at 2:00 PM, not
+    // 12:00 PM. The cron ticks every ~5 min, so the first tick at/after the
+    // scheduled minute sends it. SEND_GRACE_MIN bounds same-day catch-up so a late
+    // cron doesn't surprise-send hours later.
+    const QUEUE_LEAD_MIN = 120 // materialize the entry up to 2h before send time
+    const SEND_GRACE_MIN = 180 // send from the scheduled minute through +3h, then skip for the day
+
     const response = {
       processed: {
         sent: 0,
@@ -66,9 +75,12 @@ export async function GET(req: NextRequest) {
         const scheduleMinutes = scheduleHour * 60 + scheduleMinute
         const currentMinutes = torontoTime.getHours() * 60 + torontoTime.getMinutes()
 
-        // Queue if we're within 2 hours of send time and haven't queued yet
+        // Materialize the entry from QUEUE_LEAD_MIN before send time through the
+        // send-grace window, so a 'ready' entry exists whenever the send gate is
+        // open. Queuing early is harmless — the entry just waits; Step 3 gates the
+        // actual send to at/after the scheduled minute.
         const timeUntilSend = scheduleMinutes - currentMinutes
-        if (timeUntilSend <= 120 && timeUntilSend > -120) { // 2 hours before to 2 hours after (extended for testing)
+        if (timeUntilSend <= QUEUE_LEAD_MIN && timeUntilSend >= -SEND_GRACE_MIN) {
           const existing = await sendQueueRepo.getQueueEntry(
             schedule.emailType,
             currentDate,
@@ -111,9 +123,11 @@ export async function GET(req: NextRequest) {
       const emailMinutes = emailHour * 60 + emailMinute
       const currentMinutes = torontoTime.getHours() * 60 + torontoTime.getMinutes()
 
-      // Send if it's time (within 2 hours of scheduled time for testing)
-      const timeDiff = Math.abs(emailMinutes - currentMinutes)
-      return timeDiff <= 120 // Extended to 2 hours for testing
+      // Send only AT or AFTER the scheduled minute — never early. Bounded by
+      // SEND_GRACE_MIN so a missed/backed-up cron can still catch up the same day
+      // without surprise-sending hours late.
+      const minutesLate = currentMinutes - emailMinutes
+      return minutesLate >= 0 && minutesLate <= SEND_GRACE_MIN
     })
 
     console.log(`📮 Found ${emailsToSend.length} emails ready to send`)
