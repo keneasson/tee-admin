@@ -2,6 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working Process & WIP Hygiene
+
+Solo project, prone to emergency-driven context switches (a newsletter that must go
+out, a prod bug) that leave features half-built and forgotten. To keep work
+recoverable, **every non-trivial piece gets three things, created up front:**
+
+1. **A branch** — `feat/…`, `fix/…`, or `docs/…`. Never build on `main`.
+2. **A GitHub issue** — the durable home for scope + status. Label it **`wip`**
+   while a branch exists but isn't merged.
+3. **A card on the project board** (`github.com/users/keneasson/projects/2`) in the
+   **In-flight WIP** lane.
+
+**Emergencies get the same treatment, fast** — branch + a one-line `wip` issue even
+for a 20-minute fix, so both the interruption and the interrupted work stay tracked.
+
+**"Cleanup WIP" (a command the user may give):** run `gh issue list --label wip`
+and `git branch -a`; for each in-flight branch **push any local-only commits first
+(preserve before touching)**, summarize done-vs-left, and recommend resume / finish /
+merge / close. Reconcile branches ↔ issues ↔ board. Never stash/checkout/reset over
+uncommitted changes you did not make.
+
+**Where things live:** durable *decisions* (what a term means, how a model works) →
+`docs/adr/` (see `docs/adr/README.md`); *tasks & status* → GitHub issues; deep
+*designs* → `docs/*.md`. When the user references "progress" or a large concept,
+**read the issues + ADRs first — do not answer from memory.**
+
 ## Model Selection Guidelines (Opus vs Sonnet)
 
 ### Use Sonnet 4.5 for (Default):
