@@ -19,6 +19,13 @@ The existing provisions (managed-regions, an approval flow) are not well defined
 This ADR fixes the trust model so vetted actors are frictionless and abuse vectors
 are closed.
 
+Crucially, **trust is not binary.** It has a **level** (role: member < rep <
+Recording Brother) *and* a **standing** (how established a tenant is — its age plus
+sustained activity in Echad Hub: regular sign-ins, sends, membership management).
+The *amount* of combined trust should determine *how much process* a sensitive
+action requires — how many people must be involved. High trust → a single
+confirmation; low trust → more witnesses.
+
 ## Decision
 
 1. **Trust flows from established, vetted actors — tenant creation and RB
@@ -60,6 +67,56 @@ are closed.
    limits; every tenant-creation and RB-assignment writes an **attestation record**
    (who vouched, when) for auditability.
 
+7. **Trust is multi-vector and scales the process *inversely*.** Two axes combine
+   into a trust score for any actor/action:
+   - **Level** — the actor's role: member < rep < Recording Brother.
+   - **Standing** — how established the actor's *tenant* is: **age + sustained
+     activity** in the hub (sign-ins, sends, membership management). A long-active,
+     engaged ecclesia accrues standing over time; a brand-new one has little.
+
+   The combined trust decides **how many people must be involved**: high trust → a
+   single confirmation; low trust → additional witnesses. This refines "established"
+   as used in 2–6: *established = sufficient standing*, not merely "exists."
+
+8. **Member transfers follow the trust gradient, driven by automation.**
+   - *High trust* (both ecclesias established): the **receiving** Recording Brother
+     can accept a transfer in a **single confirmation** — it does **not** require
+     the sending RB to separately *initiate* and the receiving RB to *accept*.
+     (Example: Cambridge's RB accepts a transfer from long-established Greenaway
+     directly.) Requesting a transfer *out* **auto-emails** a trusted counterpart
+     RB when one exists.
+   - *Low trust* (e.g. a transfer *into* a brand-new ecclesia — a mass exodus is
+     itself a low-trust signal): the request **fans out** to more parties — the new
+     ecclesia's RB **and** a nearby (geo-located) established RB and/or a **Trusted
+     Organization** as witness — before it settles.
+   - The **system selects who to involve** from the trust gradient; the user does
+     not choose the approvers.
+
+9. **Trusted Organizations are neutral witnesses / publishers.** An Organization
+   tenant may carry a **`trusted`** flag (typically the community magazines — e.g.
+   Tidings — that already publish ecclesia formations, dissolutions, and member
+   transfers). A trusted org can serve as the extra witness a low-trust event needs,
+   and cross-ecclesia trust events (formation / dissolution / transfer) are
+   **publishable to it** as News. The flag is granted by the platform owner.
+
+10. **Notifications are per-person, actionable, and batch-consolidated.** Every
+    involved person gets **their own** email stating the specific action they must
+    take **inline**, plus a **"view more in Echad Hub"** link to full context (e.g.
+    the complete transfer list) — via assurance-aware deep-linking (#84) and
+    per-recipient personalization (#56). **Batch events consolidate to minimize
+    email volume** — one message per recipient carrying the whole list, e.g.:
+
+    ```
+    Members leaving Ecclesia X → Ecclesia Y
+      [ ] Name     [ ] Name     [ ] Name
+      Recording Brother (confirm): [ Bro. ____ ]
+      Sponsoring members:          [ Bro./Sis. ____ ]
+      Publish to:  [ ] Organization 1   [ ] Organization 2
+    ```
+
+    i.e. one email with a checklist + confirmer + sponsors + publish targets, not
+    N separate emails.
+
 ## Consequences
 
 - The most-vetted users get **zero-friction** control; the self-created-spam-ecclesia
@@ -72,11 +129,25 @@ are closed.
 - The RB-as-delegation-root from ADR-0001 is the backbone: within-tenant management
   never needs external approval; only crossing a *trust boundary* (new tenant,
   platform authority, RB replacement) does.
+- New build surface implied by 7–10:
+  - A computed **trust score** = f(level, standing) where *standing* aggregates
+    tenant age + activity signals (sign-ins, sends, membership ops).
+  - A **member-transfer workflow** that selects the involved parties from the trust
+    gradient (auto-notify a trusted counterpart RB; fan out to a **geo-located
+    nearby RB** and/or trusted org for low-trust cases). Transfers move a person
+    between tenants → ties into the unified-people work (#22).
+  - A **`trusted` flag on Organizations**, plus formation / dissolution / transfer
+    as first-class events **publishable to trusted orgs** as News.
+  - **Per-person, consolidated, action-in-email** notifications with "view more in
+    Echad Hub" deep-links — reuses the assurance/deep-link (#84) and per-recipient
+    personalization (#56) machinery, and the batch-consolidation form above.
 
 ## References
 
 - Implementation: #112 (frictionless escalation + anti-abuse).
 - Related: #27 (regional admin roles & permissions), #58 (Office model / RB as
-  immutable root), ADR-0001 (tenancy model — RB is each tenant's delegation root).
+  immutable root), #22 (unified people — transfers move a person between tenants),
+  #56 (per-recipient email personalization), #84 (assurance-aware deep-linking /
+  Verify), ADR-0001 (tenancy model — RB is each tenant's delegation root).
 - Code: `apps/next/utils/ecclesia-permissions.ts` (current authz), the existing
   two-approver / permission-escalation flow (to be re-calibrated).
