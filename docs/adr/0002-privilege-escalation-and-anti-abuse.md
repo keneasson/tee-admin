@@ -67,16 +67,21 @@ confirmation; low trust → more witnesses.
    limits; every tenant-creation and RB-assignment writes an **attestation record**
    (who vouched, when) for auditability.
 
-7. **Trust is multi-vector and scales the process *inversely*.** Two axes combine
-   into a trust score for any actor/action:
+7. **Trust is multi-vector and scales the process *inversely*.** Three inputs
+   combine into a trust score for any actor/action:
    - **Level** — the actor's role: member < rep < Recording Brother.
    - **Standing** — how established the actor's *tenant* is: **age + sustained
      activity** in the hub (sign-ins, sends, membership management). A long-active,
      engaged ecclesia accrues standing over time; a brand-new one has little.
+   - **Manual adjustment** — a sufficiently-trusted actor may raise or lower another
+     party's trust directly (see 11). This lets the platform owner *pre-trust*
+     brand-new ecclesias in regions no one can personally vet, and lets Recording
+     Brothers *dock* a concerning member.
 
    The combined trust decides **how many people must be involved**: high trust → a
    single confirmation; low trust → additional witnesses. This refines "established"
-   as used in 2–6: *established = sufficient standing*, not merely "exists."
+   as used in 2–6: *established = sufficient standing (computed and/or granted)*, not
+   merely "exists."
 
 8. **Member transfers follow the trust gradient, driven by automation.**
    - *High trust* (both ecclesias established): the **receiving** Recording Brother
@@ -117,6 +122,24 @@ confirmation; low trust → more witnesses.
     i.e. one email with a checklist + confirmer + sponsors + publish targets, not
     N separate emails.
 
+11. **Trust can be manually adjusted by a sufficiently-trusted actor — up and down.**
+    - **Grant up:** the **platform owner** can set any party's trust to any level,
+      including **pre-trusting a brand-new ecclesia / its RB** so it skips the
+      pending→vouch gate. Rationale: as the hub propagates into regions the owner
+      can't personally vet, trust is delegated by declaring a party trusted — *"if I
+      say they're 100% trustworthy, they are."* A high-standing Recording Brother may
+      likewise raise trust within their reach.
+    - **Dock down:** a Recording Brother (with sufficient trust) can **reduce** a
+      member's trust when concerned, from the member's **Profile** — a toggle between
+      *"high degree of trust"* and *"concerned about this person's trustworthiness."*
+    - **Scope of the concern (safeguard):** a dock governs **only the person's
+      ability to make changes within Echad Hub** — it is **not** a social, moral, or
+      doctrinal verdict on the person, and must not be presented as one. This keeps
+      the control from becoming a weapon in interpersonal or doctrinal disputes.
+    - **Ceiling & audit:** no actor can raise another **above their own** trust (the
+      owner is the ceiling); every adjustment writes to the attestation/audit record
+      (who, when, direction, reason).
+
 ## Consequences
 
 - The most-vetted users get **zero-friction** control; the self-created-spam-ecclesia
@@ -129,9 +152,14 @@ confirmation; low trust → more witnesses.
 - The RB-as-delegation-root from ADR-0001 is the backbone: within-tenant management
   never needs external approval; only crossing a *trust boundary* (new tenant,
   platform authority, RB replacement) does.
-- New build surface implied by 7–10:
-  - A computed **trust score** = f(level, standing) where *standing* aggregates
-    tenant age + activity signals (sign-ins, sends, membership ops).
+- New build surface implied by 7–11:
+  - A **trust score** = f(level, standing, manual-adjustment): *standing* aggregates
+    tenant age + activity signals (sign-ins, sends, membership ops); *manual
+    adjustment* is a stored per-party override (owner grant / RB dock) with a ceiling
+    rule and an audit trail.
+  - A **trust toggle on the member Profile** (RB-facing) — "high trust" ↔
+    "concerned" — scoped strictly to hub-change ability, plus an owner surface to
+    pre-trust new ecclesias.
   - A **member-transfer workflow** that selects the involved parties from the trust
     gradient (auto-notify a trusted counterpart RB; fan out to a **geo-located
     nearby RB** and/or trusted org for low-trust cases). Transfers move a person
