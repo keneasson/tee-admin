@@ -334,6 +334,15 @@ export interface Event extends BaseEvent {
   customType?: string
   hideDates?: boolean // When true, suppress date display in newsletter, events list, detail view, and emails
 
+  /**
+   * "No in-person services" notice shown in the newsletter/recap emails and app UI
+   * when this event replaces cancelled in-person Sunday services. Set by the admin
+   * in the Event Editor. When unset, templates fall back to
+   * DEFAULT_NO_IN_PERSON_SERVICES_MESSAGE (see config/service-messages.ts). Issue #45:
+   * un-hardcodes the message from the templates so wording changes need no deploy.
+   */
+  noInPersonServicesMessage?: string
+
   // Recurring event fields
   recurringConfig?: {
     startDate?: Date

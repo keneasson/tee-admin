@@ -8,6 +8,7 @@ import { YStack, Text, XStack, useThemeName } from 'tamagui'
 import { Button } from '../Button'
 import { Copy, ExternalLink, MapPin } from '@tamagui/lucide-icons'
 import { brandColors, type ColorMode } from '../branding/brand-colors'
+import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 
 // Enhanced schedule event interface matching requirements
 export interface EnhancedScheduleEvent {
@@ -413,7 +414,7 @@ export function EnhancedScheduleResponsive({
             {event.noServiceAtHall ? (
               <YStack gap="$1">
                 <Text fontSize="$4" fontWeight="700" color={colors.textPrimary}>
-                  There will be no service at our hall.
+                  {resolveNoInPersonServicesMessage(event.noInPersonServicesMessage)}
                 </Text>
                 {(event.Activities || event.activities) ? (
                   <Text fontSize="$3" color={colors.textPrimary}>
