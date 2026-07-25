@@ -21,11 +21,12 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { Check, Send, Mail, AlertCircle, Edit3 } from '@tamagui/lucide-icons'
-import { sendEmail, getContactsList, savePendingNote, getPendingNote, clearPendingNote } from '../../provider/get-data'
+import { Check, Send, Mail, AlertCircle, Newspaper, Calendar, Users } from '@tamagui/lucide-icons'
+import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingNote, clearPendingNote } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
+import { NewsItem, isNewsActive } from '@my/app/types/news'
 
 const DISPLAY_TIMEZONE = 'America/Toronto'
 
@@ -99,6 +100,12 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   const [activeTab, setActiveTab] = useState<string>('templates')
   const [recentEvents, setRecentEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState<boolean>(true)
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
+  const [loadingNews, setLoadingNews] = useState<boolean>(true)
+  // Audience override for the shared News + Events composer. Defaults to the
+  // newsletter list; any SES topic (incl. inter-ecclesia leaders) is selectable.
+  // Test mode still forces the test list server-side regardless of this value.
+  const [composerAudience, setComposerAudience] = useState<EmailListTypeKeys>('newsletter')
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     isOpen: false,
     emailName: '',
@@ -204,6 +211,30 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     loadRecentEvents()
   }, [])
 
+  // Load active News items so they can be sent from the same composer as events.
+  useEffect(() => {
+    const loadNews = async () => {
+      try {
+        setLoadingNews(true)
+        const response = await fetch('/api/admin/news')
+        if (response.ok) {
+          const data = await response.json()
+          const items: NewsItem[] = Array.isArray(data) ? data : (data.items || [])
+          // Only active (unexpired) items can be blasted — the send-alert route
+          // rejects expired ones, so hide them from the picker.
+          setNewsItems(items.filter((item) => isNewsActive(item)))
+        } else {
+          console.error('[EmailSender] Failed to fetch news:', response.status, response.statusText)
+        }
+      } catch (error) {
+        console.error('[EmailSender] Failed to load news:', error)
+      } finally {
+        setLoadingNews(false)
+      }
+    }
+    loadNews()
+  }, [])
+
   // Define all hooks before conditional returns
   if (!(session && session.user)) {
     return (
@@ -237,13 +268,21 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     return 'Full Subscriber List (100+ recipients)'
   }
 
-  // Show confirmation dialog before sending
-  const showSendConfirmation = (emailName: string, emailType: string, onConfirm: () => void) => {
+  // Show confirmation dialog before sending. `liveListName` lets a caller show
+  // the actual audience it will send to on a live send (the shared composer
+  // overrides the default full-subscriber list); test sends always show the
+  // test list.
+  const showSendConfirmation = (
+    emailName: string,
+    emailType: string,
+    onConfirm: () => void,
+    liveListName?: string
+  ) => {
     setConfirmDialog({
       isOpen: true,
       emailName,
       emailType,
-      listName: getListDisplayName(test),
+      listName: test ? getListDisplayName(true) : (liveListName ?? getListDisplayName(false)),
       isTest: test,
       onConfirm,
     })
@@ -282,16 +321,26 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     })
   }
 
-  // Send event-specific email (funeral/baptism announcement)
+  // Human label for the currently-selected composer audience.
+  const composerAudienceLabel =
+    availableLists.find((l) => l.key === composerAudience)?.label ?? composerAudience
+
+  // Send event-specific email (funeral/baptism announcement) to the audience
+  // chosen in the shared composer (defaults to the newsletter list).
   const sendEventEmail = async (event: Event) => {
     const emailName = event.type === 'funeral'
       ? `Funeral: ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`
       : `Baptism: ${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`
 
-    showSendConfirmation(emailName, `${event.type}-announcement`, () => {
-      closeConfirmDialog()
-      doSendEventEmail(event)
-    })
+    showSendConfirmation(
+      emailName,
+      `${event.type}-announcement`,
+      () => {
+        closeConfirmDialog()
+        doSendEventEmail(event)
+      },
+      `${composerAudienceLabel} list`
+    )
   }
 
   // Actually send event email.
@@ -304,11 +353,40 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
       const response = await sendEmail('event-announcement' as EmailReasonType, test, undefined, {
         eventId: event.id,
         eventType: event.type,
+        selectedList: composerAudience,
       })
       setEmail(response)
     } catch (error) {
       console.error('Error sending event email:', error)
       setEmail({ error: 'Failed to send event email', details: error })
+    } finally {
+      setSending(false)
+      setReason(null)
+    }
+  }
+
+  // Send a News item to the audience chosen in the shared composer.
+  const sendNewsItem = async (item: NewsItem) => {
+    showSendConfirmation(
+      item.title,
+      'news-alert',
+      () => {
+        closeConfirmDialog()
+        doSendNewsItem(item)
+      },
+      `${composerAudienceLabel} list`
+    )
+  }
+
+  const doSendNewsItem = async (item: NewsItem) => {
+    setSending(true)
+    setReason('news-alert')
+    try {
+      const response = await sendNewsAlert(item.id, test, composerAudience)
+      setEmail(response)
+    } catch (error) {
+      console.error('Error sending news alert:', error)
+      setEmail({ error: 'Failed to send news alert', details: error })
     } finally {
       setSending(false)
       setReason(null)
@@ -481,16 +559,16 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
           width="100%"
         >
           <Tabs.List separator={<Separator vertical />} backgroundColor="$background">
-            <Tabs.Tab flex={1} value="templates">
+            <Tabs.Tab flex={2} value="templates">
               <XStack gap="$2" alignItems="center">
                 <Mail size={16} />
-                <Text>Email Templates</Text>
+                <Text>News, Events &amp; Templates</Text>
               </XStack>
             </Tabs.Tab>
             <Tabs.Tab flex={1} value="custom">
               <XStack gap="$2" alignItems="center">
-                <Edit3 size={16} />
-                <Text>Create Custom Email</Text>
+                <AlertCircle size={16} color="$gray10" />
+                <Text color="$gray10">Emergency Email</Text>
               </XStack>
             </Tabs.Tab>
           </Tabs.List>
@@ -531,67 +609,189 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
             ) : null}
           </Card>
 
-          {/* Recent Event Announcements - show after Test Mode */}
-          {recentEvents.length > 0 ? (
-            <Card elevate bordered padding="$4" backgroundColor="$purple2" borderColor="$purple6">
-              <YStack gap="$3">
-                <Heading size={4} color="$purple11">Recent Event Announcements</Heading>
-                <Text fontSize="$3" color="$purple10">
-                  These events were created in the last 2 weeks and may need announcement emails sent.
-                </Text>
-                <XStack gap="$3" flexWrap="wrap">
-                  {recentEvents.map((event) => {
-                    const personName = event.type === 'funeral'
-                      ? `${event.deceased?.title || ''} ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`.trim()
-                      : `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
+          {/* Shared News + Events composer (Issue #57). One place to pick a
+              News item OR an Event and send it to a chosen audience. */}
+          <Card elevate bordered padding="$4" backgroundColor="$purple2" borderColor="$purple6">
+            <YStack gap="$3">
+              <Heading size={4} color="$purple11">Send News or Event</Heading>
+              <Text fontSize="$3" color="$purple10">
+                Pick a News item or an Event below, choose the audience, and send it.
+                Custom/freeform email is for emergencies only — use the tab above.
+              </Text>
 
-                    const eventLabel = event.type === 'funeral'
-                      ? `Funeral: ${personName}`
-                      : `Baptism: ${personName}`
-
-                    const createdDate = new Date(event.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })
-
-                    return (
-                      <Card
-                        key={event.id}
-                        bordered
-                        padding="$3"
-                        backgroundColor="$background"
-                        pressStyle={{ scale: 0.98 }}
-                        hoverStyle={{ scale: 1.02, borderColor: '$purple8' }}
-                        animation="quick"
-                        cursor="pointer"
-                        onPress={() => sendEventEmail(event)}
-                        minWidth={200}
-                      >
-                        <YStack gap="$1">
-                          <Text fontSize="$4" fontWeight="600" color="$color">
-                            {eventLabel}
-                          </Text>
-                          <Text fontSize="$2" color="$gray10">
-                            Created: {createdDate}
-                          </Text>
-                          <XStack gap="$1" alignItems="center" marginTop="$1">
-                            <Send size={14} color="$purple10" />
-                            <Text fontSize="$3" color="$purple10" fontWeight="500">
-                              Send Announcement
-                            </Text>
-                          </XStack>
-                        </YStack>
-                      </Card>
-                    )
-                  })}
+              {/* Audience override — any SES list, incl. inter-ecclesia leaders. */}
+              <YStack gap="$2">
+                <XStack gap="$2" alignItems="center">
+                  <Users size={16} color="$purple10" />
+                  <Text fontSize="$3" fontWeight="600">Audience (live sends)</Text>
                 </XStack>
-              </YStack>
-            </Card>
-          ) : null}
+                <Select
+                  value={composerAudience}
+                  onValueChange={(value) => setComposerAudience(value as EmailListTypeKeys)}
+                >
+                  <Select.Trigger minWidth={280} iconAfter={null} backgroundColor="$background">
+                    <Select.Value placeholder="Select an audience…" />
+                  </Select.Trigger>
 
-          {loadingEvents ? (
-            <Text fontSize="$3" color="$gray10">Loading recent events...</Text>
-          ) : null}
+                  <Adapt when="sm" platform="touch">
+                    <Sheet native modal dismissOnSnapToBottom>
+                      <Sheet.Frame>
+                        <Sheet.ScrollView>
+                          <Adapt.Contents />
+                        </Sheet.ScrollView>
+                      </Sheet.Frame>
+                      <Sheet.Overlay
+                        animation="lazy"
+                        enterStyle={{ opacity: 0 }}
+                        exitStyle={{ opacity: 0 }}
+                      />
+                    </Sheet>
+                  </Adapt>
+
+                  <Select.Content zIndex={200000 as any}>
+                    <Select.ScrollUpButton />
+                    <Select.Viewport>
+                      <Select.Group>
+                        {availableLists
+                          .filter((list) => list.key !== 'testList')
+                          .map((list, idx) => (
+                            <Select.Item key={list.key} index={idx} value={list.key}>
+                              <Select.ItemText>{list.label}</Select.ItemText>
+                              <Select.ItemIndicator>
+                                <Check size={16} />
+                              </Select.ItemIndicator>
+                            </Select.Item>
+                          ))}
+                      </Select.Group>
+                    </Select.Viewport>
+                    <Select.ScrollDownButton />
+                  </Select.Content>
+                </Select>
+                <Text fontSize="$2" color="$purple10">
+                  {test
+                    ? 'Test mode is on — sends go to the test list regardless of this audience.'
+                    : `Live sends go to: ${composerAudienceLabel}`}
+                </Text>
+              </YStack>
+
+              <Separator />
+
+              {/* News items */}
+              <YStack gap="$2">
+                <XStack gap="$2" alignItems="center">
+                  <Newspaper size={16} color="$purple10" />
+                  <Text fontSize="$4" fontWeight="600" color="$purple11">News</Text>
+                </XStack>
+                {loadingNews ? (
+                  <Text fontSize="$3" color="$gray10">Loading news…</Text>
+                ) : newsItems.length > 0 ? (
+                  <XStack gap="$3" flexWrap="wrap">
+                    {newsItems.map((item) => {
+                      const publishedDate = new Date(item.publishedAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                      return (
+                        <Card
+                          key={item.id}
+                          bordered
+                          padding="$3"
+                          backgroundColor="$background"
+                          pressStyle={{ scale: 0.98 }}
+                          hoverStyle={{ scale: 1.02, borderColor: '$purple8' }}
+                          animation="quick"
+                          cursor="pointer"
+                          onPress={() => sendNewsItem(item)}
+                          minWidth={200}
+                        >
+                          <YStack gap="$1">
+                            <Text fontSize="$4" fontWeight="600" color="$color">
+                              {item.title}
+                            </Text>
+                            <Text fontSize="$2" color="$gray10">
+                              Published: {publishedDate}
+                            </Text>
+                            <XStack gap="$1" alignItems="center" marginTop="$1">
+                              <Send size={14} color="$purple10" />
+                              <Text fontSize="$3" color="$purple10" fontWeight="500">
+                                Send News
+                              </Text>
+                            </XStack>
+                          </YStack>
+                        </Card>
+                      )
+                    })}
+                  </XStack>
+                ) : (
+                  <Text fontSize="$3" color="$gray10">No active news items.</Text>
+                )}
+              </YStack>
+
+              <Separator />
+
+              {/* Event announcements */}
+              <YStack gap="$2">
+                <XStack gap="$2" alignItems="center">
+                  <Calendar size={16} color="$purple10" />
+                  <Text fontSize="$4" fontWeight="600" color="$purple11">Events</Text>
+                </XStack>
+                {loadingEvents ? (
+                  <Text fontSize="$3" color="$gray10">Loading recent events…</Text>
+                ) : recentEvents.length > 0 ? (
+                  <XStack gap="$3" flexWrap="wrap">
+                    {recentEvents.map((event) => {
+                      const personName = event.type === 'funeral'
+                        ? `${event.deceased?.title || ''} ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`.trim()
+                        : `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
+
+                      const eventLabel = event.type === 'funeral'
+                        ? `Funeral: ${personName}`
+                        : `Baptism: ${personName}`
+
+                      const createdDate = new Date(event.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+
+                      return (
+                        <Card
+                          key={event.id}
+                          bordered
+                          padding="$3"
+                          backgroundColor="$background"
+                          pressStyle={{ scale: 0.98 }}
+                          hoverStyle={{ scale: 1.02, borderColor: '$purple8' }}
+                          animation="quick"
+                          cursor="pointer"
+                          onPress={() => sendEventEmail(event)}
+                          minWidth={200}
+                        >
+                          <YStack gap="$1">
+                            <Text fontSize="$4" fontWeight="600" color="$color">
+                              {eventLabel}
+                            </Text>
+                            <Text fontSize="$2" color="$gray10">
+                              Created: {createdDate}
+                            </Text>
+                            <XStack gap="$1" alignItems="center" marginTop="$1">
+                              <Send size={14} color="$purple10" />
+                              <Text fontSize="$3" color="$purple10" fontWeight="500">
+                                Send Announcement
+                              </Text>
+                            </XStack>
+                          </YStack>
+                        </Card>
+                      )
+                    })}
+                  </XStack>
+                ) : (
+                  <Text fontSize="$3" color="$gray10">
+                    No recent funeral or baptism events to announce.
+                  </Text>
+                )}
+              </YStack>
+            </YStack>
+          </Card>
 
           <Separator />
 
@@ -839,10 +1039,18 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                         <Text color="$green10">
                           ✅ Successfully sent to {email.sends.length} recipients
                         </Text>
+                      ) : typeof email.sentCount === 'number' ? (
+                        <Text color="$green10">
+                          ✅ Successfully sent to {email.sentCount} recipients
+                        </Text>
                       ) : null}
                       {email.skips && email.skips.length > 0 ? (
                         <Text color="$orange10">
                           ⚠️ Skipped {email.skips.length} recipients
+                        </Text>
+                      ) : typeof email.skippedCount === 'number' && email.skippedCount > 0 ? (
+                        <Text color="$orange10">
+                          ⚠️ Skipped {email.skippedCount} recipients
                         </Text>
                       ) : null}
                       <Separator marginVertical="$2" />
@@ -858,13 +1066,27 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
             </YStack>
           </Tabs.Content>
 
-          {/* Custom Email Tab */}
+          {/* Emergency / freeform email — demoted (Issue #57). Regular News and
+              Events are composed in the "News, Events & Templates" tab; this is
+              a last resort for one-off, freeform messages. */}
           <Tabs.Content value="custom" padding="$4">
-            <CustomEmailCreator
-              onSend={handleCustomEmailSend}
-              availableLists={availableLists}
-              sending={sending}
-            />
+            <YStack gap="$4">
+              <Card bordered padding="$3" backgroundColor="$orange2" borderColor="$orange6">
+                <XStack gap="$2" alignItems="center">
+                  <AlertCircle size={18} color="$orange10" />
+                  <Text fontSize="$3" color="$orange11" flex={1}>
+                    Emergency use only. Compose News and Events from the
+                    &quot;News, Events &amp; Templates&quot; tab — use this
+                    freeform tool only for one-off messages with no template.
+                  </Text>
+                </XStack>
+              </Card>
+              <CustomEmailCreator
+                onSend={handleCustomEmailSend}
+                availableLists={availableLists}
+                sending={sending}
+              />
+            </YStack>
           </Tabs.Content>
         </Tabs>
       </Section>

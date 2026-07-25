@@ -80,6 +80,33 @@ export const sendEmail = async (
 }
 
 /**
+ * Trigger a News item email blast (Issue #57). Sends the given News item to a
+ * chosen audience via the existing `/api/admin/news/[id]/send-alert` route,
+ * which already accepts a `list` audience override (incl. inter-ecclesia
+ * leaders). Test sends always go to the test list, enforced server-side.
+ */
+export const sendNewsAlert = async (
+  newsId: string,
+  isTest: boolean,
+  audienceKey: string
+): Promise<any> => {
+  const params = new URLSearchParams({ list: audienceKey })
+  if (isTest) {
+    params.set('test', 'true')
+  }
+  const url = `${API_PATH}api/admin/news/${newsId}/send-alert?${params.toString()}`
+  const response = await fetch(url, { method: 'POST', cache: 'no-store' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return {
+      error: data.error || `Request failed with status ${response.status}`,
+      details: data,
+    }
+  }
+  return data
+}
+
+/**
  * Save a brief note that will be attached to the next scheduled email of the
  * given reason (consumed once it sends successfully). Used for cron-triggered
  * sends like the Saturday Memorial recap or the weekly newsletter.
