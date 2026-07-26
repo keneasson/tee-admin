@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { YStack, XStack, Text, Heading, Card, Button, Separator, Spinner, Input } from '@my/ui'
 import type { AttendOption, AttendMode } from '@my/app/types'
+import { SCHEDULE_TYPE_CATALOGUE } from '@my/app/config/schedule-fields'
 
 type ServiceType = 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc'
 
@@ -29,6 +30,9 @@ type Occurrence = {
   date: string // YYYY-MM-DD
   formattedDate: string
   summary: string
+  // Current synced (Google-Sheets) value per catalogue field key — used to pre-fill
+  // the per-role inputs so the admin edits from what's live rather than a blank slate.
+  syncedFields: Record<string, string>
 }
 
 type OverrideRecord = {
@@ -38,6 +42,7 @@ type OverrideRecord = {
   message?: string
   note?: string
   attendOptions?: AttendOption[]
+  roleFields?: Record<string, string>
 }
 
 type ApiResponse = {
@@ -53,15 +58,28 @@ type Draft = {
   message: string
   note: string
   attendOptions: AttendOption[]
+  // Sparse: holds ONLY role fields the admin has edited this session (seeded from an
+  // existing override's roleFields). A field absent here falls back to the synced
+  // value at render time. On save we persist only fields that differ from synced.
+  roleFields: Record<string, string>
 }
 
 const keyOf = (serviceType: string, date: string) => `${serviceType}#${date}`
+
+const emptyDraft = (): Draft => ({
+  status: 'default',
+  message: '',
+  note: '',
+  attendOptions: [],
+  roleFields: {},
+})
 
 const draftFromOverride = (o?: OverrideRecord): Draft => ({
   status: o?.status ?? 'default',
   message: o?.message ?? '',
   note: o?.note ?? '',
   attendOptions: o?.attendOptions ?? [],
+  roleFields: { ...(o?.roleFields ?? {}) },
 })
 
 export const ScheduleOverridesManager: React.FC = () => {
@@ -102,11 +120,15 @@ export const ScheduleOverridesManager: React.FC = () => {
     return map
   }, [data])
 
-  const getDraft = (k: string): Draft =>
-    drafts[k] ?? { status: 'default', message: '', note: '', attendOptions: [] }
+  const getDraft = (k: string): Draft => drafts[k] ?? emptyDraft()
 
   const setDraft = (k: string, patch: Partial<Draft>) => {
     setDrafts((prev) => ({ ...prev, [k]: { ...getDraft(k), ...patch } }))
+  }
+
+  const setRoleField = (k: string, fieldKey: string, value: string) => {
+    const d = getDraft(k)
+    setDraft(k, { roleFields: { ...d.roleFields, [fieldKey]: value } })
   }
 
   const addOption = (k: string) => {
@@ -134,6 +156,12 @@ export const ScheduleOverridesManager: React.FC = () => {
     setSavingKey(k)
     setStatus(null)
     try {
+      // Persist ONLY role fields the admin changed away from the synced value, so the
+      // override stays a sparse overlay (untouched roles keep tracking the Sheet).
+      const roleFieldsDiff: Record<string, string> = {}
+      for (const [fieldKey, value] of Object.entries(draft.roleFields)) {
+        if (value !== (occ.syncedFields[fieldKey] ?? '')) roleFieldsDiff[fieldKey] = value
+      }
       const res = await fetch('/api/admin/schedule-overrides', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -146,6 +174,7 @@ export const ScheduleOverridesManager: React.FC = () => {
           attendOptions: draft.attendOptions.length
             ? draft.attendOptions.filter((o) => o.label.trim())
             : undefined,
+          roleFields: Object.keys(roleFieldsDiff).length ? roleFieldsDiff : undefined,
         }),
       })
       if (!res.ok) throw new Error('save failed')
@@ -284,6 +313,37 @@ export const ScheduleOverridesManager: React.FC = () => {
                       onChangeText={(t) => setDraft(k, { note: t })}
                       placeholder='e.g. "Carpool leaves the hall at 10am"'
                     />
+                  </YStack>
+
+                  <YStack space="$2">
+                    <Text fontSize="$2" fontWeight="600" color="$colorSecondary">
+                      Roster (overrides the synced schedule value for this occurrence)
+                    </Text>
+                    {SCHEDULE_TYPE_CATALOGUE[occ.serviceType].fields.map((field) => {
+                      const synced = occ.syncedFields[field.key] ?? ''
+                      const current =
+                        field.key in draft.roleFields ? draft.roleFields[field.key] : synced
+                      const changed = current !== synced
+                      return (
+                        <YStack key={field.key} space="$1">
+                          <XStack justifyContent="space-between" alignItems="center">
+                            <Text fontSize="$2" color="$colorSecondary">
+                              {field.defaultLabel}
+                            </Text>
+                            {changed ? (
+                              <Text fontSize="$1" color="$blue11" fontWeight="600">
+                                edited
+                              </Text>
+                            ) : null}
+                          </XStack>
+                          <Input
+                            value={current}
+                            onChangeText={(t) => setRoleField(k, field.key, t)}
+                            placeholder={synced || field.defaultLabel}
+                          />
+                        </YStack>
+                      )
+                    })}
                   </YStack>
 
                   <YStack space="$2">

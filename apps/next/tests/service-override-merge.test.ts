@@ -5,6 +5,8 @@ import {
   applyOverrideToProgramItem,
 } from '@my/app/utils/service-overrides/merge'
 import type { ServiceOccurrenceOverrideRecord } from '@my/app/provider/dynamodb/service-override-types'
+import { redactScheduleData } from '@my/app/utils/redact-schedule'
+import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 
 /**
  * The UTC date key is the fragile part of the overlay: the admin listing, the web
@@ -74,5 +76,65 @@ describe('applyOverrideToProgramItem', () => {
     const result = applyOverrideToProgramItem(item, undefined)
     expect(result.overrideStatus).toBeUndefined()
     expect(result).toEqual({ Key: 'memorial', Exhort: 'Bro A' })
+  })
+})
+
+/**
+ * Slice A (#110): per-ROLE field overlay. The override's `roleFields` map writes
+ * onto the program item's matching role columns at read time; roster columns NOT in
+ * the map keep their synced Sheets value. `tee-schedules` is never touched.
+ */
+describe('applyOverrideToProgramItem — roleFields (roster overlay)', () => {
+  const makeOverride = (roleFields: Record<string, string>): ServiceOccurrenceOverrideRecord =>
+    ({
+      ecclesia: 'Toronto East',
+      serviceType: 'memorial',
+      date: '2025-08-03',
+      roleFields,
+    }) as ServiceOccurrenceOverrideRecord
+
+  it('applies each roleFields entry onto the matching role column', () => {
+    const item: Record<string, any> = {
+      Key: 'memorial',
+      Exhort: 'Bro Synced',
+      Preside: 'Bro Preside',
+      Organist: 'Sis Organist',
+    }
+    const result = applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Bro Override' }))
+    expect(result.Exhort).toBe('Bro Override') // overridden
+    expect(result.Preside).toBe('Bro Preside') // untouched (absent key)
+    expect(result.Organist).toBe('Sis Organist') // untouched (absent key)
+  })
+
+  it('leaves columns absent from roleFields untouched, and overrides multiple keys', () => {
+    const item: Record<string, any> = {
+      Key: 'memorial',
+      Exhort: 'Bro A',
+      Preside: 'Bro B',
+      Steward: 'Bro C',
+    }
+    const result = applyOverrideToProgramItem(
+      item,
+      makeOverride({ Exhort: 'Bro X', Steward: 'Bro Z' })
+    )
+    expect(result.Exhort).toBe('Bro X')
+    expect(result.Steward).toBe('Bro Z')
+    expect(result.Preside).toBe('Bro B') // untouched
+  })
+
+  it('an overridden role value is still first-name-only redacted for an anon viewer', () => {
+    const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }))
+    // Merge runs BEFORE redaction on the anon read path, so the overridden full name
+    // must collapse to the first name just like a synced value would.
+    const [safe] = redactScheduleData([item], ANONYMOUS_VIEWER, 'public-web')
+    expect(safe.Exhort).toBe('Jonathan')
+  })
+
+  it('reveals the overridden full name on the member/newsletter channel', () => {
+    const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }))
+    const [full] = redactScheduleData([item], ANONYMOUS_VIEWER, 'newsletter-email')
+    expect(full.Exhort).toBe('Jonathan Bowen')
   })
 })
