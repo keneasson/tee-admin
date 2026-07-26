@@ -5,6 +5,7 @@ import { brandColors, type ColorMode } from '@my/ui/src/branding/brand-colors'
 
 import { BibleClassType } from '@my/app/types'
 import { Section } from '@my/app/features/newsletter/Section'
+import { AttendOptions } from '@my/app/features/newsletter/attend-options'
 
 type NextBibleClassProps = {
   event: BibleClassType
@@ -17,14 +18,24 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
   const isJoint = !!event.Host
   const hasInPerson = !!event.InPerson
   const hasCustomZoom = !!(event.ZoomURL || event.MeetingID)
+  // When per-occurrence attend-options are set, they supersede the hardcoded
+  // in-person card + Zoom accordion (admin has listed the ways to attend).
+  const hasAttendOptions = !!event.attendOptions && event.attendOptions.length > 0
 
-  if (!event.Speaker) {
+  // Override precedence: 'cancelled' forces the no-class branch (with optional
+  // message); 'active' forces the class to show; otherwise infer from Speaker.
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const noClass = isCancelled || (!isForcedActive && !event.Speaker)
+
+  if (noClass) {
     return (
       <Section>
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
-        <Paragraph>{event.Topic}</Paragraph>
+        <Paragraph>{event.overrideMessage || event.Topic}</Paragraph>
+        {event.overrideNote ? <Paragraph>{event.overrideNote}</Paragraph> : null}
       </Section>
     )
   }
@@ -69,9 +80,15 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
         <Text fontWeight={600}>Leader:</Text> {event.Speaker}
       </Paragraph>
       {event.Topic ? <Paragraph fontWeight={600}>{event.Topic}</Paragraph> : null}
+      {event.overrideNote ? (
+        <Paragraph fontWeight={600} color="$blue11">{event.overrideNote}</Paragraph>
+      ) : null}
+
+      {/* Per-occurrence "ways to attend" — supersedes the hardcoded blocks below */}
+      {hasAttendOptions ? <AttendOptions options={event.attendOptions} /> : null}
 
       {/* In-person location card for joint classes */}
-      {isJoint && hasInPerson ? (
+      {!hasAttendOptions && isJoint && hasInPerson ? (
         <YStack
           backgroundColor="$green3"
           padding="$3"
@@ -102,6 +119,7 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
       ) : null}
 
       {/* Zoom details accordion */}
+      {!hasAttendOptions ? (
       <Accordion overflow="hidden" type="multiple">
         <Accordion.Item value="a1">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">
@@ -166,6 +184,7 @@ export const NextBibleClass: React.FC<NextBibleClassProps> = ({ event }) => {
           </Accordion.Content>
         </Accordion.Item>
       </Accordion>
+      ) : null}
     </Section>
   )
 }

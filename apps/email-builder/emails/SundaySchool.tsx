@@ -144,7 +144,13 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
       </Row>
     )
   }
-  if (event.Refreshments) {
+  // Override precedence: 'cancelled' forces no-class; 'active' forces the class to
+  // show; otherwise infer from Refreshments.
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const hasClass = isForcedActive || (!isCancelled && !!event.Refreshments)
+
+  if (hasClass) {
     return (
       <Row align="left" width={'49%'} className="deviceWidth">
         <Column style={columnAlignTop}>
@@ -154,6 +160,12 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
             Start time: 9:30 am
             <br />
             Refreshments: {event.Refreshments}
+            {event.overrideNote ? (
+              <>
+                <br />
+                {event.overrideNote}
+              </>
+            ) : null}
             {event['Holidays and Special Events'] && (
               <>
                 <br />
@@ -171,7 +183,13 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
           <Text style={defaultText}>
             <strong>{event.Date.toString()}</strong>
             <br />
-            {event['Holidays and Special Events']}
+            {event.overrideMessage || event['Holidays and Special Events']}
+            {event.overrideNote ? (
+              <>
+                <br />
+                {event.overrideNote}
+              </>
+            ) : null}
           </Text>
         </Column>
       </Row>
