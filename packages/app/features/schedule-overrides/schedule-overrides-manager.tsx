@@ -1,7 +1,19 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { YStack, XStack, Text, Heading, Card, Button, Separator, Spinner, Input } from '@my/ui'
+import {
+  YStack,
+  XStack,
+  Text,
+  Heading,
+  Card,
+  Button,
+  Separator,
+  Spinner,
+  Input,
+  RoleMemberPicker,
+} from '@my/ui'
+import type { RosterCandidate } from '@my/ui'
 import type { AttendOption, AttendMode } from '@my/app/types'
 import { SCHEDULE_TYPE_CATALOGUE } from '@my/app/config/schedule-fields'
 
@@ -43,6 +55,9 @@ type OverrideRecord = {
   note?: string
   attendOptions?: AttendOption[]
   roleFields?: Record<string, string>
+  // Slice B (#110): fieldKey → picked PersonRecord personId (parallel metadata to
+  // roleFields; drives no rendering/redaction — see service-override-types.ts).
+  roleFieldRefs?: Record<string, string>
 }
 
 type ApiResponse = {
@@ -62,6 +77,9 @@ type Draft = {
   // existing override's roleFields). A field absent here falls back to the synced
   // value at render time. On save we persist only fields that differ from synced.
   roleFields: Record<string, string>
+  // Sparse: fieldKey → picked directory personId. Set when the admin picks a member
+  // from the typeahead; cleared when they free-type or unlink. Metadata only.
+  roleFieldRefs: Record<string, string>
 }
 
 const keyOf = (serviceType: string, date: string) => `${serviceType}#${date}`
@@ -72,6 +90,7 @@ const emptyDraft = (): Draft => ({
   note: '',
   attendOptions: [],
   roleFields: {},
+  roleFieldRefs: {},
 })
 
 const draftFromOverride = (o?: OverrideRecord): Draft => ({
@@ -80,6 +99,7 @@ const draftFromOverride = (o?: OverrideRecord): Draft => ({
   note: o?.note ?? '',
   attendOptions: o?.attendOptions ?? [],
   roleFields: { ...(o?.roleFields ?? {}) },
+  roleFieldRefs: { ...(o?.roleFieldRefs ?? {}) },
 })
 
 export const ScheduleOverridesManager: React.FC = () => {
@@ -126,9 +146,34 @@ export const ScheduleOverridesManager: React.FC = () => {
     setDrafts((prev) => ({ ...prev, [k]: { ...getDraft(k), ...patch } }))
   }
 
+  // Free-text edit of a role field: update the display value AND drop any member
+  // link for that field (the field no longer reflects the previously picked member).
   const setRoleField = (k: string, fieldKey: string, value: string) => {
     const d = getDraft(k)
-    setDraft(k, { roleFields: { ...d.roleFields, [fieldKey]: value } })
+    const nextRefs = { ...d.roleFieldRefs }
+    delete nextRefs[fieldKey]
+    setDraft(k, {
+      roleFields: { ...d.roleFields, [fieldKey]: value },
+      roleFieldRefs: nextRefs,
+    })
+  }
+
+  // A directory member was picked: store BOTH the display name (what renders/redacts)
+  // and the personId (Slice-B metadata) for the field.
+  const setRoleMember = (k: string, fieldKey: string, member: RosterCandidate) => {
+    const d = getDraft(k)
+    setDraft(k, {
+      roleFields: { ...d.roleFields, [fieldKey]: member.displayName },
+      roleFieldRefs: { ...d.roleFieldRefs, [fieldKey]: member.personId },
+    })
+  }
+
+  // Unlink the member but keep the typed display value.
+  const clearRoleMember = (k: string, fieldKey: string) => {
+    const d = getDraft(k)
+    const nextRefs = { ...d.roleFieldRefs }
+    delete nextRefs[fieldKey]
+    setDraft(k, { roleFieldRefs: nextRefs })
   }
 
   const addOption = (k: string) => {
@@ -162,6 +207,13 @@ export const ScheduleOverridesManager: React.FC = () => {
       for (const [fieldKey, value] of Object.entries(draft.roleFields)) {
         if (value !== (occ.syncedFields[fieldKey] ?? '')) roleFieldsDiff[fieldKey] = value
       }
+      // Persist member links (personIds) only for fields we're actually overriding —
+      // a ref without a stored display value would be orphaned metadata.
+      const roleFieldRefsDiff: Record<string, string> = {}
+      for (const fieldKey of Object.keys(roleFieldsDiff)) {
+        const personId = draft.roleFieldRefs[fieldKey]
+        if (personId) roleFieldRefsDiff[fieldKey] = personId
+      }
       const res = await fetch('/api/admin/schedule-overrides', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -175,6 +227,7 @@ export const ScheduleOverridesManager: React.FC = () => {
             ? draft.attendOptions.filter((o) => o.label.trim())
             : undefined,
           roleFields: Object.keys(roleFieldsDiff).length ? roleFieldsDiff : undefined,
+          roleFieldRefs: Object.keys(roleFieldRefsDiff).length ? roleFieldRefsDiff : undefined,
         }),
       })
       if (!res.ok) throw new Error('save failed')
@@ -336,10 +389,14 @@ export const ScheduleOverridesManager: React.FC = () => {
                               </Text>
                             ) : null}
                           </XStack>
-                          <Input
+                          <RoleMemberPicker
                             value={current}
-                            onChangeText={(t) => setRoleField(k, field.key, t)}
+                            ecclesia={data?.ecclesia ?? ''}
+                            selectedPersonId={draft.roleFieldRefs[field.key]}
                             placeholder={synced || field.defaultLabel}
+                            onChangeText={(t) => setRoleField(k, field.key, t)}
+                            onSelectMember={(m) => setRoleMember(k, field.key, m)}
+                            onClearMember={() => clearRoleMember(k, field.key)}
                           />
                         </YStack>
                       )

@@ -138,3 +138,42 @@ describe('applyOverrideToProgramItem — roleFields (roster overlay)', () => {
     expect(full.Exhort).toBe('Jonathan Bowen')
   })
 })
+
+/**
+ * Slice B (#110): `roleFieldRefs` (fieldKey → picked personId) is metadata for
+ * future linking ONLY. It must NEVER be applied to the program item — the display
+ * value in `roleFields` remains the single thing that renders and gets redacted, so
+ * a personId can't leak to any read path (member or anon).
+ */
+describe('applyOverrideToProgramItem — roleFieldRefs (metadata isolation, Slice B)', () => {
+  const makeOverride = (
+    roleFields: Record<string, string>,
+    roleFieldRefs: Record<string, string>
+  ): ServiceOccurrenceOverrideRecord =>
+    ({
+      ecclesia: 'Toronto East',
+      serviceType: 'memorial',
+      date: '2025-08-03',
+      roleFields,
+      roleFieldRefs,
+    }) as ServiceOccurrenceOverrideRecord
+
+  it('applies the display value but never writes the personId onto the item', () => {
+    const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
+    const result = applyOverrideToProgramItem(
+      item,
+      makeOverride({ Exhort: 'Jonathan Bowen' }, { Exhort: 'person-123' })
+    )
+    expect(result.Exhort).toBe('Jonathan Bowen') // display value drives render
+    expect(result.roleFieldRefs).toBeUndefined() // metadata never merged in
+    expect(JSON.stringify(result)).not.toContain('person-123') // personId absent everywhere
+  })
+
+  it('anon redaction is unchanged when a member is linked (still first-name-only)', () => {
+    const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }, { Exhort: 'person-123' }))
+    const [safe] = redactScheduleData([item], ANONYMOUS_VIEWER, 'public-web')
+    expect(safe.Exhort).toBe('Jonathan')
+    expect(JSON.stringify(safe)).not.toContain('person-123')
+  })
+})

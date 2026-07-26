@@ -67,6 +67,14 @@ export interface ServiceOccurrenceOverrideRecord extends BaseRecord {
   // NEVER writes these back to Sheets (`tee-schedules` stays a one-way input).
   roleFields?: Record<string, string>
 
+  // Slice B (#110): parallel metadata map, catalogue fieldKey → PersonRecord
+  // personId, recording WHICH directory member an admin picked for a role via the
+  // member-picker. This is metadata for future linking ONLY — it is deliberately
+  // NOT applied to the program item at read time, so the display value in
+  // `roleFields` still solely drives what renders (and gets first-name redacted).
+  // `roleFieldRefs` must NEVER reach the anon/public read path.
+  roleFieldRefs?: Record<string, string>
+
   createdBy: string
   createdAt: string
   updatedAt: string
