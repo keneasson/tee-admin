@@ -21,6 +21,7 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
+import { AttendOptions } from '../components/AttendOptions'
 
 type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
@@ -925,8 +926,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                   /* Normal Sunday Services */
                   sundayEvents.map((event: any, index: number) => {
                     if (event.Key === 'sundaySchool') {
-                      // Only show full Sunday School section when there's class (has Refreshments)
-                      const hasSundaySchool = !!event.Refreshments
+                      // Override precedence: 'cancelled' forces no-class; 'active' forces
+                      // it to show; otherwise infer from Refreshments.
+                      const isCancelled = event.overrideStatus === 'cancelled'
+                      const isForcedActive = event.overrideStatus === 'active'
+                      const hasSundaySchool = isForcedActive || (!isCancelled && !!event.Refreshments)
 
                       return (
                         <Section key={`ss-${index}`} style={program}>
@@ -937,10 +941,19 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 {'Refreshments: '}
                                 <strong>{event.Refreshments}</strong>
                               </Text>
+                              {event.overrideNote ? (
+                                <Text style={defaultText}>{event.overrideNote}</Text>
+                              ) : null}
                             </>
                           ) : (
                             <Text style={defaultText}>
-                              <strong>No Sunday school this week!</strong>
+                              <strong>{event.overrideMessage || 'No Sunday school this week!'}</strong>
+                              {event.overrideNote ? (
+                                <>
+                                  <br />
+                                  {event.overrideNote}
+                                </>
+                              ) : null}
                             </Text>
                           )}
                           {index < sundayEvents.length - 1 && (
@@ -1083,8 +1096,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 }
 
                 // Otherwise, show normal Bible Class
-                // Check if there's no class - same logic as NextBibleClass component: !event.Speaker
-                const hasClass = !!event.Speaker
+                // Override precedence: 'cancelled' forces no-class; 'active' forces it
+                // to show; otherwise infer from Speaker (same as NextBibleClass).
+                const bcIsCancelled = event.overrideStatus === 'cancelled'
+                const bcIsForcedActive = event.overrideStatus === 'active'
+                const hasClass = bcIsForcedActive || (!bcIsCancelled && !!event.Speaker)
 
                 // Joint Bible Class logic
                 const isJoint = !!event.Host
@@ -1161,8 +1177,16 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           <Row>
                             <Column style={columnAlignTop}>{BibleClassProgram(event)}</Column>
                           </Row>
+                          {/* Per-occurrence announcement note (shown alongside the class) */}
+                          {event.overrideNote ? (
+                            <Text style={defaultText}>{event.overrideNote}</Text>
+                          ) : null}
+                          {/* Per-occurrence "ways to attend" supersede the hardcoded blocks below */}
+                          {event.attendOptions?.length ? (
+                            <AttendOptions options={event.attendOptions} />
+                          ) : null}
                           {/* In-person location for joint Bible Class */}
-                          {hasInPerson ? (
+                          {!event.attendOptions?.length && hasInPerson ? (
                             <Section style={{
                               backgroundColor: '#e8f5e9',
                               padding: '12px 16px',
@@ -1187,7 +1211,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </Section>
                           ) : null}
                           {/* Custom Zoom details for joint Bible Class (Zoom-only) */}
-                          {!hasInPerson && hasCustomZoom ? (
+                          {!event.attendOptions?.length && !hasInPerson && hasCustomZoom ? (
                             <Section style={{
                               backgroundColor: '#e3f2fd',
                               padding: '12px 16px',
@@ -1208,7 +1232,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </Section>
                           ) : null}
                           {/* Hybrid: both in-person AND Zoom */}
-                          {hasInPerson && hasCustomZoom ? (
+                          {!event.attendOptions?.length && hasInPerson && hasCustomZoom ? (
                             <Section style={{
                               backgroundColor: '#e3f2fd',
                               padding: '12px 16px',
@@ -1233,8 +1257,11 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         <>
                           <Heading style={defaultText}>{bcHeading}</Heading>
                           <Text style={defaultText}>
-                            <strong>No Bible Class tonight</strong>
+                            <strong>{event.overrideMessage || 'No Bible Class tonight'}</strong>
                           </Text>
+                          {event.overrideNote ? (
+                            <Text style={defaultText}>{event.overrideNote}</Text>
+                          ) : null}
                         </>
                       )}
                     </Section>
@@ -2388,14 +2415,17 @@ const Lunch = ({ lunch }: { lunch: string }) => {
 }
 
 const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) => {
-  // No service at hall: Both Exhort AND Preside are blank
-  const noServiceAtHall = !event.Exhort && !event.Preside
+  // Override precedence: 'cancelled' forces no-service (with optional message);
+  // 'active' forces the service to show; otherwise both Exhort AND Preside blank.
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const noServiceAtHall = isCancelled || (!isForcedActive && !event.Exhort && !event.Preside)
 
   if (noServiceAtHall) {
     // If Lunch contains an event title, find the matching event and render it inline
     const eventTitle = event.Lunch?.trim()
     const replacementEvent = eventTitle ? findReplacementEvent(upcomingEvents || [], eventTitle) : undefined
-    const explanation = event.Activities || event['Holidays and Special Events']
+    const explanation = event.overrideNote || event.Activities || event['Holidays and Special Events']
 
     if (replacementEvent) {
       return <ReplacementEventCard event={replacementEvent} explanation={explanation} />
@@ -2404,7 +2434,7 @@ const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) =
     // Fallback: no matching event found, show simple "no service" message
     return (
       <Text style={defaultText}>
-        <strong>There will be no service at our hall.</strong>
+        <strong>{event.overrideMessage || 'There will be no service at our hall.'}</strong>
         {explanation ? (
           <>
             <br />

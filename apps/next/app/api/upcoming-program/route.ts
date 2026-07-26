@@ -7,6 +7,14 @@ import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
 import { resolveViewer } from '../../../utils/resolve-viewer'
 import { piiAwareCacheControl } from '../../../utils/pii-response'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import {
+  fetchServiceOverrides,
+  applyOverrideToProgramItem,
+  normalizeToISODate,
+  overrideKey,
+} from '@my/app/utils/service-overrides/merge'
+import type { ServiceOverrideType } from '@my/app/provider/dynamodb/service-override-types'
 
 // Cache for 15 minutes in production (shorter for faster updates when debugging)
 const CACHE_DURATION = process.env.NODE_ENV === 'production' ? 900 : 0
@@ -57,6 +65,21 @@ export async function GET(request: NextRequest) {
     
     console.log(`✅ Served upcoming program from DynamoDB cache (${upcomingEvents.length} events)`)
 
+    // Per-occurrence overrides (cancel / custom message / note / attend-options).
+    // Fetched OUTSIDE getCachedUpcomingProgram so admin edits show promptly rather
+    // than being trapped behind the 15-minute schedule cache.
+    // TODO(multi-tenant, #110): pinned to HOME_ECCLESIA — resolve the tenant from
+    // the request host and gate on managedRegions once multi-tenant lands.
+    const occurrenceDates = upcomingEvents.map(e => normalizeToISODate(e.date)).filter(Boolean)
+    const sortedDates = [...occurrenceDates].sort()
+    const serviceTypes = Array.from(new Set(upcomingEvents.map(e => e.type))) as ServiceOverrideType[]
+    const overrides = await fetchServiceOverrides(
+      HOME_ECCLESIA.canonicalName,
+      serviceTypes,
+      sortedDates[0] ?? '',
+      sortedDates[sortedDates.length - 1] ?? ''
+    )
+
     // Transform to match the original Google Sheets format that newsletter expects
     const responseData = upcomingEvents.map(event => {
       // The newsletter expects human-readable formatted date strings like "Sunday, August 31, 2025"
@@ -81,7 +104,12 @@ export async function GET(request: NextRequest) {
         Key: event.type, // Override with the correct Key field
         Date: formattedDate, // Set the Date field with human-readable format
       }
-      
+
+      // Merge any per-occurrence override (matched on the UTC date key).
+      const occurrenceDate = normalizeToISODate(event.date)
+      result.occurrenceDate = occurrenceDate
+      applyOverrideToProgramItem(result, overrides.get(overrideKey(event.type, occurrenceDate)))
+
       return result
     })
 
