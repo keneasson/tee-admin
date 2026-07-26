@@ -6,6 +6,7 @@ import { serviceOverrideRepository } from '@my/app/provider/dynamodb/repositorie
 import type { ServiceOverrideType } from '@my/app/provider/dynamodb/service-override-types'
 import { normalizeToISODate } from '@my/app/utils/service-overrides/merge'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { SCHEDULE_TYPE_CATALOGUE } from '@my/app/config/schedule-fields'
 import { invalidateScheduleCache } from '@/utils/cache'
 
 /**
@@ -37,6 +38,40 @@ async function requireAdmin() {
     return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
   }
   return { email: session.user.email }
+}
+
+/**
+ * Current synced (Google-Sheets) value for every catalogue field of a service type,
+ * so the admin UI can pre-fill the per-role inputs with what's live today. Values are
+ * coerced to strings; missing columns become ''.
+ */
+function syncedFieldsFor(serviceType: ServiceOverrideType, data: Record<string, any>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const field of SCHEDULE_TYPE_CATALOGUE[serviceType].fields) {
+    const raw = data[field.key]
+    out[field.key] = raw === undefined || raw === null ? '' : String(raw)
+  }
+  return out
+}
+
+/**
+ * Validate an incoming `roleFields` payload: a flat map of catalogue fieldKey → string.
+ * Unknown keys (not in the type's catalogue) are dropped rather than rejected, so a
+ * stale client can't inject arbitrary columns. Returns undefined when nothing valid.
+ */
+function sanitizeRoleFields(
+  serviceType: ServiceOverrideType,
+  raw: any
+): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const allowed = new Set(SCHEDULE_TYPE_CATALOGUE[serviceType].fields.map((f) => f.key))
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!allowed.has(key)) continue
+    if (typeof value !== 'string') continue
+    out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /** Short human summary of an occurrence, per service type. */
@@ -80,6 +115,7 @@ export async function GET() {
       date: string
       formattedDate: string
       summary: string
+      syncedFields: Record<string, string>
     }> = []
 
     for (const serviceType of SERVICE_TYPES) {
@@ -95,7 +131,13 @@ export async function GET() {
           day: 'numeric',
           timeZone: 'UTC',
         })
-        occurrences.push({ serviceType, date, formattedDate, summary: summarize(serviceType, data) })
+        occurrences.push({
+          serviceType,
+          date,
+          formattedDate,
+          summary: summarize(serviceType, data),
+          syncedFields: syncedFieldsFor(serviceType, data),
+        })
       }
     }
 
@@ -120,7 +162,7 @@ async function upsert(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { serviceType, date, status, message, note, attendOptions } = body
+    const { serviceType, date, status, message, note, attendOptions, roleFields } = body
 
     if (!isValidServiceType(serviceType)) {
       return NextResponse.json({ error: 'Invalid serviceType' }, { status: 400 })
@@ -141,6 +183,7 @@ async function upsert(request: NextRequest) {
       message,
       note,
       attendOptions,
+      roleFields: sanitizeRoleFields(serviceType, roleFields),
       createdBy: gate.email!,
     })
 

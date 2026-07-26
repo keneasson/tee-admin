@@ -91,5 +91,18 @@ export function applyOverrideToProgramItem<T extends Record<string, any>>(
   if (override.note !== undefined) target.overrideNote = override.note
   if (override.attendOptions !== undefined) target.attendOptions = override.attendOptions
 
+  // Slice A (#110): per-ROLE field overlay. Each key is a catalogue field
+  // (Exhort/Preside/Speaker/… — see SCHEDULE_TYPE_CATALOGUE) that maps directly to
+  // the program item's role column, so we write the overridden value straight onto
+  // the matching column. Only keys PRESENT in the override are touched — absent
+  // roster fields keep their synced Sheets value. Values stay first-name redacted
+  // downstream because the role column names live in redact-schedule's PERSON_KEYS
+  // and redaction runs AFTER this merge on the anon read path.
+  if (override.roleFields) {
+    for (const [key, value] of Object.entries(override.roleFields)) {
+      target[key] = value
+    }
+  }
+
   return item
 }
