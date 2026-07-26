@@ -74,6 +74,28 @@ function sanitizeRoleFields(
   return Object.keys(out).length > 0 ? out : undefined
 }
 
+/**
+ * Validate an incoming `roleFieldRefs` payload: catalogue fieldKey → PersonRecord
+ * personId. Slice B (#110) metadata recording WHICH directory member was picked for
+ * a role. Same allow-list discipline as roleFields — unknown/blank keys are dropped.
+ * This is metadata only; it is NEVER applied to the program item, so it can't leak to
+ * the anon read path. Returns undefined when nothing valid.
+ */
+function sanitizeRoleFieldRefs(
+  serviceType: ServiceOverrideType,
+  raw: any
+): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const allowed = new Set(SCHEDULE_TYPE_CATALOGUE[serviceType].fields.map((f) => f.key))
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!allowed.has(key)) continue
+    if (typeof value !== 'string' || value.trim().length === 0) continue
+    out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
 /** Short human summary of an occurrence, per service type. */
 function summarize(serviceType: ServiceOverrideType, data: Record<string, any>): string {
   switch (serviceType) {
@@ -162,7 +184,8 @@ async function upsert(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { serviceType, date, status, message, note, attendOptions, roleFields } = body
+    const { serviceType, date, status, message, note, attendOptions, roleFields, roleFieldRefs } =
+      body
 
     if (!isValidServiceType(serviceType)) {
       return NextResponse.json({ error: 'Invalid serviceType' }, { status: 400 })
@@ -184,6 +207,7 @@ async function upsert(request: NextRequest) {
       note,
       attendOptions,
       roleFields: sanitizeRoleFields(serviceType, roleFields),
+      roleFieldRefs: sanitizeRoleFieldRefs(serviceType, roleFieldRefs),
       createdBy: gate.email!,
     })
 
