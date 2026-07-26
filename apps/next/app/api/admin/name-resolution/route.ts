@@ -7,25 +7,28 @@ import {
   toDirectoryPerson,
   type DirectoryPerson,
 } from '@my/app/utils/name-resolver-directory'
+import { syncVisitingSpeakers } from '@my/app/provider/sync/visiting-speakers-ingest'
 import { getTeeServicesConfig } from '../../../../utils/tee-services-config'
 
 /**
- * READ-ONLY admin diagnostic for the schedule name↔member resolver
- * (keystone — issue #109, increment 2).
+ * Admin diagnostic + write path for the schedule name↔member resolver
+ * (keystone — issue #109).
  *
- * Loads the directory as candidates, harvests the free-text names from the
- * memorial schedule (inline role columns + the "Visiting Speakers" tab), runs
- * the pure resolver, and returns a grouped match report so a human can eyeball
- * match quality and tune the typo threshold BEFORE any write path is built.
+ * GET  — READ-ONLY diagnostic (increment 2). Loads the directory as candidates,
+ *        harvests the free-text names from the memorial schedule (inline role
+ *        columns + the "Visiting Speakers" tab), runs the pure resolver, and
+ *        returns a grouped match report so a human can eyeball match quality
+ *        BEFORE triggering any write. ZERO mutations.
  *
- * ZERO mutations: no PersonRecord writes, no SES, no notifications.
+ * POST — WRITE increment. AFTER reviewing the GET diagnostic, an owner/admin
+ *        triggers ingest of confident not-found visiting speakers into emailless
+ *        `visitor` PersonRecords (see visiting-speakers-ingest). Defaults to
+ *        dryRun; the caller must pass { dryRun: false } to actually write.
+ *        This is NEVER auto-fired on sheet sync.
  *
- * // NEXT INCREMENT: the auto-create-visiting-speaker + RB/Rep notification
- * // paths are deliberately NOT here. They are gated on a schema decision:
- * // personRepository.create() currently REQUIRES an email, but visiting
- * // speakers harvested from the sheet have none. That must be resolved
- * // (nullable email / synthetic placeholder / separate record kind) before
- * // the not-found group can be turned into created records or notifications.
+ * // NEXT INCREMENT: the RB/Rep discrepancy notification + exhorter heads-up
+ * // email are deliberately NOT here — per project rules this increment has no
+ * // notification/email side effects. See visiting-speakers-ingest.ts.
  */
 
 // Memorial schedule columns whose cells hold a person's name (case-insensitive
@@ -175,6 +178,71 @@ export async function GET(_request: NextRequest) {
       {
         success: false,
         error: 'Failed to run name-resolution diagnostic',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST — trigger the visiting-speaker ingest (WRITE increment, issue #109).
+ *
+ * Owner/admin only. A human runs this AFTER reviewing the GET diagnostic.
+ * Defaults to a dry run; pass { "dryRun": false } to actually create records.
+ * Creates emailless `visitor` PersonRecords for confident not-found speakers
+ * under their home ecclesia. Idempotent. No emails/notifications are sent.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // --- Auth gate: owner/admin only (matches GET) ---
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const userRole = (session.user as any).role || 'guest'
+    if (!['admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
+    // Default to dryRun for safety — a real write requires explicit dryRun:false.
+    let dryRun = true
+    try {
+      const body = await request.json()
+      if (body && typeof body.dryRun === 'boolean') dryRun = body.dryRun
+    } catch {
+      // No/invalid JSON body → keep the safe default (dry run).
+    }
+
+    // --- Resolve the memorial sheet id from the Google config ---
+    const config = getTeeServicesConfig()
+    const memorial = config.sheet_ids?.['memorial']
+    if (!memorial?.key) {
+      return NextResponse.json(
+        { error: 'Memorial sheet is not configured (sheet_ids.memorial missing)' },
+        { status: 500 }
+      )
+    }
+
+    const result = await syncVisitingSpeakers(memorial.key, { dryRun })
+
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      requestedBy: session.user.email,
+      ...result,
+      counts: {
+        totalRows: result.totalRows,
+        created: result.created.length,
+        skipped: result.skipped.length,
+      },
+    })
+  } catch (error) {
+    console.error('❌ Visiting-speaker ingest failed:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to run visiting-speaker ingest',
         message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
