@@ -201,8 +201,8 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
 
         <Container style={container} className="container">
           <Text style={defaultText}>
-            In the event you&apos;re unable to join us, please reply to this email and let us know at
-            your earliest convenience.
+            If for any reason you&apos;re unable to be with us, please reply to this email to let us
+            know as soon as you can.
           </Text>
           <Text style={{ ...defaultText, margin: '16px 0 0 0' }}>With love in the LORD,</Text>
           <Text style={{ ...defaultText, margin: '0' }}>
