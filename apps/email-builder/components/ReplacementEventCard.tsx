@@ -11,6 +11,7 @@ import React from 'react'
 import { Column, Link, Row, Text } from '@react-email/components'
 import type { Event, LocationInfo } from '@my/app/types/events'
 import { getPlatformDisplayName } from '@my/app/types/events'
+import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { defaultText, link } from '../styles'
 import { AutoLinkText } from './AutoLinkText'
 
@@ -142,7 +143,7 @@ export const ReplacementEventCard: React.FC<ReplacementEventCardProps> = ({
   return (
     <>
       <Text style={defaultText}>
-        <strong>There will be no IN PERSON Services at Toronto East, Zoom and YouTube will remain unchanged.</strong>
+        <strong>{resolveNoInPersonServicesMessage(event.noInPersonServicesMessage)}</strong>
         {explanation ? (
           <>
             <br />

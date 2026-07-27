@@ -21,6 +21,7 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
+import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { AttendOptions } from '../components/AttendOptions'
 
 type SundayEvents = MemorialServiceType &
@@ -2431,10 +2432,11 @@ const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) =
       return <ReplacementEventCard event={replacementEvent} explanation={explanation} />
     }
 
-    // Fallback: no matching event found, show simple "no service" message
+    // Fallback: no matching event found. Use the same message source as the
+    // replacement-event path so the two can't diverge (issue #45).
     return (
       <Text style={defaultText}>
-        <strong>{event.overrideMessage || 'There will be no service at our hall.'}</strong>
+        <strong>{event.overrideMessage || resolveNoInPersonServicesMessage()}</strong>
         {explanation ? (
           <>
             <br />

@@ -2,6 +2,7 @@ import { Event, EventType, EventStatus, EventSharingScope } from '@my/app/types/
 import { EventValidator } from '@my/app/utils/event-validation'
 import { TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { DEFAULT_NO_IN_PERSON_SERVICES_MESSAGE } from '@my/app/config/service-messages'
 import {
   Calendar,
   Check,
@@ -700,6 +701,7 @@ export function ProgressiveEventForm({
       publishDate: initialData?.publishDate || undefined, // Only set explicitly — never auto-reset
       membersOnly: initialData?.membersOnly || false,
       sharingScope: initialData?.sharingScope || 'own',
+      noInPersonServicesMessage: initialData?.noInPersonServicesMessage || '',
       // Type-specific defaults
       ...(currentSelectedType === 'study-weekend' && {
         dateRange: initialData?.dateRange || {
@@ -2390,6 +2392,27 @@ export function ProgressiveEventForm({
                 />
               </YStack>
             ) : null}
+
+            {/* "No in-person services" notice — only used when this event replaces
+                cancelled Sunday services (issue #45). Leave blank to use the default. */}
+            <YStack marginTop="$5" space="$2">
+              <Text fontSize="$5" fontWeight="600">
+                "No In-Person Services" Message (Optional)
+              </Text>
+              <Text fontSize="$3" color="$gray11">
+                Shown in the newsletter and recap emails when this event replaces cancelled
+                in-person Sunday services. Leave blank to use the default:
+                {'\n'}"{DEFAULT_NO_IN_PERSON_SERVICES_MESSAGE}"
+              </Text>
+              <OptimizedTextarea
+                control={control}
+                name="noInPersonServicesMessage"
+                label=""
+                placeholder={DEFAULT_NO_IN_PERSON_SERVICES_MESSAGE}
+                rows={3}
+                maxLength={500}
+              />
+            </YStack>
 
           </YStack>
         </Card>

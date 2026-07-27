@@ -5,6 +5,7 @@ import { Accordion, Anchor, ExtLink, Paragraph, Separator, Square, Text, YStack 
 import { XStack } from 'tamagui'
 import { ChevronDown, MapPin } from '@tamagui/lucide-icons'
 import { Section } from '@my/app/features/newsletter/Section'
+import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { AttendOptions } from '@my/app/features/newsletter/attend-options'
 
 /** Find an event by title (case-insensitive substring match) */
@@ -47,7 +48,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
           {event.Date.toString()}
         </Paragraph>
         <Paragraph fontWeight={600}>
-          {event.overrideMessage || 'There will be no service at our hall.'}
+          {event.overrideMessage || resolveNoInPersonServicesMessage(replacementEvent?.noInPersonServicesMessage)}
         </Paragraph>
         {event.overrideNote ? <Paragraph>{event.overrideNote}</Paragraph> : null}
         {explanation ? <Paragraph>{explanation}</Paragraph> : null}

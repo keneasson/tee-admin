@@ -32,6 +32,7 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import { AutoLinkText } from '../components/AutoLinkText'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
+import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { AttendOptions } from '../components/AttendOptions'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
@@ -378,7 +379,7 @@ const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) =
     // Fallback: no matching event found, show simple "no service" message
     return (
       <Text style={defaultText}>
-        <strong>{event.overrideMessage || 'There will be no service at our hall.'}</strong>
+        <strong>{event.overrideMessage || resolveNoInPersonServicesMessage()}</strong>
         {explanation ? (
           <>
             <br />
