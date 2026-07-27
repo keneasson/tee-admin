@@ -166,6 +166,27 @@ export type SimplifiedContacts = {
   subscribed: { [key: email]: ContactPreferences }
 }
 
+// Re-export per-occurrence override types so consumers can import from @my/app/types.
+export type {
+  AttendOption,
+  AttendMode,
+  OverrideStatus,
+  ServiceOverrideType,
+} from '@my/app/provider/dynamodb/service-override-types'
+
+/**
+ * Per-occurrence override fields merged onto a synced service at read time.
+ * Source of truth: packages/app/provider/dynamodb/service-override-types.ts.
+ * `occurrenceDate` is the stable UTC YYYY-MM-DD key set by the transform paths.
+ */
+export type ServiceOverrideCarryFields = {
+  overrideStatus?: import('@my/app/provider/dynamodb/service-override-types').OverrideStatus
+  overrideMessage?: string
+  overrideNote?: string
+  attendOptions?: import('@my/app/provider/dynamodb/service-override-types').AttendOption[]
+  occurrenceDate?: string
+}
+
 export type MemorialServiceType = {
   Date: string | Date
   Key: ProgramsTypes.memorial
@@ -187,7 +208,7 @@ export type MemorialServiceType = {
   // Timezone-aware datetime fields
   DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T16:00:00.000Z"
   ServiceTimezone?: string // IANA timezone: "America/Toronto"
-}
+} & ServiceOverrideCarryFields
 
 export type SundaySchoolType = {
   Date: string | Date
@@ -197,7 +218,7 @@ export type SundaySchoolType = {
   // Timezone-aware datetime fields
   DateTime?: string        // Full ISO datetime in UTC: "2026-02-01T14:30:00.000Z"
   ServiceTimezone?: string // IANA timezone: "America/Toronto"
-}
+} & ServiceOverrideCarryFields
 
 export type SundayEvents = MemorialServiceType &
   Pick<SundaySchoolType, 'Refreshments' | 'Holidays and Special Events'>
@@ -232,7 +253,7 @@ export type BibleClassType = {
   resolvedAddress?: string     // Full address from ecclesia lookup
   resolvedVenue?: string       // Venue name from ecclesia lookup
   resolvedMapUrl?: string      // Google Maps link for the host ecclesia
-}
+} & ServiceOverrideCarryFields
 
 export type NextBibleClassProps = {
   events: BibleClassType[]
@@ -261,7 +282,7 @@ export type CycType = {
   // Timezone-aware datetime fields
   DateTime?: string        // Full ISO datetime in UTC
   ServiceTimezone?: string // IANA timezone: "America/Toronto"
-} & (CycRegular | CycSpecial)
+} & (CycRegular | CycSpecial) & ServiceOverrideCarryFields
 
 export type ProgramTypes = MemorialServiceType | SundaySchoolType | BibleClassType | CycType
 

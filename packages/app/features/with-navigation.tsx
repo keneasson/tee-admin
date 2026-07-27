@@ -184,6 +184,12 @@ const AdminOwnerMenu: React.FC<SubMenuType> = ({ linkTo, path }) => {
         text="Meeting Manager"
         active={path === '/admin/meetings'}
       />
+      <NavigationButtonItem
+        key="scheduleOverrides"
+        linkTo={linkTo('/admin/schedule-overrides')}
+        text="Service Overrides"
+        active={path === '/admin/schedule-overrides'}
+      />
 
       {/* Admin Tools Sub-menu */}
       <NavHeading>

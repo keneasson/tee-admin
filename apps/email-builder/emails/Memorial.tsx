@@ -33,6 +33,7 @@ import { AutoLinkText } from '../components/AutoLinkText'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
+import { AttendOptions } from '../components/AttendOptions'
 
 function getNextDayOfTheWeek(dayName: string, excludeToday = true, refDate = new Date()): Date {
   const dayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(
@@ -255,8 +256,15 @@ const MemorialService: React.FC<NextMemorialServiceProps & { identity?: EmailIde
           })()}
           <hr />
         </Container>
-        {/* Only show default Zoom info when there's a normal service at the hall */}
-        {(sundayEvents[0]?.Exhort || sundayEvents[0]?.Preside) ? (
+        {/* Per-occurrence "ways to attend" supersede the default Zoom block */}
+        {sundayEvents[0]?.attendOptions?.length ? (
+          <Container style={container} className="container">
+            <AttendOptions options={sundayEvents[0].attendOptions} />
+            <hr />
+          </Container>
+        ) : null}
+        {/* Only show default Zoom info when there's a normal service at the hall and no attend-options */}
+        {(sundayEvents[0]?.Exhort || sundayEvents[0]?.Preside) && !sundayEvents[0]?.attendOptions?.length ? (
           <Container style={container} className="container zoom-info">
             <Heading style={defaultText}>Join us on Zoom</Heading>
             <Text style={defaultText}>
@@ -352,14 +360,17 @@ const Parking = () => {
 }
 
 const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) => {
-  // No service at hall: Both Exhort AND Preside are blank
-  const noServiceAtHall = !event.Exhort && !event.Preside
+  // Override precedence: 'cancelled' forces no-service (with optional message);
+  // 'active' forces the service to show; otherwise both Exhort AND Preside blank.
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const noServiceAtHall = isCancelled || (!isForcedActive && !event.Exhort && !event.Preside)
 
   if (noServiceAtHall) {
     // If Lunch contains an event title, find the matching event and render it inline
     const eventTitle = event.Lunch?.trim()
     const replacementEvent = eventTitle ? findReplacementEvent(upcomingEvents || [], eventTitle) : undefined
-    const explanation = event.Activities || event['Holidays and Special Events']
+    const explanation = event.overrideNote || event.Activities || event['Holidays and Special Events']
 
     if (replacementEvent) {
       return <ReplacementEventCard event={replacementEvent} explanation={explanation} />
@@ -368,7 +379,7 @@ const MemorialServiceProgram = (event: SundayEvents, upcomingEvents?: Event[]) =
     // Fallback: no matching event found, show simple "no service" message
     return (
       <Text style={defaultText}>
-        <strong>{resolveNoInPersonServicesMessage()}</strong>
+        <strong>{event.overrideMessage || resolveNoInPersonServicesMessage()}</strong>
         {explanation ? (
           <>
             <br />

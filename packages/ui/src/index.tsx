@@ -39,3 +39,6 @@ export * from './email/person-selector-dialog'
 
 // Directory System
 export * from './directory'
+
+// Roster member-pickers (#110, Slice B)
+export * from './roster'

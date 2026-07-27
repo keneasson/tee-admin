@@ -506,6 +506,12 @@ export interface PersonRecord extends BaseRecord {
   adminRegion?: string              // @deprecated — use managedRegions instead
   managedRegions?: string[]         // Regions this admin oversees (e.g., ['canada_east', 'caribbean'])
 
+  // Provenance — set when a record is auto-created from an external source
+  // rather than by a person (e.g. a visiting speaker harvested from the
+  // memorial schedule). Lets an admin trace/undo machine-created records.
+  source?: 'schedule-import'
+  sourceRef?: string                // Free-form ref to the origin, e.g. "visiting-speakers:{sheetId}"
+
   createdAt: string
 }
 

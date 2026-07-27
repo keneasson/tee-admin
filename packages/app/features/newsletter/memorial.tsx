@@ -6,6 +6,7 @@ import { XStack } from 'tamagui'
 import { ChevronDown, MapPin } from '@tamagui/lucide-icons'
 import { Section } from '@my/app/features/newsletter/Section'
 import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
+import { AttendOptions } from '@my/app/features/newsletter/attend-options'
 
 /** Find an event by title (case-insensitive substring match) */
 function findReplacementEvent(
@@ -24,8 +25,13 @@ type NextMemorialProps = {
   upcomingEvents?: Event[]
 }
 export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, upcomingEvents }) => {
-  // No service at hall: Both Exhort AND Preside are blank
-  const noServiceAtHall = !event.Exhort && !event.Preside
+  // Per-occurrence override precedence:
+  // - 'cancelled' forces the no-service branch (with optional custom message)
+  // - 'active' forces the normal service render even if the roster is blank
+  // - otherwise fall back to the synced heuristic (both Exhort AND Preside blank)
+  const isCancelled = event.overrideStatus === 'cancelled'
+  const isForcedActive = event.overrideStatus === 'active'
+  const noServiceAtHall = isCancelled || (!isForcedActive && !event.Exhort && !event.Preside)
 
   if (noServiceAtHall) {
     // The Lunch field contains the event title to match (same convention as email template)
@@ -42,8 +48,9 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
           {event.Date.toString()}
         </Paragraph>
         <Paragraph fontWeight={600}>
-          {resolveNoInPersonServicesMessage(replacementEvent?.noInPersonServicesMessage)}
+          {event.overrideMessage || resolveNoInPersonServicesMessage(replacementEvent?.noInPersonServicesMessage)}
         </Paragraph>
+        {event.overrideNote ? <Paragraph>{event.overrideNote}</Paragraph> : null}
         {explanation ? <Paragraph>{explanation}</Paragraph> : null}
 
         {/* Replacement event details */}
@@ -114,6 +121,8 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
 
   // If Exhort is blank but Preside has a value, exhorter is TBD (show "--")
   const exhorterDisplay = event.Exhort || '--'
+  // Per-occurrence attend-options supersede the hardcoded Zoom accordion.
+  const hasAttendOptions = !!event.attendOptions && event.attendOptions.length > 0
 
   return (
     <Section>
@@ -125,6 +134,9 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
       <Paragraph size={'$5'} fontWeight={600}>
         Memorial Service at 11:00am
       </Paragraph>
+      {event.overrideNote ? (
+        <Paragraph fontWeight={600} color="$blue11">{event.overrideNote}</Paragraph>
+      ) : null}
       <XStack $xs={{ flexDirection: 'column' }}>
         <YStack flexGrow={1}>
           <Paragraph>
@@ -161,8 +173,10 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
       {event.Collection ? <Paragraph>Second Collection is for {event.Collection}</Paragraph> : null}
       {event.Lunch ? <Paragraph fontWeight={600}>{event.Lunch}</Paragraph> : null}
       {event.Activities ? <Paragraph>{event.Activities}</Paragraph> : null}
+      {hasAttendOptions ? <AttendOptions options={event.attendOptions} /> : null}
       <Separator alignSelf="stretch" borderColor={'$light4grey'} />
       <Accordion overflow="hidden" type="multiple">
+        {!hasAttendOptions ? (
         <Accordion.Item value="a1">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">
             {({ open }: { open: boolean }) => (
@@ -204,6 +218,7 @@ export const NextMemorial: React.FC<NextMemorialProps> = ({ event, isSameDay, up
             </Paragraph>
           </Accordion.Content>
         </Accordion.Item>
+        ) : null}
 
         <Accordion.Item value="a2">
           <Accordion.Trigger flexDirection="row" justifyContent="space-between">

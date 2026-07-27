@@ -16,7 +16,10 @@ import type {
 
 // Input types for creating/updating persons
 export interface CreatePersonInput {
-  email: string
+  // Optional: a record may be created with NO email (visiting speakers
+  // harvested from the schedule have none). Emailless creation is only allowed
+  // when memberStatus is 'visitor' — see create().
+  email?: string
   firstName: string
   lastName: string
   ecclesia: string
@@ -25,6 +28,9 @@ export interface CreatePersonInput {
   role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'
   provider?: 'google' | 'credentials'
   userId?: string
+  // Provenance for machine-created records (e.g. schedule ingest).
+  source?: 'schedule-import'
+  sourceRef?: string
 }
 
 // OAuth profile from Google
@@ -218,27 +224,41 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     const personId = uuidv4()
     const displayName = `${input.firstName} ${input.lastName}`.trim()
     const now = new Date().toISOString()
+    const email = input.email?.trim().toLowerCase() || undefined
+    const memberStatus = input.memberStatus || 'member'
+
+    // Emailless records are only allowed for visitors (e.g. visiting speakers
+    // harvested from the schedule). This keeps anything fake OUT of the EMAIL#
+    // GSI space and SES — the record gets a NOEMAIL#{personId} GSI1 sentinel
+    // and NO EMAIL# item, so getByEmail() can never surface it.
+    if (!email && memberStatus !== 'visitor') {
+      throw new Error(
+        'PersonRepository.create requires an email unless memberStatus is "visitor"'
+      )
+    }
 
     const record: PersonRecord = {
       pkey: `PERSON#${personId}`,
       skey: 'PROFILE',
-      gsi1pk: `EMAIL#${input.email.toLowerCase()}`,
+      gsi1pk: email ? `EMAIL#${email}` : `NOEMAIL#${personId}`,
       gsi1sk: 'PERSON',
       gsi2pk: `ECCLESIA#${input.ecclesia}`,
       gsi2sk: `${input.lastName.toLowerCase()}#${input.firstName.toLowerCase()}#${personId}`,
       gsi3pk: `NAME#${input.lastName.toLowerCase()}`,
       gsi3sk: `${input.firstName.toLowerCase()}#${personId}`,
       personId,
-      primaryEmail: input.email.toLowerCase(),
+      primaryEmail: email ?? '',
       firstName: input.firstName,
       lastName: input.lastName,
       displayName,
       ecclesia: input.ecclesia,
-      memberStatus: input.memberStatus || 'member',
+      memberStatus,
       isInterEcclesiaRep: input.isInterEcclesiaRep,
       role: input.role,
       provider: input.provider,
       userId: input.userId,
+      source: input.source,
+      sourceRef: input.sourceRef,
       createdAt: now,
       lastUpdated: now,
       version: 0,
@@ -246,15 +266,18 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
 
     await this.put(record)
 
-    // Also create the primary email record
-    await this.addEmail(personId, {
-      email: input.email.toLowerCase(),
-      emailType: 'primary',
-      order: 0,
-      verified: true,
-      sesSubscribed: false,
-      sesStatus: 'active',
-    })
+    // Only create a primary EMAIL# item when there is a real email. Emailless
+    // visitor records intentionally have none (keeps SES / the email GSI clean).
+    if (email) {
+      await this.addEmail(personId, {
+        email,
+        emailType: 'primary',
+        order: 0,
+        verified: true,
+        sesSubscribed: false,
+        sesStatus: 'active',
+      })
+    }
 
     return record
   }

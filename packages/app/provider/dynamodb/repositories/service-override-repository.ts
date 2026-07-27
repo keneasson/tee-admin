@@ -14,6 +14,8 @@ export interface UpsertOverrideInput {
   message?: string
   note?: string
   attendOptions?: AttendOption[]
+  roleFields?: Record<string, string>
+  roleFieldRefs?: Record<string, string>
   createdBy: string
 }
 
@@ -60,6 +62,8 @@ export class ServiceOverrideRepository extends BaseRepository<ServiceOccurrenceO
       ...(input.message !== undefined ? { message: input.message } : {}),
       ...(input.note !== undefined ? { note: input.note } : {}),
       ...(input.attendOptions !== undefined ? { attendOptions: input.attendOptions } : {}),
+      ...(input.roleFields !== undefined ? { roleFields: input.roleFields } : {}),
+      ...(input.roleFieldRefs !== undefined ? { roleFieldRefs: input.roleFieldRefs } : {}),
       createdBy: existing?.createdBy ?? input.createdBy,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
