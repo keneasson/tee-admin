@@ -113,6 +113,7 @@ export type ExhorterHeadsUpStatus =
   | 'skipped:no-email'
   | 'skipped:already-sent'
   | 'skipped:needs-review'
+  | 'skipped:past-date'
   | 'no-schedule-row'
 
 export interface ExhorterHeadsUpReport {
@@ -168,6 +169,15 @@ export async function resolveAndSendExhorterHeadsUp(
   const hostPublicName = tenant.publicName
 
   const base: ExhorterHeadsUpReport = { date: targetISO, test, status: 'no-schedule-row' }
+
+  // 0. Past-date guard: a heads-up is a *reminder ahead of time* — never send one
+  //    for a Sunday already in the past, whatever date was passed in. The default
+  //    path computes a future Sunday, but a manual/automated caller could pass an
+  //    older date; this makes a past send impossible regardless.
+  const todayISO = normalizeToISODate(new Date())
+  if (targetISO && targetISO < todayISO) {
+    return { ...base, status: 'skipped:past-date' }
+  }
 
   // 1. Find the memorial row for the target Sunday.
   const schedule = await scheduleService.getScheduleData('memorial')

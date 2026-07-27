@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 
 /**
@@ -112,6 +112,10 @@ function memorialRow(extra: Record<string, any> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Fix the clock BEFORE the target dates so tests aren't tripped by the
+  // past-date guard (and stay stable in CI as real time marches on).
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-01-15T12:00:00Z'))
   h.getScheduleData.mockResolvedValue(memorialSchedule('Brad Stephens'))
   h.listAll.mockResolvedValue({ items: [BRAD], lastEvaluatedKey: undefined })
   h.getById.mockResolvedValue(BRAD)
@@ -131,6 +135,10 @@ beforeEach(() => {
     createdAt: new Date(0),
     updatedAt: new Date(0),
   })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('resolveAndSendExhorterHeadsUp — matched', () => {
@@ -217,6 +225,19 @@ describe('resolveAndSendExhorterHeadsUp — guards (no send)', () => {
     })
     expect(report.status).toBe('skipped:no-email')
     expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('a date already in the past → skipped:past-date, never sends', async () => {
+    // Clock is fixed at 2026-01-15; this Sunday is before it.
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: '2026-01-04',
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('skipped:past-date')
+    expect(h.getScheduleData).not.toHaveBeenCalled() // guarded before any lookup
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(h.claim).not.toHaveBeenCalled()
   })
 
   it('no schedule row for the date → no-schedule-row', async () => {
