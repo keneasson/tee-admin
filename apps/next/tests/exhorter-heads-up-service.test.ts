@@ -313,6 +313,42 @@ describe('resolveAndSendExhorterHeadsUp — idempotency (LIVE only)', () => {
   })
 })
 
+describe('resolveAndSendExhorterHeadsUp — date-only row (no DateTime)', () => {
+  it('renders a valid date from a non-ISO Date with no DateTime (regression)', async () => {
+    // Prod memorial rows can carry only a sheet-style `Date` ("August 9, 2026")
+    // and NO `DateTime`. The date-only formatter's parseDateOnly() splits on '-',
+    // so a non-dash value there rendered a literal "Invalid Date" in the body and
+    // subject. The service must feed the normalized ISO date instead.
+    h.getScheduleData.mockResolvedValue({
+      content: [
+        {
+          Date: 'August 9, 2026', // non-dash, sheet-style
+          // no DateTime
+          ServiceTimezone: 'America/Toronto',
+          Exhort: 'Brad Stephens',
+          Preside: 'Someone Else',
+          Key: 'memorial',
+        },
+      ],
+    })
+
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: '2026-08-09',
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+
+    expect(report.status).toBe('sent')
+    const rendered = h.renderExhorterHeadsUp.mock.calls[0][0]
+    expect(rendered.dateDisplay).not.toContain('Invalid')
+    expect(rendered.dateDisplay).toContain('August')
+    expect(rendered.dateDisplay).toContain('2026')
+    // The subject interpolates the same value — it must not leak "Invalid Date".
+    expect(h.sendEmail.mock.calls[0][0].subject).not.toContain('Invalid Date')
+    expect(h.sendEmail.mock.calls[0][0].subject).toContain('August 9, 2026')
+  })
+})
+
 describe('resolveAndSendExhorterHeadsUp — dryRun', () => {
   it('resolves + reports without sending or claiming', async () => {
     const report = await resolveAndSendExhorterHeadsUp({

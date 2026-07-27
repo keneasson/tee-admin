@@ -176,7 +176,12 @@ export async function resolveAndSendExhorterHeadsUp(
   const recipient = test ? requesterEmail : person.primaryEmail
 
   const tz = row.ServiceTimezone || DEFAULT_TIMEZONE
-  const dateDisplay = formatScheduleDateForEmail(row.DateTime, row.Date, tz)
+  // Use the normalized ISO date (YYYY-MM-DD) as the date-only fallback. The raw
+  // `row.Date` sheet value isn't guaranteed to be dash-delimited, and the
+  // date-only formatter's `parseDateOnly` splits on '-' — a non-ISO value there
+  // yields a literal "Invalid Date". `targetISO` IS this row's date (that's how
+  // the row was matched), so it's both correct and parseable.
+  const dateDisplay = formatScheduleDateForEmail(row.DateTime, targetISO, tz)
   const timeDisplay = row.DateTime ? formatTimeInTimezone(row.DateTime, tz) : '11:00am'
 
   const report: ExhorterHeadsUpReport = {
