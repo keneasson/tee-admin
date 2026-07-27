@@ -28,9 +28,9 @@ yarn-error.log*
 # local env files
 **/.env
 .env
-.env.development.local
-.env.test.local
-.env.production.local
+# All local env override files, at any depth (covers .env.local, which was
+# previously untracked-but-not-ignored — a footgun for committing secrets).
+**/.env*.local
 
 # vercel
 .vercel
