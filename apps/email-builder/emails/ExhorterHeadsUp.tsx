@@ -208,7 +208,7 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
           <Text style={{ ...defaultText, margin: '0' }}>
             {signatoryName?.trim() ? (
               <>
-                <strong>{`Brother ${signatoryName.trim()}`}</strong>
+                {`Brother ${signatoryName.trim()}`}
                 <br />
                 Ecclesial Recorder
               </>
