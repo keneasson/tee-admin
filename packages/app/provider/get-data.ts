@@ -9,6 +9,8 @@ import {
   EmailReasonType,
 } from '@my/app/types'
 import { CreateUpdateListType } from '../types'
+import type { Event } from '@my/app/types/events'
+import type { NewsItem } from '@my/app/types/news'
 
 // Use shared EmailReasonType instead of importing from next-app
 type emailReasons = EmailReasonType
@@ -77,6 +79,33 @@ export const sendEmail = async (
   // For other email types, use GET
   const rawSchedule = await fetch(url, { cache: 'no-store' })
   return await rawSchedule.json()
+}
+
+/**
+ * Trigger a News item email blast (Issue #57). Sends the given News item to a
+ * chosen audience via the existing `/api/admin/news/[id]/send-alert` route,
+ * which already accepts a `list` audience override (incl. inter-ecclesia
+ * leaders). Test sends always go to the test list, enforced server-side.
+ */
+export const sendNewsAlert = async (
+  newsId: string,
+  isTest: boolean,
+  audienceKey: string
+): Promise<any> => {
+  const params = new URLSearchParams({ list: audienceKey })
+  if (isTest) {
+    params.set('test', 'true')
+  }
+  const url = `${API_PATH}api/admin/news/${newsId}/send-alert?${params.toString()}`
+  const response = await fetch(url, { method: 'POST', cache: 'no-store' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return {
+      error: data.error || `Request failed with status ${response.status}`,
+      details: data,
+    }
+  }
+  return data
 }
 
 /**
@@ -153,6 +182,31 @@ export const clearPendingNote = async (
     return { ok: false, error: data.error || `Request failed (${response.status})` }
   }
   return { ok: true }
+}
+
+/**
+ * Recent admin events. Cross-platform safe (uses API_PATH, so it works under Expo,
+ * not just web). Returns the raw array; callers apply their own filter (e.g. the
+ * Email Sender keeps recent funerals/baptisms).
+ */
+export const getRecentEvents = async (): Promise<Event[]> => {
+  const url = `${API_PATH}api/admin/events`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch events (${response.status})`)
+  const data = await response.json()
+  return Array.isArray(data) ? data : (data.events || [])
+}
+
+/**
+ * News items. Cross-platform safe (uses API_PATH). Returns the raw array; callers
+ * filter (e.g. the Email Sender keeps only active/unexpired items).
+ */
+export const getActiveNews = async (): Promise<NewsItem[]> => {
+  const url = `${API_PATH}api/admin/news`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch news (${response.status})`)
+  const data = await response.json()
+  return Array.isArray(data) ? data : (data.items || [])
 }
 
 /**
