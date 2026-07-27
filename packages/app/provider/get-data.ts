@@ -9,6 +9,8 @@ import {
   EmailReasonType,
 } from '@my/app/types'
 import { CreateUpdateListType } from '../types'
+import type { Event } from '@my/app/types/events'
+import type { NewsItem } from '@my/app/types/news'
 
 // Use shared EmailReasonType instead of importing from next-app
 type emailReasons = EmailReasonType
@@ -180,6 +182,31 @@ export const clearPendingNote = async (
     return { ok: false, error: data.error || `Request failed (${response.status})` }
   }
   return { ok: true }
+}
+
+/**
+ * Recent admin events. Cross-platform safe (uses API_PATH, so it works under Expo,
+ * not just web). Returns the raw array; callers apply their own filter (e.g. the
+ * Email Sender keeps recent funerals/baptisms).
+ */
+export const getRecentEvents = async (): Promise<Event[]> => {
+  const url = `${API_PATH}api/admin/events`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch events (${response.status})`)
+  const data = await response.json()
+  return Array.isArray(data) ? data : (data.events || [])
+}
+
+/**
+ * News items. Cross-platform safe (uses API_PATH). Returns the raw array; callers
+ * filter (e.g. the Email Sender keeps only active/unexpired items).
+ */
+export const getActiveNews = async (): Promise<NewsItem[]> => {
+  const url = `${API_PATH}api/admin/news`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch news (${response.status})`)
+  const data = await response.json()
+  return Array.isArray(data) ? data : (data.items || [])
 }
 
 /**

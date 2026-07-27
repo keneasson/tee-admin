@@ -22,7 +22,7 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, Mail, AlertCircle, Newspaper, Calendar, Users } from '@tamagui/lucide-icons'
-import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingNote, clearPendingNote } from '../../provider/get-data'
+import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingNote, clearPendingNote, getRecentEvents, getActiveNews } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
@@ -181,27 +181,19 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     const loadRecentEvents = async () => {
       try {
         setLoadingEvents(true)
-        const response = await fetch('/api/admin/events')
-        if (response.ok) {
-          const data = await response.json()
-          const twoWeeksAgo = new Date()
-          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+        const events = await getRecentEvents()
+        const twoWeeksAgo = new Date()
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-          // API returns array directly, not { events: [...] }
-          const events = Array.isArray(data) ? data : (data.events || [])
+        // Filter for funerals and baptisms created within 2 weeks
+        const recent = events.filter((event: Event) => {
+          const isRecentType = event.type === 'funeral' || event.type === 'baptism'
+          const createdAt = new Date(event.createdAt)
+          const isRecent = createdAt >= twoWeeksAgo
+          return isRecentType && isRecent
+        })
 
-          // Filter for funerals and baptisms created within 2 weeks
-          const recent = events.filter((event: Event) => {
-            const isRecentType = event.type === 'funeral' || event.type === 'baptism'
-            const createdAt = new Date(event.createdAt)
-            const isRecent = createdAt >= twoWeeksAgo
-            return isRecentType && isRecent
-          })
-
-          setRecentEvents(recent)
-        } else {
-          console.error('[EmailSender] Failed to fetch events:', response.status, response.statusText)
-        }
+        setRecentEvents(recent)
       } catch (error) {
         console.error('[EmailSender] Failed to load recent events:', error)
       } finally {
@@ -216,16 +208,10 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     const loadNews = async () => {
       try {
         setLoadingNews(true)
-        const response = await fetch('/api/admin/news')
-        if (response.ok) {
-          const data = await response.json()
-          const items: NewsItem[] = Array.isArray(data) ? data : (data.items || [])
-          // Only active (unexpired) items can be blasted — the send-alert route
-          // rejects expired ones, so hide them from the picker.
-          setNewsItems(items.filter((item) => isNewsActive(item)))
-        } else {
-          console.error('[EmailSender] Failed to fetch news:', response.status, response.statusText)
-        }
+        const items = await getActiveNews()
+        // Only active (unexpired) items can be blasted — the send-alert route
+        // rejects expired ones, so hide them from the picker.
+        setNewsItems(items.filter((item) => isNewsActive(item)))
       } catch (error) {
         console.error('[EmailSender] Failed to load news:', error)
       } finally {
