@@ -1,6 +1,7 @@
 import { render } from '@react-email/render'
 import ExhorterHeadsUp, {
   type ExhorterHeadsUpAttendOption,
+  type ExhorterHeadsUpLunch,
 } from 'email-builder/emails/ExhorterHeadsUp'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
@@ -16,12 +17,19 @@ import { resolveBrandProfile } from './resolve-brand-profile'
  */
 
 export interface RenderExhorterHeadsUpInput {
-  firstName: string
+  /** Exhorter's full name for the formal "Dear Brother {name}" greeting. */
+  exhorterName: string
+  /** Host ecclesia SHORT name, e.g. "Toronto East". */
   hostEcclesiaName: string
+  /** Full street address of the meeting hall. */
+  address?: string
   dateDisplay: string
   timeDisplay: string
-  visiting: boolean
   attendOptions: ExhorterHeadsUpAttendOption[]
+  /** Fellowship lunch style, or undefined for no lunch line. */
+  lunchType?: ExhorterHeadsUpLunch
+  /** Recording Brother's full name for the signature. */
+  signatoryName?: string
   emailPreferencesUrl: string
   tenant?: TenantConfig
 }
@@ -38,12 +46,14 @@ export async function renderExhorterHeadsUp(
 
   const element = (
     <ExhorterHeadsUp
-      firstName={input.firstName}
+      exhorterName={input.exhorterName}
       hostEcclesiaName={input.hostEcclesiaName}
+      address={input.address}
       dateDisplay={input.dateDisplay}
       timeDisplay={input.timeDisplay}
-      visiting={input.visiting}
       attendOptions={input.attendOptions}
+      lunchType={input.lunchType}
+      signatoryName={input.signatoryName}
       emailPreferencesUrl={input.emailPreferencesUrl}
       identity={emailIdentity}
     />

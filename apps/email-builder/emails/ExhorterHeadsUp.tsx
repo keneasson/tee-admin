@@ -37,6 +37,11 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
  * shared `FooterContent`'s `{{emailPreferencesUrl}}` token (which would ship as
  * a literal placeholder here). The shared FooterContent is intentionally left
  * untouched.
+ *
+ * Content values (short ecclesia name, hall address, Recording Brother
+ * signature, lunch style, ways-to-attend) are resolved SERVER-SIDE from the
+ * ecclesia directory + the memorial row and passed as plain props — this
+ * template renders them, it does not derive them.
  */
 
 /** One "way to attend" the memorial (Zoom / stream / in-person online meeting). */
@@ -49,19 +54,30 @@ export interface ExhorterHeadsUpAttendOption {
   dialInNumber?: string
 }
 
+/** How the fellowship lunch (if any) is provided — drives the invite wording. */
+export type ExhorterHeadsUpLunch = 'potluck' | 'provided' | 'generic'
+
 export interface ExhorterHeadsUpProps {
-  /** Exhorter's first name for the greeting. */
-  firstName: string
-  /** Host ecclesia public name, e.g. "Toronto East Christadelphians". */
+  /** Exhorter's full name for the formal "Dear Brother {name}" greeting. */
+  exhorterName: string
+  /** Host ecclesia SHORT name, e.g. "Toronto East" (Christadelphians trimmed). */
   hostEcclesiaName: string
+  /** Full street address of the meeting hall, e.g. "975 Cosburn Ave., …". */
+  address?: string
   /** Pre-formatted date, e.g. "Sunday, February 1, 2026". */
   dateDisplay: string
   /** Pre-formatted time, e.g. "11:00am". */
   timeDisplay: string
-  /** True when the speaker is visiting (non-member / different ecclesia). */
-  visiting: boolean
-  /** Ways to attend — from the per-occurrence override, else the default Zoom. */
+  /**
+   * Ways to attend online — from the per-occurrence override, else the host's
+   * default meeting. Shown "just in case" the exhorter can't attend in person;
+   * omitted entirely when empty (no digital option for this meeting).
+   */
   attendOptions: ExhorterHeadsUpAttendOption[]
+  /** Fellowship lunch style for this occasion, or undefined for no lunch line. */
+  lunchType?: ExhorterHeadsUpLunch
+  /** Recording Brother's full name for the signature (host ecclesia). */
+  signatoryName?: string
   /** Real (resolved) Email Preferences URL for this recipient. */
   emailPreferencesUrl: string
   /** Echad Hub URL for the footer "powered by" line. */
@@ -71,6 +87,19 @@ export interface ExhorterHeadsUpProps {
 }
 
 const ECHAD_HUB_URL = 'https://echadhub.org'
+
+function lunchSentence(lunchType?: ExhorterHeadsUpLunch): string | null {
+  switch (lunchType) {
+    case 'potluck':
+      return "You're warmly invited to stay for a potluck fellowship lunch at the hall following the Memorial Service."
+    case 'provided':
+      return "You're warmly invited to stay for lunch and fellowship following the Memorial Service — lunch will be provided."
+    case 'generic':
+      return "You're warmly invited to stay for lunch and fellowship following the Memorial Service."
+    default:
+      return null
+  }
+}
 
 const AttendOptionBlock = ({ option }: { option: ExhorterHeadsUpAttendOption }) => {
   return (
@@ -97,24 +126,29 @@ const AttendOptionBlock = ({ option }: { option: ExhorterHeadsUpAttendOption }) 
 }
 
 const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
-  firstName,
+  exhorterName,
   hostEcclesiaName,
+  address,
   dateDisplay,
   timeDisplay,
-  visiting,
   attendOptions,
+  lunchType,
+  signatoryName,
   emailPreferencesUrl,
   echadHubUrl = ECHAD_HUB_URL,
   identity,
 }) => {
-  const greetingName = firstName?.trim() ? firstName.trim() : 'Brother'
+  const trimmedName = exhorterName?.trim() ?? ''
+  const greeting = trimmedName ? `Dear Brother ${trimmedName},` : 'Dear Brother,'
+  const lunchLine = lunchSentence(lunchType)
+  const hasDigital = attendOptions.length > 0
 
   return (
     <Html lang="en">
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>{`You're scheduled to exhort at ${hostEcclesiaName} on ${dateDisplay}.`}</Preview>
+      <Preview>{`We're looking forward to your exhortation at ${hostEcclesiaName} on ${dateDisplay}.`}</Preview>
       <Body style={main}>
         <Section style={header}>
           <Heading>{hostEcclesiaName}</Heading>
@@ -123,39 +157,64 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          <Text style={defaultText}>{`Dear ${greetingName},`}</Text>
+          <Text style={defaultText}>{greeting}</Text>
           <Text style={defaultText}>
-            {`You're scheduled to give the exhortation at ${hostEcclesiaName} on `}
+            {`We're looking forward to your exhortation at ${hostEcclesiaName} on `}
             <strong>{dateDisplay}</strong>
             {' at '}
             <strong>{timeDisplay}</strong>
-            {'. Thank you for serving — we look forward to hearing from you.'}
+            {'.'}
           </Text>
-
-          {visiting ? (
-            <Text style={defaultText}>
-              <strong>Lunch is provided — please plan to stay and share it with us.</strong>
-            </Text>
-          ) : null}
         </Container>
 
         <Container style={container} className="container">
           <Heading style={defaultText}>Ways to attend</Heading>
-          <Text style={defaultText}>
-            For any who cannot be with us in person, here are the ways to join:
+          <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
+            <strong>In person:</strong>
           </Text>
-          {attendOptions.length > 0 ? (
-            attendOptions.map((option, i) => <AttendOptionBlock key={i} option={option} />)
-          ) : (
-            <Text style={defaultText}>Attendance details will follow.</Text>
-          )}
+          {address ? (
+            <Text style={{ ...defaultText, margin: '0 0 12px 0' }}>{`We're located at: ${address}`}</Text>
+          ) : null}
+          {hasDigital ? (
+            <>
+              <Text style={defaultText}>If you can&apos;t be with us in person, please join:</Text>
+              {attendOptions.map((option, i) => (
+                <AttendOptionBlock key={i} option={option} />
+              ))}
+            </>
+          ) : null}
         </Container>
 
         <Container style={container} className="container">
-          <Heading style={defaultText}>What to expect</Heading>
+          <Heading style={defaultText}>What&apos;s next</Heading>
           <Text style={defaultText}>
             The week of your exhortation, we&apos;ll send a follow-up email to request your theme,
             readings, and hymn preferences so we can prepare the service with you.
+          </Text>
+        </Container>
+
+        {lunchLine ? (
+          <Container style={container} className="container">
+            <Text style={defaultText}>{lunchLine}</Text>
+          </Container>
+        ) : null}
+
+        <Container style={container} className="container">
+          <Text style={defaultText}>
+            In the event you&apos;re unable to join us, please reply to this email and let us know at
+            your earliest convenience.
+          </Text>
+          <Text style={{ ...defaultText, margin: '16px 0 0 0' }}>With love in the LORD,</Text>
+          <Text style={{ ...defaultText, margin: '0' }}>
+            {signatoryName?.trim() ? (
+              <>
+                <strong>{`Brother ${signatoryName.trim()}`}</strong>
+                <br />
+                Ecclesial Recorder
+              </>
+            ) : (
+              'The Ecclesial Recorder'
+            )}
           </Text>
         </Container>
 

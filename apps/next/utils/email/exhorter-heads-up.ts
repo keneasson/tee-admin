@@ -15,7 +15,11 @@ import {
   DEFAULT_TIMEZONE,
 } from '@my/app/utils/timezone'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
-import type { ExhorterHeadsUpAttendOption } from 'email-builder/emails/ExhorterHeadsUp'
+import type {
+  ExhorterHeadsUpAttendOption,
+  ExhorterHeadsUpLunch,
+} from 'email-builder/emails/ExhorterHeadsUp'
+import { getEcclesiaByName, type EcclesiaData } from '../dynamodb/locations'
 import { sendEmail } from './sesClient'
 import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
@@ -40,11 +44,55 @@ import { generateEmailPreferencesUrl } from './ecclesia-token'
 // address here or the send fails auth → spam. Reply-To carries the human contact.
 const SENDER_LOCAL_PART = 'communications'
 // Reply-To = the HOST ecclesia's Recording Brother, so the exhorter's replies
-// reach whoever is coordinating that meeting. teerecbro@gmail.com is fine as a
-// Reply-To (no domain verification needed).
-// TODO(multi-tenant, #124): resolve Reply-To to the host ecclesia's Recording
-// Brother (RB office / ecclesia record / config) instead of the TEE constant.
+// reach whoever is coordinating that meeting. Now resolved per-ecclesia from the
+// directory (`recordingBrotherEmail`); this constant is only the fallback when
+// the record has no RB email. teerecbro@gmail.com is fine as a Reply-To (no
+// domain verification needed).
 const REPLY_TO = 'teerecbro@gmail.com'
+
+// A non-lunch note in the memorial row's `Lunch`/`Activities` free-text columns
+// signals the normal at-hall memorial DIDN'T happen — cancelled, online-only, or
+// relocated (joining another ecclesia / a fraternal gathering). On those days the
+// heads-up's core promise ("come exhort at {hall} at {time}") is WRONG, so we must
+// NOT auto-send — we flag for human review instead. Keyword-based (verified
+// against the live schedule: matches the 4 cancel/relocate days, and leaves the
+// "tee study weekend" + potluck days alone). STOPGAP: the durable fix is a
+// structured occurrence status on the service-override record (see #124 follow-up)
+// so we stop parsing free-text.
+const SPECIAL_OCCASION_RE = /(cancel|joining|join us at|fraternal gathering|elsewhere)/i
+
+/** Returns the free-text signal for a cancelled/relocated occurrence, else null. */
+export function detectSpecialOccasion(lunch?: string, activities?: string): string | null {
+  const blob = `${lunch ?? ''}  ${activities ?? ''}`
+  if (!SPECIAL_OCCASION_RE.test(blob)) return null
+  return activities?.trim() || lunch?.trim() || 'Special occasion — not the usual memorial'
+}
+
+/** Classify the row's `Lunch` value into an invite style, or undefined for none. */
+export function resolveLunchType(lunch?: string): ExhorterHeadsUpLunch | undefined {
+  const v = (lunch ?? '').trim().toLowerCase()
+  if (!v) return undefined
+  if (v.includes('potluck')) return 'potluck'
+  if (v.includes('provided')) return 'provided'
+  if (v.includes('lunch') || v.includes('brunch')) return 'generic'
+  return undefined
+}
+
+/** Trim a trailing "Christadelphians"/"Ecclesia" suffix → short display name. */
+export function shortEcclesiaName(name: string): string {
+  const short = name.replace(/\s+(christadelphians?|ecclesia)\s*$/i, '').trim()
+  return short || name
+}
+
+/** Best available full hall address for the "We're located at:" line. */
+export function resolveHallAddress(ecclesia: EcclesiaData | null): string | undefined {
+  if (!ecclesia) return undefined
+  if (ecclesia.address?.trim()) return ecclesia.address.trim()
+  const parts = [ecclesia.venue, ecclesia.city, ecclesia.province, ecclesia.postalCode]
+    .map((s) => s?.trim())
+    .filter((s): s is string => !!s)
+  return parts.length ? parts.join(', ') : undefined
+}
 
 // Fallback "ways to attend" — the SAME Zoom the memorial template hardcodes.
 // Used only when the occurrence has no per-occurrence `attendOptions` override.
@@ -64,6 +112,7 @@ export type ExhorterHeadsUpStatus =
   | 'skipped:placeholder'
   | 'skipped:no-email'
   | 'skipped:already-sent'
+  | 'skipped:needs-review'
   | 'no-schedule-row'
 
 export interface ExhorterHeadsUpReport {
@@ -77,6 +126,8 @@ export interface ExhorterHeadsUpReport {
   zoomSource?: 'override' | 'default'
   /** When unresolved: the resolver outcome (typo | ambiguous | not-found). */
   matchStatus?: string
+  /** When skipped:needs-review — the free-text signal a human should look at. */
+  note?: string
 }
 
 export interface ResolveAndSendExhorterHeadsUpParams {
@@ -129,7 +180,17 @@ export async function resolveAndSendExhorterHeadsUp(
   const exhortName = String(row.Exhort ?? '').trim()
   base.exhortName = exhortName
 
-  // 2. Placeholder guard ("TBD"/"attendees"/blank) — nothing to send.
+  // 2. Special-occasion guard: a cancel/relocate/online-only signal in the row's
+  //    free-text means the normal at-hall memorial isn't happening — the standard
+  //    "come exhort at {hall} at {time}" email would be wrong. Flag, never send.
+  //    Runs BEFORE the placeholder guard so relocation days (which often have a
+  //    blank Exhort) still surface the note for a human.
+  const specialNote = detectSpecialOccasion(row.Lunch, row.Activities)
+  if (specialNote) {
+    return { ...base, status: 'skipped:needs-review', note: specialNote }
+  }
+
+  // 3. Placeholder guard ("TBD"/"attendees"/blank) — nothing to send.
   if (isPlaceholderName(exhortName)) {
     return { ...base, status: 'skipped:placeholder' }
   }
@@ -172,7 +233,16 @@ export async function resolveAndSendExhorterHeadsUp(
     zoomSource = 'default'
   }
 
-  // 6. Recipient: TEST → the requester (NEVER the real exhorter); LIVE → primaryEmail.
+  // 6. Host ecclesia directory record → short name, hall address, and the
+  //    Recording Brother signature + Reply-To (retires the hardcoded TODO).
+  const ecclesia = await getEcclesiaByName(hostCanonical)
+  const shortName = shortEcclesiaName(hostPublicName)
+  const hallAddress = resolveHallAddress(ecclesia)
+  const signatoryName = ecclesia?.recordingBrotherName?.trim() || undefined
+  const replyTo = ecclesia?.recordingBrotherEmail?.trim() || REPLY_TO
+  const lunchType = resolveLunchType(row.Lunch)
+
+  // 7. Recipient: TEST → the requester (NEVER the real exhorter); LIVE → primaryEmail.
   const recipient = test ? requesterEmail : person.primaryEmail
 
   const tz = row.ServiceTimezone || DEFAULT_TIMEZONE
@@ -222,19 +292,26 @@ export async function resolveAndSendExhorterHeadsUp(
     emailPreferencesUrl = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/email-preferences`
   }
 
+  const exhorterName =
+    [person.firstName, person.lastName].filter(Boolean).join(' ').trim() ||
+    person.displayName ||
+    person.firstName
+
   try {
     const { html, text } = await renderExhorterHeadsUp({
-      firstName: person.firstName,
-      hostEcclesiaName: hostPublicName,
+      exhorterName,
+      hostEcclesiaName: shortName,
+      address: hallAddress,
       dateDisplay,
       timeDisplay,
-      visiting,
       attendOptions,
+      lunchType,
+      signatoryName,
       emailPreferencesUrl,
       tenant,
     })
 
-    const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${hostPublicName} on ${dateDisplay}`
+    const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${shortName} on ${dateDisplay}`
     const from = `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
 
     await sendEmail({
@@ -244,7 +321,7 @@ export async function resolveAndSendExhorterHeadsUp(
       textBody: text,
       tenant,
       from,
-      replyTo: REPLY_TO,
+      replyTo,
     })
   } catch (err) {
     // Send failed AFTER a live claim — release it so a manual retry can re-send.

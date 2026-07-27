@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   release: vi.fn(),
   generateEmailPreferencesUrl: vi.fn(),
   fetchServiceOverrides: vi.fn(),
+  getEcclesiaByName: vi.fn(),
 }))
 
 vi.mock('@my/app/provider/dynamodb/schedule-service', () => ({
@@ -41,6 +42,7 @@ vi.mock('@my/app/utils/service-overrides/merge', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@my/app/utils/service-overrides/merge')>()
   return { ...actual, fetchServiceOverrides: h.fetchServiceOverrides }
 })
+vi.mock('../utils/dynamodb/locations', () => ({ getEcclesiaByName: h.getEcclesiaByName }))
 
 import { resolveAndSendExhorterHeadsUp } from '../utils/email/exhorter-heads-up'
 
@@ -91,6 +93,23 @@ function memorialSchedule(exhort: string) {
   }
 }
 
+/** A memorial row with arbitrary extra/overridden columns (Lunch, Activities…). */
+function memorialRow(extra: Record<string, any> = {}) {
+  return {
+    content: [
+      {
+        Date: 'Feb 1, 2026',
+        DateTime: '2026-02-01T16:00:00.000Z',
+        ServiceTimezone: 'America/Toronto',
+        Exhort: 'Brad Stephens',
+        Preside: 'Someone Else',
+        Key: 'memorial',
+        ...extra,
+      },
+    ],
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   h.getScheduleData.mockResolvedValue(memorialSchedule('Brad Stephens'))
@@ -101,6 +120,17 @@ beforeEach(() => {
   h.claim.mockResolvedValue(true)
   h.generateEmailPreferencesUrl.mockResolvedValue('https://tee-admin.com/email-preferences?token=x')
   h.fetchServiceOverrides.mockResolvedValue(new Map())
+  h.getEcclesiaByName.mockResolvedValue({
+    name: 'Toronto East Ecclesia',
+    country: 'Canada',
+    province: 'ON',
+    city: 'Toronto',
+    address: '975 Cosburn Ave., East York, ON M4C 2W8, Canada',
+    recordingBrotherName: 'Ken Easson',
+    recordingBrotherEmail: 'teerecbro@gmail.com',
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  })
 })
 
 describe('resolveAndSendExhorterHeadsUp — matched', () => {
@@ -281,6 +311,130 @@ describe('resolveAndSendExhorterHeadsUp — zoom source', () => {
     expect(report.zoomSource).toBe('override')
     const attend = h.renderExhorterHeadsUp.mock.calls[0][0].attendOptions
     expect(attend[0].label).toBe('Toronto West Stream')
+  })
+})
+
+describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
+  it('uses short ecclesia name, formal full name, hall address, RB signature', async () => {
+    h.getEcclesiaByName.mockResolvedValue({
+      name: 'Toronto East Ecclesia',
+      country: 'Canada',
+      province: 'ON',
+      city: 'Toronto',
+      address: '975 Cosburn Ave., East York, ON M4C 2W8, Canada',
+      recordingBrotherName: 'Ken Easson',
+      recordingBrotherEmail: 'custom-rb@example.com', // prove it's record-driven
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    })
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
+    const props = h.renderExhorterHeadsUp.mock.calls[0][0]
+    expect(props.hostEcclesiaName).toBe('Toronto East') // "Christadelphians"/"Ecclesia" trimmed
+    expect(props.exhorterName).toBe('Brad Stephens') // formal full name, not first-name-only
+    expect(props.address).toContain('975 Cosburn')
+    expect(props.signatoryName).toBe('Ken Easson')
+    const sent = h.sendEmail.mock.calls[0][0]
+    expect(sent.subject).toContain('Toronto East')
+    expect(sent.subject).not.toContain('Christadelphians')
+    expect(sent.replyTo).toBe('custom-rb@example.com')
+  })
+
+  it('composes address from parts when no `address` field; falls back Reply-To', async () => {
+    h.getEcclesiaByName.mockResolvedValue({
+      name: 'Toronto East Ecclesia',
+      country: 'Canada',
+      province: 'ON',
+      city: 'Toronto',
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    })
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+    const props = h.renderExhorterHeadsUp.mock.calls[0][0]
+    expect(props.address).toBe('Toronto, ON') // composed from city/province
+    expect(props.signatoryName).toBeUndefined() // no RB name on record
+    expect(h.sendEmail.mock.calls[0][0].replyTo).toBe('teerecbro@gmail.com') // constant fallback
+  })
+})
+
+describe('resolveAndSendExhorterHeadsUp — lunch line (from row.Lunch)', () => {
+  it.each([
+    ['Potluck lunch at the hall', 'potluck'],
+    ['Lunch will be provided', 'provided'],
+    ['Sunday School Lunch/Brunch after the memorial', 'generic'],
+  ])('Lunch=%j → lunchType %s', async (lunch, expected) => {
+    h.getScheduleData.mockResolvedValue(memorialRow({ Lunch: lunch }))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
+    expect(h.renderExhorterHeadsUp.mock.calls[0][0].lunchType).toBe(expected)
+  })
+
+  it('no Lunch value → no lunch line', async () => {
+    await resolveAndSendExhorterHeadsUp({ date: TARGET_DATE, test: true, requesterEmail: REQUESTER })
+    expect(h.renderExhorterHeadsUp.mock.calls[0][0].lunchType).toBeUndefined()
+  })
+})
+
+describe('resolveAndSendExhorterHeadsUp — special-occasion guard (no send)', () => {
+  it.each([
+    [
+      'relocation in Activities, blank Exhort',
+      { Exhort: '', Activities: 'We will be joining Toronto West For the Baptism of Rebekah Persaud-Amos' },
+    ],
+    [
+      'cancelled-at-hall in Lunch, exhorter present (the dangerous case)',
+      { Exhort: 'Brad Stephens', Lunch: 'Activities at the Hall are Cancelled, Please join us on Zoom or YouTube.' },
+    ],
+    [
+      'fraternal gathering',
+      { Exhort: '', Lunch: 'Toronto Fraternal Gathering', Activities: 'Please join us at the Toronto Fraternal Gathering' },
+    ],
+  ])('%s → skipped:needs-review, never sends', async (_name, extra) => {
+    h.getScheduleData.mockResolvedValue(memorialRow(extra))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('skipped:needs-review')
+    expect(report.note).toBeTruthy()
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(h.claim).not.toHaveBeenCalled()
+  })
+
+  it('a normal potluck day is NOT flagged (sends)', async () => {
+    h.getScheduleData.mockResolvedValue(memorialRow({ Lunch: 'Potluck lunch at the hall' }))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
+  })
+
+  it('a study weekend with provided lunch is NOT flagged (sends, provided lunch)', async () => {
+    h.getScheduleData.mockResolvedValue(
+      memorialRow({ Lunch: 'Lunch will be provided', Activities: 'tee study weekend' })
+    )
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
+    expect(h.renderExhorterHeadsUp.mock.calls[0][0].lunchType).toBe('provided')
   })
 })
 
