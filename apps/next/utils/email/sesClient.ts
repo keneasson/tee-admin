@@ -61,9 +61,27 @@ export interface SendEmailProps {
    * `resolveTenantFromEnv()` (DEPLOYMENT_NAME → 'tee' default).
    */
   tenant?: TenantConfig
+  /**
+   * Full From address (e.g. `"Toronto East Ecclesia" <communications@tee-admin.com>`).
+   * When omitted, defaults to the current behaviour: `noreply@{senderDomain}`.
+   * Backward-compatible — existing callers are unchanged.
+   */
+  from?: string
+  /**
+   * Reply-To address. When omitted, no Reply-To header is set (current behaviour).
+   */
+  replyTo?: string
 }
 
-export async function sendEmail({ to, subject, body, textBody, tenant }: SendEmailProps): Promise<void> {
+export async function sendEmail({
+  to,
+  subject,
+  body,
+  textBody,
+  tenant,
+  from,
+  replyTo,
+}: SendEmailProps): Promise<void> {
   if (!emailsEnabled()) {
     console.log(
       `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
@@ -75,7 +93,8 @@ export async function sendEmail({ to, subject, body, textBody, tenant }: SendEma
   const sesClient = getSesClient()
 
   const emailCmd = new SendEmailCommand({
-    FromEmailAddress: `"${resolvedTenant.senderDisplayName}" <noreply@${resolvedTenant.senderDomain}>`,
+    FromEmailAddress: from ?? `"${resolvedTenant.senderDisplayName}" <noreply@${resolvedTenant.senderDomain}>`,
+    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     Destination: {
       ToAddresses: [to],
     },
