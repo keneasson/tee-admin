@@ -246,7 +246,7 @@ export const DirectRecipientSend: React.FC<DirectRecipientSendProps> = ({ sessio
             />
             {searching ? (
               <XStack gap="$2" alignItems="center" padding="$2">
-                <Spinner size="small" />
+                <Spinner size="small" width={16} height={16} />
                 <Text fontSize="$2" color="$color10">
                   Searching…
                 </Text>
