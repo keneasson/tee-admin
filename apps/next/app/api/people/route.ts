@@ -239,11 +239,13 @@ function applyFilters(
     // Apply ecclesia filter if provided
     if (ecclesiaFilter && member.ecclesia !== ecclesiaFilter) return false
 
-    // Apply search filter if provided
+    // Apply search filter if provided. Null-guard every field: emailless
+    // members exist (e.g. visiting-speaker records with a NOEMAIL# sentinel and
+    // no primary email), and an unguarded `.toLowerCase()` 500s the whole search.
     if (searchQuery) {
-      const nameMatch = member.name.toLowerCase().includes(searchQuery)
+      const nameMatch = member.name?.toLowerCase().includes(searchQuery)
       const ecclesiaMatch = member.ecclesia?.toLowerCase().includes(searchQuery)
-      const emailMatch = member.email.toLowerCase().includes(searchQuery)
+      const emailMatch = member.email?.toLowerCase().includes(searchQuery)
       if (!nameMatch && !ecclesiaMatch && !emailMatch) return false
     }
 

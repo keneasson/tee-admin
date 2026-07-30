@@ -24,6 +24,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, Mail, AlertCircle, Newspaper, Calendar, Users } from '@tamagui/lucide-icons'
 import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingNote, clearPendingNote, getRecentEvents, getActiveNews } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
+import { DirectRecipientSend } from './direct-recipient-send'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 import { NewsItem, isNewsActive } from '@my/app/types/news'
@@ -594,6 +595,11 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
               </Text>
             ) : null}
           </Card>
+
+          {/* Direct-recipient send (Issue #127) — one-off, permission-gated 1:1
+              send to someone who explicitly requested an email. Sits under TEST
+              MODE and ignores it by design. */}
+          <DirectRecipientSend session={session} />
 
           {/* Shared News + Events composer (Issue #57). One place to pick a
               News item OR an Event and send it to a chosen audience. */}
