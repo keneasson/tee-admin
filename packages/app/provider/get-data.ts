@@ -184,6 +184,69 @@ export const clearPendingNote = async (
   return { ok: true }
 }
 
+export interface DirectSendPerson {
+  id: string
+  name: string
+  email: string
+  ecclesia?: string
+  emails: string[]
+}
+
+/**
+ * Lightweight name-or-email people search for the direct-recipient send.
+ * Cross-platform safe (API_PATH). Returns members (one row per person) with
+ * their known email addresses so the caller can pick which to send to.
+ */
+export const searchPeople = async (query: string): Promise<DirectSendPerson[]> => {
+  const q = query.trim()
+  if (q.length < 2) return []
+  const url = `${API_PATH}api/people?search=${encodeURIComponent(q)}&includeEmails=true`
+  const response = await fetch(url, { cache: 'no-store' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !Array.isArray(data?.members)) return []
+  return (data.members as any[]).map((m) => {
+    const extra = Array.isArray(m.emails)
+      ? m.emails.map((e: any) => (typeof e === 'string' ? e : e?.email)).filter(Boolean)
+      : []
+    const unique = Array.from(
+      new Set([m.email, ...extra].filter(Boolean).map((e: string) => e.toLowerCase()))
+    )
+    return {
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      ecclesia: m.ecclesia,
+      emails: unique,
+    }
+  })
+}
+
+/**
+ * Send ONE email of a given type to ONE explicitly-requesting recipient.
+ * Bypasses TEST MODE by design; requires an explicit permission attestation
+ * (also re-checked server-side). Does NOT subscribe the recipient or touch the
+ * contact list.
+ */
+export const sendToOneRecipient = async (params: {
+  reason: emailReasons
+  to: string
+  recipientName?: string
+  permission: boolean
+}): Promise<{ ok: boolean; subject?: string; error?: string }> => {
+  const url = `${API_PATH}api/email/send-one`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data?.ok) {
+    return { ok: false, error: data.error || `Request failed (${response.status})` }
+  }
+  return { ok: true, subject: data.subject }
+}
+
 /**
  * Recent admin events. Cross-platform safe (uses API_PATH, so it works under Expo,
  * not just web). Returns the raw array; callers apply their own filter (e.g. the

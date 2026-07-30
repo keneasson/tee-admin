@@ -102,6 +102,29 @@ const senders = {
   },
 }
 
+/**
+ * The From / Reply-To / Subject envelope for a reason, branded per tenant.
+ *
+ * Exported so a 1:1 send (e.g. the direct-recipient send that honours a specific
+ * request) produces the SAME envelope as the broadcast — same canonical
+ * `communications@` sender, same branded subject + Toronto-dated suffix — so a
+ * one-off never sends from a different address (sender reputation is per-address).
+ * Mirrors the inline construction in `emailSend` below (lines ~226–231); keep in
+ * sync.
+ */
+export function buildEmailEnvelope(
+  reason: emailReasons,
+  tenant: TenantConfig,
+  opts: { test?: boolean } = {}
+): { from: string; replyTo: string; subject: string } {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+  return {
+    from: `"${senderDisplayName(reason, tenant)}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`,
+    replyTo: senders[reason]?.replyTo ?? REPLY_TO,
+    subject: `${opts.test ? '[TEST] ' : ''}${subjectFor(reason, tenant)} ${today}`,
+  }
+}
+
 export type emailSendProps = {
   reason: emailReasons
   emailHtml: string
