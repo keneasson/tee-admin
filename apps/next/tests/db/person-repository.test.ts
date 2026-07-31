@@ -115,11 +115,28 @@ describe('PersonRepository', () => {
     })
 
     it('should return null when person not found', async () => {
-      mockSend.mockResolvedValueOnce({ Items: [] })
+      // primary query empty, then the secondary fallback query is also empty
+      mockSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({ Items: [] })
 
       const result = await repository.getByEmail('nonexistent@example.com')
 
       expect(result).toBeNull()
+    })
+
+    it('resolves a person by a SECONDARY email when it is not anyone’s primary', async () => {
+      // 1) primary fast-path: no PROFILE has this as its primary
+      mockSend.mockResolvedValueOnce({ Items: [] })
+      // 2) fallback getAllPersonsByEmail: an EMAIL# item points at PERSON#p1
+      mockSend.mockResolvedValueOnce({
+        Items: [{ pkey: 'PERSON#p1', skey: 'EMAIL#e1', gsi1sk: 'PERSON#p1', email: 'secondary@example.com' }],
+      })
+      // 3) getAllPersonsByEmail loads the owning PROFILE via getById
+      const profile = { pkey: 'PERSON#p1', skey: 'PROFILE', personId: 'p1', primaryEmail: 'primary@example.com' }
+      mockSend.mockResolvedValueOnce({ Item: profile })
+
+      const result = await repository.getByEmail('secondary@example.com')
+
+      expect(result).toEqual(profile)
     })
   })
 
@@ -258,7 +275,8 @@ describe('PersonRepository', () => {
       })
 
       it('should return null when person not found', async () => {
-        mockSend.mockResolvedValueOnce({ Items: [] })
+        // primary query + secondary fallback query both empty
+        mockSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({ Items: [] })
 
         const result = await repository.getByEmailForAuth('nonexistent@example.com')
 
@@ -358,7 +376,8 @@ describe('PersonRepository', () => {
       })
 
       it('should return false when email does not exist', async () => {
-        mockSend.mockResolvedValueOnce({ Items: [] })
+        // primary query + secondary fallback query both empty
+        mockSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({ Items: [] })
 
         const result = await repository.emailExists('nonexistent@example.com')
 
