@@ -11,6 +11,7 @@ import {
 import { CreateUpdateListType } from '../types'
 import type { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
+import type { Post } from '@my/app/types/post'
 
 // Use shared EmailReasonType instead of importing from next-app
 type emailReasons = EmailReasonType
@@ -480,4 +481,59 @@ export const unarchiveEmail = async (pkey: string, email: string): Promise<any> 
   }
 
   return data
+}
+
+// -----------------------------------------------------------------------------
+// Unified Post model — block-editor save/load (Consolidated CMS epic #131,
+// Phase 2a). Cross-platform (API_PATH) client helpers over /api/admin/posts.
+// The API itself is owner/admin- + CONSOLIDATED_CMS-flag-gated.
+// -----------------------------------------------------------------------------
+
+/** List a tenant's posts (drafts + archived included). */
+export const listPosts = async (tenant?: string): Promise<Post[]> => {
+  const qs = tenant ? `?tenant=${encodeURIComponent(tenant)}` : ''
+  const url = `${API_PATH}api/admin/posts${qs}`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to list posts (${response.status})`)
+  return await response.json()
+}
+
+/** Load a single post by id (edit case). */
+export const getPost = async (id: string): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to load post (${response.status})`)
+  return await response.json()
+}
+
+/** Create a new post; returns the persisted Post (with its assigned id). */
+export const createPost = async (input: Partial<Post>): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts`
+  const response = await fetch(url, {
+    cache: 'no-store',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to create post (${response.status})`)
+  }
+  return await response.json()
+}
+
+/** Update an existing post (the editor's autosave target). */
+export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}`
+  const response = await fetch(url, {
+    cache: 'no-store',
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to update post (${response.status})`)
+  }
+  return await response.json()
 }
