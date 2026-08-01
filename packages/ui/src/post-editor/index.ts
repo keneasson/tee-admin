@@ -27,6 +27,14 @@ export {
 } from './registry'
 export { registerDefaultBlocks } from './register-default-blocks'
 
-// Reference block editors + factories (for direct reuse / registration).
+// Block editors + factories (for direct reuse / registration).
 export { TextBlockEditor, makeTextBlock } from './blocks/text-block-editor'
 export { TimeBlockEditor, makeTimeBlock } from './blocks/time-block-editor'
+export { PersonBlockEditor, makePersonBlock } from './blocks/person-block-editor'
+export { LocationBlockEditor, makeLocationBlock } from './blocks/location-block-editor'
+export { FlyerBlockEditor, makeFlyerBlock } from './blocks/flyer-block-editor'
+export {
+  RegistrationBlockEditor,
+  makeRegistrationBlock,
+} from './blocks/registration-block-editor'
+export { LinkBlockEditor, makeLinkBlock } from './blocks/link-block-editor'
