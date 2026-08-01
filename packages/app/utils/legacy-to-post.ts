@@ -35,6 +35,10 @@ import type {
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
+// Intentional module-level counter: `legacyToPost` output is transient (an
+// in-memory adapter view, never persisted), so a process-wide incrementing
+// counter for virtual block ids is fine — it just needs to be unique within a
+// single adapted post, not stable across calls or processes.
 let seq = 0
 /** Deterministic-enough virtual block id (adapter output is transient). */
 function bid(prefix: string): string {
