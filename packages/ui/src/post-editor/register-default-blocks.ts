@@ -1,13 +1,17 @@
 import { registerBlock } from './registry'
-import { FileText, Clock } from '@tamagui/lucide-icons'
+import { FileText, Clock, Users, MapPin, FileImage, ClipboardCheck, Link2 } from '@tamagui/lucide-icons'
 import { TextBlockEditor, makeTextBlock } from './blocks/text-block-editor'
 import { TimeBlockEditor, makeTimeBlock } from './blocks/time-block-editor'
+import { PersonBlockEditor, makePersonBlock } from './blocks/person-block-editor'
+import { LocationBlockEditor, makeLocationBlock } from './blocks/location-block-editor'
+import { FlyerBlockEditor, makeFlyerBlock } from './blocks/flyer-block-editor'
+import { RegistrationBlockEditor, makeRegistrationBlock } from './blocks/registration-block-editor'
+import { LinkBlockEditor, makeLinkBlock } from './blocks/link-block-editor'
 
 /**
- * Register the reference block editors (the two hardest shapes: free-prose Text
- * and UTC-storing Time). Idempotent so it is safe to call from module scope in
- * the editor AND from tests. Remaining block editors (Person, Location, Flyer,
- * Registration, Link) are 2b — they register the same way with no editor changes.
+ * Register all default block editors (Consolidated CMS Phase 2a + 2b).
+ * Idempotent so it is safe to call from module scope in the editor AND from
+ * tests. Registration order = toolbar order.
  */
 let registered = false
 
@@ -27,5 +31,40 @@ export function registerDefaultBlocks(): void {
     icon: Clock,
     make: makeTimeBlock,
     Editor: TimeBlockEditor,
+  })
+
+  registerBlock('person', {
+    label: 'Person',
+    icon: Users,
+    make: makePersonBlock,
+    Editor: PersonBlockEditor,
+  })
+
+  registerBlock('location', {
+    label: 'Location',
+    icon: MapPin,
+    make: makeLocationBlock,
+    Editor: LocationBlockEditor,
+  })
+
+  registerBlock('flyer', {
+    label: 'Flyer',
+    icon: FileImage,
+    make: makeFlyerBlock,
+    Editor: FlyerBlockEditor,
+  })
+
+  registerBlock('registration', {
+    label: 'Registration',
+    icon: ClipboardCheck,
+    make: makeRegistrationBlock,
+    Editor: RegistrationBlockEditor,
+  })
+
+  registerBlock('link', {
+    label: 'Link',
+    icon: Link2,
+    make: makeLinkBlock,
+    Editor: LinkBlockEditor,
   })
 }

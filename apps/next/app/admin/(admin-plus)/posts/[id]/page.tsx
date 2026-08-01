@@ -132,7 +132,7 @@ export default function AdminPostEditorPage() {
   if (!isHydrated || isLoading || !hasAccess) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
-        <Spinner size="large" />
+        <Spinner size="large" width={36} height={36} />
         <Text marginTop="$4">Loading...</Text>
       </YStack>
     )
@@ -155,7 +155,7 @@ export default function AdminPostEditorPage() {
   if (!post) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" padding="$4">
-        <Spinner size="large" />
+        <Spinner size="large" width={36} height={36} />
         <Text marginTop="$4">Loading post...</Text>
       </YStack>
     )
