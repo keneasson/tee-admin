@@ -4,6 +4,7 @@ export const FEATURE_FLAGS = {
   MULTI_TENANT_INIT: 'multi_tenant_init',
   IN_APP_NOTIFICATIONS: 'in_app_notifications',
   UNIVERSAL_EMAIL_LOGIN: 'universal_email_login',
+  CONSOLIDATED_CMS: 'consolidated_cms',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -39,6 +40,15 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // as before until deliberately enabled.
     description: 'Add a per-recipient one-click sign-in link to the footer of every outgoing email',
     visibleTo: 'off',
+    users: [],
+  },
+  [FEATURE_FLAGS.CONSOLIDATED_CMS]: {
+    // Unified Post model (epic #131) Phase 0. Gates the block-model read boundary
+    // (legacyToPost + redactPost) at public read paths. OFF by default → existing
+    // response shape/format is byte-identical; flip to 'everyone' to ship the
+    // stricter anon-PII scrub to all readers.
+    description: 'Unified Post model: block-based PII redaction at public read boundaries',
+    visibleTo: 'owner',
     users: [],
   },
 }
