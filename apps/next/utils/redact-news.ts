@@ -12,6 +12,7 @@
  * flag OFF the raw item is returned unchanged (byte-identical).
  */
 import type { NewsItem } from '@my/app/types/news'
+import type { TextBlock } from '@my/app/types/post'
 import type { Viewer } from '@my/app/utils/viewer-pii'
 import { legacyToPost } from '@my/app/utils/legacy-to-post'
 import { redactPost } from '@my/app/utils/redact-post'
@@ -19,11 +20,12 @@ import { redactPost } from '@my/app/utils/redact-post'
 export function redactNewsForViewer(item: NewsItem, viewer: Viewer): NewsItem {
   const post = redactPost(legacyToPost(item), viewer, { channel: 'public-web' })
   if (!post) return { ...item, body: '', documents: [] }
-  const textBlock = post.blocks.find((b) => b.kind === 'text')
+  // The type-predicate narrows the find result to TextBlock, so no re-check is needed.
+  const textBlock = post.blocks.find((b): b is TextBlock => b.kind === 'text')
   const hasFlyer = post.blocks.some((b) => b.kind === 'flyer')
   return {
     ...item,
-    body: textBlock && textBlock.kind === 'text' ? textBlock.body : '',
+    body: textBlock ? textBlock.body : '',
     documents: hasFlyer ? item.documents : [],
   }
 }
