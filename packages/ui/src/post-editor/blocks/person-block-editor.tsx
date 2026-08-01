@@ -9,10 +9,13 @@ import { Button } from '../../Button'
 /**
  * PersonBlock editor — a `role` (design vocabulary for the block's people —
  * speaker/candidate/deceased/etc) plus a repeatable list of
- * {@link BlockPerson}. `firstName` is the only required field (the PII
- * "first-name floor" — always shown even to anon; design §8.2); the rest are
- * `pii:'name'|'bio'|'contact'` and gated by the redactor at read time, not
- * here — the editor just captures them.
+ * {@link BlockPerson}. `firstName` is the only author-facing required field
+ * (the PII "first-name floor" — always shown even to anon; design §8.2); the
+ * rest are `pii:'name'|'bio'|'contact'` and gated by the redactor at read
+ * time, not here — the editor just captures them. `id` is minted here (not
+ * author-facing) — a stable per-entry id so the list can be keyed by identity
+ * instead of array index (fixes focus jumping to the wrong input when a
+ * middle entry is removed).
  *
  * Fully controlled: `onChange` emits the full next PersonBlock.
  */
@@ -32,7 +35,7 @@ const ROLE_OPTIONS: Array<{ value: PersonBlock['role']; label: string }> = [
 ]
 
 function emptyPerson(): BlockPerson {
-  return { firstName: '' }
+  return { id: genId('ppl'), firstName: '' }
 }
 
 export function PersonBlockEditor({ block, onChange }: BlockEditorProps<PersonBlock>) {
@@ -63,7 +66,7 @@ export function PersonBlockEditor({ block, onChange }: BlockEditorProps<PersonBl
 
       <YStack gap="$3">
         {block.people.map((person, index) => (
-          <Card key={index} bordered padding="$3" gap="$3" backgroundColor="$backgroundHover">
+          <Card key={person.id} bordered padding="$3" gap="$3" backgroundColor="$backgroundHover">
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize="$3" fontWeight="600">
                 Person {index + 1}

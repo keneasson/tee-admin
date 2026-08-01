@@ -197,6 +197,7 @@ function eventToPost(event: Event): Post {
   // ── People (name / bio class) ──
   if (event.candidate) {
     const person: PersonBlock['people'][number] = {
+      id: bid('ppl'),
       firstName: event.candidate.firstName,
       lastName: event.candidate.lastName,
     }
@@ -210,6 +211,7 @@ function eventToPost(event: Event): Post {
   }
   if (event.deceased) {
     const person: PersonBlock['people'][number] = {
+      id: bid('ppl'),
       firstName: event.deceased.firstName,
       lastName: event.deceased.lastName,
     }
@@ -224,13 +226,25 @@ function eventToPost(event: Event): Post {
       id: bid('person'),
       kind: 'person',
       role: 'bride',
-      people: [{ firstName: event.couple.bride.firstName, lastName: event.couple.bride.lastName }],
+      people: [
+        {
+          id: bid('ppl'),
+          firstName: event.couple.bride.firstName,
+          lastName: event.couple.bride.lastName,
+        },
+      ],
     })
     blocks.push({
       id: bid('person'),
       kind: 'person',
       role: 'groom',
-      people: [{ firstName: event.couple.groom.firstName, lastName: event.couple.groom.lastName }],
+      people: [
+        {
+          id: bid('ppl'),
+          firstName: event.couple.groom.firstName,
+          lastName: event.couple.groom.lastName,
+        },
+      ],
     })
   }
   if (event.sponsors?.length) {
@@ -239,6 +253,7 @@ function eventToPost(event: Event): Post {
       kind: 'person',
       role: 'sponsor',
       people: event.sponsors.map((s) => ({
+        id: bid('ppl'),
         firstName: s.firstName,
         lastName: s.lastName,
         ...(s.role ? { label: s.role } : {}),
@@ -251,6 +266,7 @@ function eventToPost(event: Event): Post {
       kind: 'person',
       role: 'speaker',
       people: event.speakers.map((s) => ({
+        id: bid('ppl'),
         firstName: s.firstName,
         lastName: s.lastName,
         ...(s.title ? { title: s.title } : {}),
@@ -264,6 +280,7 @@ function eventToPost(event: Event): Post {
       kind: 'person',
       role: 'other',
       people: event.weddingParty.map((m) => ({
+        id: bid('ppl'),
         firstName: m.firstName,
         lastName: m.lastName,
         ...(m.role ? { label: m.role } : {}),

@@ -4,7 +4,7 @@ import {
   createEmptyPost,
   validateForPublish,
 } from '@my/ui/src/post-editor/post-reducer'
-import type { Block, Post, TextBlock, TimeBlock } from '@my/app/types/post'
+import type { Block, PersonBlock, Post, TextBlock, TimeBlock } from '@my/app/types/post'
 
 /**
  * Reducer-level tests for the PostEditor's pure state transitions
@@ -107,5 +107,40 @@ describe('postReducer', () => {
     const replacement: TextBlock = { id: 'a', kind: 'text', body: 'replaced', containsPii: false }
     const next = postReducer(p, { type: 'patch-block', id: 'a', patch: replacement })
     expect(next.blocks[0]).toEqual(replacement)
+  })
+
+  it('patch-block on a PersonBlock preserves each person entry\'s stable id (Phase 2c)', () => {
+    const person: PersonBlock = {
+      id: 'pb1',
+      kind: 'person',
+      role: 'candidate',
+      people: [{ id: 'ppl-1', firstName: 'Josh' }],
+    }
+    const p = draft([person])
+    const patched = postReducer(p, {
+      type: 'patch-block',
+      id: 'pb1',
+      patch: { people: [{ id: 'ppl-1', firstName: 'Josh', lastName: 'A' }] } as Partial<Block>,
+    })
+    const result = patched.blocks[0] as PersonBlock
+    expect(result.people[0].id).toBe('ppl-1') // id is stable across an edit
+    expect(result.people[0].lastName).toBe('A')
+
+    // Removing then re-adding a person via a fresh id, as the editor's
+    // add/remove flow does, still round-trips cleanly through the reducer.
+    const withSecondPerson = postReducer(patched, {
+      type: 'patch-block',
+      id: 'pb1',
+      patch: {
+        people: [
+          { id: 'ppl-1', firstName: 'Josh', lastName: 'A' },
+          { id: 'ppl-2', firstName: 'New' },
+        ],
+      } as Partial<Block>,
+    })
+    expect((withSecondPerson.blocks[0] as PersonBlock).people.map((pp) => pp.id)).toEqual([
+      'ppl-1',
+      'ppl-2',
+    ])
   })
 })

@@ -86,6 +86,7 @@ export interface TextBlock extends BlockBase {
 
 /** A person's field-classes: firstName always shown; lastName/bio/contact gated. */
 export interface BlockPerson {
+  id: string // pii:'none' — stable per-entry id (React keying; NOT shown/PII)
   firstName: string // pii:'name' — ALWAYS shown (first-name floor)
   lastName?: string // pii:'name' — dropped below reveal tier
   bio?: string // pii:'bio' — obituary / testimony / about — hidden below member

@@ -41,7 +41,12 @@ const nativePost: Post = {
   sharingScope: 'own',
   lifecycle: {},
   blocks: [
-    { id: 'pb', kind: 'person', role: 'bride', people: [{ firstName: 'Mary', lastName: 'Jones' }] },
+    {
+      id: 'pb',
+      kind: 'person',
+      role: 'bride',
+      people: [{ id: 'ppl-mary', firstName: 'Mary', lastName: 'Jones' }],
+    },
   ],
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
@@ -108,8 +113,8 @@ describe('getPostsForViewer', () => {
   it('redacts PII for an anonymous viewer (first-name floor, bio + members-only text dropped)', async () => {
     const posts = await getPostsForViewer(ANONYMOUS_VIEWER)
 
-    // native person: first name only, no surname.
-    expect(person(byId(posts, 'native-1'))).toEqual({ firstName: 'Mary' })
+    // native person: first name only, no surname. id (pii:'none') is carried through.
+    expect(person(byId(posts, 'native-1'))).toEqual({ id: 'ppl-mary', firstName: 'Mary' })
 
     // legacy baptism candidate: first name only, obituary/testimony bio dropped.
     const candidate = person(byId(posts, 'ev-1'))

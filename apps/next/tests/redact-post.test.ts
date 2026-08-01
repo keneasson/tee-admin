@@ -24,12 +24,19 @@ describe('redactBlock — PiiClass name (PersonBlock)', () => {
     id: 'p1',
     kind: 'person',
     role: 'candidate',
-    people: [{ firstName: 'Joshua', lastName: 'Archibald', ecclesia: 'Toronto East', title: 'Brother' }],
+    people: [
+      { id: 'ppl-1', firstName: 'Joshua', lastName: 'Archibald', ecclesia: 'Toronto East', title: 'Brother' },
+    ],
   }
 
-  it('anon / public-web → first name only, no lastName on the object', () => {
+  it('anon / public-web → first name only, no lastName on the object; id (pii:none) carried', () => {
     const r = redactBlock(block, anon) as PersonBlock
-    expect(r.people[0]).toEqual({ firstName: 'Joshua', ecclesia: 'Toronto East', title: 'Brother' })
+    expect(r.people[0]).toEqual({
+      id: 'ppl-1',
+      firstName: 'Joshua',
+      ecclesia: 'Toronto East',
+      title: 'Brother',
+    })
     expect(r.people[0]).not.toHaveProperty('lastName')
   })
 
@@ -50,13 +57,13 @@ describe('redactBlock — PiiClass bio', () => {
     id: 'p2',
     kind: 'person',
     role: 'deceased',
-    people: [{ firstName: 'Tom', lastName: 'Perks', bio: 'A long obituary', age: 84 }],
+    people: [{ id: 'ppl-2', firstName: 'Tom', lastName: 'Perks', bio: 'A long obituary', age: 84 }],
   }
 
   it('anon → bio omitted (name floored)', () => {
     const r = redactBlock(block, anon) as PersonBlock
     expect(r.people[0]).not.toHaveProperty('bio')
-    expect(r.people[0]).toEqual({ firstName: 'Tom', age: 84 })
+    expect(r.people[0]).toEqual({ id: 'ppl-2', firstName: 'Tom', age: 84 })
   })
 
   it('member → bio shown', () => {
@@ -76,7 +83,7 @@ describe('redactBlock — PiiClass contact', () => {
     id: 'p3',
     kind: 'person',
     role: 'contact',
-    people: [{ firstName: 'Sue', lastName: 'Green', contact: '416-555-1212' }],
+    people: [{ id: 'ppl-3', firstName: 'Sue', lastName: 'Green', contact: '416-555-1212' }],
   }
   const reg: RegistrationBlock = {
     id: 'r1',

@@ -131,7 +131,11 @@ describe('legacyToPost — baptism', () => {
   it('redacted for anon: candidate first-name only, bio gone', () => {
     const r = redactPost(post, anon)!
     const c = r.blocks.filter((b): b is PersonBlock => b.kind === 'person').find((b) => b.role === 'candidate')!
-    expect(c.people[0]).toEqual({ firstName: 'Joshua' })
+    // id (pii:'none') is carried through redaction — not shown/PII, just a stable key.
+    expect(c.people[0].firstName).toBe('Joshua')
+    expect(c.people[0]).not.toHaveProperty('lastName')
+    expect(c.people[0]).not.toHaveProperty('bio')
+    expect(typeof c.people[0].id).toBe('string')
   })
 })
 
