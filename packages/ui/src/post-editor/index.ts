@@ -27,6 +27,9 @@ export {
 } from './registry'
 export { registerDefaultBlocks } from './register-default-blocks'
 
+// Occasion-tag default block sets (Phase 2c) — pure, unit-testable in isolation.
+export { applyOccasionDefaults } from './occasion-defaults'
+
 // Block editors + factories (for direct reuse / registration).
 export { TextBlockEditor, makeTextBlock } from './blocks/text-block-editor'
 export { TimeBlockEditor, makeTimeBlock } from './blocks/time-block-editor'

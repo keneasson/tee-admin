@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { YStack, XStack, Card, Text, Label, Input, Separator, H3 } from 'tamagui'
-import { Plus, Trash2, ChevronUp, ChevronDown, X } from '@tamagui/lucide-icons'
+import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, X } from '@tamagui/lucide-icons'
 import type { OccasionTag, Post, Visibility } from '@my/app/types/post'
 import { Button } from '../Button'
 import { postReducer, validateForPublish, type PostAction } from './post-reducer'
@@ -7,6 +8,7 @@ import { getBlockDef, listBlockDefs } from './registry'
 import { registerDefaultBlocks } from './register-default-blocks'
 import { PlainSelect } from './plain-select'
 import { OCCASION_OPTIONS, VISIBILITY_OPTIONS } from './options'
+import { applyOccasionDefaults } from './occasion-defaults'
 
 // Ensure the reference block editors are available the moment the module loads.
 registerDefaultBlocks()
@@ -32,11 +34,27 @@ export interface PostEditorProps {
 
 export function PostEditor({ value, onChange, onPublish }: PostEditorProps) {
   const dispatch = (action: PostAction) => onChange(postReducer(value, action))
+  const [toolbarExpanded, setToolbarExpanded] = useState(true)
 
   const publishErrors = validateForPublish(value)
   const canPublish = publishErrors.length === 0
 
   const availableOccasions = OCCASION_OPTIONS.filter((o) => !value.occasion.includes(o.value))
+
+  /**
+   * Adding an occasion tag pre-adds that occasion's default block set
+   * (Phase 2c) — additive only, never touches existing blocks (see
+   * `occasion-defaults.ts`). Composed as two pure reducer steps applied to
+   * the SAME base `value` so the editor stays a single onChange per action,
+   * same as every other toolbar action here.
+   */
+  const addOccasionTag = (tag: OccasionTag) => {
+    const withTag = postReducer(value, {
+      type: 'patch-post',
+      patch: { occasion: [...value.occasion, tag] },
+    })
+    onChange(applyOccasionDefaults(withTag))
+  }
 
   return (
     <YStack gap="$4">
@@ -95,12 +113,7 @@ export function PostEditor({ value, onChange, onPublish }: PostEditorProps) {
                 value=""
                 placeholder="Add a tag…"
                 options={availableOccasions}
-                onValueChange={(tag) =>
-                  dispatch({
-                    type: 'patch-post',
-                    patch: { occasion: [...value.occasion, tag as OccasionTag] },
-                  })
-                }
+                onValueChange={(tag) => addOccasionTag(tag as OccasionTag)}
               />
             </XStack>
           ) : null}
@@ -201,23 +214,41 @@ export function PostEditor({ value, onChange, onPublish }: PostEditorProps) {
         )}
       </YStack>
 
-      {/* ---- Toolbar (add blocks) ------------------------------------------ */}
+      {/* ---- Toolbar (add blocks) — collapsible; free-drag positioning and
+          block drag-reorder are a later slice (up/down reorder stays above). */}
       <Card bordered padding="$3" gap="$2" backgroundColor="$backgroundHover">
-        <Text fontSize="$3" fontWeight="600">
-          Add a block
-        </Text>
-        <XStack gap="$2" flexWrap="wrap">
-          {listBlockDefs().map((def) => (
-            <Button
-              key={def.kind}
-              size="$3"
-              icon={def.icon ?? Plus}
-              onPress={() => dispatch({ type: 'add-block', block: def.make() })}
-            >
-              {def.label}
-            </Button>
-          ))}
+        <XStack
+          alignItems="center"
+          justifyContent="space-between"
+          cursor="pointer"
+          pressStyle={{ opacity: 0.8 }}
+          aria-label={toolbarExpanded ? 'Collapse block toolbar' : 'Expand block toolbar'}
+          onPress={() => setToolbarExpanded((prev) => !prev)}
+        >
+          <XStack alignItems="center" gap="$2">
+            {toolbarExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <Text fontSize="$3" fontWeight="600">
+              Add a block
+            </Text>
+          </XStack>
+          <Text fontSize="$2" color="$color10">
+            {toolbarExpanded ? 'Hide' : 'Show'}
+          </Text>
         </XStack>
+        {toolbarExpanded ? (
+          <XStack gap="$2" flexWrap="wrap">
+            {listBlockDefs().map((def) => (
+              <Button
+                key={def.kind}
+                size="$3"
+                icon={def.icon ?? Plus}
+                onPress={() => dispatch({ type: 'add-block', block: def.make() })}
+              >
+                {def.label}
+              </Button>
+            ))}
+          </XStack>
+        ) : null}
       </Card>
 
       {/* ---- Publish (validate-on-publish only) ---------------------------- */}

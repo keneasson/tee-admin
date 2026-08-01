@@ -82,6 +82,7 @@ function redactPerson(block: PersonBlock, viewer: Viewer, channel: Channel): Per
       // shapePersonName drops lastName below reveal tier — no View-Source leak.
       const named = shapePersonName(p, viewer, channel)
       const out: PersonBlock['people'][number] = {
+        id: p.id, // pii:'none' — always carried (keying, not shown)
         firstName: named.firstName,
       }
       if (named.lastName) out.lastName = named.lastName
