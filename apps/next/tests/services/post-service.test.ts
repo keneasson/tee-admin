@@ -15,7 +15,7 @@ vi.mock('@my/app/services/news-service', () => ({
   listNewsItems: vi.fn(),
 }))
 
-import { getPostsForViewer } from '@my/app/services/post-service'
+import { getPostsForViewer, getPostsForViewerWithState } from '@my/app/services/post-service'
 import { postRepository } from '@my/app/provider/dynamodb/repositories/post-repository'
 import { getPublishedEvents } from '@my/app/services/event-service'
 import { listNewsItems } from '@my/app/services/news-service'
@@ -28,6 +28,13 @@ const member: Viewer = {
   tenant: 'Toronto East',
   email: 'm@x.z',
 }
+
+// Deterministic reference time for the Phase 4a lifecycle filter. All fixtures
+// below are published 2026-07-01 (native + baptism have no future date → news-
+// shaped, active for their retrospective window; the medical news expires
+// 2026-12-01), so at this instant every fixture is active and the merge/redaction
+// assertions are unaffected by the lifecycle gate.
+const NOW = new Date('2026-07-05T00:00:00.000Z')
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -102,7 +109,7 @@ describe('getPostsForViewer', () => {
   })
 
   it('merges native + legacy (events & news) into one set', async () => {
-    const posts = await getPostsForViewer(member)
+    const posts = await getPostsForViewer(member, { now: NOW })
     expect(posts.map((p) => p.id).sort()).toEqual(['ev-1', 'native-1', 'nw-1'])
     // Legacy came through the adapter (news defaults to includeExpired:false).
     expect(getPublishedEvents).toHaveBeenCalledTimes(1)
@@ -111,7 +118,7 @@ describe('getPostsForViewer', () => {
   })
 
   it('redacts PII for an anonymous viewer (first-name floor, bio + members-only text dropped)', async () => {
-    const posts = await getPostsForViewer(ANONYMOUS_VIEWER)
+    const posts = await getPostsForViewer(ANONYMOUS_VIEWER, { now: NOW })
 
     // native person: first name only, no surname. id (pii:'none') is carried through.
     expect(person(byId(posts, 'native-1'))).toEqual({ id: 'ppl-mary', firstName: 'Mary' })
@@ -128,7 +135,7 @@ describe('getPostsForViewer', () => {
   })
 
   it('reveals full PII for an authenticated member', async () => {
-    const posts = await getPostsForViewer(member)
+    const posts = await getPostsForViewer(member, { now: NOW })
 
     expect(person(byId(posts, 'native-1')).lastName).toBe('Jones')
 
@@ -141,13 +148,67 @@ describe('getPostsForViewer', () => {
     expect(text && text.kind === 'text' ? text.body : null).toBe('Private medical details')
   })
 
+  it('filters out posts that are not active at the injected `now` (lifecycle gate)', async () => {
+    // A native post with a FUTURE happening (TimeBlock ~6 weeks out) stays active
+    // even far past its createdAt — the whole point of the unified rule.
+    const futureShower: Post = {
+      ...nativePost,
+      id: 'shower-1',
+      title: 'Wedding Shower',
+      occasion: ['shower'],
+      lifecycle: { publishDate: '2026-07-01T00:00:00.000Z' },
+      blocks: [
+        { id: 't', kind: 'time', label: 'Shower', startsAt: '2026-08-15T18:00:00.000Z' },
+      ],
+    }
+    ;(postRepository.listAllPosts as any).mockResolvedValue([nativePost, futureShower])
+
+    // At 2026-08-01 the news-shaped fixtures (native + baptism, published 07-01,
+    // 2-week window) have EXPIRED, but the shower (event 08-15) is still active.
+    const posts = await getPostsForViewer(member, { now: new Date('2026-08-01T00:00:00.000Z') })
+    const ids = posts.map((p) => p.id).sort()
+    expect(ids).toContain('shower-1') // future event → stays up
+    expect(ids).toContain('nw-1') // medical news expires 2026-12-01 → still active
+    expect(ids).not.toContain('native-1') // news-shaped, window ended → dropped
+    expect(ids).not.toContain('ev-1') // baptism, no future date → dropped
+  })
+
+  it('surfaces the eve-of reminder flag via getPostsForViewerWithState', async () => {
+    const funeralArc: Post = {
+      ...nativePost,
+      id: 'arc-1',
+      title: 'Funeral',
+      occasion: ['funeral'],
+      lifecycle: { publishDate: '2026-07-01T00:00:00.000Z' },
+      blocks: [{ id: 't', kind: 'time', label: 'Service', startsAt: '2026-08-14T12:00:00.000Z' }],
+    }
+    ;(postRepository.listAllPosts as any).mockResolvedValue([funeralArc])
+    ;(getPublishedEvents as any).mockResolvedValue([])
+    ;(listNewsItems as any).mockResolvedValue([])
+
+    // 2026-08-14 is a Friday → Thursday-before is 2026-08-13. (Noon-UTC times keep
+    // the calendar day stable under the engine's local-time weekday check.)
+    const onThursday = await getPostsForViewerWithState(member, {
+      now: new Date('2026-08-13T12:00:00.000Z'),
+    })
+    expect(onThursday.find((w) => w.post.id === 'arc-1')?.isReminder).toBe(true)
+
+    const weekEarlier = await getPostsForViewerWithState(member, {
+      now: new Date('2026-08-06T12:00:00.000Z'),
+    })
+    // Still active (event upcoming) but NOT the reminder day.
+    const w = weekEarlier.find((x) => x.post.id === 'arc-1')
+    expect(w?.post).toBeDefined()
+    expect(w?.isReminder).toBe(false)
+  })
+
   it('scopes to a tenant via listPosts and filters legacy by tenant', async () => {
     ;(getPublishedEvents as any).mockResolvedValue([
       legacyEvent,
       { ...legacyEvent, id: 'ev-other', ownerEcclesia: 'Hamilton' },
     ])
 
-    const posts = await getPostsForViewer(member, { tenant: 'Toronto East' })
+    const posts = await getPostsForViewer(member, { tenant: 'Toronto East', now: NOW })
 
     expect(postRepository.listPosts).toHaveBeenCalledWith(
       expect.objectContaining({ tenant: 'Toronto East' })

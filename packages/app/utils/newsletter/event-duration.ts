@@ -1,4 +1,5 @@
 import { DisplayDuration, EventTypeRule, DurationCalculationResult, EventDurationContext } from '@my/app/types/newsletter-rules'
+import { getThursdayBefore, isSameDay, isUserDateOnOrBefore } from './date-helpers'
 
 /**
  * Event Duration Calculator
@@ -354,53 +355,19 @@ export class EventDurationCalculator {
     }
   }
 
-  /**
-   * Get the Thursday before a given date
-   * If the date is a Thursday, returns the previous Thursday (7 days before)
-   */
+  // Date helpers (getThursdayBefore / isSameDay / isUserDateOnOrBefore) now live
+  // in ./date-helpers so the unified Post lifecycle engine reuses the identical
+  // logic. Thin private wrappers keep the existing call sites unchanged.
   private static getThursdayBefore(date: Date): Date {
-    const result = new Date(date)
-    const dayOfWeek = result.getDay()
-    // Calculate days to go back to reach Thursday (4)
-    // If date is Thursday (4), go back 7 days to previous Thursday
-    // If date is Friday (5), go back 1 day
-    // If date is Saturday (6), go back 2 days
-    // If date is Sunday (0), go back 3 days
-    // If date is Monday (1), go back 4 days
-    // If date is Tuesday (2), go back 5 days
-    // If date is Wednesday (3), go back 6 days
-    const daysBack = dayOfWeek === 4 ? 7 : (dayOfWeek + 3) % 7 || 7
-    result.setDate(result.getDate() - daysBack)
-    return result
+    return getThursdayBefore(date)
   }
 
-  /**
-   * Check if two dates are the same day (ignoring time)
-   * Both dates use the same timezone context (local methods)
-   */
   private static isSameDay(date1: Date, date2: Date): boolean {
-    return (
-      date1.getFullYear() === date2.getFullYear() &&
-      date1.getMonth() === date2.getMonth() &&
-      date1.getDate() === date2.getDate()
-    )
+    return isSameDay(date1, date2)
   }
 
-  /**
-   * Timezone-aware date comparison for event filtering.
-   *
-   * Event dates stored as "YYYY-MM-DD" create midnight UTC dates, so we use
-   * UTC accessors (getUTCFullYear etc.) to get the intended calendar date.
-   *
-   * currentDate (from browser's new Date()) uses local accessors to get the
-   * user's actual calendar date in their timezone.
-   *
-   * This ensures events show until midnight in the USER's timezone.
-   */
   private static isUserDateOnOrBefore(currentDate: Date, eventDate: Date): boolean {
-    const currentStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
-    const eventStr = `${eventDate.getUTCFullYear()}-${String(eventDate.getUTCMonth() + 1).padStart(2, '0')}-${String(eventDate.getUTCDate()).padStart(2, '0')}`
-    return currentStr <= eventStr
+    return isUserDateOnOrBefore(currentDate, eventDate)
   }
 
   /**
