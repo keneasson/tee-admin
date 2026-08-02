@@ -6,7 +6,7 @@ import { YStack, XStack, Text, Spinner, Heading, Button } from '@my/ui'
 import { PostEditor, createEmptyPost, validateForPublish } from '@my/ui/src/post-editor'
 import { useAdminAccess } from '@/hooks/use-admin-access'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { getPost, createPost, updatePost } from '@my/app/provider/get-data'
+import { getPost, createPost, updatePost, getPostSeries } from '@my/app/provider/get-data'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import type { Post } from '@my/app/types/post'
 
@@ -34,6 +34,7 @@ export default function AdminPostEditorPage() {
   const [post, setPost] = useState<Post | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [seriesPosts, setSeriesPosts] = useState<Array<{ id: string; title: string }>>([])
 
   // The server-assigned id once the draft has been created (starts '' for new).
   const savedIdRef = useRef<string>('')
@@ -68,6 +69,27 @@ export default function AdminPostEditorPage() {
       cancelled = true
     }
   }, [hasAccess, routeId, authorId])
+
+  // ---- Connect/series indicator ("part of a series — N related") -----------
+  useEffect(() => {
+    if (!hasAccess || !post?.id || !post.seriesId) {
+      setSeriesPosts([])
+      return
+    }
+    let cancelled = false
+    getPostSeries(post.id)
+      .then((siblings) => {
+        if (cancelled) return
+        setSeriesPosts(siblings.map((s) => ({ id: s.id, title: s.title })))
+      })
+      .catch(() => {
+        // Non-critical — the indicator simply stays hidden on failure.
+        if (!cancelled) setSeriesPosts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hasAccess, post?.id, post?.seriesId])
 
   // ---- Persist (create-then-update) ----------------------------------------
   const persist = useCallback(async (next: Post): Promise<Post | null> => {
@@ -183,7 +205,13 @@ export default function AdminPostEditorPage() {
         </Text>
       </XStack>
 
-      <PostEditor value={post} onChange={handleChange} onPublish={handlePublish} />
+      <PostEditor
+        value={post}
+        onChange={handleChange}
+        onPublish={handlePublish}
+        seriesPosts={seriesPosts}
+        onSeriesPostPress={(id) => router.push(`/admin/posts/${id}`)}
+      />
     </YStack>
   )
 }

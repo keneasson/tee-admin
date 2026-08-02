@@ -47,6 +47,7 @@ export interface CreatePostInput {
   lifecycle?: Post['lifecycle']
   blocks?: Post['blocks']
   status?: Post['status']
+  seriesId?: Post['seriesId']
 }
 
 /** Fields a caller may patch. Keys, id, tenant and createdAt are immutable here. */
@@ -61,6 +62,7 @@ export type UpdatePostInput = Partial<
     | 'lifecycle'
     | 'blocks'
     | 'status'
+    | 'seriesId'
   >
 >
 
@@ -84,6 +86,19 @@ export interface ListPostsResult {
 /** The date a post sorts by in gsi2: its publishDate, else its createdAt. */
 function sortDate(lifecycle: Post['lifecycle'] | undefined, createdAt: string): string {
   return lifecycle?.publishDate || createdAt
+}
+
+/**
+ * Mint a fresh block id for a duplicated post. Same compact time+random
+ * scheme as the client editor's `genId` (packages/ui/src/post-editor/
+ * post-reducer.ts) so server- and client-minted block ids are
+ * indistinguishable — duplicated here (rather than imported) so this
+ * server-side repository stays free of a `packages/ui` dependency
+ * (CLAUDE.md cross-platform layering: shared data code never reaches into UI).
+ */
+function mintBlockId(prefix = 'blk'): string {
+  const rand = Math.random().toString(36).slice(2, 10)
+  return `${prefix}_${Date.now().toString(36)}_${rand}`
 }
 
 /**
@@ -160,6 +175,7 @@ export class PostRepository extends BaseRepository<PostRecord> {
       createdAt: now,
       updatedAt: now,
       status: input.status ?? 'draft',
+      seriesId: input.seriesId,
     }
 
     const record: PostRecord = {
@@ -269,6 +285,78 @@ export class PostRepository extends BaseRepository<PostRecord> {
     } while (lastKey)
 
     return posts
+  }
+
+  /**
+   * List every post sharing a `seriesId` (Connect/series, Consolidated CMS
+   * epic #131). Series are small (a handful of related posts), so — like
+   * {@link listAllPosts} — a filtered scan mirrors the existing query style
+   * instead of adding a dedicated GSI for what is, today, a rare lookup.
+   */
+  async listPostsBySeries(seriesId: string): Promise<Post[]> {
+    if (!seriesId) return []
+    const posts: Post[] = []
+    let lastKey: Record<string, any> | undefined
+
+    do {
+      const result = await this.scan({
+        filterExpression: 'begins_with(pkey, :prefix) AND seriesId = :seriesId',
+        expressionAttributeValues: { ':prefix': 'POST#', ':seriesId': seriesId },
+        lastEvaluatedKey: lastKey,
+      })
+      posts.push(...result.items.map(PostRepository.toPost))
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
+
+    return posts
+  }
+
+  /**
+   * Duplicate a post's STRUCTURE into a fresh draft (Consolidated CMS epic
+   * #131 "Duplicate/replicate"): so an annual gathering or study day isn't
+   * rebuilt from scratch every year. Deep-clones `blocks` with FRESH block ids
+   * (mirrors the client editor's `genId` scheme — see {@link mintBlockId}) so
+   * neither post's blocks alias the other's. `title`/`occasion`/`blocks`
+   * (structure) carry over verbatim for the author to edit; `id`/`createdAt`/
+   * `updatedAt` are freshly minted by {@link createPost} and `status` resets to
+   * `'draft'`.
+   *
+   * `seriesId` = the source's existing series, or a brand-new one — either way
+   * the source AND the new draft end up sharing ONE seriesId (Connect/series:
+   * "a duplicate auto-joins the original's series"). When the source had no
+   * `seriesId` yet, it is retroactively updated to the new series id so the
+   * pair is linked from both sides.
+   *
+   * `authorId` is caller-supplied (never trusts a client body — mirrors
+   * {@link createPost}'s convention; the API route derives it from the session).
+   */
+  async duplicatePost(id: string, authorId: string): Promise<Post> {
+    const source = await this.getPost(id)
+    if (!source) throw new Error(`Post ${id} not found`)
+
+    const seriesId = source.seriesId ?? uuidv4()
+    if (!source.seriesId) {
+      await this.updatePost(source.id, { seriesId })
+    }
+
+    const blocks = source.blocks.map((block) => ({
+      ...(JSON.parse(JSON.stringify(block)) as typeof block),
+      id: mintBlockId(),
+    }))
+
+    return this.createPost({
+      tenant: source.tenant,
+      authorId,
+      title: source.title,
+      occasion: source.occasion,
+      summary: source.summary,
+      visibility: source.visibility,
+      sharingScope: source.sharingScope,
+      lifecycle: { ...source.lifecycle },
+      blocks,
+      status: 'draft',
+      seriesId,
+    })
   }
 }
 

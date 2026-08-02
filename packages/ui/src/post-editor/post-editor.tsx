@@ -30,9 +30,28 @@ export interface PostEditorProps {
   value: Post
   onChange: (next: Post) => void
   onPublish?: (post: Post) => void
+  /**
+   * Connect/series (Consolidated CMS epic #131): the OTHER posts sharing
+   * `value.seriesId`, for the "part of a series — N related" indicator. Omit
+   * (or pass an empty array) to hide it — e.g. while the page's own series
+   * fetch is still loading, or the post has no `seriesId`.
+   */
+  seriesPosts?: Array<{ id: string; title: string }>
+  /**
+   * Navigate to a sibling series post. Platform navigation (next/navigation on
+   * web, a different stack on native) is kept OUT of this shared editor —
+   * the page supplies it, same as auth state elsewhere in this package.
+   */
+  onSeriesPostPress?: (postId: string) => void
 }
 
-export function PostEditor({ value, onChange, onPublish }: PostEditorProps) {
+export function PostEditor({
+  value,
+  onChange,
+  onPublish,
+  seriesPosts,
+  onSeriesPostPress,
+}: PostEditorProps) {
   const dispatch = (action: PostAction) => onChange(postReducer(value, action))
   const [toolbarExpanded, setToolbarExpanded] = useState(true)
 
@@ -152,6 +171,27 @@ export function PostEditor({ value, onChange, onPublish }: PostEditorProps) {
           </YStack>
         </XStack>
       </Card>
+
+      {/* ---- Connect/series indicator ---------------------------------------- */}
+      {(seriesPosts?.length ?? 0) > 0 ? (
+        <Card bordered padding="$3" gap="$2" backgroundColor="$blue2">
+          <Text fontSize="$3" fontWeight="600">
+            Part of a series — {seriesPosts!.length} related
+          </Text>
+          <XStack gap="$2" flexWrap="wrap">
+            {seriesPosts!.map((sibling) => (
+              <Button
+                key={sibling.id}
+                size="$2"
+                chromeless
+                onPress={() => onSeriesPostPress?.(sibling.id)}
+              >
+                {sibling.title || 'Untitled post'}
+              </Button>
+            ))}
+          </XStack>
+        </Card>
+      ) : null}
 
       {/* ---- Block canvas --------------------------------------------------- */}
       <YStack gap="$3">

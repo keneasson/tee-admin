@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { YStack, XStack, Card, Text, Spinner, Heading, Button, Paragraph } from '@my/ui'
-import { Plus } from '@tamagui/lucide-icons'
+import { Plus, Copy } from '@tamagui/lucide-icons'
 import { useAdminAccess } from '@/hooks/use-admin-access'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { listPosts } from '@my/app/provider/get-data'
+import { listPosts, duplicatePost } from '@my/app/provider/get-data'
 import type { Post } from '@my/app/types/post'
 
 /**
@@ -48,6 +48,7 @@ export default function AdminPostsPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!hasAccess) return
@@ -71,6 +72,21 @@ export default function AdminPostsPage() {
       cancelled = true
     }
   }, [hasAccess])
+
+  // Duplicate/replicate (Consolidated CMS epic #131): clone the post's
+  // structure into a fresh draft, then jump straight into editing it.
+  const handleDuplicate = async (postId: string) => {
+    if (duplicatingId) return
+    setDuplicatingId(postId)
+    setErrorMessage(null)
+    try {
+      const draft = await duplicatePost(postId)
+      router.push(`/admin/posts/${draft.id}`)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to duplicate post')
+      setDuplicatingId(null)
+    }
+  }
 
   if (!isHydrated || isLoading || !hasAccess) {
     return (
@@ -131,6 +147,19 @@ export default function AdminPostsPage() {
                     {post.status}
                   </Text>
                 </XStack>
+                <Button
+                  size="$2"
+                  variant="outlined"
+                  icon={<Copy size={14} />}
+                  disabled={duplicatingId === post.id}
+                  aria-label={`Duplicate ${post.title || 'Untitled post'}`}
+                  onPress={(e: any) => {
+                    e.stopPropagation()
+                    void handleDuplicate(post.id)
+                  }}
+                >
+                  {duplicatingId === post.id ? 'Duplicating…' : 'Duplicate'}
+                </Button>
               </XStack>
 
               <XStack justifyContent="space-between" alignItems="center" gap="$3" flexWrap="wrap">

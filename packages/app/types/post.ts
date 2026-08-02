@@ -216,6 +216,16 @@ export interface Post {
   occasion: OccasionTag[] // DATA, not a code path
   summary?: string // short, PII-safe headline/teaser (public floor)
 
+  /**
+   * pii:'none' — shared id linking related Posts into ONE story/series (design
+   * "Connect/series"): a death's separate events (funeral, celebration-of-life
+   * weeks later), or a recurring annual gathering's yearly instances. Posts
+   * with the same `seriesId` cross-reference and can be browsed as a series.
+   * Unset for a post with no known relations. Never PII — just an internal
+   * grouping id, so the redactor carries it through unchanged.
+   */
+  seriesId?: string
+
   // Reach — coarse gate resolved vs viewer tier.
   visibility: Visibility
   sharingScope: SharingScope

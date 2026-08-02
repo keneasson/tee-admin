@@ -142,3 +142,15 @@ export async function getPostsForViewer(
   const withState = await getPostsForViewerWithState(viewer, options)
   return withState.map((w) => w.post)
 }
+
+/**
+ * Connect/series (Consolidated CMS epic #131): the OTHER posts sharing
+ * `post.seriesId` — excludes `post` itself. Empty when the post has no
+ * `seriesId` (not part of a series). Unredacted — this is the admin-facing
+ * "part of a series" read (editor / posts list), not a public surface.
+ */
+export async function getSeriesForPost(post: Post): Promise<Post[]> {
+  if (!post.seriesId) return []
+  const members = await postRepository.listPostsBySeries(post.seriesId)
+  return members.filter((p) => p.id !== post.id)
+}

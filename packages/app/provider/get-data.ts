@@ -537,3 +537,31 @@ export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post
   }
   return await response.json()
 }
+
+/**
+ * Duplicate/replicate (Consolidated CMS epic #131): clone a post's structure
+ * (title/occasion/blocks, fresh block ids) into a brand-new draft that
+ * auto-joins the source's series (Connect/series). Returns the new draft —
+ * callers navigate to `/admin/posts/{newId}`.
+ */
+export const duplicatePost = async (id: string): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/duplicate`
+  const response = await fetch(url, { cache: 'no-store', method: 'POST' })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to duplicate post (${response.status})`)
+  }
+  return await response.json()
+}
+
+/**
+ * Connect/series (Consolidated CMS epic #131): the other posts sharing this
+ * post's `seriesId` (empty array when it isn't part of a series). Powers the
+ * "part of a series — N related" indicator.
+ */
+export const getPostSeries = async (id: string): Promise<Post[]> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/series`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to load post series (${response.status})`)
+  return await response.json()
+}
