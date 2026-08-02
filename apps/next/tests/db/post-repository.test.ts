@@ -275,4 +275,99 @@ describe('PostRepository', () => {
       expect(posts.map((p) => p.id)).toEqual(['p1'])
     })
   })
+
+  describe('listPostsBySeries', () => {
+    it('scans filtering on seriesId + the POST# prefix', async () => {
+      mockSend.mockResolvedValueOnce({
+        Items: [storedRecord({ id: 'p1', seriesId: 'series-1' })],
+        LastEvaluatedKey: undefined,
+      })
+
+      const posts = await repository.listPostsBySeries('series-1')
+
+      const scanCall = mockSend.mock.calls[0][0]
+      expect(scanCall.type).toBe('ScanCommand')
+      expect(scanCall.params.FilterExpression).toBe(
+        'begins_with(pkey, :prefix) AND seriesId = :seriesId'
+      )
+      expect(scanCall.params.ExpressionAttributeValues).toMatchObject({
+        ':prefix': 'POST#',
+        ':seriesId': 'series-1',
+      })
+      expect(posts.map((p) => p.id)).toEqual(['p1'])
+    })
+
+    it('returns [] without querying when seriesId is empty', async () => {
+      const posts = await repository.listPostsBySeries('')
+      expect(posts).toEqual([])
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('duplicatePost', () => {
+    it('deep-clones blocks with fresh ids, resets id/status/timestamps, and mints a shared seriesId when the source had none', async () => {
+      const source = storedRecord({
+        id: 'src-1',
+        title: 'Toronto Fraternal Gathering 2025',
+        occasion: ['study-weekend'],
+        blocks: [{ id: 'blk-orig', kind: 'text', body: 'Join us', containsPii: false }],
+      })
+      mockSend
+        .mockResolvedValueOnce({ Items: [source] }) // getPost (source)
+        .mockResolvedValueOnce({ Items: [source] }) // updatePost's internal getPost
+        .mockResolvedValueOnce({ Attributes: { ...source, seriesId: 'test-post-uuid' } }) // updatePost's update
+        .mockResolvedValueOnce({}) // createPost's put
+
+      const result = await repository.duplicatePost('src-1', 'duplicator@x.com')
+
+      // 4 calls: getPost(source), updatePost→getPost, updatePost→update, createPost→put.
+      expect(mockSend).toHaveBeenCalledTimes(4)
+
+      // The source is retroactively linked into the freshly-minted series.
+      const backlinkUpdateCall = mockSend.mock.calls[2][0]
+      expect(backlinkUpdateCall.type).toBe('UpdateCommand')
+      expect(Object.values(backlinkUpdateCall.params.ExpressionAttributeValues)).toContain(
+        'test-post-uuid'
+      )
+
+      // The new draft: fresh id/status/authorId, title+occasion carried, blocks
+      // deep-cloned with a FRESH id (not reusing 'blk-orig'), sharing the series.
+      const createPutCall = mockSend.mock.calls[3][0]
+      expect(createPutCall.type).toBe('PutCommand')
+      const item = createPutCall.params.Item
+      expect(item.id).toBe('test-post-uuid')
+      expect(item.status).toBe('draft')
+      expect(item.authorId).toBe('duplicator@x.com')
+      expect(item.title).toBe('Toronto Fraternal Gathering 2025')
+      expect(item.occasion).toEqual(['study-weekend'])
+      expect(item.seriesId).toBe('test-post-uuid')
+      expect(item.blocks).toHaveLength(1)
+      expect(item.blocks[0].id).not.toBe('blk-orig')
+      expect(item.blocks[0].body).toBe('Join us')
+
+      expect(result.id).toBe('test-post-uuid')
+      expect(result.status).toBe('draft')
+    })
+
+    it('reuses the source seriesId (no backlink update) when the source already has one', async () => {
+      const source = storedRecord({ id: 'src-2', seriesId: 'existing-series' })
+      mockSend
+        .mockResolvedValueOnce({ Items: [source] }) // getPost (source)
+        .mockResolvedValueOnce({}) // createPost's put
+
+      const result = await repository.duplicatePost('src-2', 'duplicator@x.com')
+
+      // Only 2 calls — no retroactive backlink update since the source already
+      // had a seriesId.
+      expect(mockSend).toHaveBeenCalledTimes(2)
+      const createPutCall = mockSend.mock.calls[1][0]
+      expect(createPutCall.params.Item.seriesId).toBe('existing-series')
+      expect(result.seriesId).toBe('existing-series')
+    })
+
+    it('throws when the source post does not exist', async () => {
+      mockSend.mockResolvedValueOnce({ Items: [] }) // getPost → none
+      await expect(repository.duplicatePost('missing', 'x@x.com')).rejects.toThrow(/not found/)
+    })
+  })
 })

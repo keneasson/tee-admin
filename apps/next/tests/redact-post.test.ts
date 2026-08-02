@@ -243,6 +243,18 @@ describe('redactPost — reach gating', () => {
     expect(redactPost(post, member)!.blocks).toHaveLength(0)
     expect(redactPost(post, admin)!.blocks).toHaveLength(1)
   })
+
+  it('seriesId (pii:none, Connect/series) carries through unchanged for every viewer tier', () => {
+    const post: Post = { ...base, visibility: 'public', blocks: [], seriesId: 'series-abc' }
+    expect(redactPost(post, anon)!.seriesId).toBe('series-abc')
+    expect(redactPost(post, member)!.seriesId).toBe('series-abc')
+    expect(redactPost(post, admin)!.seriesId).toBe('series-abc')
+  })
+
+  it('a post with no seriesId redacts with seriesId still undefined', () => {
+    const post: Post = { ...base, visibility: 'public', blocks: [] }
+    expect(redactPost(post, member)).not.toHaveProperty('seriesId')
+  })
 })
 
 // ── canSee tier matrix ───────────────────────────────────────────────────────

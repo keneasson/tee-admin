@@ -6,6 +6,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/post-repository', () => ({
   postRepository: {
     listPosts: vi.fn(),
     listAllPosts: vi.fn(),
+    listPostsBySeries: vi.fn(),
   },
 }))
 vi.mock('@my/app/services/event-service', () => ({
@@ -15,7 +16,11 @@ vi.mock('@my/app/services/news-service', () => ({
   listNewsItems: vi.fn(),
 }))
 
-import { getPostsForViewer, getPostsForViewerWithState } from '@my/app/services/post-service'
+import {
+  getPostsForViewer,
+  getPostsForViewerWithState,
+  getSeriesForPost,
+} from '@my/app/services/post-service'
 import { postRepository } from '@my/app/provider/dynamodb/repositories/post-repository'
 import { getPublishedEvents } from '@my/app/services/event-service'
 import { listNewsItems } from '@my/app/services/news-service'
@@ -216,5 +221,28 @@ describe('getPostsForViewer', () => {
     expect(postRepository.listAllPosts).not.toHaveBeenCalled()
     // The Hamilton event is filtered out; Toronto East legacy + native remain.
     expect(posts.map((p) => p.id).sort()).toEqual(['ev-1', 'native-1', 'nw-1'])
+  })
+})
+
+describe('getSeriesForPost', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns [] without querying when the post has no seriesId', async () => {
+    const result = await getSeriesForPost(nativePost)
+    expect(result).toEqual([])
+    expect(postRepository.listPostsBySeries).not.toHaveBeenCalled()
+  })
+
+  it('returns the OTHER series members, excluding the post itself', async () => {
+    const self: Post = { ...nativePost, id: 'gathering-2026', seriesId: 'tfg' }
+    const sibling2025: Post = { ...nativePost, id: 'gathering-2025', seriesId: 'tfg' }
+    ;(postRepository.listPostsBySeries as any).mockResolvedValue([self, sibling2025])
+
+    const result = await getSeriesForPost(self)
+
+    expect(postRepository.listPostsBySeries).toHaveBeenCalledWith('tfg')
+    expect(result.map((p) => p.id)).toEqual(['gathering-2025'])
   })
 })
