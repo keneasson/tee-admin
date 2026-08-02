@@ -132,6 +132,19 @@ export interface LocationBlock extends BlockBase {
   onlineMeeting?: OnlineMeetingInfo // pii:'none' — virtual meeting link/details
 }
 
+/**
+ * Author-controlled reminder offset anchored to a {@link TimeBlock}'s `startsAt`
+ * or a {@link RegistrationBlock}'s `deadline`. Extensible (data, not a code path
+ * per-type — mirrors {@link OccasionTag}). Both offsets always resolve to a
+ * THURSDAY, matching the weekly newsletter cadence (post-lifecycle.ts):
+ *  - `'eve-of'` — the Thursday immediately before the anchor date (the Phase 4a
+ *    "final reminder" rule; if the anchor itself IS a Thursday, the PRIOR
+ *    Thursday, 7 days back).
+ *  - `'week-before'` — the Thursday exactly 7 calendar days before the
+ *    `'eve-of'` Thursday (so ~9–13 days before the anchor, always a Thursday).
+ */
+export type ReminderOffset = 'eve-of' | 'week-before'
+
 /** Timezone-aware date/time. Presence of a FUTURE `startsAt` drives the event facet. */
 export interface TimeBlock extends BlockBase {
   kind: 'time'
@@ -140,6 +153,11 @@ export interface TimeBlock extends BlockBase {
   endsAt?: string // ISO-8601
   timezone?: string // IANA (e.g. 'America/Toronto')
   display?: string // free-text time when no ISO value (e.g. '7:30pm')
+  /**
+   * pii:'none' — which reminder(s) to fire before `startsAt`. Unset (or empty)
+   * ⇒ defaults to `['eve-of']`, preserving the Phase 4a behaviour exactly.
+   */
+  remind?: ReminderOffset[]
 }
 
 /** PDF/image attachment. PII can be baked into pixels — unredactable — so under a
@@ -160,6 +178,11 @@ export interface RegistrationBlock extends BlockBase {
   fee?: number
   paymentInstructions?: string
   notes?: string
+  /**
+   * pii:'none' — which reminder(s) to fire before `deadline`. Unset (or empty)
+   * ⇒ no deadline reminder (this is new, opt-in behaviour; Phase 4a had none).
+   */
+  remindDeadline?: ReminderOffset[]
 }
 
 export interface LinkBlock extends BlockBase {

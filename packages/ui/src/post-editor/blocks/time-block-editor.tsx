@@ -1,8 +1,9 @@
 import { YStack, XStack, Label, Text, Input } from 'tamagui'
-import type { TimeBlock } from '@my/app/types/post'
+import type { ReminderOffset, TimeBlock } from '@my/app/types/post'
 import type { BlockEditorProps } from '../registry'
 import { genId } from '../post-reducer'
 import { PlainSelect } from '../plain-select'
+import { PlainCheckbox } from '../plain-checkbox'
 import {
   DEFAULT_TIMEZONE,
   TIMEZONE_OPTIONS,
@@ -58,9 +59,27 @@ function utcToWallTime(iso: string | undefined, timeZone: string): string {
   return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}`
 }
 
+/**
+ * `remind` unset ⇒ defaults to eve-of only (post-lifecycle.ts DEFAULT_TIME_REMINDERS).
+ * Once the author touches either checkbox we always write an explicit array —
+ * including `[]` if they uncheck everything, which the engine honours as "no
+ * reminders" (does NOT fall back to the default; see post-lifecycle.ts).
+ */
+function toggleReminderOffset(
+  current: ReminderOffset[] | undefined,
+  offset: ReminderOffset,
+  checked: boolean
+): ReminderOffset[] {
+  const effective = current ?? ['eve-of']
+  return checked
+    ? Array.from(new Set([...effective, offset]))
+    : effective.filter((o) => o !== offset)
+}
+
 export function TimeBlockEditor({ block, onChange }: BlockEditorProps<TimeBlock>) {
   const timezone = block.timezone || DEFAULT_TIMEZONE
   const wallValue = utcToWallTime(block.startsAt, timezone)
+  const effectiveRemind = block.remind ?? ['eve-of']
 
   const preview = block.startsAt
     ? formatScheduleDateTime({
@@ -125,6 +144,29 @@ export function TimeBlockEditor({ block, onChange }: BlockEditorProps<TimeBlock>
           Enter a date/time (24-hour). Stored in UTC; shown in the chosen timezone.
         </Text>
       )}
+
+      <YStack gap="$1">
+        <Label fontSize="$3" fontWeight="600">
+          Reminders
+        </Label>
+        <PlainCheckbox
+          checked={effectiveRemind.includes('eve-of')}
+          onCheckedChange={(checked) =>
+            onChange({ ...block, remind: toggleReminderOffset(block.remind, 'eve-of', checked) })
+          }
+          label="Remind the day-of week (Thursday before the event)"
+        />
+        <PlainCheckbox
+          checked={effectiveRemind.includes('week-before')}
+          onCheckedChange={(checked) =>
+            onChange({
+              ...block,
+              remind: toggleReminderOffset(block.remind, 'week-before', checked),
+            })
+          }
+          label="Remind the week before the event"
+        />
+      </YStack>
     </YStack>
   )
 }

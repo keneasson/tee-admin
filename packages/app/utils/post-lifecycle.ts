@@ -35,7 +35,7 @@
  * `newsletter/date-helpers.ts` — no duplication.
  */
 
-import type { Post, TimeBlock } from '../types/post'
+import type { Post, RegistrationBlock, ReminderOffset, TimeBlock } from '../types/post'
 import { getThursdayBefore, isSameDay, isUserDateOnOrBefore } from './newsletter/date-helpers'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -60,11 +60,42 @@ export interface DisplayStateOptions {
   defaultNewsWindowWeeks?: number
 }
 
+/** Reminder offset(s) applied when a TimeBlock omits `remind` (Phase 4a default). */
+const DEFAULT_TIME_REMINDERS: ReminderOffset[] = ['eve-of']
+
 /** A single time happening on a Post (a TimeBlock, or the lifecycle-level date). */
 interface Happening {
   startsAt: string
   endsAt?: string
   label?: string
+  /** Author-configured reminder offsets; undefined ⇒ {@link DEFAULT_TIME_REMINDERS}. */
+  remind?: ReminderOffset[]
+}
+
+/** A single registration deadline anchor on a Post's RegistrationBlock(s). */
+interface DeadlineAnchor {
+  deadline: string
+  /** Author-configured reminder offsets; undefined/empty ⇒ no reminder (opt-in). */
+  remindDeadline?: ReminderOffset[]
+}
+
+/**
+ * The Thursday exactly 7 calendar days before `date`'s eve-of Thursday
+ * ({@link getThursdayBefore}). Calendar (`setDate`) subtraction, not ms
+ * arithmetic, so DST transitions can't shift it off Thursday.
+ */
+function getWeekBeforeThursday(date: Date): Date {
+  const eveOf = getThursdayBefore(date)
+  const result = new Date(eveOf)
+  result.setDate(result.getDate() - 7)
+  return result
+}
+
+/** Does `now` match ANY of `offsets` relative to `anchor` (an event start or a deadline)? */
+function matchedReminderOffset(now: Date, anchor: Date, offsets: ReminderOffset[]): ReminderOffset | undefined {
+  if (offsets.includes('eve-of') && isSameDay(now, getThursdayBefore(anchor))) return 'eve-of'
+  if (offsets.includes('week-before') && isSameDay(now, getWeekBeforeThursday(anchor))) return 'week-before'
+  return undefined
 }
 
 function parseDate(value?: string): Date | undefined {
@@ -91,15 +122,42 @@ function collectHappenings(post: Post): Happening[] {
     if (block.kind === 'time') {
       const tb = block as TimeBlock
       if (tb.startsAt) {
-        out.push({ startsAt: tb.startsAt, endsAt: tb.endsAt, label: tb.label })
+        out.push({ startsAt: tb.startsAt, endsAt: tb.endsAt, label: tb.label, remind: tb.remind })
       }
     }
   }
   const ls = post.lifecycle.startsAt
   if (ls && !out.some((h) => sameInstant(h.startsAt, ls))) {
+    // Lifecycle-level date has no block to carry `remind` — falls back to the
+    // same DEFAULT_TIME_REMINDERS as an unconfigured TimeBlock (no regression).
     out.push({ startsAt: ls, endsAt: post.lifecycle.endsAt, label: post.title })
   }
   return out
+}
+
+/** All RegistrationBlock deadlines on the Post that carry a `deadline`. */
+function collectDeadlines(post: Post): DeadlineAnchor[] {
+  const out: DeadlineAnchor[] = []
+  for (const block of post.blocks) {
+    if (block.kind === 'registration') {
+      const rb = block as RegistrationBlock
+      if (rb.deadline && parseDate(rb.deadline)) {
+        out.push({ deadline: rb.deadline, remindDeadline: rb.remindDeadline })
+      }
+    }
+  }
+  return out
+}
+
+/** The nearest still-upcoming registration deadline, sequence-aware like {@link resolvePostNextDate}. */
+function resolveNextDeadline(post: Post, now: Date): DeadlineAnchor | undefined {
+  const upcoming = collectDeadlines(post).filter((d) =>
+    isUserDateOnOrBefore(now, parseDate(d.deadline)!)
+  )
+  if (upcoming.length === 0) return undefined
+  return upcoming.reduce((next, d) =>
+    parseDate(d.deadline)! < parseDate(next.deadline)! ? d : next
+  )
 }
 
 /** The date through which a happening keeps a post active (multi-day → its end). */
@@ -164,23 +222,30 @@ export function resolvePostLastDate(post: Post): string | undefined {
 
 /**
  * THE unified lifecycle rule. Given a Post and `now`, decide whether it is active
- * and whether `now` is its bounded eve-of reminder.
+ * and whether `now` is one of its bounded reminders.
  *
- * 1. Not yet published (`publishDate` in the future) ⇒ inactive.
+ * 1. Not yet published (`publishDate` in the future) ⇒ inactive, no reminders.
  * 2. Has a future happening ({@link resolvePostNextDate}) ⇒ **event-shaped**:
- *    active through that happening; `isReminder` on the Thursday immediately
- *    before the NEXT happening. As each happening passes the next becomes current.
+ *    active through that happening; `isReminder` when `now` matches one of the
+ *    happening's CONFIGURED `remind` offsets ({@link ReminderOffset}) — a
+ *    TimeBlock with no `remind` set defaults to `['eve-of']` (Phase 4a
+ *    behaviour, unchanged). As each happening passes the next becomes current.
  * 3. No future happening (none, or all past) ⇒ **news-shaped**: active from
  *    publish for its retrospective window (`lifecycle.expiresAt`, else a default
  *    window anchored at the later of publish / last happening). Subsumes
  *    `isNewsActive`.
+ *
+ * Independently of 2/3, any RegistrationBlock with a still-upcoming `deadline`
+ * and a configured `remindDeadline` contributes its own reminder — folded into
+ * the same `isReminder`/`reason` output (does not affect `active`; a deadline
+ * alone does not make a Post event-shaped, only a TimeBlock does — design §6).
  */
 export function getPostDisplayState(
   post: Post,
   now: Date,
   opts: DisplayStateOptions = {}
 ): PostDisplayState {
-  // 1. Not yet published.
+  // 1. Not yet published — no reminders fire for unpublished content.
   const publishDate = parseDate(post.lifecycle.publishDate)
   if (publishDate && publishDate.getTime() > now.getTime()) {
     return {
@@ -190,18 +255,46 @@ export function getPostDisplayState(
     }
   }
 
+  // Deadline reminder (independent of event-shaped/news-shaped branch below).
+  const nextDeadline = resolveNextDeadline(post, now)
+  let deadlineReminderReason: string | undefined
+  if (nextDeadline) {
+    const deadlineDate = parseDate(nextDeadline.deadline)!
+    const matched = matchedReminderOffset(now, deadlineDate, nextDeadline.remindDeadline ?? [])
+    if (matched === 'week-before') {
+      deadlineReminderReason = `Reminder — week before signup deadline (${deadlineDate.toDateString()})`
+    } else if (matched === 'eve-of') {
+      deadlineReminderReason = `Reminder — signup deadline this week (${deadlineDate.toDateString()})`
+    }
+  }
+
   // 2. Event-shaped: any happening still upcoming.
   const next = resolvePostNextDate(post, now)
   if (next) {
     const nextStart = parseDate(next.startsAt)!
-    const thursdayBefore = getThursdayBefore(nextStart)
-    const isReminder = isSameDay(now, thursdayBefore)
     const which = next.label ?? post.title
+    // `remind` UNDEFINED (field never set) ⇒ default to eve-of (Phase 4a).
+    // `remind: []` is a DELIBERATE author choice (all reminders unchecked in
+    // the editor) and must NOT fall back to the default — that would make
+    // "uncheck eve-of" a no-op.
+    const offsets = next.remind !== undefined ? next.remind : DEFAULT_TIME_REMINDERS
+    const matched = matchedReminderOffset(now, nextStart, offsets)
+    const eventReminderReason =
+      matched === 'eve-of'
+        ? `final reminder — Thursday before ${which} (${nextStart.toDateString()})`
+        : matched === 'week-before'
+          ? `Reminder — week before ${which} (${nextStart.toDateString()})`
+          : undefined
+
+    const reasons = [eventReminderReason, deadlineReminderReason].filter(
+      (r): r is string => !!r
+    )
+    const isReminder = reasons.length > 0
     return {
       active: true,
       isReminder,
       reason: isReminder
-        ? `Event-shaped: final reminder — Thursday before ${which} (${nextStart.toDateString()})`
+        ? `Event-shaped: ${reasons.join('; ')}`
         : `Event-shaped: next happening ${which} on ${nextStart.toDateString()} — active until then`,
     }
   }
@@ -225,12 +318,15 @@ export function getPostDisplayState(
 
   const active = now.getTime() < expiresAt.getTime()
   const tail = hadHappening ? ' (all happenings passed)' : ''
+  const isReminder = !!deadlineReminderReason
   return {
     active,
-    isReminder: false,
-    reason: active
-      ? `News-shaped: within retrospective window until ${expiresAt.toDateString()}${tail}`
-      : `News-shaped: retrospective window ended ${expiresAt.toDateString()}${tail}`,
+    isReminder,
+    reason: isReminder
+      ? deadlineReminderReason!
+      : active
+        ? `News-shaped: within retrospective window until ${expiresAt.toDateString()}${tail}`
+        : `News-shaped: retrospective window ended ${expiresAt.toDateString()}${tail}`,
   }
 }
 
