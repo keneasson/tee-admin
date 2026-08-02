@@ -39,6 +39,20 @@ export function RegistrationBlockEditor({ block, onChange }: BlockEditorProps<Re
             placeholder="YYYY-MM-DD"
             autoCapitalize="none"
           />
+          {block.deadline ? (
+            <PlainCheckbox
+              checked={(block.remindDeadline ?? []).includes('week-before')}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...block,
+                  remindDeadline: checked
+                    ? Array.from(new Set([...(block.remindDeadline ?? []), 'week-before' as const]))
+                    : (block.remindDeadline ?? []).filter((o) => o !== 'week-before'),
+                })
+              }
+              label="Remind the week before the signup deadline"
+            />
+          ) : null}
         </YStack>
 
         <YStack minWidth={220} flex={1} gap="$2">

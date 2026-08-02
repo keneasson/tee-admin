@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Block, Post } from '@my/app/types/post'
+import type { Block, Post, ReminderOffset } from '@my/app/types/post'
 import {
   DEFAULT_NEWS_WINDOW_WEEKS,
   getPostDisplayState,
@@ -48,6 +48,25 @@ function makePost(overrides: Partial<Post> = {}): Post {
 
 function timeBlock(id: string, startsAt: string, label?: string, endsAt?: string): Block {
   return { id, kind: 'time', startsAt, ...(endsAt ? { endsAt } : {}), ...(label ? { label } : {}) }
+}
+
+/** A TimeBlock with an explicit `remind` config (reminder-controls slice). */
+function timeBlockWithRemind(
+  id: string,
+  startsAt: string,
+  remind: ReminderOffset[],
+  label?: string
+): Block {
+  return { id, kind: 'time', startsAt, remind, ...(label ? { label } : {}) }
+}
+
+/** A RegistrationBlock with a deadline + optional `remindDeadline` config. */
+function registrationBlock(
+  id: string,
+  deadline: string,
+  remindDeadline?: ReminderOffset[]
+): Block {
+  return { id, kind: 'registration', deadline, ...(remindDeadline ? { remindDeadline } : {}) }
 }
 
 // ── resolvePostStartsAt ───────────────────────────────────────────────────────
@@ -265,5 +284,147 @@ describe('getPostDisplayState — death arc (funeral → celebration of life)', 
     const s = getPostDisplayState(arc, at(2026, 10, 10))
     expect(s.active).toBe(false)
     expect(s.reason).toMatch(/News-shaped/)
+  })
+})
+
+// ── reminder controls (Consolidated CMS #131 — this slice) ───────────────────
+//
+// Event 2026-08-15 is a Saturday. Its eve-of Thursday (getThursdayBefore) is
+// 2026-08-13; the week-before Thursday (exactly 7 calendar days earlier, per
+// getWeekBeforeThursday) is 2026-08-06.
+describe('getPostDisplayState — reminder offsets (TimeBlock.remind)', () => {
+  it('DEFAULT (no remind set) behaves EXACTLY as Phase 4a: eve-of only, nothing regresses', () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [timeBlock('t', iso(2026, 8, 15), 'Service')],
+    })
+    // Week-before Thursday: NOT a reminder by default.
+    expect(getPostDisplayState(post, at(2026, 8, 6)).isReminder).toBe(false)
+    // Eve-of Thursday: reminder fires (unchanged 4a behaviour).
+    const eveOf = getPostDisplayState(post, at(2026, 8, 13))
+    expect(eveOf.isReminder).toBe(true)
+    expect(eveOf.reason).toMatch(/final reminder/i)
+  })
+
+  it("'week-before' fires on the week-before Thursday and NOT on eve-of when it's the only offset configured", () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [timeBlockWithRemind('t', iso(2026, 8, 15), ['week-before'], 'Service')],
+    })
+    const weekBefore = getPostDisplayState(post, at(2026, 8, 6))
+    expect(weekBefore.isReminder).toBe(true)
+    expect(weekBefore.reason).toContain('Reminder — week before Service')
+    expect(weekBefore.reason).toContain('2026')
+
+    // Eve-of Thursday: NOT a reminder — 'eve-of' wasn't configured.
+    expect(getPostDisplayState(post, at(2026, 8, 13)).isReminder).toBe(false)
+  })
+
+  it("BOTH offsets configured → BOTH fire, each on its own Thursday", () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [timeBlockWithRemind('t', iso(2026, 8, 15), ['eve-of', 'week-before'], 'Service')],
+    })
+    const weekBefore = getPostDisplayState(post, at(2026, 8, 6))
+    expect(weekBefore.isReminder).toBe(true)
+    expect(weekBefore.reason).toContain('Reminder — week before Service')
+
+    const eveOf = getPostDisplayState(post, at(2026, 8, 13))
+    expect(eveOf.isReminder).toBe(true)
+    expect(eveOf.reason).toMatch(/final reminder/i)
+  })
+
+  it('an explicit EMPTY remind ([]) means NO reminders at all — unchecking eve-of is not a no-op', () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [timeBlockWithRemind('t', iso(2026, 8, 15), [], 'Service')],
+    })
+    expect(getPostDisplayState(post, at(2026, 8, 6)).isReminder).toBe(false)
+    expect(getPostDisplayState(post, at(2026, 8, 13)).isReminder).toBe(false)
+    // Still active through the event — remind config never affects `active`.
+    expect(getPostDisplayState(post, at(2026, 8, 13)).active).toBe(true)
+  })
+
+  it('the death arc still reminds per-happening with per-block remind config', () => {
+    // Funeral (2026-08-14, Fri) wants eve-of only; celebration (2026-09-19, Sat)
+    // wants week-before only — independently configured per happening.
+    const arc = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [
+        timeBlockWithRemind('funeral', iso(2026, 8, 14), ['eve-of'], 'Funeral Service'),
+        timeBlockWithRemind('celebration', iso(2026, 9, 19), ['week-before'], 'Celebration of Life'),
+      ],
+    })
+    // Eve-of Thursday before the funeral (2026-08-13).
+    const funeralReminder = getPostDisplayState(arc, at(2026, 8, 13))
+    expect(funeralReminder.isReminder).toBe(true)
+    expect(funeralReminder.reason).toContain('Funeral Service')
+
+    // Celebration's eve-of Thursday (2026-09-17) is NOT configured → no reminder.
+    expect(getPostDisplayState(arc, at(2026, 9, 17)).isReminder).toBe(false)
+    // Celebration's week-before Thursday (2026-09-10) fires.
+    const celebrationReminder = getPostDisplayState(arc, at(2026, 9, 10))
+    expect(celebrationReminder.isReminder).toBe(true)
+    expect(celebrationReminder.reason).toContain('Celebration of Life')
+  })
+})
+
+describe('getPostDisplayState — registration deadline reminders (RegistrationBlock.remindDeadline)', () => {
+  it('fires a "week before signup deadline" reminder when configured, folded into isReminder/reason', () => {
+    // Event + registration deadline both 2026-08-15 (Sat); the event's own
+    // remind is turned off ([]) so only the deadline reminder can fire, proving
+    // the two are independently folded together.
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [
+        timeBlockWithRemind('t', iso(2026, 8, 15), [], 'Study Weekend'),
+        registrationBlock('r', iso(2026, 8, 15), ['week-before']),
+      ],
+    })
+    const s = getPostDisplayState(post, at(2026, 8, 6))
+    expect(s.isReminder).toBe(true)
+    expect(s.reason).toContain('Reminder — week before signup deadline')
+    // No event reminder configured, and this isn't the event's own reminder day.
+    expect(getPostDisplayState(post, at(2026, 8, 13)).isReminder).toBe(false)
+  })
+
+  it('does NOT fire when remindDeadline is unset (opt-in, no Phase 4a precedent to preserve)', () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [
+        timeBlockWithRemind('t', iso(2026, 8, 15), [], 'Study Weekend'),
+        registrationBlock('r', iso(2026, 8, 15)),
+      ],
+    })
+    expect(getPostDisplayState(post, at(2026, 8, 6)).isReminder).toBe(false)
+  })
+
+  it('a deadline reminder and an event reminder can both fire (on their respective days), each with its own reason', () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [
+        timeBlockWithRemind('t', iso(2026, 8, 15), ['eve-of'], 'Study Weekend'),
+        registrationBlock('r', iso(2026, 8, 15), ['week-before']),
+      ],
+    })
+    // Week-before Thursday: only the deadline reminder fires.
+    const weekBefore = getPostDisplayState(post, at(2026, 8, 6))
+    expect(weekBefore.isReminder).toBe(true)
+    expect(weekBefore.reason).toContain('Reminder — week before signup deadline')
+
+    // Eve-of Thursday: only the event reminder fires.
+    const eveOf = getPostDisplayState(post, at(2026, 8, 13))
+    expect(eveOf.isReminder).toBe(true)
+    expect(eveOf.reason).toMatch(/final reminder/i)
+  })
+
+  it('a standalone RegistrationBlock (no TimeBlock) still fires its deadline reminder', () => {
+    const post = makePost({
+      lifecycle: { publishDate: iso(2026, 7, 1) },
+      blocks: [registrationBlock('r', iso(2026, 8, 15), ['week-before'])],
+    })
+    const s = getPostDisplayState(post, at(2026, 8, 6))
+    expect(s.isReminder).toBe(true)
+    expect(s.reason).toContain('Reminder — week before signup deadline')
   })
 })
