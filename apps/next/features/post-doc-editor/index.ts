@@ -20,5 +20,20 @@ export {
   type SerializedTopNode,
 } from './doc-serialization'
 
-// Armed-tool catalogue + factories.
-export { TOOLS, makeToolBlock, type ToolKind, type ToolDef } from './tool-blocks'
+// Armed-tool catalogue + factories (blank insert + seeded convert-selection).
+export { TOOLS, makeToolBlock, makeSeededToolBlock, type ToolKind, type ToolDef } from './tool-blocks'
+
+// Progressive Location resolver + its pure block-mapping logic (unit-tested).
+export { LocationResolver, type LocationResolverProps } from './widgets/location-resolver'
+export {
+  makeLocationBlock,
+  makeSeededLocationBlock,
+  ecclesiaToLocationBlock,
+  plainLocationBlock,
+  externalPlaceToLocationBlock,
+  isLocationResolved,
+  pickUniqueMatch,
+  canEditEcclesiaClient,
+  type EcclesiaSuggestion,
+  type ExternalPlaceAddress,
+} from './widgets/location-resolve'

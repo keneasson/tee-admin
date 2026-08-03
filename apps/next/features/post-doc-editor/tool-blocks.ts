@@ -49,3 +49,21 @@ export function makeToolBlock(kind: ToolKind): Block {
       throw new Error(`Tool "${kind}" is not wired yet (Consolidated CMS 2R-2)`)
   }
 }
+
+/**
+ * SEEDED block for the convert-selection path (2R-1b): when a tool is applied to
+ * a non-empty TEXT SELECTION, the selected string seeds a fresh block instead of
+ * dropping a blank one. For Location the seed lands on `venueName` (keeping the
+ * block a valid plain LocationBlock so the doc round-trip stays green) and the
+ * resolver reads it as its initial query, immediately attempting a directory
+ * resolution. Only Location is wired this slice; unwired kinds throw like
+ * {@link makeToolBlock}.
+ */
+export function makeSeededToolBlock(kind: ToolKind, seed: string): Block {
+  switch (kind) {
+    case 'location':
+      return { id: genId(), kind: 'location', mode: 'plain', venueName: seed.trim() } satisfies LocationBlock
+    default:
+      throw new Error(`Tool "${kind}" is not wired yet (Consolidated CMS 2R-2)`)
+  }
+}

@@ -2,13 +2,14 @@
 
 /**
  * BlockWidget — the React form-widget a {@link PostBlockNode} decorates the
- * canvas with. It REUSES the existing Tamagui block editors from packages/ui
- * (apps → packages is allowed): for the keystone it mounts the real
- * {@link LocationBlockEditor}, so a Location dropped into the document shows its
- * fields as a clear inline form embedded in the prose flow. Editing a field calls
- * the editor's `onChange`, which writes the full next block back onto the Lexical
- * node via `setBlock` — the data model, lifecycle, redaction and rendering are
- * all untouched; this is purely a container swap for the *authoring* experience.
+ * canvas with. For the keystone's Location kind it mounts the PROGRESSIVE
+ * {@link LocationResolver} (2R-1b) — a resolve-first single input (directory
+ * autocomplete → Places seam → plain text), NOT a form. Resolving a block calls
+ * `onChange`, which writes the full next block back onto the Lexical node via
+ * `setBlock` — the data model, lifecycle, redaction and rendering are all
+ * untouched; this is purely a container swap for the *authoring* experience.
+ * (The legacy packages/ui `LocationBlockEditor` still powers the old block-form
+ * editor and is intentionally left in place.)
  *
  * The other block kinds are handled by the same registry the block-form editor
  * uses, so 2R-2 lights them up by flipping their tool to `enabled`.
@@ -20,7 +21,7 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { YStack, XStack, Text, Button } from '@my/ui'
 import { Trash2, MapPin } from '@tamagui/lucide-icons'
 import type { Block, LocationBlock } from '@my/app/types/post'
-import { LocationBlockEditor } from '@my/ui/src/post-editor/blocks/location-block-editor'
+import { LocationResolver } from './widgets/location-resolver'
 import { $isPostBlockNode } from './post-block-node'
 
 export interface BlockWidgetProps {
@@ -80,7 +81,7 @@ export function BlockWidget({ nodeKey, block }: BlockWidgetProps) {
       </XStack>
 
         {block.kind === 'location' ? (
-          <LocationBlockEditor block={block as LocationBlock} onChange={update} onRemove={remove} />
+          <LocationResolver block={block as LocationBlock} onChange={update} />
         ) : (
           <Text color="$color10">
             The "{block.kind}" widget lands in 2R-2. Only Location is wired for the keystone.
