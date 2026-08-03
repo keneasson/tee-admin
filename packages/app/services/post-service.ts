@@ -48,6 +48,15 @@ export interface GetPostsOptions {
    * window) are dropped.
    */
   now?: Date
+  /**
+   * Which underlying sources to merge (Phase 4b-1). Defaults to `'all'` — the
+   * historical behaviour: native {@link PostRepository} posts PLUS legacy events
+   * + news adapted through {@link legacyToPost}. `'native'` returns ONLY id-backed
+   * native posts (legacy is skipped entirely — not even fetched); `'legacy'`
+   * returns only the adapted legacy set. The public-web cutover uses `'native'`
+   * so legacy records keep rendering through their OWN path with no double-render.
+   */
+  source?: 'all' | 'native' | 'legacy'
 }
 
 /** A viewer-ready Post plus its lifecycle state (whether `now` is its eve-of reminder). */
@@ -103,9 +112,10 @@ export async function getPostsForViewerWithState(
   viewer: Viewer,
   options: GetPostsOptions = {}
 ): Promise<PostWithDisplayState[]> {
+  const source = options.source ?? 'all'
   const [native, legacy] = await Promise.all([
-    loadNativePosts(options),
-    loadLegacyPosts(options),
+    source === 'legacy' ? Promise.resolve<Post[]>([]) : loadNativePosts(options),
+    source === 'native' ? Promise.resolve<Post[]>([]) : loadLegacyPosts(options),
   ])
 
   const now = options.now ?? new Date()

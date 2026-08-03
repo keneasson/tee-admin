@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect } from 'react'
 import { Wrapper } from '@my/app/provider/wrapper'
-import { Button, Heading, Paragraph } from '@my/ui'
+import { Button, Heading, Paragraph, PostView } from '@my/ui'
 import { useRouter } from 'solito/navigation'
 import { StudyWeekend2024 } from '@my/app/features/events/study-weekend-2024'
 import { XStack, YStack, Card, Text } from 'tamagui'
@@ -9,6 +9,7 @@ import { Section } from '@my/app/features/newsletter/Section'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { EventDetailView } from '@my/ui/src/events/event-detail-view'
 import { Event, isEventActive } from '@my/app/types/events'
+import type { Post } from '@my/app/types/post'
 
 export type BackLink = {
   href: string
@@ -51,6 +52,11 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Consolidated CMS #131 (Phase 4b-1): native, event-shaped Posts surfaced
+  // ADDITIVELY. Empty when the CONSOLIDATED_CMS flag is OFF (server returns
+  // `{ events: [] }`), so the section below renders nothing and the legacy list
+  // above is byte-identical to today.
+  const [nativeEvents, setNativeEvents] = useState<Post[]>([])
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -71,6 +77,23 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
     }
 
     fetchEvents()
+  }, [])
+
+  // Additive, flag-gated native Posts. Isolated from the legacy fetch above so a
+  // failure here can never affect the existing events list.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/posts/public')
+      .then((r) => (r.ok ? r.json() : { events: [] }))
+      .then((data) => {
+        if (!cancelled) setNativeEvents(Array.isArray(data?.events) ? data.events : [])
+      })
+      .catch(() => {
+        /* additive surface — ignore, leave native section empty */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleEventPress = (eventId: string) => {
@@ -124,6 +147,22 @@ export const EventListing: React.FC<EventListingProps> = ({ isNotFound, userRole
           <Paragraph>No events found.</Paragraph>
         </Section>
       )}
+
+      {/* Native Posts (Consolidated CMS #131) — rendered in a clearly-labelled
+          section rather than interleaved: legacy events use compact summary
+          cards (click → detail) while native posts render the full read-only
+          PostView, so a distinct section reads far cleaner than mixing the two
+          card styles inline. Skipped entirely when the flag is OFF (empty array). */}
+      {nativeEvents.length > 0 ? (
+        <Section>
+          <Heading size={5}>More upcoming events</Heading>
+          <YStack gap="$4">
+            {nativeEvents.map((post) => (
+              <PostView key={post.id} post={post} />
+            ))}
+          </YStack>
+        </Section>
+      ) : null}
     </Wrapper>
   )
 }
