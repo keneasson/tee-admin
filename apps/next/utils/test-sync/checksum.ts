@@ -3,6 +3,11 @@
  * Fast data change detection using row-level and sheet-level checksums
  */
 
+// buffer-crc32's ESM type entry (dist/index.d.mts) mis-declares `export =`, which
+// TS treats as "no default export" under `moduleResolution: bundler`. The `.mjs`
+// runtime DOES export a default, so the import below is correct at runtime — only
+// the shipped types are wrong. Suppress the resolution-only type error.
+// @ts-expect-error — see comment above (upstream buffer-crc32 type bug)
 import crc32 from 'buffer-crc32'
 
 /**
