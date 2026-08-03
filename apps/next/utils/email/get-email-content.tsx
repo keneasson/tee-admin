@@ -35,6 +35,7 @@ import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
 import { meetingRepository } from '@my/app/provider/dynamodb/repositories/meeting-repository'
 import MeetingEmail from 'email-builder/emails/MeetingEmail'
 import { meetingRecordToEmailProps } from './meeting-email-helpers'
+import { getNewsletterNativePosts } from './get-newsletter-posts'
 
 // Event display duration rules live in event-display-rules.ts (shared with the
 // web newsletter and the public Events listing so all surfaces stay in sync).
@@ -228,14 +229,29 @@ export const getEmailContent = async (
       }
 
       // Fetch all required data for newsletter (including per-ecclesia service times)
-      const [scheduleData, upcomingEvents, readingsData, homeEcclesia, newsletterNewsItems] =
-        await Promise.all([
+      const [
+        scheduleData,
+        upcomingEvents,
+        readingsData,
+        homeEcclesia,
+        newsletterNewsItems,
+        communityPosts,
+      ] = await Promise.all([
           get_upcoming_program(['memorial', 'sundaySchool', 'bibleClass']),
           fetchEvents(),
           fetchBibleReadings(),
           getEcclesiaByName(contentEcclesiaName),
           listNewsItems({ includeExpired: false }).catch((err) => {
             console.error('Failed to fetch news for newsletter (non-fatal):', err)
+            return []
+          }),
+          // Consolidated CMS (#131, Phase 4b-2) — ADDITIVE native Posts, flag-gated
+          // inside this helper. With CONSOLIDATED_CMS not 'everyone' this returns
+          // `[]`, so `posts` is empty and the template renders BYTE-IDENTICAL to
+          // today. Non-fatal: a native-post read failure must never break the
+          // community's primary email channel.
+          getNewsletterNativePosts(contentEcclesiaName).catch((err) => {
+            console.error('Failed to fetch native posts for newsletter (non-fatal):', err)
             return []
           }),
         ])
@@ -245,6 +261,7 @@ export const getEmailContent = async (
         upcomingEvents: upcomingEvents.length,
         readingsData: readingsData.length,
         newsItems: newsletterNewsItems.length,
+        communityPosts: communityPosts.length,
       })
 
       // Resolve per-ecclesia service times (falls back to catalogue defaults)
@@ -275,6 +292,7 @@ export const getEmailContent = async (
           newsItems={newsletterNewsItems}
           serviceTimes={newsletterServiceTimes}
           identity={emailIdentity}
+          posts={communityPosts}
         />
       )
       const newsletterHtmlContent = await render(newsletterEl)
