@@ -32,6 +32,7 @@ import type { Block } from '@my/app/types/post'
 import { PostBlockNode } from './post-block-node'
 import { ArmedToolPlugin } from './armed-tool-plugin'
 import { FloatingToolbar } from './floating-toolbar'
+import { EditSessionProvider } from './edit-session'
 import { blocksToDocState, docToBlocks } from './doc-serialization'
 import { type ToolKind } from './tool-blocks'
 
@@ -83,6 +84,7 @@ export function PostDocEditor({ initialBlocks = [], onBlocksChange }: PostDocEdi
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
+      <EditSessionProvider>
       <div style={{ position: 'relative' }}>
         <RichTextPlugin
           contentEditable={
@@ -121,6 +123,7 @@ export function PostDocEditor({ initialBlocks = [], onBlocksChange }: PostDocEdi
         <ArmedToolPlugin armed={armed} onInserted={() => setArmed(null)} />
       </div>
       <FloatingToolbar armed={armed} onArm={setArmed} />
+      </EditSessionProvider>
     </LexicalComposer>
   )
 }

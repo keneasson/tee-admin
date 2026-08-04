@@ -34,6 +34,7 @@ import {
 import { $insertNodeToNearestRoot } from '@lexical/utils'
 import { $createPostBlockNode } from './post-block-node'
 import { makeToolBlock, makeSeededToolBlock, type ToolKind } from './tool-blocks'
+import { useEditSession } from './edit-session'
 
 export interface ArmedToolPluginProps {
   armed: ToolKind | null
@@ -42,13 +43,14 @@ export interface ArmedToolPluginProps {
 
 export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
   const [editor] = useLexicalComposerContext()
+  const { beginEdit } = useEditSession()
 
   useEffect(() => {
     if (!armed) return
 
     // CONVERT-SELECTION: if there is a live non-collapsed selection when the tool
     // is armed, replace it with a seeded block immediately (no canvas click).
-    let didConvert = false
+    let convertedKey: string | null = null
     editor.update(() => {
       const sel = $getSelection()
       if (!$isRangeSelection(sel) || sel.isCollapsed()) return
@@ -58,10 +60,13 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
       sel.removeText()
       const node = $createPostBlockNode(makeSeededToolBlock(armed, text))
       $insertNodeToNearestRoot(node)
-      didConvert = true
+      convertedKey = node.getKey()
     })
-    if (didConvert) {
+    if (convertedKey) {
       onInserted()
+      // Open the seeded element in the floating tool so its resolver (pre-filled
+      // with the selected text) is ready to confirm — never an inline form.
+      beginEdit(convertedKey)
       return
     }
 
@@ -69,16 +74,22 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
     return editor.registerCommand(
       CLICK_COMMAND,
       () => {
+        let newKey: string | null = null
         editor.update(() => {
           const node = $createPostBlockNode(makeToolBlock(armed))
           $insertNodeToNearestRoot(node)
+          newKey = node.getKey()
         })
         onInserted()
+        // Open the freshly-placed element straight into the floating editor —
+        // the user never meets an inline form; the element lands as its (empty)
+        // final display and its editor opens in the tool.
+        if (newKey) beginEdit(newKey)
         return true
       },
       COMMAND_PRIORITY_LOW
     )
-  }, [editor, armed, onInserted])
+  }, [editor, armed, onInserted, beginEdit])
 
   return null
 }

@@ -82,11 +82,13 @@ export function PostDocEditorShowcase() {
       <YStack gap="$2">
         <H2>Post Doc Editor (keystone)</H2>
         <Paragraph color="$color10">
-          The Google-Docs / Notion redo of the block-form editor: write prose freely, then
-          use the floating toolbar to ARM a tool and click in the document to drop a
-          structured element inline as a form-widget. Structured underneath, freeform on
-          top — the same unified Post model, a new authoring container. Location is wired
-          for the keystone; the other tools are stubbed for 2R-2.
+          The Google-Docs / Notion redo of the block-form editor. The document is the
+          FINAL version — a Location reads exactly as it will in the published post, no
+          forms, no inline metadata. Write prose freely; ARM a tool from the floating
+          toolbar and click to drop a structured element (it lands as its final display).
+          Hover any element for its editor-space affordance, then "Edit this location" to
+          open its editor in the FLOATING tool — the form lives in the tool, never in the
+          doc. Location is wired for the keystone; the other tools are stubbed for 2R-2.
         </Paragraph>
         <Paragraph color="$color10">
           The Location widget is a PROGRESSIVE RESOLVER (2R-1b), not a form: type ~2–4

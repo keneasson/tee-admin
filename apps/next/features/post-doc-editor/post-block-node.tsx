@@ -2,11 +2,12 @@
 
 /**
  * PostBlockNode — the Lexical `DecoratorNode` that embeds a structured Post
- * {@link Block} as an INLINE form-widget in the document canvas (Consolidated CMS
- * Phase 2R-1 keystone). This is the seam that makes the editor "structured
- * underneath, freeform on top": prose is ordinary Lexical text; every structured
- * element is one of these decorator nodes sitting between paragraphs, rendered as
- * a clear form-widget (see {@link BlockWidget}) that edits the block's data.
+ * {@link Block} in the document canvas (Consolidated CMS Phase 2R-1 keystone).
+ * This is the seam that makes the editor "structured underneath, freeform on
+ * top": prose is ordinary Lexical text; every structured element is one of these
+ * decorator nodes sitting between paragraphs, rendered as its FINAL published
+ * display (see {@link BlockWidget}) — never a form. Editing happens in the
+ * floating tool, not in the document.
  *
  * The node carries the FULL typed block as its payload (`__block`). It is block-
  * level (`isInline() === false`) so it lives as a direct child of the root,

@@ -332,8 +332,13 @@ function LinkBlockView({ block }: { block: LinkBlock }) {
   return <ExtLink href={url}>{block.label || url}</ExtLink>
 }
 
-/** Render a single block by kind — mirrors the editor's 7-kind coverage. */
-function BlockView({ block }: { block: Block }) {
+/**
+ * Render a single block by kind — mirrors the editor's 7-kind coverage. Exported
+ * so the document-canvas editor can render each structured element's FINAL,
+ * published appearance inline (the "document is the final version" contract); the
+ * editor NEVER shows a form in the doc — editing happens in the floating tool.
+ */
+export function BlockView({ block }: { block: Block }) {
   switch (block.kind) {
     case 'text':
       return <TextBlockView block={block} />
