@@ -20,7 +20,7 @@
  * and hoverable until its details are filled in from the floating editor.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { $getNodeByKey, type NodeKey } from 'lexical'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { XStack, Text } from '@my/ui'
@@ -35,9 +35,10 @@ import {
   ClipboardCheck,
   Link as LinkIcon,
 } from '@tamagui/lucide-icons'
-import type { Block } from '@my/app/types/post'
+import type { Block, FlyerBlock } from '@my/app/types/post'
 import { $isPostBlockNode } from './post-block-node'
 import { useEditSession } from './edit-session'
+import { FlyerCanvas } from './flyer-canvas'
 
 export interface BlockWidgetProps {
   nodeKey: NodeKey
@@ -48,10 +49,22 @@ export function BlockWidget({ nodeKey, block }: BlockWidgetProps) {
   const [editor] = useLexicalComposerContext()
   const { editingKey, beginEdit } = useEditSession()
   const [hovered, setHovered] = useState(false)
+  const [selected, setSelected] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const isEditing = editingKey === nodeKey
 
   const onEdit = useCallback(() => beginEdit(nodeKey), [beginEdit, nodeKey])
+
+  const update = useCallback(
+    (next: Block) => {
+      editor.update(() => {
+        const node = $getNodeByKey(nodeKey)
+        if ($isPostBlockNode(node)) node.setBlock(next)
+      })
+    },
+    [editor, nodeKey]
+  )
 
   const onRemove = useCallback(() => {
     editor.update(() => {
@@ -59,6 +72,33 @@ export function BlockWidget({ nodeKey, block }: BlockWidgetProps) {
       node?.remove()
     })
   }, [editor, nodeKey])
+
+  // Clicking anywhere outside this element clears its in-canvas selection.
+  useEffect(() => {
+    if (!selected) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setSelected(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [selected])
+
+  // Flyer/image gets the Google-Docs in-canvas treatment (handles + contextual
+  // toolbar), not the generic hover affordance.
+  if (block.kind === 'flyer') {
+    return (
+      <div ref={rootRef} contentEditable={false} suppressContentEditableWarning style={{ margin: '12px 0' }}>
+        <FlyerCanvas
+          block={block as FlyerBlock}
+          selected={selected}
+          onSelect={() => setSelected(true)}
+          onChange={update}
+          onEditOptions={onEdit}
+          onRemove={onRemove}
+        />
+      </div>
+    )
+  }
 
   const empty = isBlockEmpty(block)
 

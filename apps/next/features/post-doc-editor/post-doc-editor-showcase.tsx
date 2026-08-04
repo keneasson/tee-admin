@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import { YStack, XStack, H2, H4, Paragraph, Separator, Text, Button } from '@my/ui'
-import type { Block, LocationBlock, TextBlock } from '@my/app/types/post'
+import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 import { PostDocEditor } from './post-doc-editor'
 
 const text = (body: string): TextBlock => ({
@@ -32,10 +32,27 @@ function seedBlocks(): Block[] {
     city: 'Toronto',
     province: 'ON',
   }
+  const flyer: FlyerBlock = {
+    id: `seed_fly_${Math.random().toString(36).slice(2, 8)}`,
+    kind: 'flyer',
+    document: {
+      id: 'seed-doc',
+      documentType: 'upload',
+      fileName: 'android-chrome-512x512.png',
+      originalName: 'Event flyer',
+      fileUrl: '/android-chrome-512x512.png',
+      fileSize: 0,
+      mimeType: 'image/png',
+      uploadedAt: new Date(0),
+      uploadedBy: 'seed',
+    },
+  }
   return [
     text('# Sunday Memorial Service\n\nAll are welcome to join us this week. Details below.'),
     location,
     text('Please arrive a few minutes early. **Lunch** will follow the service.'),
+    flyer,
+    text('_Click the image above to resize, rotate, or annotate it — Google-Docs style._'),
   ]
 }
 
