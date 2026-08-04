@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { YStack, XStack, H2, H4, Paragraph, Separator, Text, Button } from '@my/ui'
 import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 import { PostDocEditor } from './post-doc-editor'
+import { TemplatePicker } from './template-picker'
 
 const text = (body: string): TextBlock => ({
   id: `seed_${Math.random().toString(36).slice(2, 8)}`,
@@ -122,6 +123,18 @@ export function PostDocEditorShowcase() {
             Empty draft
           </Button>
         </XStack>
+      </YStack>
+
+      {/* Templates — a warm start that seeds labelled placeholder structures. */}
+      <YStack
+        gap="$2"
+        borderColor="$borderColor"
+        borderWidth={1}
+        borderRadius="$4"
+        padding="$4"
+        backgroundColor="$color1"
+      >
+        <TemplatePicker onApply={(next) => reseed(next)} />
       </YStack>
 
       <XStack gap="$4" flexWrap="wrap" alignItems="flex-start">

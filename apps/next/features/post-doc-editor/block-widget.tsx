@@ -194,39 +194,83 @@ const affordanceBtn: React.CSSProperties = {
 
 // ---- Placeholder for a not-yet-filled element --------------------------------
 
-const KIND_META: Record<Block['kind'], { icon: typeof MapPin; label: string }> = {
-  location: { icon: MapPin, label: 'location' },
-  person: { icon: Users, label: 'speaker' },
-  time: { icon: Clock, label: 'date & time' },
-  flyer: { icon: FileImage, label: 'image / flyer' },
-  registration: { icon: ClipboardCheck, label: 'registration' },
-  link: { icon: LinkIcon, label: 'link' },
-  text: { icon: LinkIcon, label: 'text' },
+const KIND_ICON: Record<Block['kind'], typeof MapPin> = {
+  location: MapPin,
+  person: Users,
+  time: Clock,
+  flyer: FileImage,
+  registration: ClipboardCheck,
+  link: LinkIcon,
+  text: LinkIcon,
 }
 
+const ROLE_TITLE: Record<string, string> = {
+  deceased: 'In loving memory of',
+  speaker: 'Speaker',
+  candidate: 'Baptism candidate',
+  bride: 'Bride',
+  groom: 'Groom',
+  sponsor: 'Sponsor',
+  contact: 'Contact',
+  other: 'Person',
+}
+
+/**
+ * Structure annotation for an unfilled block: `title` names WHAT this structure is
+ * (a template's section label like "Visitation", or the kind), `action` is the
+ * call-to-fill. Placeholders read as clearly-labelled structure, not mystery boxes.
+ */
+function placeholderAnnotation(block: Block): { title: string; action: string } {
+  switch (block.kind) {
+    case 'location':
+      return { title: block.label || 'Location', action: 'Add the address or venue' }
+    case 'time':
+      return { title: block.label || 'Date & time', action: 'Add the date and time' }
+    case 'person':
+      return { title: ROLE_TITLE[block.role] ?? 'Person', action: 'Add the name and details' }
+    case 'flyer':
+      return { title: 'Photo', action: 'Add an image or flyer' }
+    case 'registration':
+      return { title: 'Registration', action: 'Add registration details' }
+    case 'link':
+      return { title: 'Link', action: 'Add a URL' }
+    default:
+      return { title: 'Content', action: 'Add details' }
+  }
+}
+
+/**
+ * A faint, annotated placeholder for a not-yet-filled structure. "Faint but WCAG
+ * accessible": the placeholder look comes from a muted/dashed CONTAINER, while the
+ * text keeps accessible contrast ($color11/$color12) — never washed-out text.
+ */
 function PlaceholderChip({ block, onPress }: { block: Block; onPress: () => void }) {
-  const meta = KIND_META[block.kind] ?? KIND_META.text
-  const Icon = meta.icon
+  const Icon = KIND_ICON[block.kind] ?? LinkIcon
+  const { title, action } = placeholderAnnotation(block)
   return (
     <button
       type="button"
       onClick={onPress}
       style={{
-        display: 'inline-flex',
+        display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '8px 14px',
-        background: 'var(--blue2)',
-        border: '1px dashed var(--blue7)',
+        gap: 12,
+        width: '100%',
+        textAlign: 'left',
+        padding: '10px 14px',
+        background: 'var(--color2)',
+        border: '1px dashed var(--color8)',
         borderRadius: 8,
         cursor: 'pointer',
-        color: 'var(--blue11)',
       }}
     >
-      <XStack alignItems="center" gap="$2">
-        <Icon size={15} color="var(--blue10)" />
-        <Text fontSize="$3" color="$blue11">
-          Add {meta.label} details
+      <Icon size={18} color="var(--color11)" />
+      <XStack flexDirection="column" gap="$0.5">
+        <Text fontSize="$3" fontWeight="700" color="$color12">
+          {title}
+        </Text>
+        <Text fontSize="$2" fontStyle="italic" color="$color11">
+          {action}
         </Text>
       </XStack>
     </button>
@@ -249,7 +293,9 @@ export function isBlockEmpty(block: Block): boolean {
     case 'person':
       return block.people.length === 0
     case 'time':
-      return !block.startsAt && !block.label
+      // A label alone (e.g. a template's "Visitation" heading) is annotation, not
+      // data — the block is still an unfilled placeholder until it has a date.
+      return !block.startsAt
     case 'flyer':
       return !block.document?.fileUrl?.trim() && !block.document?.thumbnailUrl?.trim()
     case 'registration':
