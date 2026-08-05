@@ -162,16 +162,17 @@ function HoverAffordance({
       }}
     >
       <button type="button" onClick={onEdit} style={affordanceBtn} aria-label={`Edit this ${kind}`}>
-        <Pencil size={13} color="var(--blue11)" />
+        <Pencil size={13} color="$blue11" />
         <span style={{ marginLeft: 5 }}>Edit this {kind}</span>
       </button>
       <button
         type="button"
         onClick={onRemove}
-        style={{ ...affordanceBtn, paddingRight: 8 }}
+        style={{ ...affordanceBtn, paddingRight: 8, color: 'var(--red11)' }}
         aria-label={`Remove this ${kind}`}
       >
-        <Trash2 size={13} color="var(--red10)" />
+        <Trash2 size={13} color="$red11" />
+        <span style={{ marginLeft: 5 }}>Remove</span>
       </button>
     </div>
   )
@@ -264,7 +265,7 @@ function PlaceholderChip({ block, onPress }: { block: Block; onPress: () => void
         cursor: 'pointer',
       }}
     >
-      <Icon size={18} color="var(--color11)" />
+      <Icon size={18} color="$color11" />
       <XStack flexDirection="column" gap="$0.5">
         <Text fontSize="$3" fontWeight="700" color="$color12">
           {title}

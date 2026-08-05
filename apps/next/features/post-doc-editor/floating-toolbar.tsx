@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { $getNodeByKey } from 'lexical'
+import { $getNodeByKey, BLUR_COMMAND, COMMAND_PRIORITY_LOW, FOCUS_COMMAND } from 'lexical'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { YStack, XStack, Text, Button, Separator } from '@my/ui'
 import { GripVertical, ChevronDown, ChevronRight, MapPin, Check, X } from '@tamagui/lucide-icons'
@@ -44,10 +44,40 @@ export interface FloatingToolbarProps {
 }
 
 export function FloatingToolbar({ armed, onArm }: FloatingToolbarProps) {
+  const [editor] = useLexicalComposerContext()
   const [pos, setPos] = useState({ x: 24, y: 120 })
   const [collapsed, setCollapsed] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [hoverToolbar, setHoverToolbar] = useState(false)
   const dragOffset = useRef<{ dx: number; dy: number } | null>(null)
   const { editingKey } = useEditSession()
+
+  // This toolbar belongs to ONE editor. On a page with several editors (e.g. the
+  // showcase) each renders its own fixed toolbar; without gating they'd stack.
+  // Show it only when THIS editor is engaged: focused, hovering its own toolbar,
+  // a tool is armed, or an element is open for editing.
+  useEffect(() => {
+    const offFocus = editor.registerCommand(
+      FOCUS_COMMAND,
+      () => {
+        setFocused(true)
+        return false
+      },
+      COMMAND_PRIORITY_LOW
+    )
+    const offBlur = editor.registerCommand(
+      BLUR_COMMAND,
+      () => {
+        setFocused(false)
+        return false
+      },
+      COMMAND_PRIORITY_LOW
+    )
+    return () => {
+      offFocus()
+      offBlur()
+    }
+  }, [editor])
 
   const onHandleDown = useCallback(
     (e: React.MouseEvent) => {
@@ -79,9 +109,15 @@ export function FloatingToolbar({ armed, onArm }: FloatingToolbarProps) {
   }, [armed, editingKey, onArm])
 
   const editing = editingKey != null
+  const visible = focused || hoverToolbar || armed != null || editing
+  if (!visible) return null
 
   return (
-    <div style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 1000, width: editing ? 320 : 244 }}>
+    <div
+      style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 1000, width: editing ? 320 : 244 }}
+      onMouseEnter={() => setHoverToolbar(true)}
+      onMouseLeave={() => setHoverToolbar(false)}
+    >
       <YStack
         borderWidth={1}
         borderColor="$borderColor"

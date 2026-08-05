@@ -148,16 +148,16 @@ export function FlyerCanvas({
             {/* Floating contextual toolbar beneath the image */}
             <div style={contextBarStyle} onClick={(e) => e.stopPropagation()}>
               <BarButton label="Rotate" onClick={rotate}>
-                <RotateCw size={15} color="var(--color11)" />
+                <RotateCw size={15} color="$color11" />
               </BarButton>
               <BarButton label="Annotate" onClick={() => setCaptioning((c) => !c)}>
-                <MessageSquarePlus size={15} color="var(--color11)" />
+                <MessageSquarePlus size={15} color="$color11" />
               </BarButton>
               <BarButton label="Image options" onClick={onEditOptions}>
-                <Settings2 size={15} color="var(--color11)" />
+                <Settings2 size={15} color="$color11" />
               </BarButton>
               <BarButton label="Remove image" onClick={onRemove}>
-                <Trash2 size={15} color="var(--red10)" />
+                <Trash2 size={15} color="$red11" />
               </BarButton>
             </div>
           </>
