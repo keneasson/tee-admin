@@ -47,17 +47,44 @@ const isNoClass = (event: BibleClassType): boolean => {
   return !event.Speaker || event.Topic.toLowerCase().includes('no class')
 }
 
+// Whether tonight has no class, honoring the override precedence: 'cancelled'
+// forces no-class, 'active' forces the class to show, otherwise the Speaker/Topic
+// heuristic. Exported so the SEND path can brand the subject line to match the
+// body — subject and body must never contradict (a "no class" body under a
+// "Bible Class Tonight!" subject).
+export const bibleClassHasNoClass = (currentEvent?: BibleClassType): boolean => {
+  if (!currentEvent) return false
+  if (currentEvent.overrideStatus === 'cancelled') return true
+  if (currentEvent.overrideStatus === 'active') return false
+  return isNoClass(currentEvent)
+}
+
+// The subject line for a Bible Class send, reflecting whether there's a class
+// tonight. (The send appends the date, so this is just the lead phrase.)
+export const bibleClassSubject = (events?: BibleClassType[]): string =>
+  bibleClassHasNoClass(events?.[0]) ? 'No Bible Class Tonight' : 'Bible Class Tonight!'
+
+// Generic, non-name leader values that should NOT take the "Brother" honorific —
+// e.g. an attendee-led / open-discussion class reads "Led by attendees", not
+// "Led by Brother attendees". Matched case-insensitively; display keeps the
+// original casing.
+const GENERIC_LEADERS = new Set(['attendees', 'all', 'open', 'discussion', 'group', 'tba', 'tbd'])
+
+// Format a class leader for display, adding the "Brother" honorific only when the
+// leader is an actual name (not a generic term like "attendees").
+export const formatLeader = (speaker?: string): string => {
+  const name = (speaker ?? '').trim()
+  if (!name) return ''
+  return GENERIC_LEADERS.has(name.toLowerCase()) ? name : `Brother ${name}`
+}
+
 // `identity` is passed as a prop (not via the client EmailIdentityProvider) so this
 // renders from an App Router server route (the email-queue cron processor).
 const BibleClass: React.FC<NextBibleClassProps & { identity?: EmailIdentity }> = ({ events, note, identity }) => {
   const bibleClassEvents = events || mockEvents
   const currentEvent = bibleClassEvents[0]
   const nextEvent = bibleClassEvents[1]
-  // Override precedence: 'cancelled' forces no-class; 'active' forces the class to
-  // show; otherwise fall back to the Speaker/Topic heuristic.
-  const isCancelled = currentEvent?.overrideStatus === 'cancelled'
-  const isForcedActive = currentEvent?.overrideStatus === 'active'
-  const hasNoClass = isCancelled || (!isForcedActive && !!currentEvent && isNoClass(currentEvent))
+  const hasNoClass = bibleClassHasNoClass(currentEvent)
   // Find the next actual class (skipping any "no class" entries)
   const nextActualClass = hasNoClass && nextEvent && !isNoClass(nextEvent) ? nextEvent : undefined
 
@@ -172,7 +199,7 @@ const BibleClass: React.FC<NextBibleClassProps & { identity?: EmailIdentity }> =
                     <br />
                     {nextActualClass.Date.toString()} at 7:30pm
                     <br />
-                    Led by Brother {nextActualClass.Speaker}
+                    Led by {formatLeader(nextActualClass.Speaker)}
                     {nextActualClass.Topic ? (
                       <>
                         <br />
