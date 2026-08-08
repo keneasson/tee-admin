@@ -26,13 +26,16 @@ import { $getNodeByKey, BLUR_COMMAND, COMMAND_PRIORITY_LOW, FOCUS_COMMAND } from
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { YStack, XStack, Text, Button, Separator } from '@my/ui'
 import { GripVertical, ChevronDown, ChevronRight, MapPin, Check, X } from '@tamagui/lucide-icons'
-import type { Block, LocationBlock } from '@my/app/types/post'
+import type { Block, LinkBlock, LocationBlock, PersonBlock, TimeBlock } from '@my/app/types/post'
 import { getBlockDef } from '@my/ui/src/post-editor/registry'
 import { registerDefaultBlocks } from '@my/ui/src/post-editor/register-default-blocks'
 import { TOOLS, type ToolKind } from './tool-blocks'
 import { useEditSession } from './edit-session'
 import { $isPostBlockNode } from './post-block-node'
 import { LocationResolver } from './widgets/location-resolver'
+import { PersonResolver } from './widgets/person-resolver'
+import { TimePicker } from './widgets/time-picker'
+import { LinkEditor } from './widgets/link-editor'
 
 // Populate the block registry (idempotent) so Edit mode can look up each kind's
 // encapsulated editor. Same registry the block-form editor uses.
@@ -288,18 +291,34 @@ function EditPanel({ nodeKey }: { nodeKey: string }) {
         <Text fontSize="$2" color="$color10">
           Editing this {def?.label ?? draft.kind} — the document updates as you type.
         </Text>
+        {/* Purpose-built progressive widgets host their editor HERE in the floating
+            tool (never inline in the doc). Kinds not yet redesigned fall back to
+            the registry's block-form Editor. */}
         {draft.kind === 'location' ? (
-          // Location's editor IS the progressive resolver (2R-1b), now hosted in
-          // the floating tool instead of inline in the document.
           <LocationResolver
             block={draft as LocationBlock}
             onChange={writeBack as (next: LocationBlock) => void}
+          />
+        ) : draft.kind === 'person' ? (
+          <PersonResolver
+            block={draft as PersonBlock}
+            onChange={writeBack as (next: PersonBlock) => void}
+          />
+        ) : draft.kind === 'time' ? (
+          <TimePicker
+            block={draft as TimeBlock}
+            onChange={writeBack as (next: TimeBlock) => void}
+          />
+        ) : draft.kind === 'link' ? (
+          <LinkEditor
+            block={draft as LinkBlock}
+            onChange={writeBack as (next: LinkBlock) => void}
           />
         ) : Editor ? (
           <Editor block={draft} onChange={writeBack} onRemove={removeNode} />
         ) : (
           <Text color="$color10">
-            The "{draft.kind}" editor lands in 2R-2. Only Location is wired for the keystone.
+            The "{draft.kind}" editor is coming in a later slice.
           </Text>
         )}
       </YStack>

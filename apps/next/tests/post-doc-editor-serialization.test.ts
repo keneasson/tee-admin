@@ -133,12 +133,17 @@ describe('round-trip: blocks → doc → blocks (order + content stable)', () =>
 })
 
 describe('armed-tool insert (pure state transition of ArmedToolPlugin)', () => {
-  it('makeToolBlock builds a fresh Location block; unwired tools throw (2R-2)', () => {
+  it('makeToolBlock builds a fresh Location block; unwired tools throw', () => {
     const loc = makeToolBlock('location')
     expect(loc.kind).toBe('location')
     expect((loc as LocationBlock).mode).toBe('plain')
     expect(makeToolBlock('location').id).not.toBe(loc.id) // fresh id each call
-    expect(() => makeToolBlock('person')).toThrow()
+    // Wired kinds build a fresh empty block; not-yet-wired kinds still throw.
+    expect(makeToolBlock('person').kind).toBe('person')
+    expect(makeToolBlock('time').kind).toBe('time')
+    expect(makeToolBlock('link').kind).toBe('link')
+    expect(() => makeToolBlock('flyer')).toThrow()
+    expect(() => makeToolBlock('registration')).toThrow()
   })
 
   it('arming Location + clicking inserts a location post-block at the click index', () => {

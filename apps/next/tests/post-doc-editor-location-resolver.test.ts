@@ -40,11 +40,16 @@ describe('convert-selection seeding (makeSeededToolBlock / makeSeededLocationBlo
     expect(seeded.id).toBeTruthy()
   })
 
-  it('trims the seed and gives each call a fresh id; unwired tools throw (2R-2)', () => {
+  it('trims the seed and gives each call a fresh id; unwired tools throw', () => {
     const a = makeSeededLocationBlock('  East Hall  ')
     expect(a.venueName).toBe('East Hall')
     expect(makeSeededLocationBlock('x').id).not.toBe(a.id)
-    expect(() => makeSeededToolBlock('person', 'anything')).toThrow()
+    // Person seeds a single plain person from the selected name.
+    const person = makeSeededToolBlock('person', 'Visiting Brother')
+    expect(person.kind).toBe('person')
+    expect(person.kind === 'person' && person.people[0]?.firstName).toBe('Visiting')
+    // Not-yet-wired kinds still throw.
+    expect(() => makeSeededToolBlock('flyer', 'anything')).toThrow()
   })
 
   it('empty-caret insert still yields a BLANK Location block (no seed)', () => {
