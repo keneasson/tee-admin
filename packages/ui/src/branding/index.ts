@@ -7,6 +7,8 @@ export * from './brand-colors'
 export * from './brand-typography'
 export * from './component-showcase'
 export * from './components-showcase'
+export * from './post-editor-showcase'
+export * from './post-view-showcase'
 export * from './navigation-testing'
 // feature-playground removed — replaced by packages/ui/src/admin/feature-flag-manager.tsx
 export * from '../navigation/navigation-showcase'

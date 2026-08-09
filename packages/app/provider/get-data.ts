@@ -11,6 +11,7 @@ import {
 import { CreateUpdateListType } from '../types'
 import type { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
+import type { Post } from '@my/app/types/post'
 
 // Use shared EmailReasonType instead of importing from next-app
 type emailReasons = EmailReasonType
@@ -182,6 +183,69 @@ export const clearPendingNote = async (
     return { ok: false, error: data.error || `Request failed (${response.status})` }
   }
   return { ok: true }
+}
+
+export interface DirectSendPerson {
+  id: string
+  name: string
+  email: string
+  ecclesia?: string
+  emails: string[]
+}
+
+/**
+ * Lightweight name-or-email people search for the direct-recipient send.
+ * Cross-platform safe (API_PATH). Returns members (one row per person) with
+ * their known email addresses so the caller can pick which to send to.
+ */
+export const searchPeople = async (query: string): Promise<DirectSendPerson[]> => {
+  const q = query.trim()
+  if (q.length < 2) return []
+  const url = `${API_PATH}api/people?search=${encodeURIComponent(q)}&includeEmails=true`
+  const response = await fetch(url, { cache: 'no-store' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !Array.isArray(data?.members)) return []
+  return (data.members as any[]).map((m) => {
+    const extra = Array.isArray(m.emails)
+      ? m.emails.map((e: any) => (typeof e === 'string' ? e : e?.email)).filter(Boolean)
+      : []
+    const unique = Array.from(
+      new Set([m.email, ...extra].filter(Boolean).map((e: string) => e.toLowerCase()))
+    )
+    return {
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      ecclesia: m.ecclesia,
+      emails: unique,
+    }
+  })
+}
+
+/**
+ * Send ONE email of a given type to ONE explicitly-requesting recipient.
+ * Bypasses TEST MODE by design; requires an explicit permission attestation
+ * (also re-checked server-side). Does NOT subscribe the recipient or touch the
+ * contact list.
+ */
+export const sendToOneRecipient = async (params: {
+  reason: emailReasons
+  to: string
+  recipientName?: string
+  permission: boolean
+}): Promise<{ ok: boolean; subject?: string; error?: string }> => {
+  const url = `${API_PATH}api/email/send-one`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data?.ok) {
+    return { ok: false, error: data.error || `Request failed (${response.status})` }
+  }
+  return { ok: true, subject: data.subject }
 }
 
 /**
@@ -417,4 +481,87 @@ export const unarchiveEmail = async (pkey: string, email: string): Promise<any> 
   }
 
   return data
+}
+
+// -----------------------------------------------------------------------------
+// Unified Post model — block-editor save/load (Consolidated CMS epic #131,
+// Phase 2a). Cross-platform (API_PATH) client helpers over /api/admin/posts.
+// The API itself is owner/admin- + CONSOLIDATED_CMS-flag-gated.
+// -----------------------------------------------------------------------------
+
+/** List a tenant's posts (drafts + archived included). */
+export const listPosts = async (tenant?: string): Promise<Post[]> => {
+  const qs = tenant ? `?tenant=${encodeURIComponent(tenant)}` : ''
+  const url = `${API_PATH}api/admin/posts${qs}`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to list posts (${response.status})`)
+  return await response.json()
+}
+
+/** Load a single post by id (edit case). */
+export const getPost = async (id: string): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to load post (${response.status})`)
+  return await response.json()
+}
+
+/** Create a new post; returns the persisted Post (with its assigned id). */
+export const createPost = async (input: Partial<Post>): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts`
+  const response = await fetch(url, {
+    cache: 'no-store',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to create post (${response.status})`)
+  }
+  return await response.json()
+}
+
+/** Update an existing post (the editor's autosave target). */
+export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}`
+  const response = await fetch(url, {
+    cache: 'no-store',
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to update post (${response.status})`)
+  }
+  return await response.json()
+}
+
+/**
+ * Duplicate/replicate (Consolidated CMS epic #131): clone a post's structure
+ * (title/occasion/blocks, fresh block ids) into a brand-new draft that
+ * auto-joins the source's series (Connect/series). Returns the new draft —
+ * callers navigate to `/admin/posts/{newId}`.
+ */
+export const duplicatePost = async (id: string): Promise<Post> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/duplicate`
+  const response = await fetch(url, { cache: 'no-store', method: 'POST' })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to duplicate post (${response.status})`)
+  }
+  return await response.json()
+}
+
+/**
+ * Connect/series (Consolidated CMS epic #131): the other posts sharing this
+ * post's `seriesId` (empty array when it isn't part of a series). Powers the
+ * "part of a series — N related" indicator.
+ */
+export const getPostSeries = async (id: string): Promise<Post[]> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/series`
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Failed to load post series (${response.status})`)
+  return await response.json()
 }

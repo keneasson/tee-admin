@@ -16,6 +16,8 @@ import React from 'react'
 import { BibleClassType, MemorialServiceType, ProgramsTypes, SundaySchoolType } from '@my/app/types'
 import { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
+import type { Post } from '@my/app/types/post'
+import { PostEmailView } from '../components/PostEmailView'
 import { FooterContent } from '../components/FooterContent'
 import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
@@ -686,6 +688,15 @@ interface EmailNewsletterProps {
   note?: string
   /** Active news items (Issue #41) — rendered before events, dateless, no section heading */
   newsItems?: NewsItem[]
+  /**
+   * Active NATIVE Posts (Consolidated CMS #131, Phase 4b-2) — ADDITIVE, rendered
+   * in a "Community Posts" section via {@link PostEmailView}. ALREADY redacted at
+   * member tier + lifecycle-filtered by the caller. Defaults to `[]` (none): the
+   * caller passes posts ONLY when the CONSOLIDATED_CMS flag is on, so with the
+   * flag OFF this is empty and the section renders nothing → newsletter is
+   * BYTE-IDENTICAL to today.
+   */
+  posts?: Post[]
   /** Per-ecclesia service times — replaces hardcoded "9:30am" / "11:00am" */
   serviceTimes?: {
     sundaySchool?: ServiceTimeDisplay
@@ -708,6 +719,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
   newsItems = [],
   serviceTimes,
   identity,
+  posts = [],
 }) => {
   const todaysDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -1819,6 +1831,36 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             </Container>
           )
         })()}
+
+        {/* Community Posts (Consolidated CMS #131, Phase 4b-2) — ADDITIVE native
+            Posts, rendered as email via the server-safe PostEmailView. `posts` is
+            passed ONLY when the CONSOLIDATED_CMS flag is on (a broadcast reads it
+            with a null session → on only at 'everyone'), so with the flag OFF this
+            is empty and renders NOTHING → the newsletter is byte-identical. */}
+        {posts.length > 0 ? (
+          <Container style={container} className="container">
+            <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
+            <Heading style={defaultText}>Community Posts</Heading>
+            {posts.map((post, index) => (
+              <React.Fragment key={post.id}>
+                {index > 0 ? (
+                  <hr
+                    style={{
+                      borderWidth: '0',
+                      background: '#ccc',
+                      color: '#ccc',
+                      height: '1px',
+                      margin: '16px 0',
+                    }}
+                  />
+                ) : null}
+                <Section style={program}>
+                  <PostEmailView post={post} />
+                </Section>
+              </React.Fragment>
+            ))}
+          </Container>
+        ) : null}
 
         {/* Learn to Read the Bible Seminars */}
         {(() => {

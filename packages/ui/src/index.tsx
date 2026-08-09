@@ -42,3 +42,9 @@ export * from './directory'
 
 // Roster member-pickers (#110, Slice B)
 export * from './roster'
+
+// Unified Post editor (Consolidated CMS epic #131, Phase 2a)
+export * from './post-editor'
+
+// Unified Post view — read-only display twin of the editor (epic #131, Phase 3)
+export * from './post-view'

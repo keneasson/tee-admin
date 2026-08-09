@@ -62,13 +62,16 @@ export interface SendEmailProps {
    */
   tenant?: TenantConfig
   /**
-   * Full From address (e.g. `"Toronto East Ecclesia" <communications@tee-admin.com>`).
-   * When omitted, defaults to the current behaviour: `noreply@{senderDomain}`.
-   * Backward-compatible — existing callers are unchanged.
+   * Explicit From-address (e.g. the canonical `"Name" <communications@domain>`
+   * newsletter sender). When omitted, defaults to the tenant's `noreply@{senderDomain}`
+   * transactional sender. Pass this for content that must go from the same address as
+   * its broadcast, so sender reputation stays on one address. Backward-compatible —
+   * existing callers are unchanged.
    */
   from?: string
   /**
-   * Reply-To address. When omitted, no Reply-To header is set (current behaviour).
+   * Optional Reply-To (e.g. the Recording Brother). When omitted, no Reply-To
+   * header is set (current behaviour).
    */
   replyTo?: string
 }
@@ -94,10 +97,10 @@ export async function sendEmail({
 
   const emailCmd = new SendEmailCommand({
     FromEmailAddress: from ?? `"${resolvedTenant.senderDisplayName}" <noreply@${resolvedTenant.senderDomain}>`,
-    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     Destination: {
       ToAddresses: [to],
     },
+    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     Content: {
       Simple: {
         Subject: {

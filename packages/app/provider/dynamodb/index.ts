@@ -4,17 +4,20 @@ export * from './types'
 export * from './repositories/schedule-repository'
 export * from './repositories/admin-repository'
 export * from './repositories/person-repository'
+export * from './repositories/post-repository'
 export * from './table-definitions'
 
 // Repository instances (singletons)
 import { ScheduleRepository } from './repositories/schedule-repository'
 import { AdminRepository } from './repositories/admin-repository'
 import { PersonRepository } from './repositories/person-repository'
+import { PostRepository } from './repositories/post-repository'
 
 // Export repository instances
 export const scheduleRepo = new ScheduleRepository()
 export const adminRepo = new AdminRepository()
 export const personRepo = new PersonRepository()
+export const postRepo = new PostRepository()
 
 // Convenience methods for common operations
 export const DynamoDataLayer = {
