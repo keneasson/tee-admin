@@ -63,16 +63,28 @@ export interface SendEmailProps {
   tenant?: TenantConfig
   /**
    * Explicit From-address (e.g. the canonical `"Name" <communications@domain>`
-   * newsletter sender). When omitted, uses the tenant's `noreply@` transactional
-   * sender. Pass this for content that must go from the same address as its
-   * broadcast, so sender reputation stays on one address.
+   * newsletter sender). When omitted, defaults to the tenant's `noreply@{senderDomain}`
+   * transactional sender. Pass this for content that must go from the same address as
+   * its broadcast, so sender reputation stays on one address. Backward-compatible —
+   * existing callers are unchanged.
    */
   from?: string
-  /** Optional Reply-To (e.g. the Recording Brother). */
+  /**
+   * Optional Reply-To (e.g. the Recording Brother). When omitted, no Reply-To
+   * header is set (current behaviour).
+   */
   replyTo?: string
 }
 
-export async function sendEmail({ to, subject, body, textBody, tenant, from, replyTo }: SendEmailProps): Promise<void> {
+export async function sendEmail({
+  to,
+  subject,
+  body,
+  textBody,
+  tenant,
+  from,
+  replyTo,
+}: SendEmailProps): Promise<void> {
   if (!emailsEnabled()) {
     console.log(
       `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
@@ -88,7 +100,7 @@ export async function sendEmail({ to, subject, body, textBody, tenant, from, rep
     Destination: {
       ToAddresses: [to],
     },
-    ...(replyTo && { ReplyToAddresses: [replyTo] }),
+    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     Content: {
       Simple: {
         Subject: {
