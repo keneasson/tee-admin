@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { auth } from '../../../../utils/auth'
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { sendEmail } from '../../../../utils/email/sesClient'
 import { getPublicOptInCount } from '../../../../utils/email/public-topics'
 import { requireFreshAuth } from '../../../../utils/require-fresh-auth'
@@ -206,13 +207,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if email already exists
+    const normalized = email.toLowerCase()
+
+    // Check if email already exists (legacy USER# store)
     const existing = await userRepository.getEmails(session.user.email)
-    if (existing.items.some(e => e.email.toLowerCase() === email.toLowerCase())) {
+    if (existing.items.some(e => e.email.toLowerCase() === normalized)) {
       return NextResponse.json(
         { error: 'This email address is already added' },
         { status: 409 }
       )
+    }
+
+    // Resolve the acting person, and guard against attaching an address that
+    // already belongs to a DIFFERENT person — silently doing so would merge two
+    // identities. (Resolves via any address now that getByEmail sees secondaries.)
+    const person = await personRepository.getByEmail(session.user.email.toLowerCase())
+    if (person) {
+      const owners = await personRepository.getAllPersonsByEmail(normalized)
+      if (owners.some(p => p.personId !== person.personId)) {
+        return NextResponse.json(
+          { error: 'That email is already associated with another person in the directory.' },
+          { status: 409 }
+        )
+      }
     }
 
     const emailId = generateEmailId()
@@ -220,11 +237,34 @@ export async function POST(request: NextRequest) {
 
     await userRepository.addEmail(session.user.email, {
       emailId,
-      email: email.toLowerCase(),
+      email: normalized,
       verified: false,
       order,
       isPrimary: false,
     })
+
+    // Mirror the address onto the PersonRecord as a SECONDARY EMAIL# item, so it
+    // resolves (via GSI1) to this person. Without this the verify/lookup flow
+    // can't find the owner and mints a duplicate orphan profile. Best-effort:
+    // never fail the request if this half hiccups (the USER# add already stuck).
+    if (person) {
+      try {
+        const pEmails = await personRepository.getEmails(person.personId)
+        const alreadyOnPerson = pEmails.some(e => e.email.toLowerCase() === normalized)
+        if (!alreadyOnPerson) {
+          await personRepository.addEmail(person.personId, {
+            email: normalized,
+            emailType: 'secondary',
+            order: pEmails.length,
+            verified: false,
+            sesSubscribed: false,
+            sesStatus: 'active',
+          })
+        }
+      } catch (err) {
+        console.error('[user/emails] failed to mirror secondary email to PersonRecord:', err)
+      }
+    }
 
     return NextResponse.json({
       success: true,
