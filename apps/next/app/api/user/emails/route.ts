@@ -4,6 +4,7 @@ import { auth } from '../../../../utils/auth'
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { sendEmail } from '../../../../utils/email/sesClient'
 import { getPublicOptInCount } from '../../../../utils/email/public-topics'
+import { requireFreshAuth } from '../../../../utils/require-fresh-auth'
 
 // Generate a simple unique ID
 function generateEmailId(): string {
@@ -102,6 +103,10 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Editing the email set is a sensitive account change — require fresh step-up.
+    const gate = await requireFreshAuth()
+    if (!gate.ok) return gate.response
+
     const body = await request.json()
     const { emails } = body as { emails: Array<{ id: string; email: string; verified?: boolean; isPrimary?: boolean; subscribed?: boolean }> }
 
@@ -186,6 +191,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Adding an email is a sensitive account change — require fresh step-up.
+    const gate = await requireFreshAuth()
+    if (!gate.ok) return gate.response
+
     const body = await request.json()
     const { email } = body
 
@@ -244,6 +253,10 @@ export async function DELETE(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Removing an email is a sensitive account change — require fresh step-up.
+    const gate = await requireFreshAuth()
+    if (!gate.ok) return gate.response
 
     const { searchParams } = new URL(request.url)
     const emailId = searchParams.get('emailId')
