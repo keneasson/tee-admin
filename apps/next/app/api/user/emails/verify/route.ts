@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { auth } from '../../../../../utils/auth'
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { sendEmail } from '../../../../../utils/email/sesClient'
+import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
 
 // Token expiry: 24 hours
 const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000
@@ -26,6 +27,11 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Sending a verification to an added address is an account edit — require a
+    // fresh step-up (a recognized/forwarded-link session must not trigger sends).
+    const gate = await requireFreshAuth()
+    if (!gate.ok) return gate.response
 
     const body = await request.json()
     const { emailId } = body
@@ -153,8 +159,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Extract primary email from PK (format: USER#{primaryEmail})
-    const primaryEmail = emailRecord.PK.replace('USER#', '')
+    // Extract primary email from the partition key (format: USER#{primaryEmail}).
+    // These records are stored with the legacy `pkey` attribute (not `PK`), so
+    // `emailRecord.PK` is undefined at runtime — reading `.replace` off it threw a
+    // TypeError that the catch below rendered as the misleading "Verification
+    // failed. Please try again." Read `pkey` defensively and guard a missing key.
+    const storedPk = (emailRecord as { pkey?: string; PK?: string }).pkey ?? emailRecord.PK
+    if (!storedPk) {
+      return redirectWithMessage('error', 'Invalid or expired verification link')
+    }
+    const primaryEmail = storedPk.replace('USER#', '')
 
     // Mark email as verified and clear token
     await userRepository.updateEmail(primaryEmail, emailRecord.emailId, {

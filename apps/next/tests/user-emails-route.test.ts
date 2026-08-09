@@ -37,7 +37,12 @@ vi.mock('../utils/email/public-topics', () => ({ getPublicOptInCount: vi.fn() })
 import { POST } from '../app/api/user/emails/route'
 
 const req = (body: any) => ({ json: async () => body }) as any
-const ME = { user: { email: 'gord@yahoo.com' } }
+// A FRESHLY-authenticated session: adding an email is gated by requireFreshAuth
+// (requireAssurance('authenticated') + isRecentlyAuthenticated), so the caller
+// must have a recent `authTime`. This is the normal post-step-up state.
+const ME = {
+  user: { email: 'gord@yahoo.com', assuranceLevel: 'authenticated', authTime: Date.now() },
+}
 const GORD = { personId: 'gord-1', primaryEmail: 'gord@yahoo.com' }
 
 beforeEach(() => {
@@ -56,6 +61,16 @@ describe('POST /api/user/emails', () => {
     h.auth.mockResolvedValue(null)
     const res = await POST(req({ email: 'x@y.com' }))
     expect(res.status).toBe(401)
+  })
+
+  it('403 stepUpRequired when the session is not freshly authenticated', async () => {
+    // A recognized-tier or stale session (no fresh authTime) must step up first.
+    h.auth.mockResolvedValue({ user: { email: 'gord@yahoo.com', assuranceLevel: 'recognized' } })
+    const res = await POST(req({ email: 'x@y.com' }))
+    expect(res.status).toBe(403)
+    const body = await res.json()
+    expect(body.stepUpRequired).toBe(true)
+    expect(h.p_addEmail).not.toHaveBeenCalled()
   })
 
   it('400 on an invalid email', async () => {

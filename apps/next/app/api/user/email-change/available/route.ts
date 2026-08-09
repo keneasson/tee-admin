@@ -1,0 +1,21 @@
+import { NextResponse } from 'next/server'
+import { auth } from '@/utils/auth'
+import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+
+/**
+ * GET /api/user/email-change/available — is the secure email-change feature
+ * visible to THIS session? The client `useFeatureFlag` hook is presence-based
+ * (always true once a flag is defined), so it can't drive a launch-dark UI. This
+ * resolves the flag server-side per session (same check the start/confirm routes
+ * enforce), letting the UI self-hide for everyone the flag doesn't target while an
+ * admin can exercise it in prod behind the flag.
+ */
+export async function GET() {
+  const session = await auth()
+  if (!session?.user?.email) {
+    return NextResponse.json({ available: false })
+  }
+  const available = await checkFeatureFlagFromDB(FEATURE_FLAGS.SECURE_EMAIL_CHANGE, session as any)
+  return NextResponse.json({ available: !!available })
+}

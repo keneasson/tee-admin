@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { privacyRepository } from '@my/app/provider/dynamodb/repositories/privacy-repository'
 import type { VisibilityLevel } from '@my/app/provider/dynamodb/types'
+import { requireFreshAuth } from '../../../../utils/require-fresh-auth'
 
 const validVisibilityLevels: VisibilityLevel[] = [
   'authenticated',
@@ -61,6 +62,10 @@ export async function PATCH(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Editing privacy settings is a sensitive account change — require step-up.
+    const gate = await requireFreshAuth()
+    if (!gate.ok) return gate.response
 
     const body = await request.json()
     const {

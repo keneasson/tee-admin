@@ -16,6 +16,7 @@
       "@/types/*": ["types/*"],
       "@/lib/*": ["lib/*"],
       "@/components/*": ["components/*"],
+      "@/features/*": ["features/*"],
       "@/hooks/*": ["hooks/*"],
       "@/middleware": ["middleware.ts"]
     },

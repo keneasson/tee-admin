@@ -19,6 +19,13 @@ interface UserProfileProps {
   userRole?: string
   userEcclesia?: string
   onNavigateToPerson?: (personId: string) => void
+  /**
+   * Fired when a sensitive mutation is refused with the fresh-auth step-up gate
+   * (403 `{ stepUpRequired }`). The platform layer (apps/next) mounts <Verify>
+   * and, once re-verified, calls the supplied `retry` to re-run the mutation.
+   * Kept as a prop because this shared package cannot import next-auth/Verify.
+   */
+  onStepUpRequired?: (retry: () => void) => void
 }
 
 interface Address {
@@ -82,6 +89,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   userRole,
   userEcclesia,
   onNavigateToPerson,
+  onStepUpRequired,
 }) => {
   const [loading, setLoading] = useState(true)
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -254,6 +262,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
+  // The fresh-auth gate (require-fresh-auth) refuses sensitive edits with a
+  // 403 `{ stepUpRequired }`. Surface that to the platform layer (which mounts
+  // <Verify>) rather than failing silently; on re-verify it calls `retry`.
+  const handledStepUp = async (res: Response, retry: () => void): Promise<boolean> => {
+    if (res.status !== 403) return false
+    const body = await res.clone().json().catch(() => ({} as any))
+    if (body?.stepUpRequired && onStepUpRequired) {
+      onStepUpRequired(retry)
+      return true
+    }
+    return false
+  }
+
   // Email handlers for EmailManager
   const handleSaveEmails = async () => {
     setSavingEmails(true)
@@ -272,7 +293,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       })
       if (res.ok) {
         await fetchData()
+        return
       }
+      await handledStepUp(res, () => { void handleSaveEmails() })
     } finally {
       setSavingEmails(false)
     }
@@ -286,7 +309,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     })
     if (res.ok) {
       await fetchData()
+      return
     }
+    await handledStepUp(res, () => { void handleSendVerification(emailId) })
   }
 
   // Family handlers
@@ -378,7 +403,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     })
     if (res.ok) {
       await fetchData()
+      return
     }
+    await handledStepUp(res, () => { void handleSavePrivacy(updates) })
   }
 
   // Contact request handlers
