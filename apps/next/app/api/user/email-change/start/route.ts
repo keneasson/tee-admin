@@ -46,9 +46,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
     }
 
-    // Guard against colliding with a DIFFERENT account's login handle.
-    const ownerOfNew = await personRepository.getByEmail(newEmail)
-    if (ownerOfNew && ownerOfNew.personId !== person.personId) {
+    // Guard against transferring to an address that already belongs to a DIFFERENT
+    // person — as a primary OR a secondary, or a shared address (mirrors the
+    // collision check #130 added to add-email; getAllPersonsByEmail sees both).
+    const owners = await personRepository.getAllPersonsByEmail(newEmail)
+    if (owners.some((p) => p.personId !== person.personId)) {
       return NextResponse.json(
         { error: 'That email address is already associated with another account and cannot be used.' },
         { status: 409 }
