@@ -529,6 +529,11 @@ export interface PersonEmailRecord extends BaseRecord {
   order: number
   verified: boolean
 
+  // When a former primary is demoted by an email change it becomes a recoverable
+  // secondary until this instant, after which it may be archived (grace window —
+  // we never hard-delete the address the identity transferred away from).
+  archiveAfter?: string  // ISO-8601
+
   // SES integration
   sesSubscribed: boolean
   sesStatus: 'active' | 'bounced' | 'complained' | 'unsubscribed'
@@ -613,7 +618,7 @@ export function isPersonPhoneRecord(record: any): record is PersonPhoneRecord {
 // ===== TOKEN SYSTEM =====
 // Unified token management for email verification, password reset, and invitations
 
-export type TokenType = 'email_verification' | 'password_reset' | 'invitation' | 'otp'
+export type TokenType = 'email_verification' | 'password_reset' | 'invitation' | 'otp' | 'email_change'
 
 // Token Record - Stored under person, indexed by token value via GSI4
 // PK: PERSON#{personId}, SK: TOKEN#{tokenType}#{tokenId}
@@ -642,6 +647,9 @@ export interface TokenRecord extends BaseRecord {
   otpCode?: string       // 6-digit numeric code for manual entry
   attempts?: number      // Number of verification attempts made
   maxAttempts?: number   // Maximum allowed attempts (default 5)
+
+  // Email-change-specific: the NEW address this code authorizes moving login to.
+  newEmail?: string
 }
 
 export type TokenQueryResult = {

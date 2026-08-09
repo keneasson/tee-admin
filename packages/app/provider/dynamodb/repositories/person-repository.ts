@@ -362,6 +362,83 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     return record
   }
 
+  /** Default grace before a demoted former-primary email may be archived. */
+  static readonly EMAIL_DEMOTE_GRACE_MS = 14 * 24 * 60 * 60 * 1000
+
+  /**
+   * Change a person's LOGIN email (identity transfer). Re-points the single
+   * source of login truth — `PROFILE.primaryEmail` and its `gsi1pk` lookup index
+   * — to `newEmail`, and demotes the former primary to a recoverable secondary
+   * for a grace window (never hard-deleted). The new address is marked verified
+   * and labelled `primary`.
+   *
+   * The caller MUST have already proven the operator controls the account (fresh
+   * step-up) AND that `newEmail` is deliverable (the confirmation code) — this
+   * method only performs the transfer.
+   *
+   * DynamoDB has no cross-item transaction here, so writes are ordered so the
+   * PROFILE flip (the commit point that actually moves login) happens LAST, after
+   * the new row exists and the old is demoted. A mid-way failure leaves login on
+   * the old address (safe) and is idempotent on retry.
+   */
+  async changePrimaryEmail(
+    personId: string,
+    newEmailRaw: string,
+    opts?: { graceMs?: number }
+  ): Promise<{ newEmailId: string; oldEmail: string | null }> {
+    const newEmail = (newEmailRaw || '').trim().toLowerCase()
+    if (!newEmail) throw new Error('changePrimaryEmail: newEmail is required')
+
+    const person = await this.getById(personId)
+    if (!person) throw new Error(`Person ${personId} not found`)
+    const oldEmail = person.primaryEmail ? person.primaryEmail.toLowerCase() : null
+
+    const emails = await this.getEmails(personId)
+    const nowIso = new Date().toISOString()
+    const graceMs = opts?.graceMs ?? PersonRepository.EMAIL_DEMOTE_GRACE_MS
+    const archiveAfter = new Date(Date.now() + graceMs).toISOString()
+
+    // 1) Ensure the NEW email exists as a verified, primary-labelled EMAIL# row.
+    let newRow = emails.find((e) => e.email.toLowerCase() === newEmail)
+    if (newRow) {
+      await this.update(
+        `PERSON#${personId}`,
+        `EMAIL#${newRow.emailId}`,
+        { emailType: 'primary', verified: true } as unknown as Partial<PersonRecord>
+      )
+    } else {
+      newRow = await this.addEmail(personId, {
+        email: newEmail,
+        emailType: 'primary',
+        order: 0,
+        verified: true,
+        sesSubscribed: true,
+        sesStatus: 'active',
+      })
+    }
+
+    // 2) Demote any OTHER row currently labelled primary → recoverable secondary.
+    for (const row of emails) {
+      if (row.emailId === newRow.emailId) continue
+      if (row.emailType === 'primary') {
+        await this.update(
+          `PERSON#${personId}`,
+          `EMAIL#${row.emailId}`,
+          { emailType: 'secondary', archiveAfter } as unknown as Partial<PersonRecord>
+        )
+      }
+    }
+
+    // 3) COMMIT: move the login handle + lookup index to the new address.
+    await this.update(`PERSON#${personId}`, 'PROFILE', {
+      primaryEmail: newEmail,
+      gsi1pk: `EMAIL#${newEmail}`,
+      emailVerified: nowIso,
+    })
+
+    return { newEmailId: newRow.emailId, oldEmail }
+  }
+
   // ===== PHONE OPERATIONS =====
 
   async getPhone(personId: string, phoneId: string): Promise<PersonPhoneRecord | null> {
