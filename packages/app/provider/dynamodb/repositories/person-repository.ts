@@ -125,15 +125,37 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /**
-   * Get person by email via GSI1
+   * Get person by email via GSI1 — resolves ANY of the person's addresses.
+   *
+   * A profile's PRIMARY email is the PROFILE item (gsi1sk = 'PERSON'); SECONDARY
+   * emails are EMAIL# items (gsi1sk = 'PERSON#<uuid>'). Historically this only
+   * matched the primary, so a lookup by a secondary returned null — which let the
+   * verify-otp/add-email flows mint a duplicate "orphan" person for an address
+   * that already belonged to someone. We now try the primary fast-path, then fall
+   * back to resolving the address as a secondary.
+   *
+   * If an address is shared by more than one person (e.g. a couple), this returns
+   * a single best-effort owner (primary-owner if any, else the first) and logs —
+   * shared-address disambiguation is handled by the caller where it matters.
    */
   async getByEmail(email: string): Promise<PersonRecord | null> {
-    const result = await this.query(
+    const lower = email.toLowerCase()
+    // Fast path: the address is a PRIMARY (on a PROFILE item).
+    const primary = await this.query(
       'gsi1pk = :gsi1pk AND gsi1sk = :gsi1sk',
-      { ':gsi1pk': `EMAIL#${email.toLowerCase()}`, ':gsi1sk': 'PERSON' },
+      { ':gsi1pk': `EMAIL#${lower}`, ':gsi1sk': 'PERSON' },
       { indexName: 'gsi1' }
     )
-    return result.items[0] || null
+    if (primary.items[0]) return primary.items[0]
+
+    // Fallback: the address is a SECONDARY (EMAIL# item) — resolve to its profile.
+    const owners = await this.getAllPersonsByEmail(lower)
+    if (owners.length > 1) {
+      console.warn(
+        `[getByEmail] "${lower}" resolves to ${owners.length} persons (shared address); returning first`
+      )
+    }
+    return owners[0] || null
   }
 
   /**
@@ -743,12 +765,9 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * Uses GSI1 for O(1) email lookup - replaces scan-based getUserFromDynamoDB
    */
   async getByEmailForAuth(email: string): Promise<PersonAuthData | null> {
-    let person = await this.getByEmail(email)
-    if (!person) {
-      // Fallback: check secondary emails via begins_with query
-      const persons = await this.getAllPersonsByEmail(email)
-      person = persons[0] || null
-    }
+    // getByEmail now resolves secondary addresses itself (primary fast-path, then
+    // EMAIL#-item fallback) — no need for a separate secondary lookup here.
+    const person = await this.getByEmail(email)
     if (!person) return null
 
     return {

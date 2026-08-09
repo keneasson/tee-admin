@@ -83,7 +83,7 @@ describe('Unified People Auth Integration', () => {
     })
 
     it('should normalize email to lowercase for consistent lookups', async () => {
-      mockSend.mockResolvedValueOnce({ Items: [] })
+      mockSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({ Items: [] })
 
       await personRepository.getByEmail('Test@Example.COM')
 
@@ -181,7 +181,7 @@ describe('Unified People Auth Integration', () => {
     })
 
     it('should return false for non-existent email', async () => {
-      mockSend.mockResolvedValueOnce({ Items: [] })
+      mockSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({ Items: [] })
 
       const exists = await personRepository.emailExists('nonexistent@example.com')
 
