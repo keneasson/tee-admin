@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
+import { auth } from '@/utils/auth'
 import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
 import { sendEmail } from '../../../../../utils/email/sesClient'
 import { maskEmail } from '../../../../../utils/mask-email'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { codeFromBytes, EMAIL_CHANGE_CODE_LENGTH } from '@my/app/utils/email-change'
+import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -26,6 +29,12 @@ export async function POST(request: NextRequest) {
     const currentEmail = gate.ctx.email
     if (!currentEmail) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    // Launch-dark: the feature stays invisible (404) until deliberately enabled.
+    const flagOn = await checkFeatureFlagFromDB(FEATURE_FLAGS.SECURE_EMAIL_CHANGE, (await auth()) as any)
+    if (!flagOn) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
     const body = await request.json().catch(() => ({}))

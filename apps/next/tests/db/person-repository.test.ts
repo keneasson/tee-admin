@@ -42,7 +42,10 @@ describe('PersonRepository', () => {
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    // clearAllMocks (not restoreAllMocks) so the mocked command constructors keep
+    // their implementations across tests — restoreAllMocks wipes them, which would
+    // make later tests see `undefined` commands instead of { type, params }.
+    vi.clearAllMocks()
   })
 
   describe('getById', () => {
@@ -416,6 +419,106 @@ describe('PersonRepository', () => {
 
         expect(result.isInterEcclesiaRep).toBe(true)
       })
+    })
+  })
+
+  describe('changePrimaryEmail (identity transfer)', () => {
+    // Reconstruct the { attr: value } pairs a SET UpdateCommand actually writes,
+    // resolving the #attrN / :valN indirection the base repository builds.
+    const setFields = (cmd: any): Record<string, any> => {
+      const names = cmd.params.ExpressionAttributeNames || {}
+      const values = cmd.params.ExpressionAttributeValues || {}
+      const out: Record<string, any> = {}
+      for (const nameKey of Object.keys(names)) {
+        const m = nameKey.match(/^#attr(\d+)$/)
+        if (m) out[names[nameKey]] = values[`:val${m[1]}`]
+      }
+      return out
+    }
+
+    const profile = {
+      pkey: 'PERSON#p1',
+      skey: 'PROFILE',
+      personId: 'p1',
+      primaryEmail: 'old@example.com',
+    }
+
+    it('promotes an existing SECONDARY to primary, demotes the old primary with an archiveAfter, and re-points PROFILE', async () => {
+      mockSend
+        .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
+        .mockResolvedValueOnce({
+          Items: [
+            { emailId: 'old-id', email: 'old@example.com', emailType: 'primary' },
+            { emailId: 'new-id', email: 'new@example.com', emailType: 'secondary' },
+          ],
+        }) // getEmails
+        .mockResolvedValueOnce({ Attributes: {} }) // update new email → primary + verified
+        .mockResolvedValueOnce({ Attributes: {} }) // demote old primary → secondary
+        .mockResolvedValueOnce({ Attributes: {} }) // COMMIT: update PROFILE
+
+      const result = await repository.changePrimaryEmail('p1', 'New@Example.com')
+
+      expect(result).toEqual({ newEmailId: 'new-id', oldEmail: 'old@example.com' })
+      expect(mockSend).toHaveBeenCalledTimes(5)
+
+      const calls = mockSend.mock.calls.map((c) => c[0])
+
+      // 1) new email row promoted: verified + primary
+      expect(calls[2].type).toBe('UpdateCommand')
+      expect(calls[2].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#new-id' })
+      expect(setFields(calls[2])).toMatchObject({ emailType: 'primary', verified: true })
+
+      // 2) old primary demoted to secondary WITH an archiveAfter grace stamp
+      expect(calls[3].type).toBe('UpdateCommand')
+      expect(calls[3].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#old-id' })
+      const demote = setFields(calls[3])
+      expect(demote.emailType).toBe('secondary')
+      expect(typeof demote.archiveAfter).toBe('string')
+      expect(new Date(demote.archiveAfter).getTime()).toBeGreaterThan(Date.now())
+
+      // 3) COMMIT: PROFILE now carries the new login handle + lookup index (lowercased)
+      expect(calls[4].type).toBe('UpdateCommand')
+      expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
+      const commit = setFields(calls[4])
+      expect(commit.primaryEmail).toBe('new@example.com')
+      expect(commit.gsi1pk).toBe('EMAIL#new@example.com')
+      expect(typeof commit.emailVerified).toBe('string')
+    })
+
+    it('creates a brand-new verified primary EMAIL# row when the new address is not already on the account', async () => {
+      mockSend
+        .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
+        .mockResolvedValueOnce({
+          Items: [{ emailId: 'old-id', email: 'old@example.com', emailType: 'primary' }],
+        }) // getEmails
+        .mockResolvedValueOnce({}) // addEmail → put (new row)
+        .mockResolvedValueOnce({ Attributes: {} }) // demote old primary → secondary
+        .mockResolvedValueOnce({ Attributes: {} }) // COMMIT: update PROFILE
+
+      const result = await repository.changePrimaryEmail('p1', 'new@example.com')
+
+      // emailId comes from the mocked uuid
+      expect(result).toEqual({ newEmailId: 'test-uuid-1234', oldEmail: 'old@example.com' })
+      expect(mockSend).toHaveBeenCalledTimes(5)
+
+      const calls = mockSend.mock.calls.map((c) => c[0])
+
+      // The new row is a PutCommand: verified, primary-labelled, correct lookup index
+      expect(calls[2].type).toBe('PutCommand')
+      expect(calls[2].params.Item).toMatchObject({
+        skey: 'EMAIL#test-uuid-1234',
+        email: 'new@example.com',
+        emailType: 'primary',
+        verified: true,
+        gsi1pk: 'EMAIL#new@example.com',
+      })
+
+      // old primary still demoted with grace, PROFILE still committed last
+      expect(calls[3].type).toBe('UpdateCommand')
+      expect(setFields(calls[3])).toMatchObject({ emailType: 'secondary' })
+      expect(calls[4].type).toBe('UpdateCommand')
+      expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
+      expect(setFields(calls[4]).primaryEmail).toBe('new@example.com')
     })
   })
 })

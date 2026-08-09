@@ -5,6 +5,7 @@ export const FEATURE_FLAGS = {
   IN_APP_NOTIFICATIONS: 'in_app_notifications',
   UNIVERSAL_EMAIL_LOGIN: 'universal_email_login',
   CONSOLIDATED_CMS: 'consolidated_cms',
+  SECURE_EMAIL_CHANGE: 'secure_email_change',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -49,6 +50,15 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // stricter anon-PII scrub to all readers.
     description: 'Unified Post model: block-based PII redaction at public read boundaries',
     visibleTo: 'owner',
+    users: [],
+  },
+  [FEATURE_FLAGS.SECURE_EMAIL_CHANGE]: {
+    // Launch-dark security feature. Read server-side with the request session; the
+    // email-change/start + confirm routes 404 while this is 'off', so the endpoints
+    // stay invisible until deliberately enabled. Default 'off' → disabled for
+    // everyone, including owner.
+    description: 'Secure self-serve login-email change (fresh-auth step-up + confirmation code)',
+    visibleTo: 'off',
     users: [],
   },
 }
