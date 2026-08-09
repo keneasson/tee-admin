@@ -192,9 +192,11 @@ export async function GET(req: NextRequest) {
 
         const emailReason = emailTypeMap[queueEntry.emailType]
 
-        // Get email content for this type
+        // Get email content for this type. Some templates return a content-aware
+        // subject as a 3rd element (e.g. Bible Class → "No Bible Class Tonight"
+        // when there's no class), which must override the static per-reason subject.
         const emailContent = await getEmailContent(emailReason)
-        const [emailHtml, emailText] = emailContent || ['', '']
+        const [emailHtml, emailText, generatedSubject] = emailContent || ['', '']
 
         if (!emailHtml || !emailText) {
           throw new Error(`Failed to generate email content for ${emailReason}`)
@@ -206,6 +208,7 @@ export async function GET(req: NextRequest) {
           emailHtml,
           emailText,
           test: queueEntry.testMode || false,
+          customSubject: generatedSubject || undefined,
         })
 
         if (sendResult instanceof Error) {

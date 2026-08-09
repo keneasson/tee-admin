@@ -13,7 +13,7 @@ import { Event, LocationInfo } from '@my/app/types/events'
 import MemorialService from 'email-builder/emails/Memorial'
 import Newsletter from 'email-builder/emails/Newsletter'
 import { emailReasons } from './email-send'
-import BibleClass from 'email-builder/emails/BibleClass'
+import BibleClass, { bibleClassSubject } from 'email-builder/emails/BibleClass'
 import BusinessMeeting from 'email-builder/emails/BusinessMeeting'
 import CustomEmail from 'email-builder/emails/CustomEmail'
 import FuneralEmail from 'email-builder/emails/Funeral'
@@ -220,7 +220,10 @@ export const getEmailContent = async (
           plainText: true,
         }
       )
-      return [bibleClassHtmlContent, bibleClassTextContent]
+      // Brand the subject from the same "no class" logic the body uses, so the
+      // subject never contradicts the body (e.g. "No Bible Class Tonight").
+      const bibleClassSubjectLine = bibleClassSubject(bibleClassEvents as BibleClassType[])
+      return [bibleClassHtmlContent, bibleClassTextContent, bibleClassSubjectLine]
     case 'newsletter':
       // Fallback: Sync YouTube URLs if any are missing (primary sync happens at livestream creation)
       const newsletterSyncResult = await syncYouTubeUrlsForEmail(14)
