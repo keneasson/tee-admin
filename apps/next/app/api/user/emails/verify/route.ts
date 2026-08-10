@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { auth } from '../../../../../utils/auth'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { sendEmail } from '../../../../../utils/email/sesClient'
 import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
 
-// Token expiry: 24 hours
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000
-
-// Generate secure verification token
-function generateVerificationToken(): string {
-  return randomBytes(32).toString('hex')
+/**
+ * Resolve the acting person from the session login email (primary via GSI1, then
+ * any-address fallback).
+ */
+async function resolveActingPerson(loginEmail: string) {
+  const email = loginEmail.toLowerCase()
+  let person = await personRepository.getByEmail(email)
+  if (!person) {
+    const persons = await personRepository.getAllPersonsByEmail(email)
+    person = persons[0] || null
+  }
+  return person
 }
 
 /**
@@ -43,8 +50,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get the email record
-    const emailRecord = await userRepository.getEmail(session.user.email, emailId)
+    const person = await resolveActingPerson(session.user.email)
+    if (!person) {
+      return NextResponse.json(
+        { error: 'No profile found for your account' },
+        { status: 404 }
+      )
+    }
+
+    // Guard the target EMAIL# row exists and is still unverified.
+    const emailRecord = await personRepository.getEmailById(person.personId, emailId)
     if (!emailRecord) {
       return NextResponse.json(
         { error: 'Email not found' },
@@ -59,20 +74,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate token and expiry
-    const token = generateVerificationToken()
-    const expiry = new Date(Date.now() + TOKEN_EXPIRY_MS).toISOString()
-
-    // Update the email record with verification token
-    await userRepository.updateEmail(session.user.email, emailId, {
-      verificationToken: token,
-      verificationTokenExpiry: expiry,
-      verificationSentAt: new Date().toISOString(),
-    })
+    // Mint a single-use verification token in the unified TokenRepository
+    // (O(1) GSI4 lookup, atomic consume). Replaces the previous USER# token write.
+    const token = await tokenRepository.createEmailVerification(person.personId, emailRecord.email)
 
     // Build verification URL
     const baseUrl = process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
-    const verificationUrl = `${baseUrl}/api/user/emails/verify?token=${token}`
+    const verificationUrl = `${baseUrl}/api/user/emails/verify?token=${token.tokenValue}`
 
     // Send verification email
     const emailBody = `
@@ -133,8 +141,10 @@ Toronto East Christadelphian Ecclesia
 }
 
 /**
- * GET /api/user/emails/verify?token=xxx - Verify email with token
- * This is called when user clicks the link in their email
+ * GET /api/user/emails/verify?token=xxx - Verify email with token (link click,
+ * UNauthenticated). Consumes the unified token, then marks the matching
+ * PersonRecord EMAIL# row verified. Falls back to the legacy USER# token store
+ * for one release, to drain in-flight links minted before this change.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -145,13 +155,28 @@ export async function GET(request: NextRequest) {
       return redirectWithMessage('error', 'Invalid verification link')
     }
 
-    // Find email by token
+    // Primary path: unified TokenRepository (O(1), atomic single-use).
+    const result = await tokenRepository.verifyAndConsume(token, 'email_verification')
+    if (result.valid && result.token) {
+      await personRepository.markEmailVerifiedByAddress(result.token.personId, result.token.email)
+      return redirectWithMessage('success', 'Email verified successfully!')
+    }
+
+    // Token found but not consumable — report the reason without falling back.
+    if (result.token) {
+      if (result.error === 'expired') {
+        return redirectWithMessage('error', 'Verification link has expired. Please request a new one.')
+      }
+      return redirectWithMessage('error', 'Invalid or expired verification link')
+    }
+
+    // FALLBACK (drain window): no unified token → try the legacy USER# store for
+    // links minted before this release. Keep the `pkey` crash-fix.
     const emailRecord = await userRepository.getEmailByToken(token)
     if (!emailRecord) {
       return redirectWithMessage('error', 'Invalid or expired verification link')
     }
 
-    // Check if token has expired
     if (emailRecord.verificationTokenExpiry) {
       const expiry = new Date(emailRecord.verificationTokenExpiry)
       if (expiry < new Date()) {
@@ -159,23 +184,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Extract primary email from the partition key (format: USER#{primaryEmail}).
-    // These records are stored with the legacy `pkey` attribute (not `PK`), so
-    // `emailRecord.PK` is undefined at runtime — reading `.replace` off it threw a
-    // TypeError that the catch below rendered as the misleading "Verification
-    // failed. Please try again." Read `pkey` defensively and guard a missing key.
+    // Records are stored with the legacy `pkey` attribute (not `PK`), so
+    // `emailRecord.PK` is undefined at runtime — read `pkey` defensively and
+    // guard a missing key rather than throwing a misleading generic error.
     const storedPk = (emailRecord as { pkey?: string; PK?: string }).pkey ?? emailRecord.PK
     if (!storedPk) {
       return redirectWithMessage('error', 'Invalid or expired verification link')
     }
     const primaryEmail = storedPk.replace('USER#', '')
 
-    // Mark email as verified and clear token
+    // Mark legacy record verified + clear token.
     await userRepository.updateEmail(primaryEmail, emailRecord.emailId, {
       verified: true,
       verificationToken: undefined,
       verificationTokenExpiry: undefined,
     })
+
+    // Also heal the PersonRecord so the single system agrees. Best-effort.
+    try {
+      const owner = await resolveActingPerson(primaryEmail)
+      if (owner) {
+        await personRepository.markEmailVerifiedByAddress(owner.personId, emailRecord.email)
+      }
+    } catch (healErr) {
+      console.error('[user/emails/verify] PersonRecord heal on legacy verify failed (non-fatal):', healErr)
+    }
 
     return redirectWithMessage('success', 'Email verified successfully!')
   } catch (error) {

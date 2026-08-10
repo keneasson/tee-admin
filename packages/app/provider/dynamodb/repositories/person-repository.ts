@@ -384,6 +384,51 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     return record
   }
 
+  /**
+   * Fetch a single EMAIL# row by its id (for existence / primary guards).
+   */
+  async getEmailById(personId: string, emailId: string): Promise<PersonEmailRecord | null> {
+    const pk = `PERSON#${personId}`
+    const sk = `EMAIL#${emailId}`
+    return this.get(pk, sk) as unknown as Promise<PersonEmailRecord | null>
+  }
+
+  /**
+   * Set the display `order` on each EMAIL# row to match the given id sequence.
+   * This is DISPLAY ordering only ("set as preferred" moves an address to the
+   * front) — it MUST NOT touch PROFILE.primaryEmail or any EMAIL# gsi1pk, since
+   * changing which address is preferred for display is not an identity transfer.
+   */
+  async setEmailOrder(personId: string, orderedEmailIds: string[]): Promise<void> {
+    const pk = `PERSON#${personId}`
+    for (let i = 0; i < orderedEmailIds.length; i++) {
+      await this.update(
+        pk,
+        `EMAIL#${orderedEmailIds[i]}`,
+        { order: i } as unknown as Partial<PersonRecord>
+      )
+    }
+  }
+
+  /**
+   * Mark the EMAIL# row matching a given address as verified. Unlike
+   * `markEmailVerified` (which only flips the `emailType==='primary'` row and the
+   * PROFILE.emailVerified stamp), this works for SECONDARY addresses too, so a
+   * verification link for an added address lands on the right row. Idempotent:
+   * a no-op if the address isn't on the person.
+   */
+  async markEmailVerifiedByAddress(personId: string, email: string): Promise<void> {
+    const target = email.toLowerCase()
+    const emails = await this.getEmails(personId)
+    const match = emails.find(e => e.email.toLowerCase() === target)
+    if (!match) return
+    await this.update(
+      match.pkey,
+      match.skey,
+      { verified: true } as unknown as Partial<PersonRecord>
+    )
+  }
+
   /** Default grace before a demoted former-primary email may be archived. */
   static readonly EMAIL_DEMOTE_GRACE_MS = 14 * 24 * 60 * 60 * 1000
 

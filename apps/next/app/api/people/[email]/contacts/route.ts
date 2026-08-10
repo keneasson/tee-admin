@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { auth } from '../../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
-import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
+import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../../cache'
 import { sendEmailChangeNotification, sendAdminAddedEmailVerification } from '../../../../../utils/email/send-email-change-notification'
@@ -117,27 +116,20 @@ export async function POST(
           || [targetPerson.firstName, targetPerson.lastName].filter(Boolean).join(' ')
           || 'Member'
 
-        // Send verification email to the NEW email address
+        // Send verification email to the NEW email address. Mint a single-use
+        // token in the unified TokenRepository so the /api/user/emails/verify?token
+        // callback resolves it (O(1) GSI4) and marks the PersonRecord EMAIL# row
+        // verified — no legacy USER# token write.
         try {
-          const token = randomBytes(32).toString('hex')
-          const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-
-          // Store verification token on the USER# email record (legacy system)
-          // so the existing /api/user/emails/verify?token=xxx callback can find it
-          await userRepository.addEmail(targetPerson.primaryEmail, {
-            emailId: record.emailId,
-            email: email.toLowerCase().trim(),
-            verified: false,
-            order: existingEmails.length,
-            verificationToken: token,
-            verificationTokenExpiry: expiry,
-            verificationSentAt: new Date().toISOString(),
-          })
+          const token = await tokenRepository.createEmailVerification(
+            targetPerson.personId,
+            email.toLowerCase().trim()
+          )
 
           await sendAdminAddedEmailVerification({
             newEmail: email.toLowerCase().trim(),
             personName,
-            verificationToken: token,
+            verificationToken: token.tokenValue,
             addedByName: permResult.viewerName,
           })
         } catch (verifyError) {

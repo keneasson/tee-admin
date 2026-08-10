@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { auth } from '../../../../utils/auth'
-import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
-import { sendEmail } from '../../../../utils/email/sesClient'
+import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
+import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { getPublicOptInCount } from '../../../../utils/email/public-topics'
 import { requireFreshAuth } from '../../../../utils/require-fresh-auth'
-
-// Generate a simple unique ID
-function generateEmailId(): string {
-  return `email-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-}
-
-// Generate secure verification token
-function generateVerificationToken(): string {
-  return randomBytes(32).toString('hex')
-}
-
-// Token expiry: 24 hours
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000
+import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 
 // Simple email validation
 function isValidEmail(email: string): boolean {
@@ -26,8 +13,24 @@ function isValidEmail(email: string): boolean {
 }
 
 /**
+ * Resolve the acting person from the session login email. Prefers the O(1)
+ * primary-email GSI1 lookup, then falls back to any-address match so a login on
+ * a secondary still resolves the owner.
+ */
+async function resolveActingPerson(loginEmail: string): Promise<PersonRecord | null> {
+  const email = loginEmail.toLowerCase()
+  let person = await personRepository.getByEmail(email)
+  if (!person) {
+    const persons = await personRepository.getAllPersonsByEmail(email)
+    person = persons[0] || null
+  }
+  return person
+}
+
+/**
  * GET /api/user/emails - Get all emails for current user
- * Returns emails sorted by order (first = preferred)
+ * Sourced from PersonRecord EMAIL# rows (the single system). Lazily heals any
+ * historical USER#-only addresses onto the PersonRecord on read.
  */
 export async function GET() {
   try {
@@ -40,9 +43,9 @@ export async function GET() {
       )
     }
 
-    const result = await userRepository.getEmails(session.user.email)
+    const loginEmail = session.user.email.toLowerCase()
+    const person = await resolveActingPerson(loginEmail)
 
-    // Sort by order and transform to client format
     type ClientEmail = {
       id: string
       email: string
@@ -54,41 +57,90 @@ export async function GET() {
       /** A role this address represents (e.g. Recording Brother) — shown read-only. */
       roleLabel?: string
     }
-    const sorted = result.items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    let emails: ClientEmail[] = await Promise.all(
-      sorted.map(async (email) => ({
-        id: email.emailId,
-        email: email.email,
-        verified: email.verified,
-        verificationSentAt: email.verificationSentAt,
-        subscribed: email.subscribed,
-        // How many public mailing lists this address is opted into (verified
-        // addresses only — no point querying SES for an unverified one).
-        subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
-        isPrimary: email.isPrimary,
-      }))
-    )
+
+    let emails: ClientEmail[] = []
+
+    if (person) {
+      // Lazy-migrate: fold any USER#-only addresses into the PersonRecord. This is
+      // per-session, additive and idempotent — it heals historical addresses that
+      // only ever lived in the legacy USER# store (no data loss, no batch job).
+      try {
+        const [personEmails, legacy] = await Promise.all([
+          personRepository.getEmails(person.personId),
+          userRepository.getEmails(loginEmail),
+        ])
+        const known = new Set(personEmails.map(e => e.email.toLowerCase()))
+        for (const legacyEmail of legacy.items) {
+          const addr = legacyEmail.email.toLowerCase()
+          if (known.has(addr)) continue
+          await personRepository.addEmail(person.personId, {
+            email: addr,
+            emailType: legacyEmail.isPrimary ? 'primary' : 'secondary',
+            order: legacyEmail.order ?? known.size,
+            verified: !!legacyEmail.verified,
+            sesSubscribed: legacyEmail.subscribed ?? false,
+            sesStatus: 'active',
+          })
+          known.add(addr)
+        }
+      } catch (migrateErr) {
+        console.error('[user/emails] lazy-migrate of legacy USER# emails failed (non-fatal):', migrateErr)
+      }
+
+      // Re-read so freshly-healed rows are included in the response.
+      const personEmails = await personRepository.getEmails(person.personId)
+
+      // Derive "verification pending" from an active email_verification token for
+      // the address (createEmailVerification keeps at most one per person). No
+      // schema field needed — the token IS the pending state.
+      const pendingByEmail = new Map<string, string>()
+      try {
+        const tokens = await tokenRepository.getByPersonAndType(person.personId, 'email_verification')
+        const now = Date.now()
+        for (const t of tokens) {
+          if (t.usedAt) continue
+          if (new Date(t.expiresAt).getTime() < now) continue
+          pendingByEmail.set(t.email.toLowerCase(), t.createdAt)
+        }
+      } catch (tokErr) {
+        console.error('[user/emails] deriving verificationSentAt failed (non-fatal):', tokErr)
+      }
+
+      const sorted = [...personEmails].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      emails = await Promise.all(
+        sorted.map(async (email) => ({
+          id: email.emailId,
+          email: email.email,
+          verified: email.verified,
+          verificationSentAt: pendingByEmail.get(email.email.toLowerCase()),
+          subscribed: email.sesSubscribed,
+          // How many public mailing lists this address is opted into (verified
+          // addresses only — no point querying SES for an unverified one).
+          subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
+          isPrimary: email.emailType === 'primary',
+        }))
+      )
+    }
 
     // If nothing is stored yet, seed with the login email.
     if (emails.length === 0) {
       emails = [
         {
           id: 'primary',
-          email: session.user.email,
+          email: loginEmail,
           verified: true, // Login email is verified by definition
           subscribed: true,
-          subscriptionCount: await getPublicOptInCount(session.user.email),
+          subscriptionCount: await getPublicOptInCount(loginEmail),
           isPrimary: true,
         },
       ]
     }
 
     // Surface the Recording Brother ECCLESIA email. It lives on the PersonRecord
-    // (`rbEcclesiaEmail`), NOT the USER# email store, so it never appeared here —
+    // (`rbEcclesiaEmail`), NOT the personal email set, so it never appeared here —
     // yet the RB genuinely receives on it. Shown read-only: it's a role address,
     // managed via the ecclesia / RB settings, not deletable from a personal profile.
     try {
-      const person = await personRepository.getByEmail(session.user.email.toLowerCase())
       const rbEmail = person?.isRecordingBrother ? person.rbEcclesiaEmail?.toLowerCase() : undefined
       if (rbEmail && !emails.some((e) => e.email.toLowerCase() === rbEmail)) {
         emails.push({
@@ -115,9 +167,9 @@ export async function GET() {
 }
 
 /**
- * PUT /api/user/emails - Replace all emails (batch update with ordering)
- * Body: { emails: Array<{ id: string, email: string, verified?: boolean }> }
- * Order is determined by array index (first = preferred)
+ * PUT /api/user/emails - Reorder emails ("set as preferred" moves an address to
+ * the front). Order is the array index. Display order only — never an identity
+ * transfer, so the primary login email is untouched.
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -135,7 +187,7 @@ export async function PUT(request: NextRequest) {
     if (!gate.ok) return gate.response
 
     const body = await request.json()
-    const { emails } = body as { emails: Array<{ id: string; email: string; verified?: boolean; isPrimary?: boolean; subscribed?: boolean }> }
+    const { emails } = body as { emails: Array<{ id: string; email: string }> }
 
     if (!Array.isArray(emails)) {
       return NextResponse.json(
@@ -144,56 +196,26 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Validate each email
-    for (const email of emails) {
-      if (email.email && !isValidEmail(email.email)) {
-        return NextResponse.json(
-          { error: `Invalid email address: ${email.email}` },
-          { status: 400 }
-        )
-      }
+    const person = await resolveActingPerson(session.user.email)
+    if (!person) {
+      return NextResponse.json(
+        { error: 'No profile found for your account' },
+        { status: 404 }
+      )
     }
 
-    // Get existing emails to preserve verification status
-    const existing = await userRepository.getEmails(session.user.email)
-    const existingByEmail = new Map(existing.items.map(e => [e.email.toLowerCase(), e]))
+    // Only reorder real EMAIL# rows — filter out synthetic ids (seeded 'primary',
+    // read-only 'rb-ecclesia') and anything not on this person.
+    const personEmails = await personRepository.getEmails(person.personId)
+    const validIds = new Set(personEmails.map(e => e.emailId))
+    const orderedIds = emails.map(e => e.id).filter(id => validIds.has(id))
 
-    // Ensure primary login email is always included
-    let hasPrimary = emails.some(e => e.email.toLowerCase() === session.user.email?.toLowerCase())
-    if (!hasPrimary) {
-      // Add primary email at the start
-      emails.unshift({
-        id: 'primary',
-        email: session.user.email,
-        verified: true,
-        isPrimary: true,
-        subscribed: true,
-      })
-    }
-
-    // Filter out empty emails and prepare for save
-    const validEmails = emails
-      .filter(e => e.email && isValidEmail(e.email))
-      .map((email, index) => {
-        const existingRecord = existingByEmail.get(email.email.toLowerCase())
-        const isPrimaryLogin = email.email.toLowerCase() === session.user.email?.toLowerCase()
-
-        return {
-          emailId: email.id || generateEmailId(),
-          email: email.email.toLowerCase(),
-          verified: isPrimaryLogin ? true : (existingRecord?.verified ?? false),
-          order: index,
-          isPrimary: isPrimaryLogin,
-          subscribed: existingRecord?.subscribed ?? true,
-        }
-      })
-
-    await userRepository.replaceAllEmails(session.user.email, validEmails)
+    await personRepository.setEmailOrder(person.personId, orderedIds)
 
     return NextResponse.json({
       success: true,
       message: 'Email addresses updated',
-      count: validEmails.length,
+      count: orderedIds.length,
     })
   } catch (error) {
     console.error('Update emails error:', error)
@@ -205,7 +227,7 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * POST /api/user/emails - Add a new email
+ * POST /api/user/emails - Add a new secondary email to the acting person.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -235,66 +257,46 @@ export async function POST(request: NextRequest) {
 
     const normalized = email.toLowerCase()
 
-    // Check if email already exists (legacy USER# store)
-    const existing = await userRepository.getEmails(session.user.email)
-    if (existing.items.some(e => e.email.toLowerCase() === normalized)) {
+    const person = await resolveActingPerson(session.user.email)
+    if (!person) {
+      return NextResponse.json(
+        { error: 'No profile found for your account' },
+        { status: 404 }
+      )
+    }
+
+    // Dup-check against THIS person's existing addresses (PersonRecord is the
+    // single source of truth now).
+    const personEmails = await personRepository.getEmails(person.personId)
+    if (personEmails.some(e => e.email.toLowerCase() === normalized)) {
       return NextResponse.json(
         { error: 'This email address is already added' },
         { status: 409 }
       )
     }
 
-    // Resolve the acting person, and guard against attaching an address that
-    // already belongs to a DIFFERENT person — silently doing so would merge two
-    // identities. (Resolves via any address now that getByEmail sees secondaries.)
-    const person = await personRepository.getByEmail(session.user.email.toLowerCase())
-    if (person) {
-      const owners = await personRepository.getAllPersonsByEmail(normalized)
-      if (owners.some(p => p.personId !== person.personId)) {
-        return NextResponse.json(
-          { error: 'That email is already associated with another person in the directory.' },
-          { status: 409 }
-        )
-      }
+    // Collision guard: never attach an address that already belongs to a
+    // DIFFERENT person — silently doing so would merge two identities.
+    const owners = await personRepository.getAllPersonsByEmail(normalized)
+    if (owners.some(p => p.personId !== person.personId)) {
+      return NextResponse.json(
+        { error: 'That email is already associated with another person in the directory.' },
+        { status: 409 }
+      )
     }
 
-    const emailId = generateEmailId()
-    const order = existing.items.length
-
-    await userRepository.addEmail(session.user.email, {
-      emailId,
+    const record = await personRepository.addEmail(person.personId, {
       email: normalized,
+      emailType: 'secondary',
+      order: personEmails.length,
       verified: false,
-      order,
-      isPrimary: false,
+      sesSubscribed: false,
+      sesStatus: 'active',
     })
-
-    // Mirror the address onto the PersonRecord as a SECONDARY EMAIL# item, so it
-    // resolves (via GSI1) to this person. Without this the verify/lookup flow
-    // can't find the owner and mints a duplicate orphan profile. Best-effort:
-    // never fail the request if this half hiccups (the USER# add already stuck).
-    if (person) {
-      try {
-        const pEmails = await personRepository.getEmails(person.personId)
-        const alreadyOnPerson = pEmails.some(e => e.email.toLowerCase() === normalized)
-        if (!alreadyOnPerson) {
-          await personRepository.addEmail(person.personId, {
-            email: normalized,
-            emailType: 'secondary',
-            order: pEmails.length,
-            verified: false,
-            sesSubscribed: false,
-            sesStatus: 'active',
-          })
-        }
-      } catch (err) {
-        console.error('[user/emails] failed to mirror secondary email to PersonRecord:', err)
-      }
-    }
 
     return NextResponse.json({
       success: true,
-      emailId,
+      emailId: record.emailId,
       message: 'Email added. Please verify it.',
     })
   } catch (error) {
@@ -307,7 +309,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/user/emails - Delete an email
+ * DELETE /api/user/emails - Delete a secondary email
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -334,23 +336,31 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Verify the email exists and is not the primary
-    const existing = await userRepository.getEmail(session.user.email, emailId)
-    if (!existing) {
+    const person = await resolveActingPerson(session.user.email)
+    if (!person) {
+      return NextResponse.json(
+        { error: 'No profile found for your account' },
+        { status: 404 }
+      )
+    }
+
+    // Verify the email exists and is not the primary login address.
+    const target = await personRepository.getEmailById(person.personId, emailId)
+    if (!target) {
       return NextResponse.json(
         { error: 'Email not found' },
         { status: 404 }
       )
     }
 
-    if (existing.isPrimary) {
+    if (target.emailType === 'primary') {
       return NextResponse.json(
         { error: 'Cannot delete your primary login email' },
         { status: 400 }
       )
     }
 
-    await userRepository.deleteEmail(session.user.email, emailId)
+    await personRepository.removeEmail(person.personId, emailId)
 
     return NextResponse.json({
       success: true,
