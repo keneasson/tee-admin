@@ -43,9 +43,19 @@ export async function GET() {
     const result = await userRepository.getEmails(session.user.email)
 
     // Sort by order and transform to client format
-    // Always include the primary login email
+    type ClientEmail = {
+      id: string
+      email: string
+      verified: boolean
+      verificationSentAt?: string
+      subscribed?: boolean
+      subscriptionCount?: number
+      isPrimary?: boolean
+      /** A role this address represents (e.g. Recording Brother) — shown read-only. */
+      roleLabel?: string
+    }
     const sorted = result.items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    const emails = await Promise.all(
+    let emails: ClientEmail[] = await Promise.all(
       sorted.map(async (email) => ({
         id: email.emailId,
         email: email.email,
@@ -59,26 +69,42 @@ export async function GET() {
       }))
     )
 
-    // If no emails stored, create entry for primary login email
+    // If nothing is stored yet, seed with the login email.
     if (emails.length === 0) {
-      const primaryEmail = {
-        id: 'primary',
-        email: session.user.email,
-        verified: true, // Login email is verified by definition
-        subscribed: true, // Assume subscribed by default
-        subscriptionCount: await getPublicOptInCount(session.user.email),
-        isPrimary: true,
-      }
-      return NextResponse.json({
-        success: true,
-        emails: [primaryEmail],
-      })
+      emails = [
+        {
+          id: 'primary',
+          email: session.user.email,
+          verified: true, // Login email is verified by definition
+          subscribed: true,
+          subscriptionCount: await getPublicOptInCount(session.user.email),
+          isPrimary: true,
+        },
+      ]
     }
 
-    return NextResponse.json({
-      success: true,
-      emails,
-    })
+    // Surface the Recording Brother ECCLESIA email. It lives on the PersonRecord
+    // (`rbEcclesiaEmail`), NOT the USER# email store, so it never appeared here —
+    // yet the RB genuinely receives on it. Shown read-only: it's a role address,
+    // managed via the ecclesia / RB settings, not deletable from a personal profile.
+    try {
+      const person = await personRepository.getByEmail(session.user.email.toLowerCase())
+      const rbEmail = person?.isRecordingBrother ? person.rbEcclesiaEmail?.toLowerCase() : undefined
+      if (rbEmail && !emails.some((e) => e.email.toLowerCase() === rbEmail)) {
+        emails.push({
+          id: 'rb-ecclesia',
+          email: rbEmail,
+          verified: true,
+          isPrimary: false,
+          subscriptionCount: await getPublicOptInCount(rbEmail),
+          roleLabel: 'Recording Brother',
+        })
+      }
+    } catch (rbErr) {
+      console.error('Surface RB ecclesia email failed (non-fatal):', rbErr)
+    }
+
+    return NextResponse.json({ success: true, emails })
   } catch (error) {
     console.error('Get emails error:', error)
     return NextResponse.json(

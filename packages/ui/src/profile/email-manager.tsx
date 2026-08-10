@@ -24,6 +24,9 @@ export interface EmailEntry {
   verified: boolean
   verificationSentAt?: string
   isPrimary?: boolean // Primary login email (cannot be removed)
+  /** A role this address represents (e.g. "Recording Brother"). Rendered read-only
+   *  with a badge — it's managed elsewhere (ecclesia/RB settings), not editable here. */
+  roleLabel?: string
   // NOTE: `subscribed`/`subscriptionCount` used to render here; subscriptions now
   // live in their own tab. Kept optional so the API payload still type-checks.
   subscribed?: boolean
@@ -156,11 +159,12 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
         <YStack gap="$2">
           {emails.map((entry, index) => {
             const isLogin = !!entry.isPrimary
-            const isPreferred = index === 0
+            const isRole = !!entry.roleLabel // e.g. Recording Brother — read-only
+            const isPreferred = index === 0 && !isRole
             const isEditing = editingId === entry.id
             const rowBusy = busyId === entry.id
-            const showMenu = !readOnly && entry.verified && !isLogin
-            const canRename = !readOnly && !isLogin
+            const showMenu = !readOnly && entry.verified && !isLogin && !isRole
+            const canRename = !readOnly && !isLogin && !isRole
 
             return (
               <Card
@@ -206,7 +210,7 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                   <XStack gap="$2" alignItems="flex-start">
                     {/* Left edit gutter — consistent on every row */}
                     <XStack width={GUTTER} alignItems="center" justifyContent="flex-start">
-                      {readOnly ? null : isLogin ? (
+                      {readOnly || isRole ? null : isLogin ? (
                         canChangeLogin ? (
                           <Button
                             size="$2"
@@ -244,6 +248,11 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                         {isLogin ? (
                           <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
                             <Text fontSize="$1" color="$gray11">Login</Text>
+                          </Card>
+                        ) : null}
+                        {isRole ? (
+                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$color4">
+                            <Text fontSize="$1" color="$color11">{entry.roleLabel}</Text>
                           </Card>
                         ) : null}
                       </XStack>
@@ -335,7 +344,7 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                         </Popover>
                       ) : null}
 
-                      {readOnly || isLogin ? null : (
+                      {readOnly || isLogin || isRole ? null : (
                         <Button
                           size="$2"
                           circular
