@@ -5,12 +5,12 @@ import { Section, Text, YStack, XStack, Heading, Separator, Spinner, Tabs, Card,
 import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
 import { PhoneManager, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
-import { EmailManager, type EmailEntry } from '@my/ui/src/profile/email-manager'
+import { EmailManager, moveEmailToFront, type EmailEntry } from '@my/ui/src/profile/email-manager'
 import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/family-members'
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
 import { ContactRequestsList } from '@my/ui/src/profile/contact-requests-list'
-import { Church, Search, Pencil, Check, X, User } from '@tamagui/lucide-icons'
+import { Church, Search, Pencil, Check, X } from '@tamagui/lucide-icons'
 import type { AddressType, PhoneType, RelationshipType, VisibilityLevel } from '@my/app/provider/dynamodb/types'
 
 interface UserProfileProps {
@@ -26,6 +26,16 @@ interface UserProfileProps {
    * Kept as a prop because this shared package cannot import next-auth/Verify.
    */
   onStepUpRequired?: (retry: () => void) => void
+  /**
+   * Whether the secure change-login flow (SECURE_EMAIL_CHANGE) is available to
+   * this session — resolved server-side by the platform layer and threaded down.
+   * Gates the "Set as login" menu item and the login-row change pencil.
+   */
+  canChangeLogin?: boolean
+  /** Launch the secure change-login flow (owned by the platform layer). */
+  onChangeLogin?: () => void
+  /** Launch the secure change-login flow pre-filled with an already-verified address. */
+  onSetLogin?: (email: string) => void
 }
 
 interface Address {
@@ -90,13 +100,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   userEcclesia,
   onNavigateToPerson,
   onStepUpRequired,
+  canChangeLogin = false,
+  onChangeLogin,
+  onSetLogin,
 }) => {
   const [loading, setLoading] = useState(true)
   const [addresses, setAddresses] = useState<Address[]>([])
   const [phones, setPhones] = useState<PhoneEntry[]>([])
   const [emails, setEmails] = useState<EmailEntry[]>([])
   const [savingPhones, setSavingPhones] = useState(false)
-  const [savingEmails, setSavingEmails] = useState(false)
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [connections, setConnections] = useState<Connection[]>([])
   const [blockedUsers, setBlockedUsers] = useState<string[]>([])
@@ -275,30 +287,58 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     return false
   }
 
-  // Email handlers for EmailManager
-  const handleSaveEmails = async () => {
-    setSavingEmails(true)
-    try {
-      const res = await fetch('/api/user/emails', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emails: emails.map(e => ({
-            id: e.id,
-            email: e.email,
-            verified: e.verified,
-            isPrimary: e.isPrimary,
-          })),
-        }),
-      })
-      if (res.ok) {
-        await fetchData()
-        return
-      }
-      await handledStepUp(res, () => { void handleSaveEmails() })
-    } finally {
-      setSavingEmails(false)
+  // Email handlers for EmailManager — each saves in place, then refetches the
+  // list so the UI reflects server state. All route a 403 { stepUpRequired }
+  // through the platform step-up mechanism instead of failing silently.
+  const handleAddEmail = async (email: string): Promise<boolean> => {
+    const res = await fetch('/api/user/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return true
     }
+    // 403 → step up and retry the ADD alone (never the delete); other errors just
+    // stop. Returning false lets a rename keep the old address until the new one
+    // is actually added, so a stale-session rename can't drop an address.
+    await handledStepUp(res, () => { void handleAddEmail(email) })
+    return false
+  }
+
+  const handleDeleteEmail = async (emailId: string) => {
+    const res = await fetch(`/api/user/emails?emailId=${encodeURIComponent(emailId)}`, {
+      method: 'DELETE',
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleDeleteEmail(emailId) })
+  }
+
+  // "Set as preferred" = move the address to index 0 and PUT the whole ordered
+  // set (the replace-all model; first = preferred).
+  const handleSetPreferred = async (emailId: string) => {
+    const reordered = moveEmailToFront(emails, emailId)
+    const res = await fetch('/api/user/emails', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emails: reordered.map(e => ({
+          id: e.id,
+          email: e.email,
+          verified: e.verified,
+          isPrimary: e.isPrimary,
+        })),
+      }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleSetPreferred(emailId) })
   }
 
   const handleSendVerification = async (emailId: string) => {
@@ -677,14 +717,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </Card>
                   ) : (
                     <Card padding="$3" backgroundColor="$backgroundHover">
-                      <XStack gap="$3" alignItems="center" justifyContent="space-between">
-                        <XStack gap="$3" alignItems="center" flex={1}>
-                          <User size={20} color="$blue10" />
-                          <Text fontSize="$4" fontWeight="500">
-                            {displayName || 'No name set'}
-                          </Text>
+                      <XStack gap="$2" alignItems="center">
+                        <XStack width={34} justifyContent="flex-start">
+                          <Button size="$2" icon={Pencil} chromeless circular aria-label="Edit name" onPress={startEditingName} />
                         </XStack>
-                        <Button size="$2" icon={Pencil} chromeless circular onPress={startEditingName} />
+                        <Text fontSize="$4" fontWeight="500">
+                          {displayName || 'No name set'}
+                        </Text>
                       </XStack>
                     </Card>
                   )}
@@ -776,14 +815,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </Card>
                   ) : (
                     <Card padding="$3" backgroundColor="$backgroundHover">
-                      <XStack gap="$3" alignItems="center" justifyContent="space-between">
-                        <XStack gap="$3" alignItems="center" flex={1}>
-                          <Church size={20} color="$blue10" />
-                          <Text fontSize="$4" fontWeight="500">
-                            {ecclesia || 'No ecclesia set'}
-                          </Text>
+                      <XStack gap="$2" alignItems="center">
+                        <XStack width={34} justifyContent="flex-start">
+                          <Button size="$2" icon={Pencil} chromeless circular aria-label="Edit ecclesia" onPress={startEditingEcclesia} />
                         </XStack>
-                        <Button size="$2" icon={Pencil} chromeless circular onPress={startEditingEcclesia} />
+                        <Text fontSize="$4" fontWeight="500">
+                          {ecclesia || 'No ecclesia set'}
+                        </Text>
                       </XStack>
                     </Card>
                   )}
@@ -792,10 +830,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <Separator />
                 <EmailManager
                   emails={emails}
-                  onChange={setEmails}
-                  onSave={handleSaveEmails}
+                  onAddEmail={handleAddEmail}
+                  onDeleteEmail={handleDeleteEmail}
                   onSendVerification={handleSendVerification}
-                  saving={savingEmails}
+                  onSetPreferred={handleSetPreferred}
+                  onSetLogin={(email) => onSetLogin?.(email)}
+                  onChangeLogin={() => onChangeLogin?.()}
+                  canChangeLogin={canChangeLogin}
                 />
                 <Separator />
                 <PhoneManager

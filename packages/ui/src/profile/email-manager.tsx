@@ -1,102 +1,130 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner, Popover, Separator } from 'tamagui'
 import { Button } from '../Button'
-import { Mail, Plus, Trash2, GripVertical, Check, AlertCircle, Send, Bell } from '@tamagui/lucide-icons'
+import {
+  Mail,
+  Plus,
+  Trash2,
+  Check,
+  AlertCircle,
+  Send,
+  Pencil,
+  MoreHorizontal,
+  Star,
+  Shield,
+  X,
+} from '@tamagui/lucide-icons'
+import { moveEmailToFront } from './email-ordering'
+
+export { moveEmailToFront }
 
 export interface EmailEntry {
   id: string
   email: string
   verified: boolean
   verificationSentAt?: string
-  subscribed?: boolean // Whether subscribed to communications
-  subscriptionCount?: number // How many mailing lists this address is opted into
   isPrimary?: boolean // Primary login email (cannot be removed)
+  // NOTE: `subscribed`/`subscriptionCount` used to render here; subscriptions now
+  // live in their own tab. Kept optional so the API payload still type-checks.
+  subscribed?: boolean
+  subscriptionCount?: number
 }
 
 interface EmailManagerProps {
   emails: EmailEntry[]
-  onChange: (emails: EmailEntry[]) => void
-  onSave?: () => Promise<void>
-  onSendVerification?: (emailId: string) => Promise<void>
-  saving?: boolean
+  /** Add a brand-new (unverified) address. Resolves true only when it actually
+   *  landed (false on a deferred step-up / error) so a rename won't drop the old
+   *  address before the new one exists. */
+  onAddEmail: (email: string) => Promise<boolean> | boolean
+  /** Soft-delete a non-login address by id. */
+  onDeleteEmail: (emailId: string) => Promise<void> | void
+  /** (Re)send the verification code for an address. */
+  onSendVerification: (emailId: string) => Promise<void> | void
+  /** Make this address the preferred (first) contact — soft, in-place. */
+  onSetPreferred: (emailId: string) => Promise<void> | void
+  /** Promote an already-verified address to the login identity (secure flow). */
+  onSetLogin: (email: string) => void
+  /** Change the login/primary address (secure flow). */
+  onChangeLogin: () => void
+  /**
+   * Whether the secure change-login flow is available to this session (the
+   * SECURE_EMAIL_CHANGE launch-dark flag). Gates the "Set as login" menu item and
+   * the login-row change pencil.
+   */
+  canChangeLogin: boolean
+  /** View-only: render addresses + verified badges, no controls. */
   readOnly?: boolean
-  emailPreferencesUrl?: string
 }
+
+const GUTTER = 34
 
 // Simple email validation
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-// Generate a simple ID
-function generateId(): string {
-  return `email-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
-
 export const EmailManager: React.FC<EmailManagerProps> = ({
   emails,
-  onChange,
-  onSave,
+  onAddEmail,
+  onDeleteEmail,
   onSendVerification,
-  saving = false,
+  onSetPreferred,
+  onSetLogin,
+  onChangeLogin,
+  canChangeLogin,
   readOnly = false,
-  emailPreferencesUrl = '/email-preferences',
 }) => {
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [sendingVerification, setSendingVerification] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const handleAddEmail = () => {
-    const newEmail: EmailEntry = {
-      id: generateId(),
-      email: '',
-      verified: false,
-    }
-    onChange([...emails, newEmail])
-  }
+  // Inline "add a new address" editor (revealed by the Add button).
+  const [adding, setAdding] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
 
-  const handleRemoveEmail = (id: string) => {
-    // Don't allow removing primary email
-    const emailToRemove = emails.find(e => e.id === id)
-    if (emailToRemove?.isPrimary) return
-    onChange(emails.filter(e => e.id !== id))
-  }
+  // Inline "rename an existing address" editor, keyed by row id. Because there is
+  // no rename endpoint, saving a changed value adds the new address and removes
+  // the old one (which also, correctly, resets verification for the new address).
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
 
-  const handleUpdateEmail = (id: string, value: string) => {
-    onChange(emails.map(e => e.id === id ? { ...e, email: value.toLowerCase().trim(), verified: false } : e))
-  }
-
-  const moveEmail = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= emails.length) return
-    const newEmails = [...emails]
-    const [moved] = newEmails.splice(fromIndex, 1)
-    newEmails.splice(toIndex, 0, moved)
-    onChange(newEmails)
-  }
-
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index)
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    if (draggedIndex !== null && draggedIndex !== index) {
-      moveEmail(draggedIndex, index)
-      setDraggedIndex(index)
-    }
-  }
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-  }
-
-  const handleSendVerification = async (emailId: string) => {
-    if (!onSendVerification) return
-    setSendingVerification(emailId)
+  const run = async (id: string, fn: () => Promise<void> | void) => {
+    setBusyId(id)
     try {
-      await onSendVerification(emailId)
+      await fn()
     } finally {
-      setSendingVerification(null)
+      setBusyId(null)
     }
+  }
+
+  const submitAdd = async () => {
+    const value = newEmail.toLowerCase().trim()
+    if (!isValidEmail(value)) return
+    await run('__add__', async () => {
+      await onAddEmail(value)
+      setNewEmail('')
+      setAdding(false)
+    })
+  }
+
+  const startEdit = (entry: EmailEntry) => {
+    setEditingId(entry.id)
+    setEditValue(entry.email)
+  }
+
+  const submitEdit = async (entry: EmailEntry) => {
+    const value = editValue.toLowerCase().trim()
+    if (!isValidEmail(value)) return
+    if (value === entry.email.toLowerCase()) {
+      setEditingId(null)
+      return
+    }
+    await run(entry.id, async () => {
+      // Only drop the old address once the new one has actually been added — a
+      // deferred step-up (or any failure) returns false and keeps the old address.
+      const added = await onAddEmail(value)
+      if (added) await onDeleteEmail(entry.id)
+      setEditingId(null)
+    })
   }
 
   return (
@@ -106,14 +134,19 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
           <Mail size={20} />
           <Text fontSize="$4" fontWeight="600">Email Addresses</Text>
         </XStack>
-        {!readOnly && (
-          <Button size="$2" icon={Plus} onPress={handleAddEmail}>
+        {readOnly ? null : (
+          <Button
+            size="$2"
+            variant="outlined"
+            icon={Plus}
+            onPress={() => { setAdding(true); setNewEmail('') }}
+          >
             Add
           </Button>
         )}
       </XStack>
 
-      {emails.length === 0 ? (
+      {emails.length === 0 && !adding ? (
         <Card padding="$3" backgroundColor="$backgroundHover">
           <Text fontSize="$3" theme="alt2" textAlign="center">
             No email addresses. Click "Add" to add one.
@@ -121,158 +154,247 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
         </Card>
       ) : (
         <YStack gap="$2">
-          {emails.map((emailEntry, index) => (
-            <Card
-              key={emailEntry.id}
-              padding="$3"
-              backgroundColor={index === 0 ? '$blue2' : '$backgroundHover'}
-              borderWidth={index === 0 ? 1 : 0}
-              borderColor="$blue6"
-              {...({
-                draggable: !readOnly && !emailEntry.isPrimary,
-                onDragStart: () => handleDragStart(index),
-                onDragOver: (e: React.DragEvent) => handleDragOver(e, index),
-                onDragEnd: handleDragEnd,
-              } as any)}
-              opacity={draggedIndex === index ? 0.5 : 1}
-            >
-              <YStack gap="$2">
-                <XStack gap="$3" alignItems="center">
-                  {!readOnly && !emailEntry.isPrimary && (
-                    <YStack cursor="grab" opacity={0.5}>
-                      <GripVertical size={16} />
-                    </YStack>
-                  )}
+          {emails.map((entry, index) => {
+            const isLogin = !!entry.isPrimary
+            const isPreferred = index === 0
+            const isEditing = editingId === entry.id
+            const rowBusy = busyId === entry.id
+            const showMenu = !readOnly && entry.verified && !isLogin
+            const canRename = !readOnly && !isLogin
 
-                  <YStack flex={1} gap="$1">
-                    {readOnly ? (
-                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Text fontSize="$4" fontWeight="500">
-                          {emailEntry.email || 'No email'}
-                        </Text>
-                        {index === 0 && (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
-                            <Text fontSize="$1" color="$blue10">Preferred</Text>
-                          </Card>
-                        )}
-                        {emailEntry.isPrimary && (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
-                            <Text fontSize="$1" color="$gray11">Login</Text>
-                          </Card>
-                        )}
-                      </XStack>
-                    ) : (
-                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Input
-                          flex={1}
-                          minWidth={200}
-                          placeholder="email@example.com"
-                          value={emailEntry.email}
-                          onChangeText={(value) => handleUpdateEmail(emailEntry.id, value)}
-                          keyboardType="email-address"
-                          autoCapitalize="none"
-                          editable={!emailEntry.isPrimary}
-                        />
-                        {index === 0 && (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
-                            <Text fontSize="$1" color="$blue10">Preferred</Text>
-                          </Card>
-                        )}
-                        {emailEntry.isPrimary && (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
-                            <Text fontSize="$1" color="$gray11">Login</Text>
-                          </Card>
-                        )}
-                      </XStack>
-                    )}
-
-                    {/* Validation error */}
-                    {emailEntry.email && !isValidEmail(emailEntry.email) && !readOnly && (
-                      <Text fontSize="$2" color="$red10">
-                        Enter a valid email address
-                      </Text>
-                    )}
-                  </YStack>
-
-                  {!readOnly && !emailEntry.isPrimary && (
+            return (
+              <Card
+                key={entry.id}
+                padding="$3"
+                backgroundColor={isLogin ? '$blue2' : '$backgroundHover'}
+                borderWidth={isLogin ? 1 : 0}
+                borderColor="$blue6"
+              >
+                {isEditing ? (
+                  // Inline rename editor
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <Input
+                      flex={1}
+                      minWidth={200}
+                      value={editValue}
+                      onChangeText={setEditValue}
+                      placeholder="email@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoFocus
+                    />
                     <Button
                       size="$2"
-                      circular
-                      icon={Trash2}
-                      theme="red"
-                      onPress={() => handleRemoveEmail(emailEntry.id)}
-                    />
-                  )}
-                </XStack>
-
-                {/* Verification and subscription status */}
-                <XStack gap="$3" alignItems="center" flexWrap="wrap" paddingLeft={!readOnly && !emailEntry.isPrimary ? '$6' : 0}>
-                  {emailEntry.verified ? (
-                    <XStack gap="$1" alignItems="center">
-                      <Check size={14} color="$green10" />
-                      <Text fontSize="$2" color="$green10">Verified</Text>
-                    </XStack>
-                  ) : emailEntry.email && isValidEmail(emailEntry.email) ? (
-                    <XStack gap="$2" alignItems="center">
-                      <XStack gap="$1" alignItems="center">
-                        <AlertCircle size={14} color="$orange10" />
-                        <Text fontSize="$2" color="$orange10">Not verified</Text>
-                      </XStack>
-                      {onSendVerification && (
+                      variant="outlined"
+                      icon={X}
+                      onPress={() => setEditingId(null)}
+                      disabled={rowBusy}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="$2"
+                      theme="blue"
+                      icon={rowBusy ? <Spinner size="small" /> : Check}
+                      onPress={() => submitEdit(entry)}
+                      disabled={rowBusy || !isValidEmail(editValue.trim())}
+                    >
+                      Save
+                    </Button>
+                  </XStack>
+                ) : (
+                  <XStack gap="$2" alignItems="flex-start">
+                    {/* Left edit gutter — consistent on every row */}
+                    <XStack width={GUTTER} alignItems="center" justifyContent="flex-start">
+                      {readOnly ? null : isLogin ? (
+                        canChangeLogin ? (
+                          <Button
+                            size="$2"
+                            circular
+                            chromeless
+                            icon={Pencil}
+                            aria-label="Change login email"
+                            onPress={onChangeLogin}
+                          />
+                        ) : null
+                      ) : (
                         <Button
-                          size="$1"
-                          icon={sendingVerification === emailEntry.id ? <Spinner size="small" /> : Send}
-                          onPress={() => handleSendVerification(emailEntry.id)}
-                          disabled={sendingVerification !== null}
-                        >
-                          {emailEntry.verificationSentAt ? 'Resend' : 'Verify'}
-                        </Button>
+                          size="$2"
+                          circular
+                          chromeless
+                          icon={Pencil}
+                          aria-label="Edit email"
+                          onPress={() => startEdit(entry)}
+                          disabled={rowBusy}
+                        />
                       )}
                     </XStack>
-                  ) : null}
 
-                  {emailEntry.verified && (
-                    <>
-                      {emailEntry.subscriptionCount !== undefined && (
-                        <Text fontSize="$2" theme="alt2">
-                          {emailEntry.subscriptionCount === 0
-                            ? 'You are not currently signed up to any emails'
-                            : `You are currently signed up to ${emailEntry.subscriptionCount} email${emailEntry.subscriptionCount === 1 ? '' : 's'}`}
+                    {/* Value + badges */}
+                    <YStack flex={1} gap="$1" minWidth={0}>
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                        <Text fontSize="$4" fontWeight="500">
+                          {entry.email || 'No email'}
                         </Text>
+                        {isPreferred ? (
+                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
+                            <Text fontSize="$1" color="$blue10">Preferred</Text>
+                          </Card>
+                        ) : null}
+                        {isLogin ? (
+                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
+                            <Text fontSize="$1" color="$gray11">Login</Text>
+                          </Card>
+                        ) : null}
+                      </XStack>
+                    </YStack>
+
+                    {/* Right actions */}
+                    <XStack gap="$2" alignItems="center">
+                      {entry.verified ? (
+                        <XStack gap="$1" alignItems="center">
+                          <Check size={15} color="$green10" />
+                          <Text fontSize="$2" color="$green10" fontWeight="600">Verified</Text>
+                        </XStack>
+                      ) : (
+                        <XStack gap="$2" alignItems="center">
+                          <XStack gap="$1" alignItems="center">
+                            <AlertCircle size={14} color="$orange10" />
+                            <Text fontSize="$2" color="$orange10" fontWeight="600">Not verified</Text>
+                          </XStack>
+                          {readOnly ? null : (
+                            <Button
+                              size="$1"
+                              variant="outlined"
+                              icon={busyId === `verify-${entry.id}` ? <Spinner size="small" /> : Send}
+                              onPress={() => run(`verify-${entry.id}`, () => onSendVerification(entry.id))}
+                              disabled={busyId !== null}
+                            >
+                              {entry.verificationSentAt ? 'Resend' : 'Verify'}
+                            </Button>
+                          )}
+                        </XStack>
                       )}
-                      <Button
-                        size="$1"
-                        icon={Bell}
-                        onPress={() => {
-                          if (typeof window !== 'undefined') window.location.href = emailPreferencesUrl
-                        }}
-                      >
-                        Manage my Email Notifications
-                      </Button>
-                    </>
-                  )}
-                </XStack>
-              </YStack>
+
+                      {showMenu ? (
+                        <Popover
+                          size="$3"
+                          allowFlip
+                          open={openMenuId === entry.id}
+                          onOpenChange={(open) => setOpenMenuId(open ? entry.id : null)}
+                        >
+                          <Popover.Trigger asChild>
+                            <Button
+                              size="$2"
+                              circular
+                              chromeless
+                              icon={MoreHorizontal}
+                              aria-label="More actions"
+                            />
+                          </Popover.Trigger>
+                          <Popover.Content
+                            bordered
+                            elevate
+                            padding="$0"
+                            enterStyle={{ y: -6, opacity: 0 }}
+                            exitStyle={{ y: -6, opacity: 0 }}
+                            animation="quick"
+                          >
+                            <YStack minWidth={220}>
+                              {isPreferred ? null : (
+                                <Button
+                                  chromeless
+                                  justifyContent="flex-start"
+                                  borderRadius={0}
+                                  icon={Star}
+                                  onPress={() => {
+                                    setOpenMenuId(null)
+                                    void run(entry.id, () => onSetPreferred(entry.id))
+                                  }}
+                                >
+                                  Set as preferred
+                                </Button>
+                              )}
+                              {!isPreferred && canChangeLogin ? <Separator /> : null}
+                              {canChangeLogin ? (
+                                <Button
+                                  chromeless
+                                  justifyContent="flex-start"
+                                  borderRadius={0}
+                                  icon={Shield}
+                                  onPress={() => {
+                                    setOpenMenuId(null)
+                                    onSetLogin(entry.email)
+                                  }}
+                                >
+                                  Set as login
+                                </Button>
+                              ) : null}
+                            </YStack>
+                          </Popover.Content>
+                        </Popover>
+                      ) : null}
+
+                      {readOnly || isLogin ? null : (
+                        <Button
+                          size="$2"
+                          circular
+                          chromeless
+                          icon={rowBusy ? <Spinner size="small" /> : Trash2}
+                          color="$red10"
+                          aria-label="Delete this address"
+                          onPress={() => run(entry.id, () => onDeleteEmail(entry.id))}
+                          disabled={rowBusy}
+                        />
+                      )}
+                    </XStack>
+                  </XStack>
+                )}
+              </Card>
+            )
+          })}
+
+          {adding ? (
+            <Card padding="$3" backgroundColor="$backgroundHover">
+              <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                <XStack width={GUTTER} />
+                <Input
+                  flex={1}
+                  minWidth={200}
+                  value={newEmail}
+                  onChangeText={setNewEmail}
+                  placeholder="email@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoFocus
+                />
+                <Button
+                  size="$2"
+                  variant="outlined"
+                  icon={X}
+                  onPress={() => { setAdding(false); setNewEmail('') }}
+                  disabled={busyId === '__add__'}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="$2"
+                  theme="blue"
+                  icon={busyId === '__add__' ? <Spinner size="small" /> : Check}
+                  onPress={submitAdd}
+                  disabled={busyId === '__add__' || !isValidEmail(newEmail.trim())}
+                >
+                  Add
+                </Button>
+              </XStack>
+              {newEmail && !isValidEmail(newEmail.trim()) ? (
+                <Text fontSize="$2" color="$red10" paddingTop="$2" paddingLeft={GUTTER + 8}>
+                  Enter a valid email address
+                </Text>
+              ) : null}
             </Card>
-          ))}
+          ) : null}
         </YStack>
-      )}
-
-      {emails.length > 1 && !readOnly && (
-        <Text fontSize="$2" theme="alt2" textAlign="center">
-          Drag to reorder. First email is your preferred contact.
-        </Text>
-      )}
-
-      {onSave && !readOnly && (
-        <Button
-          theme="blue"
-          onPress={onSave}
-          disabled={saving || emails.some(e => e.email && !isValidEmail(e.email))}
-          icon={saving ? <Spinner /> : undefined}
-        >
-          {saving ? 'Saving...' : 'Save Email Addresses'}
-        </Button>
       )}
     </YStack>
   )

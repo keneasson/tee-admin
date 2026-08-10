@@ -39,7 +39,14 @@ type Step = 'email' | 'code' | 'done'
  *
  * The whole component self-hides unless the `SECURE_EMAIL_CHANGE` flag is on.
  */
-export function ChangeEmailFlow() {
+interface ChangeEmailFlowProps {
+  /** Pre-fill the "new email" field (e.g. "Set as login" on an already-verified address). */
+  initialEmail?: string
+  /** Optional dismiss affordance (e.g. when launched in a modal). */
+  onClose?: () => void
+}
+
+export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps = {}) {
   const isHydrated = useHydrated()
 
   // Launch-dark visibility resolved per session server-side (the client flag hook
@@ -55,7 +62,7 @@ export function ChangeEmailFlow() {
   }, [])
 
   const [step, setStep] = useState<Step>('email')
-  const [newEmail, setNewEmail] = useState('')
+  const [newEmail, setNewEmail] = useState(initialEmail ?? '')
   const [newEmailMasked, setNewEmailMasked] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
@@ -180,12 +187,26 @@ export function ChangeEmailFlow() {
 
   return (
     <Card elevate bordered padding="$4" gap="$4">
-      <YStack gap="$2">
-        <Heading size="$6" color="$color12">Change your login email</Heading>
-        <Paragraph color="$color11">
-          Changing your email is simple if you can receive one more email — at your new address.
-        </Paragraph>
-      </YStack>
+      <XStack justifyContent="space-between" alignItems="flex-start" gap="$2">
+        <YStack gap="$2" flex={1}>
+          <Heading size="$6" color="$color12">Change your login email</Heading>
+          <Paragraph color="$color11">
+            Changing your email is simple if you can receive one more email — at your new address.
+          </Paragraph>
+        </YStack>
+        {onClose ? (
+          <Button
+            size="$2"
+            chromeless
+            circular
+            aria-label="Close"
+            onPress={onClose}
+            disabled={loading || signingOut}
+          >
+            ✕
+          </Button>
+        ) : null}
+      </XStack>
 
       {step === 'email' ? (
         <YStack gap="$3">
