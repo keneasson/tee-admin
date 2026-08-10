@@ -326,12 +326,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        emails: reordered.map(e => ({
-          id: e.id,
-          email: e.email,
-          verified: e.verified,
-          isPrimary: e.isPrimary,
-        })),
+        // Role entries (e.g. the Recording Brother ecclesia email) are surfaced
+        // read-only from the PersonRecord — they must NOT be written back into the
+        // USER# email store, so exclude them from the replace-all payload.
+        emails: reordered
+          .filter(e => !e.roleLabel)
+          .map(e => ({
+            id: e.id,
+            email: e.email,
+            verified: e.verified,
+            isPrimary: e.isPrimary,
+          })),
       }),
     })
     if (res.ok) {
@@ -626,7 +631,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   return (
     <Wrapper>
       <Section gap={'$4'}>
-        <YStack gap="$4">
+        {/* Cap the settings column so rows don't stretch edge-to-edge on wide
+            viewports (the far-apart controls read as disconnected otherwise). */}
+        <YStack gap="$4" width="100%" maxWidth={880} alignSelf="center">
           {/* Header */}
           <YStack gap="$2">
             <Heading size={5}>My Profile</Heading>
