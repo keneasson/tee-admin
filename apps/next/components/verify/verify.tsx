@@ -4,14 +4,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { YStack, XStack, Text, Heading, Button, Paragraph, Input, Separator, Label } from '@my/ui'
-import { maskEmail } from '@/utils/mask-email'
 
 /**
  * <Verify> — the reusable step-up challenge (Epic #84, slice B).
  *
  * Elevates a `recognized` (or stale `authenticated`) viewer to a freshly-proven
  * `authenticated` session at the moment a sensitive action or page demands it.
- * Every method confirms the ONE on-file address (shown masked) — never a new
+ * Every method confirms the ONE on-file address (shown in full) — never a new
  * address — so it's unambiguous which inbox/credentials are being proven.
  * Offers, in order presented:
  *   1. OTP              — "Email me a code" to the ON-FILE address only, FIRST.
@@ -57,6 +56,20 @@ const INPUT_STYLE = {
   color: '$color12',
 } as const
 
+/** "— Option N —" divider that introduces each choice. Sentence case in the
+    default sans (not the old spaced-out caps label). */
+function OptionDivider({ label }: { label: string }) {
+  return (
+    <XStack alignItems="center" gap="$3">
+      <Separator flex={1} />
+      <Text fontSize="$3" color="$color11" fontWeight="600">
+        {label}
+      </Text>
+      <Separator flex={1} />
+    </XStack>
+  )
+}
+
 export function Verify({
   email,
   reason,
@@ -97,7 +110,11 @@ export function Verify({
   const showFacebook =
     showGoogle && process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true'
   const showSocial = showGoogle || showFacebook
-  const maskedEmail = targetEmail ? maskEmail(targetEmail) : ''
+  // Sequential "Option N" numbering over whatever methods are actually shown.
+  let optionCount = 0
+  const otpNum = showOtp ? ++optionCount : 0
+  const passwordNum = showPassword ? ++optionCount : 0
+  const socialNum = showSocial ? ++optionCount : 0
 
   // --- Social re-auth: redirects out; the return re-stamps authTime. ---
   const socialCallbackUrl = () =>
@@ -214,7 +231,7 @@ export function Verify({
         <YStack gap="$2" alignItems="center">
           <Heading size="$7" color="$color12">Enter your code</Heading>
           <Paragraph color="$color11" textAlign="center">
-            We sent a code to <Text fontWeight="bold" color="$color12">{maskedEmail}</Text>.
+            We sent a code to <Text fontWeight="bold" color="$color12">{targetEmail}</Text>.
           </Paragraph>
         </YStack>
 
@@ -247,10 +264,8 @@ export function Verify({
           <Button
             onPress={verifyOtp}
             size="$4"
+            variant="action"
             disabled={loading || otp.length !== 6}
-            backgroundColor="$blue10"
-            color="white"
-            hoverStyle={{ backgroundColor: '$blue11' }}
           >
             {loading ? 'Verifying…' : 'Verify'}
           </Button>
@@ -302,42 +317,30 @@ export function Verify({
           To protect you, we need to confirm the email address we have on file
           {reason ? ` ${reason}` : ''}.
         </Paragraph>
-        {maskedEmail ? (
+        {targetEmail ? (
           <Text fontWeight="700" fontSize="$5" color="$color12">
-            {maskedEmail}
+            {targetEmail}
           </Text>
         ) : null}
       </YStack>
 
-      <YStack gap="$4">
-        <Text fontSize="$2" color="$color11" textTransform="uppercase" letterSpacing={1}>
-          Pick one
-        </Text>
+      <YStack gap="$5">
+        {/* Three distinct choices, each introduced by its own "Option N" divider. */}
 
-        {/* 1 — Email me a code (OTP), FIRST. Sends then reveals the code field. */}
+        {/* Email me a code (OTP) — advances to the code-entry view. */}
         {showOtp ? (
-          <YStack gap="$1">
-            <Button
-              onPress={sendOtp}
-              size="$4"
-              disabled={loading}
-              variant="outlined"
-              borderColor="$borderColor"
-              hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-            >
+          <YStack gap="$2">
+            <OptionDivider label={`Option ${otpNum}`} />
+            <Button onPress={sendOtp} size="$4" variant="action" disabled={loading}>
               {loading ? 'Sending…' : 'Email me a code'}
             </Button>
-            {maskedEmail ? (
-              <Text fontSize="$2" color="$color11" textAlign="center">
-                sent to {maskedEmail}
-              </Text>
-            ) : null}
           </YStack>
         ) : null}
 
-        {/* 2 — Re-enter your password. Real <Label>-grade text, compact one-row input + Verify. */}
+        {/* Re-enter your password — real <Label>, one-row input + a primary Verify. */}
         {showPassword ? (
           <YStack gap="$2">
+            <OptionDivider label={`Option ${passwordNum}`} />
             <Label htmlFor="verify-password" fontWeight="600" color="$color12">
               Re-enter your password
             </Label>
@@ -356,50 +359,25 @@ export function Verify({
                 size="$4"
                 onSubmitEditing={handlePassword}
               />
-              <Button
-                onPress={handlePassword}
-                size="$4"
-                disabled={loading}
-                backgroundColor="$blue10"
-                color="white"
-                hoverStyle={{ backgroundColor: '$blue11' }}
-              >
+              <Button onPress={handlePassword} size="$4" variant="action" disabled={loading}>
                 {loading ? '…' : 'Verify'}
               </Button>
             </XStack>
           </YStack>
         ) : null}
 
-        {/* 3 — OR divider, then social buttons, LAST. */}
+        {/* Social login — quiet bordered choices. */}
         {showSocial ? (
-          <YStack gap="$3">
-            {showOtp || showPassword ? (
-              <XStack alignItems="center" gap="$3">
-                <Separator flex={1} />
-                <Text fontSize="$2" color="$color11">OR</Text>
-                <Separator flex={1} />
-              </XStack>
-            ) : null}
+          <YStack gap="$2">
+            <OptionDivider label={`Option ${socialNum}`} />
             {showGoogle ? (
-              <Button
-                onPress={handleGoogle}
-                size="$4"
-                variant="outlined"
-                borderColor="$borderColor"
-                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-              >
-                Continue with Google
+              <Button onPress={handleGoogle} size="$4" variant="outlined">
+                Confirm with Google
               </Button>
             ) : null}
             {showFacebook ? (
-              <Button
-                onPress={handleFacebook}
-                size="$4"
-                variant="outlined"
-                borderColor="$borderColor"
-                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-              >
-                Continue with Facebook
+              <Button onPress={handleFacebook} size="$4" variant="outlined">
+                Confirm with Facebook
               </Button>
             ) : null}
           </YStack>
