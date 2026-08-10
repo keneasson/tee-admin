@@ -4,6 +4,7 @@ import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import NextAuth, { type NextAuthConfig, type User, type Session } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
 import GoogleProvider from 'next-auth/providers/google'
+import FacebookProvider from 'next-auth/providers/facebook'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { headers } from 'next/headers'
 import { jwtVerify } from 'jose'
@@ -45,16 +46,36 @@ const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
   },
 })
 
+// Providers are assembled here so optional OAuth providers can be added
+// conditionally — only when their credentials are actually configured. This
+// keeps builds and runtime healthy while a provider is un-provisioned.
+const authProviders: NextAuthConfig['providers'] = [
+  GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID as string,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+  }),
+]
+
+// Facebook — only registered when BOTH the App ID and App Secret are present.
+// Unconfigured, the provider is simply absent (no dead callback route), Google
+// has no `authorize` step so Facebook (also OAuth) resolves the PersonRecord via
+// the shared signIn/jwt callbacks and defaults to `assurance: 'authenticated'`.
+if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
+  authProviders.push(
+    FacebookProvider({
+      clientId: process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+    })
+  )
+}
+
 export const authOptions: NextAuthConfig = {
   trustHost: true,
   session: {
     strategy: 'jwt' as const,
   },
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    }),
+    ...authProviders,
     CredentialsProvider({
       name: 'credentials',
       credentials: {
