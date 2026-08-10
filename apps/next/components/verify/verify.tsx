@@ -247,10 +247,8 @@ export function Verify({
           <Button
             onPress={verifyOtp}
             size="$4"
+            variant="action"
             disabled={loading || otp.length !== 6}
-            backgroundColor="$blue10"
-            color="white"
-            hoverStyle={{ backgroundColor: '$blue11' }}
           >
             {loading ? 'Verifying…' : 'Verify'}
           </Button>
@@ -314,32 +312,38 @@ export function Verify({
           Pick one
         </Text>
 
-        {/* 1 — Email me a code (OTP), FIRST. Sends then reveals the code field. */}
+        {/* Three distinct, equally-valid choices, each separated by an OR divider.
+            Copy stays first-person throughout ("me"/"my") so the voice is consistent. */}
+
+        {/* 1 — Email me a code (OTP). A clear primary action; advances to the code view. */}
         {showOtp ? (
-          <YStack gap="$1">
-            <Button
-              onPress={sendOtp}
-              size="$4"
-              disabled={loading}
-              variant="outlined"
-              borderColor="$borderColor"
-              hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-            >
+          <YStack gap="$2">
+            <Button onPress={sendOtp} size="$4" variant="action" disabled={loading}>
               {loading ? 'Sending…' : 'Email me a code'}
             </Button>
             {maskedEmail ? (
               <Text fontSize="$2" color="$color11" textAlign="center">
-                sent to {maskedEmail}
+                We’ll send it to {maskedEmail}
               </Text>
             ) : null}
           </YStack>
         ) : null}
 
-        {/* 2 — Re-enter your password. Real <Label>-grade text, compact one-row input + Verify. */}
+        {/* OR — between "email me a code" and "re-enter my password" */}
+        {showOtp && showPassword ? (
+          <XStack alignItems="center" gap="$3">
+            <Separator flex={1} />
+            <Text fontSize="$2" color="$color11" fontWeight="600">OR</Text>
+            <Separator flex={1} />
+          </XStack>
+        ) : null}
+
+        {/* 2 — Re-enter my password (shown only if this account has one set). Real
+            <Label> (not a placeholder), compact one-row input + a primary Verify. */}
         {showPassword ? (
           <YStack gap="$2">
             <Label htmlFor="verify-password" fontWeight="600" color="$color12">
-              Re-enter your password
+              Re-enter my password
             </Label>
             <XStack gap="$2" alignItems="center">
               <Input
@@ -356,49 +360,32 @@ export function Verify({
                 size="$4"
                 onSubmitEditing={handlePassword}
               />
-              <Button
-                onPress={handlePassword}
-                size="$4"
-                disabled={loading}
-                backgroundColor="$blue10"
-                color="white"
-                hoverStyle={{ backgroundColor: '$blue11' }}
-              >
+              <Button onPress={handlePassword} size="$4" variant="action" disabled={loading}>
                 {loading ? '…' : 'Verify'}
               </Button>
             </XStack>
           </YStack>
         ) : null}
 
-        {/* 3 — OR divider, then social buttons, LAST. */}
+        {/* OR — between the on-file methods and social login */}
+        {(showOtp || showPassword) && showSocial ? (
+          <XStack alignItems="center" gap="$3">
+            <Separator flex={1} />
+            <Text fontSize="$2" color="$color11" fontWeight="600">OR</Text>
+            <Separator flex={1} />
+          </XStack>
+        ) : null}
+
+        {/* 3 — Social login. Quiet bordered choices. */}
         {showSocial ? (
           <YStack gap="$3">
-            {showOtp || showPassword ? (
-              <XStack alignItems="center" gap="$3">
-                <Separator flex={1} />
-                <Text fontSize="$2" color="$color11">OR</Text>
-                <Separator flex={1} />
-              </XStack>
-            ) : null}
             {showGoogle ? (
-              <Button
-                onPress={handleGoogle}
-                size="$4"
-                variant="outlined"
-                borderColor="$borderColor"
-                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-              >
+              <Button onPress={handleGoogle} size="$4" variant="outlined">
                 Continue with Google
               </Button>
             ) : null}
             {showFacebook ? (
-              <Button
-                onPress={handleFacebook}
-                size="$4"
-                variant="outlined"
-                borderColor="$borderColor"
-                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-              >
+              <Button onPress={handleFacebook} size="$4" variant="outlined">
                 Continue with Facebook
               </Button>
             ) : null}
