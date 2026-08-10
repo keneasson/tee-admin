@@ -678,7 +678,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </Tabs.List>
 
             <Tabs.Content value="contact">
-              <YStack gap="$6" paddingTop="$4" paddingBottom="$8">
+              {/* Tight vertical rhythm — the sections were $6 (~24px) apart, which
+                  read as miles of empty space between rows. */}
+              <YStack gap="$3" paddingTop="$3" paddingBottom="$5">
+                {/* Name + ecclesia grouped tight (they're one identity block). */}
+                <YStack gap="$2">
                 {/* Name */}
                 <YStack gap="$3">
                   {editingName ? (
@@ -832,6 +836,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </XStack>
                     </Card>
                   )}
+                </YStack>
                 </YStack>
 
                 <Separator />
