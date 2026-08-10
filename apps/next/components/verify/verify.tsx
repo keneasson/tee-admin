@@ -3,20 +3,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
-import { YStack, XStack, Text, Heading, Button, Paragraph, Input, Separator } from '@my/ui'
+import { YStack, XStack, Text, Heading, Button, Paragraph, Input, Separator, Label } from '@my/ui'
+import { maskEmail } from '@/utils/mask-email'
 
 /**
  * <Verify> — the reusable step-up challenge (Epic #84, slice B).
  *
  * Elevates a `recognized` (or stale `authenticated`) viewer to a freshly-proven
  * `authenticated` session at the moment a sensitive action or page demands it.
- * Offers, in order of convenience:
- *   1. Google re-auth   — one tap if they're a Google account (redirects out and
- *      back; the return re-stamps `authTime`).
+ * Every method confirms the ONE on-file address (shown masked) — never a new
+ * address — so it's unambiguous which inbox/credentials are being proven.
+ * Offers, in order presented:
+ *   1. OTP              — "Email me a code" to the ON-FILE address only, FIRST.
+ *      This is the forward-safety anchor: a forwarder holding the email link can
+ *      VIEW, but only the true addressee receives the code, so only they can ACT.
  *   2. Password         — re-enter the on-file password (no redirect).
- *   3. OTP              — a 6-digit code to the ON-FILE address only. This is the
- *      forward-safety anchor: a forwarder holding the email link can VIEW, but
- *      only the true addressee receives the code, so only they can ACT.
+ *   3. Social re-auth   — Google / Facebook, one tap (redirects out and back;
+ *      the return re-stamps `authTime`). Facebook only appears once configured
+ *      (`NEXT_PUBLIC_FACEBOOK_ENABLED === 'true'`).
  *
  * On success the caller's `onVerified` fires — the caller then retries whatever
  * triggered the challenge. The server is the real boundary (`requireFreshAuth`);
@@ -88,12 +92,23 @@ export function Verify({
   const showGoogle = methods.includes('google')
   const showPassword = methods.includes('password')
   const showOtp = methods.includes('otp')
+  // Facebook is client-gated on a public flag so no dead button ships before the
+  // Meta app + Vercel env vars are configured (see EXTERNAL_CHANGES.md).
+  const showFacebook =
+    showGoogle && process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true'
+  const showSocial = showGoogle || showFacebook
+  const maskedEmail = targetEmail ? maskEmail(targetEmail) : ''
 
-  // --- Google re-auth: redirects out; the return re-stamps authTime. ---
+  // --- Social re-auth: redirects out; the return re-stamps authTime. ---
+  const socialCallbackUrl = () =>
+    returnTo ?? (typeof window !== 'undefined' ? window.location.href : '/')
+
   const handleGoogle = useCallback(() => {
-    const callbackUrl =
-      returnTo ?? (typeof window !== 'undefined' ? window.location.href : '/')
-    signIn('google', { callbackUrl })
+    signIn('google', { callbackUrl: socialCallbackUrl() })
+  }, [returnTo])
+
+  const handleFacebook = useCallback(() => {
+    signIn('facebook', { callbackUrl: socialCallbackUrl() })
   }, [returnTo])
 
   // --- Password re-entry: no redirect; onVerified on success. ---
@@ -199,7 +214,7 @@ export function Verify({
         <YStack gap="$2" alignItems="center">
           <Heading size="$7" color="$color12">Enter your code</Heading>
           <Paragraph color="$color11" textAlign="center">
-            We sent a 6-digit code to <Text fontWeight="bold" color="$color12">{targetEmail}</Text>.
+            We sent a code to <Text fontWeight="bold" color="$color12">{maskedEmail}</Text>.
           </Paragraph>
         </YStack>
 
@@ -284,60 +299,24 @@ export function Verify({
       <YStack gap="$2" alignItems="center">
         <Heading size="$7" color="$color12">Confirm it’s you</Heading>
         <Paragraph color="$color11" textAlign="center">
-          {reason ? `Please confirm your identity ${reason}.` : 'Please confirm your identity to continue.'}
+          To protect you, we need to confirm the email address we have on file
+          {reason ? ` ${reason}` : ''}.
         </Paragraph>
+        {maskedEmail ? (
+          <Text fontWeight="700" fontSize="$5" color="$color12">
+            {maskedEmail}
+          </Text>
+        ) : null}
       </YStack>
 
       <YStack gap="$4">
-        {showGoogle ? (
-          <Button
-            onPress={handleGoogle}
-            size="$4"
-            variant="outlined"
-            borderColor="$borderColor"
-            hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
-          >
-            Continue with Google
-          </Button>
-        ) : null}
+        <Text fontSize="$2" color="$color11" textTransform="uppercase" letterSpacing={1}>
+          Pick one
+        </Text>
 
-        {showPassword ? (
-          <YStack gap="$2">
-            <Text fontWeight="600" color="$color12">Password</Text>
-            <Input
-              {...INPUT_STYLE}
-              value={password}
-              onChangeText={(val: string) => {
-                setPassword(val)
-                clearError()
-              }}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              secureTextEntry
-              size="$4"
-            />
-            <Button
-              onPress={handlePassword}
-              size="$4"
-              disabled={loading}
-              backgroundColor="$blue10"
-              color="white"
-              hoverStyle={{ backgroundColor: '$blue11' }}
-            >
-              {loading ? 'Confirming…' : 'Confirm with password'}
-            </Button>
-          </YStack>
-        ) : null}
-
+        {/* 1 — Email me a code (OTP), FIRST. Sends then reveals the code field. */}
         {showOtp ? (
-          <YStack gap="$4">
-            {showGoogle || showPassword ? (
-              <XStack alignItems="center" gap="$3">
-                <Separator flex={1} />
-                <Text fontSize="$2" color="$color11">OR</Text>
-                <Separator flex={1} />
-              </XStack>
-            ) : null}
+          <YStack gap="$1">
             <Button
               onPress={sendOtp}
               size="$4"
@@ -346,8 +325,83 @@ export function Verify({
               borderColor="$borderColor"
               hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
             >
-              {loading ? 'Sending…' : 'Email me a 6-digit code'}
+              {loading ? 'Sending…' : 'Email me a code'}
             </Button>
+            {maskedEmail ? (
+              <Text fontSize="$2" color="$color11" textAlign="center">
+                sent to {maskedEmail}
+              </Text>
+            ) : null}
+          </YStack>
+        ) : null}
+
+        {/* 2 — Re-enter your password. Real <Label>-grade text, compact one-row input + Verify. */}
+        {showPassword ? (
+          <YStack gap="$2">
+            <Label htmlFor="verify-password" fontWeight="600" color="$color12">
+              Re-enter your password
+            </Label>
+            <XStack gap="$2" alignItems="center">
+              <Input
+                {...INPUT_STYLE}
+                flex={1}
+                id="verify-password"
+                value={password}
+                onChangeText={(val: string) => {
+                  setPassword(val)
+                  clearError()
+                }}
+                autoComplete="current-password"
+                secureTextEntry
+                size="$4"
+                onSubmitEditing={handlePassword}
+              />
+              <Button
+                onPress={handlePassword}
+                size="$4"
+                disabled={loading}
+                backgroundColor="$blue10"
+                color="white"
+                hoverStyle={{ backgroundColor: '$blue11' }}
+              >
+                {loading ? '…' : 'Verify'}
+              </Button>
+            </XStack>
+          </YStack>
+        ) : null}
+
+        {/* 3 — OR divider, then social buttons, LAST. */}
+        {showSocial ? (
+          <YStack gap="$3">
+            {showOtp || showPassword ? (
+              <XStack alignItems="center" gap="$3">
+                <Separator flex={1} />
+                <Text fontSize="$2" color="$color11">OR</Text>
+                <Separator flex={1} />
+              </XStack>
+            ) : null}
+            {showGoogle ? (
+              <Button
+                onPress={handleGoogle}
+                size="$4"
+                variant="outlined"
+                borderColor="$borderColor"
+                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
+              >
+                Continue with Google
+              </Button>
+            ) : null}
+            {showFacebook ? (
+              <Button
+                onPress={handleFacebook}
+                size="$4"
+                variant="outlined"
+                borderColor="$borderColor"
+                hoverStyle={{ backgroundColor: '$backgroundHover', borderColor: '$borderColor' }}
+              >
+                Continue with Facebook
+              </Button>
+            ) : null}
           </YStack>
         ) : null}
 
