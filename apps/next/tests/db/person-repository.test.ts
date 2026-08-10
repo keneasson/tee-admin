@@ -450,6 +450,35 @@ describe('PersonRepository', () => {
         await repository.setEmailOrder('p1', [])
         expect(mockSend).not.toHaveBeenCalled()
       })
+
+      it('reordering a MULTI-email person never touches PROFILE / primaryEmail / gsi1pk (login is preserved)', async () => {
+        // A Recording Brother with several addresses re-preferences them. Reorder is
+        // display-only: it must not become an identity transfer.
+        mockSend
+          .mockResolvedValueOnce({ Attributes: {} }) // e-work
+          .mockResolvedValueOnce({ Attributes: {} }) // e-primary
+          .mockResolvedValueOnce({ Attributes: {} }) // e-personal
+
+        await repository.setEmailOrder('p1', ['e-work', 'e-primary', 'e-personal'])
+
+        expect(mockSend).toHaveBeenCalledTimes(3)
+
+        for (const call of mockSend.mock.calls) {
+          const cmd = call[0]
+          expect(cmd.type).toBe('UpdateCommand')
+          // Never writes the PROFILE row — only EMAIL# rows are reordered.
+          expect(cmd.params.Key.skey).not.toBe('PROFILE')
+          expect(cmd.params.Key.skey.startsWith('EMAIL#')).toBe(true)
+          // Never mutates the identity/login handle or its lookup index.
+          const names = Object.values(cmd.params.ExpressionAttributeNames)
+          expect(names).not.toContain('primaryEmail')
+          expect(names).not.toContain('gsi1pk')
+          expect(names).not.toContain('emailType')
+          expect(names).not.toContain('email')
+          // The only domain field written is `order` (plus base lastUpdated/version bookkeeping).
+          expect(names).toContain('order')
+        }
+      })
     })
 
     describe('markEmailVerifiedByAddress', () => {
