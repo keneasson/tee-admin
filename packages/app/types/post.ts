@@ -165,6 +165,14 @@ export interface TimeBlock extends BlockBase {
 export interface FlyerBlock extends BlockBase {
   kind: 'flyer'
   document: DocumentAttachment
+  /**
+   * pii:'none' — presentation-only display controls set from the doc-editor's
+   * in-canvas image handles (Google-Docs style). Both the editor's live preview
+   * and the published {@link PostView} honour them, so the document stays the
+   * final version. Additive & optional: absent ⇒ full width, no rotation.
+   */
+  displayWidth?: number // percent of the content column, 10–100 (default 100)
+  rotation?: number // degrees clockwise, one of 0 | 90 | 180 | 270 (default 0)
 }
 
 export interface RegistrationBlock extends BlockBase {

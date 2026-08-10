@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
     const { input, sessionToken, country } = await request.json()
 
     if (!input || typeof input !== 'string' || input.length < 3) {
-      return NextResponse.json({ success: true, predictions: [] })
+      return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions: [] })
     }
 
     if (!GOOGLE_PLACES_API_KEY) {
       console.warn('GOOGLE_PLACES_API_KEY not configured - returning empty predictions')
-      return NextResponse.json({ success: true, predictions: [] })
+      return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions: [] })
     }
 
     // Map app country codes and full names to Google's ISO codes
@@ -66,14 +66,14 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       console.error('Google Places API error:', response.status, response.statusText)
-      return NextResponse.json({ success: true, predictions: [] })
+      return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions: [] })
     }
 
     const data = await response.json()
 
     if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
       console.error('Google Places API status:', data.status, data.error_message)
-      return NextResponse.json({ success: true, predictions: [] })
+      return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions: [] })
     }
 
     const predictions = (data.predictions || []).map(
@@ -92,9 +92,9 @@ export async function POST(request: NextRequest) {
       })
     )
 
-    return NextResponse.json({ success: true, predictions })
+    return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions })
   } catch (error) {
     console.error('Places autocomplete error:', error)
-    return NextResponse.json({ success: true, predictions: [] })
+    return NextResponse.json({ success: true, configured: !!GOOGLE_PLACES_API_KEY, predictions: [] })
   }
 }

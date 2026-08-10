@@ -236,31 +236,32 @@ function FlyerBlockView({ block }: { block: FlyerBlock }) {
   const title = document.originalName || 'Attachment'
   const isImage = looksLikeImage(url, document.mimeType)
 
+  // Presentation-only controls from the doc-editor's in-canvas handles. Clamp
+  // defensively so a bad stored value can't blow out the layout.
+  const widthPct = Math.min(100, Math.max(10, block.displayWidth ?? 100))
+  const rotation = ((block.rotation ?? 0) % 360) as 0 | 90 | 180 | 270
+  const rotated = rotation === 90 || rotation === 270
+  const imageProps = {
+    width: '100%' as const,
+    height: 320,
+    objectFit: 'contain' as const,
+    borderRadius: '$3' as const,
+    borderWidth: 1,
+    borderColor: '$borderColor' as const,
+    ...(rotation ? { transform: [{ rotate: `${rotation}deg` }] } : {}),
+  }
+
   return (
     <YStack gap="$2">
       <BlockHeader icon={FileImage} label="Flyer" />
       {isImage ? (
-        <Image
-          source={{ uri: url }}
-          width="100%"
-          height={320}
-          maxWidth={480}
-          objectFit="contain"
-          borderRadius="$3"
-          borderWidth={1}
-          borderColor="$borderColor"
-        />
+        <YStack width={`${widthPct}%`} maxWidth={480} paddingVertical={rotated ? '$5' : 0}>
+          <Image source={{ uri: url }} {...imageProps} />
+        </YStack>
       ) : document.thumbnailUrl ? (
-        <Image
-          source={{ uri: document.thumbnailUrl }}
-          width="100%"
-          height={320}
-          maxWidth={480}
-          objectFit="contain"
-          borderRadius="$3"
-          borderWidth={1}
-          borderColor="$borderColor"
-        />
+        <YStack width={`${widthPct}%`} maxWidth={480} paddingVertical={rotated ? '$5' : 0}>
+          <Image source={{ uri: document.thumbnailUrl }} {...imageProps} />
+        </YStack>
       ) : null}
       {document.description ? (
         <Text fontSize="$3" color="$color11">
@@ -332,8 +333,13 @@ function LinkBlockView({ block }: { block: LinkBlock }) {
   return <ExtLink href={url}>{block.label || url}</ExtLink>
 }
 
-/** Render a single block by kind — mirrors the editor's 7-kind coverage. */
-function BlockView({ block }: { block: Block }) {
+/**
+ * Render a single block by kind — mirrors the editor's 7-kind coverage. Exported
+ * so the document-canvas editor can render each structured element's FINAL,
+ * published appearance inline (the "document is the final version" contract); the
+ * editor NEVER shows a form in the doc — editing happens in the floating tool.
+ */
+export function BlockView({ block }: { block: Block }) {
   switch (block.kind) {
     case 'text':
       return <TextBlockView block={block} />

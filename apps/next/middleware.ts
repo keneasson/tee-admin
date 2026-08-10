@@ -1,6 +1,6 @@
 import { auth } from './utils/auth'
 import { NextResponse } from 'next/server'
-import type { NextAuthRequest } from 'next-auth/lib'
+import type { NextAuthRequest } from 'next-auth'
 import { getTenantByHost } from '@my/app/config/tenants'
 
 const ANALYTICS_KEY = process.env.ANALYTICS_INTERNAL_KEY
