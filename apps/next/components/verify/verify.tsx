@@ -372,12 +372,12 @@ export function Verify({
             <OptionDivider label={`Option ${socialNum}`} />
             {showGoogle ? (
               <Button onPress={handleGoogle} size="$4" variant="outlined">
-                Continue with Google
+                Confirm with Google
               </Button>
             ) : null}
             {showFacebook ? (
               <Button onPress={handleFacebook} size="$4" variant="outlined">
-                Continue with Facebook
+                Confirm with Facebook
               </Button>
             ) : null}
           </YStack>
