@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Section, Text, YStack, XStack, Heading, Separator, Spinner, Tabs, Card, Input, Button } from '@my/ui'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
-import { PhoneManager, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
+import { PhoneManager, movePhoneToFront, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
 import { EmailManager, moveEmailToFront, type EmailEntry } from '@my/ui/src/profile/email-manager'
 import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/family-members'
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
@@ -108,7 +108,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [addresses, setAddresses] = useState<Address[]>([])
   const [phones, setPhones] = useState<PhoneEntry[]>([])
   const [emails, setEmails] = useState<EmailEntry[]>([])
-  const [savingPhones, setSavingPhones] = useState(false)
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
   const [connections, setConnections] = useState<Connection[]>([])
   const [blockedUsers, setBlockedUsers] = useState<string[]>([])
@@ -251,29 +250,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
-  // Phone handlers for PhoneManager
-  const handleSavePhones = async () => {
-    setSavingPhones(true)
-    try {
-      const res = await fetch('/api/user/phones', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phones: phones.map(p => ({
-            id: p.id,
-            type: p.type,
-            number: p.number,
-          })),
-        }),
-      })
-      if (res.ok) {
-        await fetchData()
-      }
-    } finally {
-      setSavingPhones(false)
-    }
-  }
-
   // The fresh-auth gate (require-fresh-auth) refuses sensitive edits with a
   // 403 `{ stepUpRequired }`. Surface that to the platform layer (which mounts
   // <Verify>) rather than failing silently; on re-verify it calls `retry`.
@@ -357,6 +333,69 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return
     }
     await handledStepUp(res, () => { void handleSendVerification(emailId) })
+  }
+
+  // Phone handlers for PhoneManager — each saves in place against the granular
+  // phones endpoints, then refetches. A 403 { stepUpRequired } is routed through
+  // the platform step-up mechanism (mirroring the email handlers) rather than
+  // failing silently.
+  const handleAddPhone = async (type: PhoneType, number: string) => {
+    const res = await fetch('/api/user/phones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, number }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleAddPhone(type, number) })
+  }
+
+  const handleUpdatePhone = async (id: string, updates: { type?: PhoneType; number?: string }) => {
+    const res = await fetch('/api/user/phones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneId: id, ...updates }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleUpdatePhone(id, updates) })
+  }
+
+  const handleDeletePhone = async (id: string) => {
+    const res = await fetch(`/api/user/phones?phoneId=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleDeletePhone(id) })
+  }
+
+  // "Set as preferred" = move the number to index 0 and PUT the whole ordered
+  // set (the replace-all model; first = preferred).
+  const handleSetPreferredPhone = async (id: string) => {
+    const reordered = movePhoneToFront(phones, id)
+    const res = await fetch('/api/user/phones', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phones: reordered.map(p => ({
+          id: p.id,
+          type: p.type,
+          number: p.number,
+        })),
+      }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleSetPreferredPhone(id) })
   }
 
   // Family handlers
@@ -853,9 +892,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 <Separator />
                 <PhoneManager
                   phones={phones}
-                  onChange={setPhones}
-                  onSave={handleSavePhones}
-                  saving={savingPhones}
+                  onAddPhone={handleAddPhone}
+                  onUpdatePhone={handleUpdatePhone}
+                  onDeletePhone={handleDeletePhone}
+                  onSetPreferred={handleSetPreferredPhone}
                 />
                 <Separator />
                 <AddressList

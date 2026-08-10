@@ -1,7 +1,10 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner, Popover } from 'tamagui'
 import { Button } from '../Button'
-import { Phone, Plus, Trash2, GripVertical, Check } from '@tamagui/lucide-icons'
+import { Phone, Plus, Trash2, Check, Pencil, MoreHorizontal, Star, X } from '@tamagui/lucide-icons'
+import { movePhoneToFront } from './phone-ordering'
+
+export { movePhoneToFront }
 
 export type PhoneType = 'mobile' | 'home' | 'work' | 'other'
 
@@ -14,11 +17,19 @@ export interface PhoneEntry {
 
 interface PhoneManagerProps {
   phones: PhoneEntry[]
-  onChange: (phones: PhoneEntry[]) => void
-  onSave?: () => Promise<void>
-  saving?: boolean
+  /** Add a new phone. Each save hits its endpoint immediately, then the page refetches. */
+  onAddPhone: (type: PhoneType, number: string) => Promise<void> | void
+  /** Update a phone's type and/or number in place. */
+  onUpdatePhone: (id: string, updates: { type?: PhoneType; number?: string }) => Promise<void> | void
+  /** Soft-delete a phone by id. */
+  onDeletePhone: (id: string) => Promise<void> | void
+  /** Make this number the preferred (first) contact — soft, in-place (reorder). */
+  onSetPreferred: (id: string) => Promise<void> | void
+  /** View-only: render numbers + badges, no controls. */
   readOnly?: boolean
 }
+
+const GUTTER = 34
 
 const phoneTypeLabels: Record<PhoneType, string> = {
   mobile: 'Mobile',
@@ -26,6 +37,8 @@ const phoneTypeLabels: Record<PhoneType, string> = {
   work: 'Work',
   other: 'Other',
 }
+
+const PHONE_TYPES: PhoneType[] = ['mobile', 'home', 'work', 'other']
 
 // Format 10 digits as xxx-xxx-xxxx
 export function formatPhoneNumber(digits: string): string {
@@ -40,65 +53,136 @@ export function extractDigits(formatted: string): string {
   return formatted.replace(/\D/g, '').slice(0, 10)
 }
 
-// Generate a simple ID
-function generateId(): string {
-  return `phone-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+function isValidNumber(digits: string): boolean {
+  return /^\d{10}$/.test(digits)
+}
+
+/** Shared inline editor: a compact segmented type selector + number Input + Save/Cancel. */
+const PhoneEditor: React.FC<{
+  type: PhoneType
+  number: string
+  onTypeChange: (type: PhoneType) => void
+  onNumberChange: (digits: string) => void
+  onCancel: () => void
+  onSave: () => void
+  saving: boolean
+  saveLabel: string
+}> = ({ type, number, onTypeChange, onNumberChange, onCancel, onSave, saving, saveLabel }) => {
+  const invalid = number.length > 0 && !isValidNumber(number)
+  return (
+    <YStack gap="$2">
+      <XStack gap="$2" alignItems="center" flexWrap="wrap">
+        <XStack gap="$1" flexWrap="wrap" alignItems="center">
+          {PHONE_TYPES.map((t) => (
+            <Button
+              key={t}
+              size="$2"
+              theme={type === t ? 'blue' : undefined}
+              onPress={() => onTypeChange(t)}
+            >
+              {phoneTypeLabels[t]}
+            </Button>
+          ))}
+        </XStack>
+        <Input
+          flex={1}
+          minWidth={160}
+          placeholder="xxx-xxx-xxxx"
+          value={formatPhoneNumber(number)}
+          onChangeText={(value: string) => onNumberChange(extractDigits(value))}
+          keyboardType="phone-pad"
+          maxLength={12}
+          autoFocus
+        />
+        <Button
+          size="$2"
+          variant="outlined"
+          icon={X}
+          onPress={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="$2"
+          theme="blue"
+          icon={saving ? <Spinner size="small" /> : Check}
+          onPress={onSave}
+          disabled={saving || !isValidNumber(number)}
+        >
+          {saveLabel}
+        </Button>
+      </XStack>
+      {invalid ? (
+        <Text fontSize="$2" color="$red10" paddingLeft={GUTTER + 8}>
+          Enter all 10 digits
+        </Text>
+      ) : null}
+    </YStack>
+  )
 }
 
 export const PhoneManager: React.FC<PhoneManagerProps> = ({
   phones,
-  onChange,
-  onSave,
-  saving = false,
+  onAddPhone,
+  onUpdatePhone,
+  onDeletePhone,
+  onSetPreferred,
   readOnly = false,
 }) => {
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const handleAddPhone = () => {
-    const newPhone: PhoneEntry = {
-      id: generateId(),
-      type: 'mobile',
-      number: '',
-    }
-    onChange([...phones, newPhone])
-  }
+  // Inline "add a new number" editor (revealed by the Add button).
+  const [adding, setAdding] = useState(false)
+  const [newType, setNewType] = useState<PhoneType>('mobile')
+  const [newNumber, setNewNumber] = useState('')
 
-  const handleRemovePhone = (id: string) => {
-    onChange(phones.filter(p => p.id !== id))
-  }
+  // Inline "edit an existing number" editor, keyed by row id.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editType, setEditType] = useState<PhoneType>('mobile')
+  const [editNumber, setEditNumber] = useState('')
 
-  const handleUpdatePhone = (id: string, updates: Partial<PhoneEntry>) => {
-    onChange(phones.map(p => p.id === id ? { ...p, ...updates } : p))
-  }
-
-  const handleNumberChange = (id: string, value: string) => {
-    // Extract digits and update
-    const digits = extractDigits(value)
-    handleUpdatePhone(id, { number: digits })
-  }
-
-  const movePhone = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= phones.length) return
-    const newPhones = [...phones]
-    const [moved] = newPhones.splice(fromIndex, 1)
-    newPhones.splice(toIndex, 0, moved)
-    onChange(newPhones)
-  }
-
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index)
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    if (draggedIndex !== null && draggedIndex !== index) {
-      movePhone(draggedIndex, index)
-      setDraggedIndex(index)
+  const run = async (id: string, fn: () => Promise<void> | void) => {
+    setBusyId(id)
+    try {
+      await fn()
+    } finally {
+      setBusyId(null)
     }
   }
 
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
+  const startAdd = () => {
+    setAdding(true)
+    setNewType('mobile')
+    setNewNumber('')
+  }
+
+  const submitAdd = async () => {
+    if (!isValidNumber(newNumber)) return
+    await run('__add__', async () => {
+      await onAddPhone(newType, newNumber)
+      setNewNumber('')
+      setAdding(false)
+    })
+  }
+
+  const startEdit = (entry: PhoneEntry) => {
+    setEditingId(entry.id)
+    setEditType(entry.type)
+    setEditNumber(entry.number)
+  }
+
+  const submitEdit = async (entry: PhoneEntry) => {
+    if (!isValidNumber(editNumber)) return
+    if (editNumber === entry.number && editType === entry.type) {
+      setEditingId(null)
+      return
+    }
+    await run(entry.id, async () => {
+      await onUpdatePhone(entry.id, { type: editType, number: editNumber })
+      setEditingId(null)
+    })
   }
 
   return (
@@ -108,128 +192,158 @@ export const PhoneManager: React.FC<PhoneManagerProps> = ({
           <Phone size={20} />
           <Text fontSize="$4" fontWeight="600">Phone Numbers</Text>
         </XStack>
-        {!readOnly && (
-          <Button size="$2" icon={Plus} onPress={handleAddPhone}>
+        {readOnly ? null : (
+          <Button size="$2" variant="outlined" icon={Plus} onPress={startAdd}>
             Add
           </Button>
         )}
       </XStack>
 
-      {phones.length === 0 ? (
+      {phones.length === 0 && !adding ? (
         <Card padding="$3" backgroundColor="$backgroundHover">
           <Text fontSize="$3" theme="alt2" textAlign="center">
-            No phone numbers added. Click "Add" to add one.
+            No phone numbers. Click "Add" to add one.
           </Text>
         </Card>
       ) : (
         <YStack gap="$2">
-          {phones.map((phone, index) => (
-            <Card
-              key={phone.id}
-              padding="$3"
-              backgroundColor={index === 0 ? '$blue2' : '$backgroundHover'}
-              borderWidth={index === 0 ? 1 : 0}
-              borderColor="$blue6"
-              {...({
-                draggable: !readOnly,
-                onDragStart: () => handleDragStart(index),
-                onDragOver: (e: React.DragEvent) => handleDragOver(e, index),
-                onDragEnd: handleDragEnd,
-              } as any)}
-              opacity={draggedIndex === index ? 0.5 : 1}
-            >
-              <XStack gap="$3" alignItems="center">
-                {!readOnly && (
-                  <YStack cursor="grab" opacity={0.5}>
-                    <GripVertical size={16} />
-                  </YStack>
-                )}
+          {phones.map((entry, index) => {
+            const isPreferred = index === 0
+            const isEditing = editingId === entry.id
+            const rowBusy = busyId === entry.id
+            const showMenu = !readOnly && !isPreferred
 
-                <YStack flex={1} gap="$2">
-                  {readOnly ? (
-                    <XStack gap="$2" alignItems="center">
-                      <Text fontSize="$4" fontWeight="500">
-                        {formatPhoneNumber(phone.number) || 'No number'}
-                      </Text>
-                      <Text fontSize="$2" theme="alt2">
-                        ({phoneTypeLabels[phone.type]})
-                      </Text>
-                      {index === 0 && (
-                        <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
-                          <Text fontSize="$1" color="$blue10">Preferred</Text>
-                        </Card>
-                      )}
-                      {phone.verified && (
-                        <Check size={14} color="$green10" />
+            return (
+              <Card
+                key={entry.id}
+                padding="$3"
+                backgroundColor={isPreferred ? '$blue2' : '$backgroundHover'}
+                borderWidth={isPreferred ? 1 : 0}
+                borderColor="$blue6"
+              >
+                {isEditing ? (
+                  <PhoneEditor
+                    type={editType}
+                    number={editNumber}
+                    onTypeChange={setEditType}
+                    onNumberChange={setEditNumber}
+                    onCancel={() => setEditingId(null)}
+                    onSave={() => submitEdit(entry)}
+                    saving={rowBusy}
+                    saveLabel="Save"
+                  />
+                ) : (
+                  <XStack gap="$2" alignItems="flex-start">
+                    {/* Left edit gutter — consistent on every row */}
+                    <XStack width={GUTTER} alignItems="center" justifyContent="flex-start">
+                      {readOnly ? null : (
+                        <Button
+                          size="$2"
+                          circular
+                          chromeless
+                          icon={Pencil}
+                          aria-label="Edit phone"
+                          onPress={() => startEdit(entry)}
+                          disabled={rowBusy}
+                        />
                       )}
                     </XStack>
-                  ) : (
-                    <YStack gap="$2">
-                      <XStack gap="$1" flexWrap="wrap" alignItems="center">
-                        {(['mobile', 'home', 'work', 'other'] as PhoneType[]).map((type) => (
-                          <Button
-                            key={type}
-                            size="$2"
-                            theme={phone.type === type ? 'blue' : undefined}
-                            onPress={() => handleUpdatePhone(phone.id, { type })}
-                          >
-                            {phoneTypeLabels[type]}
-                          </Button>
-                        ))}
-                        {index === 0 && (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4" marginLeft="$2">
+
+                    {/* Value + badges */}
+                    <YStack flex={1} gap="$1" minWidth={0}>
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                        <Text fontSize="$4" fontWeight="500">
+                          {formatPhoneNumber(entry.number) || 'No number'}
+                        </Text>
+                        <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
+                          <Text fontSize="$1" color="$gray11">{phoneTypeLabels[entry.type]}</Text>
+                        </Card>
+                        {isPreferred ? (
+                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
                             <Text fontSize="$1" color="$blue10">Preferred</Text>
                           </Card>
-                        )}
+                        ) : null}
                       </XStack>
-
-                      <Input
-                        placeholder="xxx-xxx-xxxx"
-                        value={formatPhoneNumber(phone.number)}
-                        onChangeText={(value: string) => handleNumberChange(phone.id, value)}
-                        keyboardType="phone-pad"
-                        maxLength={12}
-                      />
                     </YStack>
-                  )}
 
-                  {phone.number.length > 0 && phone.number.length < 10 && !readOnly && (
-                    <Text fontSize="$2" color="$red10">
-                      Enter all 10 digits
-                    </Text>
-                  )}
-                </YStack>
+                    {/* Right actions */}
+                    <XStack gap="$2" alignItems="center">
+                      {showMenu ? (
+                        <Popover
+                          size="$3"
+                          allowFlip
+                          open={openMenuId === entry.id}
+                          onOpenChange={(open) => setOpenMenuId(open ? entry.id : null)}
+                        >
+                          <Popover.Trigger asChild>
+                            <Button
+                              size="$2"
+                              circular
+                              chromeless
+                              icon={MoreHorizontal}
+                              aria-label="More actions"
+                            />
+                          </Popover.Trigger>
+                          <Popover.Content
+                            bordered
+                            elevate
+                            padding="$0"
+                            enterStyle={{ y: -6, opacity: 0 }}
+                            exitStyle={{ y: -6, opacity: 0 }}
+                            animation="quick"
+                          >
+                            <YStack minWidth={220}>
+                              <Button
+                                chromeless
+                                justifyContent="flex-start"
+                                borderRadius={0}
+                                icon={Star}
+                                onPress={() => {
+                                  setOpenMenuId(null)
+                                  void run(entry.id, () => onSetPreferred(entry.id))
+                                }}
+                              >
+                                Set as preferred
+                              </Button>
+                            </YStack>
+                          </Popover.Content>
+                        </Popover>
+                      ) : null}
 
-                {!readOnly && (
-                  <Button
-                    size="$2"
-                    circular
-                    icon={Trash2}
-                    theme="red"
-                    onPress={() => handleRemovePhone(phone.id)}
-                  />
+                      {readOnly ? null : (
+                        <Button
+                          size="$2"
+                          circular
+                          chromeless
+                          icon={rowBusy ? <Spinner size="small" /> : Trash2}
+                          color="$red10"
+                          aria-label="Delete this number"
+                          onPress={() => run(entry.id, () => onDeletePhone(entry.id))}
+                          disabled={rowBusy}
+                        />
+                      )}
+                    </XStack>
+                  </XStack>
                 )}
-              </XStack>
+              </Card>
+            )
+          })}
+
+          {adding ? (
+            <Card padding="$3" backgroundColor="$backgroundHover">
+              <PhoneEditor
+                type={newType}
+                number={newNumber}
+                onTypeChange={setNewType}
+                onNumberChange={setNewNumber}
+                onCancel={() => { setAdding(false); setNewNumber('') }}
+                onSave={submitAdd}
+                saving={busyId === '__add__'}
+                saveLabel="Add"
+              />
             </Card>
-          ))}
+          ) : null}
         </YStack>
-      )}
-
-      {phones.length > 1 && !readOnly && (
-        <Text fontSize="$2" theme="alt2" textAlign="center">
-          Drag to reorder. First number is your preferred contact.
-        </Text>
-      )}
-
-      {onSave && !readOnly && (
-        <Button
-          theme="blue"
-          onPress={onSave}
-          disabled={saving || phones.some(p => p.number.length > 0 && p.number.length < 10)}
-          icon={saving ? <Spinner /> : undefined}
-        >
-          {saving ? 'Saving...' : 'Save Phone Numbers'}
-        </Button>
       )}
     </YStack>
   )
