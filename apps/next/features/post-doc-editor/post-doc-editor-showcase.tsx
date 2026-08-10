@@ -106,8 +106,10 @@ export function PostDocEditorShowcase() {
           toolbar and click to drop a structured element (it lands as its final display).
           Hover any element for its editor-space affordance, then "Edit this location" to
           open its editor in the FLOATING tool — the form lives in the tool, never in the
-          doc. Location, Speaker/Person, Date/Time and Link are wired end-to-end (Person is
-          a directory resolver like Location); Image/Flyer and Registration are next.
+          doc. All six tools are wired end-to-end: Location, Speaker/Person, Date/Time,
+          Link, Image/Flyer (upload / replace / caption in the tool; resize · rotate ·
+          annotate on the canvas) and Registration (a progressive form — required, link,
+          deadline up front; fee / contact / notes / reminders behind "Add details").
         </Paragraph>
         <Paragraph color="$color10">
           The Location widget is a PROGRESSIVE RESOLVER (2R-1b), not a form: type ~2–4

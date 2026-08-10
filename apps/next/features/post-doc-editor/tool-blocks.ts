@@ -9,11 +9,19 @@
  * live editor (toolbar + insert plugin) and the serialization unit tests without
  * dragging in Tamagui / lucide. Rendering of a block is the decorator node's job.
  *
- * WIRED end-to-end: Location (2R-1), Speaker/Person + Date/Time + Link (2R-2a).
- * Registration + Image/Flyer are listed but disabled — a later slice.
+ * WIRED end-to-end: Location (2R-1), Speaker/Person + Date/Time + Link (2R-2a),
+ * Image/Flyer + Registration (2R-2b) — all six tools.
  */
 
-import type { Block, LinkBlock, LocationBlock, PersonBlock, TimeBlock } from '@my/app/types/post'
+import type {
+  Block,
+  FlyerBlock,
+  LinkBlock,
+  LocationBlock,
+  PersonBlock,
+  RegistrationBlock,
+  TimeBlock,
+} from '@my/app/types/post'
 import { genId } from '@my/ui/src/post-editor/post-reducer'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import { plainNameToPerson } from './widgets/person-resolve'
@@ -34,9 +42,33 @@ export const TOOLS: ToolDef[] = [
   { kind: 'person', label: 'Speaker / Person', enabled: true },
   { kind: 'time', label: 'Date / Time', enabled: true },
   { kind: 'link', label: 'Link', enabled: true },
-  { kind: 'flyer', label: 'Image / Flyer', enabled: false },
-  { kind: 'registration', label: 'Registration', enabled: false },
+  { kind: 'flyer', label: 'Image / Flyer', enabled: true },
+  { kind: 'registration', label: 'Registration', enabled: true },
 ]
+
+/**
+ * A fresh, empty flyer block — an image-less {@link FlyerBlock} whose document is
+ * blank strings + `uploadedAt: new Date(0)` (mirrors `emptyFlyer()` in
+ * templates.ts). The doc renders it as an "Add an image" placeholder; the
+ * FlyerUploader fills the document on a successful upload.
+ */
+function emptyFlyerBlock(): FlyerBlock {
+  return {
+    id: genId(),
+    kind: 'flyer',
+    document: {
+      id: genId(),
+      documentType: 'upload',
+      fileName: '',
+      originalName: '',
+      fileUrl: '',
+      fileSize: 0,
+      mimeType: '',
+      uploadedAt: new Date(0),
+      uploadedBy: '',
+    },
+  }
+}
 
 /**
  * Fresh, empty block for an armed tool. Mirrors the packages/ui `make*` factories
@@ -53,8 +85,10 @@ export function makeToolBlock(kind: ToolKind): Block {
       return { id: genId(), kind: 'time', timezone: DEFAULT_TIMEZONE } satisfies TimeBlock
     case 'link':
       return { id: genId(), kind: 'link', url: '' } satisfies LinkBlock
-    default:
-      throw new Error(`Tool "${kind}" is not wired yet (Consolidated CMS)`)
+    case 'flyer':
+      return emptyFlyerBlock()
+    case 'registration':
+      return { id: genId(), kind: 'registration' } satisfies RegistrationBlock
   }
 }
 
@@ -66,6 +100,9 @@ export function makeToolBlock(kind: ToolKind): Block {
  *  - person   → seeds a single plain person from the selected name
  *  - time     → seeds the free-text `display` (e.g. "7:30pm every Wednesday")
  *  - link     → a URL-looking selection seeds `url`; otherwise it seeds `label`
+ *  - registration → a URL-looking selection seeds `registrationUrl`; otherwise `notes`
+ *  - flyer    → the seed is IGNORED (an image can't come from selected text); a
+ *               blank flyer block is returned to open the uploader
  */
 export function makeSeededToolBlock(kind: ToolKind, seed: string): Block {
   const text = seed.trim()
@@ -85,7 +122,12 @@ export function makeSeededToolBlock(kind: ToolKind, seed: string): Block {
       return looksLikeUrl(text)
         ? ({ id: genId(), kind: 'link', url: normalizeUrl(text) } satisfies LinkBlock)
         : ({ id: genId(), kind: 'link', url: '', label: text } satisfies LinkBlock)
-    default:
-      throw new Error(`Tool "${kind}" is not wired yet (Consolidated CMS)`)
+    case 'registration':
+      return looksLikeUrl(text)
+        ? ({ id: genId(), kind: 'registration', registrationUrl: normalizeUrl(text) } satisfies RegistrationBlock)
+        : ({ id: genId(), kind: 'registration', notes: text } satisfies RegistrationBlock)
+    case 'flyer':
+      // An image can't come from selected text — ignore the seed, open blank.
+      return emptyFlyerBlock()
   }
 }

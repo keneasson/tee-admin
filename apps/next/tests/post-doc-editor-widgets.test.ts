@@ -16,6 +16,14 @@ import {
   combineWall,
 } from '../features/post-doc-editor/widgets/time-resolve'
 import { looksLikeUrl, normalizeUrl } from '../features/post-doc-editor/widgets/link-resolve'
+import { isImageMime, hasFlyerImage } from '../features/post-doc-editor/widgets/flyer-resolve'
+import {
+  parseFee,
+  formatFee,
+  deadlineDateToIso,
+  isoToDeadlineDate,
+} from '../features/post-doc-editor/widgets/registration-resolve'
+import type { FlyerBlock } from '@my/app/types/post'
 
 /**
  * Pure block-mapping for the 2R-2 widgets (Person / Time / Link). The Tamagui
@@ -135,5 +143,65 @@ describe('link: looksLikeUrl / normalizeUrl', () => {
     expect(normalizeUrl('mailto:a@b.com')).toBe('mailto:a@b.com')
     expect(normalizeUrl('  example.com/x ')).toBe('https://example.com/x')
     expect(normalizeUrl('')).toBe('')
+  })
+})
+
+describe('flyer: isImageMime / hasFlyerImage', () => {
+  const flyer = (fileUrl: string): FlyerBlock => ({
+    id: 'f',
+    kind: 'flyer',
+    document: {
+      id: 'd',
+      documentType: 'upload',
+      fileName: '',
+      originalName: '',
+      fileUrl,
+      fileSize: 0,
+      mimeType: '',
+      uploadedAt: new Date(0),
+      uploadedBy: '',
+    },
+  })
+  it('recognizes image MIME types (case-insensitive), rejects others/blank', () => {
+    expect(isImageMime('image/png')).toBe(true)
+    expect(isImageMime('IMAGE/JPEG')).toBe(true)
+    expect(isImageMime('application/pdf')).toBe(false)
+    expect(isImageMime('')).toBe(false)
+    expect(isImageMime(undefined)).toBe(false)
+  })
+  it('hasFlyerImage is false for a blank document, true once a fileUrl is set', () => {
+    expect(hasFlyerImage(flyer(''))).toBe(false)
+    expect(hasFlyerImage(flyer('   '))).toBe(false)
+    expect(hasFlyerImage(flyer('https://cdn/x.png'))).toBe(true)
+  })
+})
+
+describe('registration: parseFee / formatFee', () => {
+  it('parses forgiving currency strings, drops blank/invalid/negative', () => {
+    expect(parseFee('25')).toBe(25)
+    expect(parseFee('$25.50')).toBe(25.5)
+    expect(parseFee('1,200')).toBe(1200)
+    expect(parseFee('  10 ')).toBe(10)
+    expect(parseFee('')).toBeUndefined()
+    expect(parseFee('free')).toBeUndefined()
+    expect(parseFee('-5')).toBeUndefined()
+  })
+  it('formatFee renders the stored number, empty when unset', () => {
+    expect(formatFee(25)).toBe('25')
+    expect(formatFee(0)).toBe('0')
+    expect(formatFee(undefined)).toBe('')
+  })
+})
+
+describe('registration: deadline date ⇄ ISO', () => {
+  const tz = 'America/Toronto'
+  it('a date input becomes a start-of-day ISO in the zone, round-trips back', () => {
+    const iso = deadlineDateToIso('2026-09-15', tz)
+    expect(iso).toBe('2026-09-15T04:00:00.000Z') // EDT midnight = 04:00Z
+    expect(isoToDeadlineDate(iso, tz)).toBe('2026-09-15')
+  })
+  it('blank date → undefined; undefined ISO → empty date', () => {
+    expect(deadlineDateToIso('', tz)).toBeUndefined()
+    expect(isoToDeadlineDate(undefined, tz)).toBe('')
   })
 })

@@ -26,7 +26,15 @@ import { $getNodeByKey, BLUR_COMMAND, COMMAND_PRIORITY_LOW, FOCUS_COMMAND } from
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { YStack, XStack, Text, Button, Separator } from '@my/ui'
 import { GripVertical, ChevronDown, ChevronRight, MapPin, Check, X } from '@tamagui/lucide-icons'
-import type { Block, LinkBlock, LocationBlock, PersonBlock, TimeBlock } from '@my/app/types/post'
+import type {
+  Block,
+  FlyerBlock,
+  LinkBlock,
+  LocationBlock,
+  PersonBlock,
+  RegistrationBlock,
+  TimeBlock,
+} from '@my/app/types/post'
 import { getBlockDef } from '@my/ui/src/post-editor/registry'
 import { registerDefaultBlocks } from '@my/ui/src/post-editor/register-default-blocks'
 import { TOOLS, type ToolKind } from './tool-blocks'
@@ -36,6 +44,8 @@ import { LocationResolver } from './widgets/location-resolver'
 import { PersonResolver } from './widgets/person-resolver'
 import { TimePicker } from './widgets/time-picker'
 import { LinkEditor } from './widgets/link-editor'
+import { FlyerUploader } from './widgets/flyer-uploader'
+import { RegistrationEditor } from './widgets/registration-editor'
 
 // Populate the block registry (idempotent) so Edit mode can look up each kind's
 // encapsulated editor. Same registry the block-form editor uses.
@@ -313,6 +323,16 @@ function EditPanel({ nodeKey }: { nodeKey: string }) {
           <LinkEditor
             block={draft as LinkBlock}
             onChange={writeBack as (next: LinkBlock) => void}
+          />
+        ) : draft.kind === 'flyer' ? (
+          <FlyerUploader
+            block={draft as FlyerBlock}
+            onChange={writeBack as (next: FlyerBlock) => void}
+          />
+        ) : draft.kind === 'registration' ? (
+          <RegistrationEditor
+            block={draft as RegistrationBlock}
+            onChange={writeBack as (next: RegistrationBlock) => void}
           />
         ) : Editor ? (
           <Editor block={draft} onChange={writeBack} onRemove={removeNode} />

@@ -48,8 +48,18 @@ describe('convert-selection seeding (makeSeededToolBlock / makeSeededLocationBlo
     const person = makeSeededToolBlock('person', 'Visiting Brother')
     expect(person.kind).toBe('person')
     expect(person.kind === 'person' && person.people[0]?.firstName).toBe('Visiting')
-    // Not-yet-wired kinds still throw.
-    expect(() => makeSeededToolBlock('flyer', 'anything')).toThrow()
+    // All six tools are wired: flyer ignores the seed (an image can't come from
+    // text) and returns a blank block; registration distils a URL vs. notes.
+    const flyer = makeSeededToolBlock('flyer', 'anything')
+    expect(flyer.kind).toBe('flyer')
+    expect(flyer.kind === 'flyer' && flyer.document.fileUrl).toBe('')
+    const regUrl = makeSeededToolBlock('registration', 'example.com/register')
+    expect(regUrl.kind === 'registration' && regUrl.registrationUrl).toBe(
+      'https://example.com/register'
+    )
+    const regNotes = makeSeededToolBlock('registration', 'Ask the arranging brother')
+    expect(regNotes.kind === 'registration' && regNotes.notes).toBe('Ask the arranging brother')
+    expect(regNotes.kind === 'registration' && regNotes.registrationUrl).toBeUndefined()
   })
 
   it('empty-caret insert still yields a BLANK Location block (no seed)', () => {

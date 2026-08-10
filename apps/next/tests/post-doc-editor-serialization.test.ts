@@ -7,7 +7,7 @@ import {
   type SerializedTopNode,
 } from '../features/post-doc-editor/doc-serialization'
 import { makeToolBlock } from '../features/post-doc-editor/tool-blocks'
-import type { Block, LocationBlock, TextBlock } from '@my/app/types/post'
+import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 
 /**
  * The CRUX of the document-canvas editor (Consolidated CMS Phase 2R-1 keystone):
@@ -133,17 +133,21 @@ describe('round-trip: blocks → doc → blocks (order + content stable)', () =>
 })
 
 describe('armed-tool insert (pure state transition of ArmedToolPlugin)', () => {
-  it('makeToolBlock builds a fresh Location block; unwired tools throw', () => {
+  it('makeToolBlock builds a fresh, empty block for every wired tool', () => {
     const loc = makeToolBlock('location')
     expect(loc.kind).toBe('location')
     expect((loc as LocationBlock).mode).toBe('plain')
     expect(makeToolBlock('location').id).not.toBe(loc.id) // fresh id each call
-    // Wired kinds build a fresh empty block; not-yet-wired kinds still throw.
+    // All six tools are now wired end-to-end.
     expect(makeToolBlock('person').kind).toBe('person')
     expect(makeToolBlock('time').kind).toBe('time')
     expect(makeToolBlock('link').kind).toBe('link')
-    expect(() => makeToolBlock('flyer')).toThrow()
-    expect(() => makeToolBlock('registration')).toThrow()
+    expect(makeToolBlock('registration').kind).toBe('registration')
+    // Flyer builds an image-less block whose document is blank (uploader fills it).
+    const flyer = makeToolBlock('flyer') as FlyerBlock
+    expect(flyer.kind).toBe('flyer')
+    expect(flyer.document.fileUrl).toBe('')
+    expect(makeToolBlock('flyer').id).not.toBe(flyer.id)
   })
 
   it('arming Location + clicking inserts a location post-block at the click index', () => {
