@@ -1,27 +1,28 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 /**
- * POST /api/user/emails — adding a secondary email (Issue #129).
+ * POST /api/user/emails — adding a secondary email, PersonRecord-only.
  *
- * The fix: the address must be mirrored onto the PersonRecord as a SECONDARY
- * EMAIL# item so it resolves (GSI1) to this person — otherwise the verify/lookup
- * flow can't find the owner and mints a duplicate orphan profile. And attaching
- * an address that already belongs to a DIFFERENT person is a collision (409).
+ * Email is consolidated onto the PersonRecord EMAIL# store (the single system):
+ * the address is written ONLY to the PersonRecord as a SECONDARY item (no legacy
+ * USER# write). Guards: attaching an address that already belongs to a DIFFERENT
+ * person is a collision (409); re-adding an address this person already has is a
+ * duplicate (409).
  */
 
 const h = vi.hoisted(() => ({
   auth: vi.fn(),
   u_getEmails: vi.fn(),
-  u_addEmail: vi.fn(),
   p_getByEmail: vi.fn(),
   p_getAllPersonsByEmail: vi.fn(),
   p_getEmails: vi.fn(),
   p_addEmail: vi.fn(),
+  t_getByPersonAndType: vi.fn(),
 }))
 
 vi.mock('../utils/auth', () => ({ auth: h.auth }))
 vi.mock('@my/app/provider/dynamodb/repositories/user-repository', () => ({
-  userRepository: { getEmails: h.u_getEmails, addEmail: h.u_addEmail },
+  userRepository: { getEmails: h.u_getEmails },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: {
@@ -31,7 +32,9 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
     addEmail: h.p_addEmail,
   },
 }))
-vi.mock('../utils/email/sesClient', () => ({ sendEmail: vi.fn() }))
+vi.mock('@my/app/provider/dynamodb/repositories/token-repository', () => ({
+  tokenRepository: { getByPersonAndType: h.t_getByPersonAndType },
+}))
 vi.mock('../utils/email/public-topics', () => ({ getPublicOptInCount: vi.fn() }))
 
 import { POST } from '../app/api/user/emails/route'
@@ -49,11 +52,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.auth.mockResolvedValue(ME)
   h.u_getEmails.mockResolvedValue({ items: [] })
-  h.u_addEmail.mockResolvedValue(undefined)
   h.p_getByEmail.mockResolvedValue(GORD)
   h.p_getAllPersonsByEmail.mockResolvedValue([]) // address free
   h.p_getEmails.mockResolvedValue([])
-  h.p_addEmail.mockResolvedValue(undefined)
+  h.p_addEmail.mockResolvedValue({ emailId: 'new-email-id', email: 'gord@gmail.com', emailType: 'secondary' })
+  h.t_getByPersonAndType.mockResolvedValue([])
 })
 
 describe('POST /api/user/emails', () => {
@@ -78,31 +81,31 @@ describe('POST /api/user/emails', () => {
     expect(res.status).toBe(400)
   })
 
-  it('mirrors the address onto the PersonRecord as a SECONDARY email', async () => {
+  it('writes the address to the PersonRecord ONLY, as a SECONDARY email', async () => {
     const res = await POST(req({ email: 'Gord@Gmail.com' }))
     expect(res.status).toBe(200)
-    // legacy USER# store still written
-    expect(h.u_addEmail).toHaveBeenCalledTimes(1)
-    // NEW: PersonRecord EMAIL# item written, lowercased, as secondary
+    const body = await res.json()
+    expect(body.emailId).toBe('new-email-id')
+    // PersonRecord EMAIL# item written, lowercased, as secondary
     expect(h.p_addEmail).toHaveBeenCalledTimes(1)
     const [pid, rec] = h.p_addEmail.mock.calls[0]
     expect(pid).toBe('gord-1')
     expect(rec.email).toBe('gord@gmail.com')
     expect(rec.emailType).toBe('secondary')
+    expect(rec.verified).toBe(false)
   })
 
   it('409 when the address already belongs to a DIFFERENT person', async () => {
     h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: 'someone-else' }])
     const res = await POST(req({ email: 'shared@example.com' }))
     expect(res.status).toBe(409)
-    expect(h.u_addEmail).not.toHaveBeenCalled()
     expect(h.p_addEmail).not.toHaveBeenCalled()
   })
 
-  it('does not double-add when the person already has the address', async () => {
-    h.p_getEmails.mockResolvedValue([{ email: 'gord@gmail.com', emailType: 'secondary' }])
+  it('409 when this person already has the address (duplicate)', async () => {
+    h.p_getEmails.mockResolvedValue([{ emailId: 'x', email: 'gord@gmail.com', emailType: 'secondary' }])
     const res = await POST(req({ email: 'gord@gmail.com' }))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(409)
     expect(h.p_addEmail).not.toHaveBeenCalled()
   })
 })

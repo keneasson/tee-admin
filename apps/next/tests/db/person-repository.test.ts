@@ -389,6 +389,128 @@ describe('PersonRepository', () => {
     })
   })
 
+  describe('Email consolidation methods', () => {
+    describe('getEmailById', () => {
+      it('fetches a single EMAIL# row by id', async () => {
+        const mockEmail = {
+          pkey: 'PERSON#p1',
+          skey: 'EMAIL#e1',
+          emailId: 'e1',
+          email: 'a@b.com',
+          emailType: 'secondary',
+        }
+        mockSend.mockResolvedValueOnce({ Item: mockEmail })
+
+        const result = await repository.getEmailById('p1', 'e1')
+
+        expect(result).toEqual(mockEmail)
+        expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
+          type: 'GetCommand',
+          params: expect.objectContaining({
+            TableName: 'tee-admin',
+            Key: { pkey: 'PERSON#p1', skey: 'EMAIL#e1' },
+          }),
+        }))
+      })
+
+      it('returns null when the row is absent', async () => {
+        mockSend.mockResolvedValueOnce({ Item: null })
+        const result = await repository.getEmailById('p1', 'missing')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('setEmailOrder', () => {
+      it('writes order per EMAIL# row matching the given sequence, without touching identity keys', async () => {
+        mockSend
+          .mockResolvedValueOnce({ Attributes: {} }) // update e-a
+          .mockResolvedValueOnce({ Attributes: {} }) // update e-b
+
+        await repository.setEmailOrder('p1', ['e-a', 'e-b'])
+
+        expect(mockSend).toHaveBeenCalledTimes(2)
+
+        const first = mockSend.mock.calls[0][0]
+        expect(first.type).toBe('UpdateCommand')
+        expect(first.params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#e-a' })
+        // order = index 0
+        expect(first.params.ExpressionAttributeNames['#attr0']).toBe('order')
+        expect(first.params.ExpressionAttributeValues[':val0']).toBe(0)
+        // never mutates identity/lookup keys
+        const firstNames = Object.values(first.params.ExpressionAttributeNames)
+        expect(firstNames).not.toContain('primaryEmail')
+        expect(firstNames).not.toContain('gsi1pk')
+
+        const second = mockSend.mock.calls[1][0]
+        expect(second.params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#e-b' })
+        expect(second.params.ExpressionAttributeValues[':val0']).toBe(1)
+      })
+
+      it('is a no-op when the id list is empty', async () => {
+        await repository.setEmailOrder('p1', [])
+        expect(mockSend).not.toHaveBeenCalled()
+      })
+
+      it('reordering a MULTI-email person never touches PROFILE / primaryEmail / gsi1pk (login is preserved)', async () => {
+        // A Recording Brother with several addresses re-preferences them. Reorder is
+        // display-only: it must not become an identity transfer.
+        mockSend
+          .mockResolvedValueOnce({ Attributes: {} }) // e-work
+          .mockResolvedValueOnce({ Attributes: {} }) // e-primary
+          .mockResolvedValueOnce({ Attributes: {} }) // e-personal
+
+        await repository.setEmailOrder('p1', ['e-work', 'e-primary', 'e-personal'])
+
+        expect(mockSend).toHaveBeenCalledTimes(3)
+
+        for (const call of mockSend.mock.calls) {
+          const cmd = call[0]
+          expect(cmd.type).toBe('UpdateCommand')
+          // Never writes the PROFILE row — only EMAIL# rows are reordered.
+          expect(cmd.params.Key.skey).not.toBe('PROFILE')
+          expect(cmd.params.Key.skey.startsWith('EMAIL#')).toBe(true)
+          // Never mutates the identity/login handle or its lookup index.
+          const names = Object.values(cmd.params.ExpressionAttributeNames)
+          expect(names).not.toContain('primaryEmail')
+          expect(names).not.toContain('gsi1pk')
+          expect(names).not.toContain('emailType')
+          expect(names).not.toContain('email')
+          // The only domain field written is `order` (plus base lastUpdated/version bookkeeping).
+          expect(names).toContain('order')
+        }
+      })
+    })
+
+    describe('markEmailVerifiedByAddress', () => {
+      it('sets verified=true on the matching EMAIL# row (secondary works)', async () => {
+        const rows = [
+          { pkey: 'PERSON#p1', skey: 'EMAIL#e1', emailId: 'e1', email: 'primary@x.com', emailType: 'primary', verified: true },
+          { pkey: 'PERSON#p1', skey: 'EMAIL#e2', emailId: 'e2', email: 'second@x.com', emailType: 'secondary', verified: false },
+        ]
+        mockSend
+          .mockResolvedValueOnce({ Items: rows }) // getEmails query
+          .mockResolvedValueOnce({ Attributes: {} }) // update
+
+        await repository.markEmailVerifiedByAddress('p1', 'Second@X.com')
+
+        expect(mockSend).toHaveBeenCalledTimes(2)
+        const update = mockSend.mock.calls[1][0]
+        expect(update.type).toBe('UpdateCommand')
+        expect(update.params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#e2' })
+        const idx = Object.entries(update.params.ExpressionAttributeNames)
+          .find(([, v]) => v === 'verified')?.[0]
+          .replace('#attr', ':val')
+        expect(update.params.ExpressionAttributeValues[idx as string]).toBe(true)
+      })
+
+      it('is idempotent (no update) when the address is not on the person', async () => {
+        mockSend.mockResolvedValueOnce({ Items: [] }) // getEmails query only
+        await repository.markEmailVerifiedByAddress('p1', 'ghost@x.com')
+        expect(mockSend).toHaveBeenCalledTimes(1)
+      })
+    })
+  })
+
   describe('Inter-Ecclesia Rep Methods', () => {
     describe('listInterEcclesiaReps', () => {
       it('should list all inter-ecclesia representatives', async () => {
