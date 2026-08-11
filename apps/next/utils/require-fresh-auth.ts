@@ -13,11 +13,17 @@ import { requireAssurance, isRecentlyAuthenticated, type TrustContext } from './
  *
  * The recency check also closes the pre-#80 "grandfathering" gap: a session with
  * no `authTime` (treated as `authenticated` by getTrust) is NOT recent, so it is
- * forced to step up before it can mutate anything. The window is generous enough
- * that one step-up covers a short editing session without re-challenging on every
- * save.
+ * forced to step up before it can mutate anything.
+ *
+ * Window = 24h ("confirm it's you" at most once per day). One step-up persists on
+ * the session JWT (`authTime`, re-stamped by the jwt callback on every re-auth)
+ * and covers a full day of account edits without re-challenging. This only ever
+ * applies to `authenticated` sessions — a `recognized` bearer (the newsletter
+ * deep-link / a forwarded link) is never "recent" regardless of the window
+ * (isRecentlyAuthenticated requires `authenticated`), so a forwarded link can
+ * never ride a persisted confirmation and always has to step up.
  */
-export const FRESH_AUTH_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+export const FRESH_AUTH_WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export type FreshAuthGate =
   | { ok: true; ctx: TrustContext }
