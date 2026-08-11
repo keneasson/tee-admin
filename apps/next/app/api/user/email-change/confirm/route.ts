@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
 import { sendEmail } from '../../../../../utils/email/sesClient'
-import { maskEmail } from '../../../../../utils/mask-email'
+import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { describeLock, remainingAttempts } from '@my/app/utils/email-change'
@@ -92,30 +92,40 @@ export async function POST(request: NextRequest) {
     // old → recoverable secondary (30-day grace), re-point the login index.
     const { oldEmail } = await personRepository.changePrimaryEmail(person.personId, newEmail)
 
-    // Notify the OLD address — a paper trail + a path to raise the alarm.
+    // Notify the OLD address — a paper trail + a path to raise the alarm. Brand-aware,
+    // and shows the NEW address IN FULL: we're writing to the account owner about
+    // their own change, so masking the very address we just moved them to helps no
+    // one (and the old address stays a valid login for the 30-day grace, so they can
+    // still sign in and undo, or reply to this mail).
     if (oldEmail && oldEmail !== newEmail.toLowerCase()) {
       try {
+        const tenant = getTenantFromHeaders(request.headers) ?? resolveTenantFromEnv()
+        const brandName = tenant.senderDisplayName || tenant.publicName
+        const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
+        const proto =
+          request.headers.get('x-forwarded-proto') ||
+          (host && host.startsWith('localhost') ? 'http' : 'https')
+        const baseUrl = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com')
         await sendEmail({
           to: oldEmail,
-          subject: 'Your login email was changed – TEE Admin',
+          subject: `Your email address on ${brandName} was just changed`,
           body: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color:#333;">Your login email was changed</h2>
-              <p>The login email for your Toronto East account was just changed to <strong>${maskEmail(newEmail)}</strong>.</p>
-              <p>If this was you, no action is needed. This address stays on your account as a secondary for 30 days, then is archived.</p>
-              <p style="color:#b00;"><strong>If this wasn't you</strong>, contact <a href="mailto:${SUPPORT_CONTACT}">${SUPPORT_CONTACT}</a> right away.</p>
+              <p>Your email address on <strong>${brandName}</strong> has just been changed to:
+                 <strong>${newEmail}</strong>.</p>
+              <p>If you didn't make this change, please
+                 <a href="${baseUrl}/profile">sign in and undo it</a>, or reply to this email with
+                 &ldquo;I didn't make this change&rdquo;.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-              <p style="color:#999; font-size:12px;">Toronto East Christadelphian Ecclesia</p>
+              <p style="color:#999; font-size:12px;">${brandName}</p>
             </div>
           `,
           textBody: [
-            'Your login email was changed',
+            `Your email address on ${brandName} has just been changed to: ${newEmail}`,
             '',
-            `The login email for your Toronto East account was just changed to ${maskEmail(newEmail)}.`,
-            'If this was you, no action is needed. This address stays on your account as a secondary for 30 days, then is archived.',
-            `If this wasn't you, contact ${SUPPORT_CONTACT} right away.`,
+            `If you didn't make this change, sign in and undo it (${baseUrl}/profile), or reply to this email with "I didn't make this change".`,
             '',
-            'Toronto East Christadelphian Ecclesia',
+            brandName,
           ].join('\n'),
         })
       } catch (e) {
