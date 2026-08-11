@@ -176,6 +176,13 @@ export async function GET() {
       console.error('Surface RB ecclesia email failed (non-fatal):', rbErr)
     }
 
+    // Display order: primary (login) ALWAYS first, then active secondaries in their
+    // saved order, then retired (demoted former-primary) last. The array is already
+    // in `order` sequence, and Array#sort is stable, so ranking by group preserves
+    // the within-group order (a change-email tie left retired sitting first).
+    const rank = (e: ClientEmail) => (e.isPrimary ? 0 : e.retired ? 2 : 1)
+    emails.sort((a, b) => rank(a) - rank(b))
+
     return NextResponse.json({ success: true, emails })
   } catch (error) {
     console.error('Get emails error:', error)
