@@ -88,6 +88,28 @@ export const Button = styled(TamaguiButton, {
         pressStyle: { opacity: 0.8 },
       },
 
+      // Navigation link treatment — NO chrome. Transparent fill, no border, link-like
+      // text. Exists so navigation reuses the shared Button (for consistent press/focus/
+      // sizing) WITHOUT inheriting the neutral default's surface+border, which made nav
+      // links read as boxed buttons. Callers still layer their own active-state fill and
+      // hover background inline; those props win over this variant.
+      chromeless: {
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        borderWidth: 0,
+        color: '$color',
+        hoverStyle: {
+          opacity: 1,
+          backgroundColor: '$backgroundHover',
+          borderColor: 'transparent',
+        },
+        pressStyle: {
+          opacity: 1,
+          backgroundColor: '$backgroundPress',
+          borderColor: 'transparent',
+        },
+      },
+
       // Quiet, bordered choice — transparent fill, neutral border+text, subtle fill on hover.
       outlined: {
         backgroundColor: 'transparent',
