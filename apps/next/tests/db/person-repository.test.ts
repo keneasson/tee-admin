@@ -643,4 +643,51 @@ describe('PersonRepository', () => {
       expect(setFields(calls[4]).primaryEmail).toBe('new@example.com')
     })
   })
+
+  describe('email retire grace + undo', () => {
+    it('EMAIL_DEMOTE_GRACE_MS is 30 days', () => {
+      expect(PersonRepository.EMAIL_DEMOTE_GRACE_MS).toBe(30 * 24 * 60 * 60 * 1000)
+    })
+
+    it('undoEmailRetire clears archiveAfter via a REMOVE expression on the secondary row', async () => {
+      mockSend
+        .mockResolvedValueOnce({
+          Item: {
+            pkey: 'PERSON#p1',
+            skey: 'EMAIL#e1',
+            emailId: 'e1',
+            email: 'old@example.com',
+            emailType: 'secondary',
+            archiveAfter: '2099-01-01T00:00:00.000Z',
+          },
+        }) // getEmailById
+        .mockResolvedValueOnce({}) // REMOVE update
+
+      await repository.undoEmailRetire('p1', 'e1')
+
+      expect(mockSend).toHaveBeenCalledTimes(2)
+      const update = mockSend.mock.calls[1][0]
+      expect(update.type).toBe('UpdateCommand')
+      expect(update.params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#e1' })
+      // The attribute is REMOVEd (not set to null/undefined, which the base helper
+      // would silently drop — leaving the stale timestamp in place).
+      expect(update.params.UpdateExpression).toContain('REMOVE archiveAfter')
+    })
+
+    it('undoEmailRetire throws when the row is missing (no write)', async () => {
+      mockSend.mockResolvedValueOnce({ Item: null }) // getEmailById → not found
+
+      await expect(repository.undoEmailRetire('p1', 'missing')).rejects.toThrow(/not found/i)
+      expect(mockSend).toHaveBeenCalledTimes(1)
+    })
+
+    it('undoEmailRetire refuses to touch the primary login row (no write)', async () => {
+      mockSend.mockResolvedValueOnce({
+        Item: { pkey: 'PERSON#p1', skey: 'EMAIL#e1', emailId: 'e1', email: 'me@example.com', emailType: 'primary' },
+      }) // getEmailById → primary
+
+      await expect(repository.undoEmailRetire('p1', 'e1')).rejects.toThrow(/primary/i)
+      expect(mockSend).toHaveBeenCalledTimes(1)
+    })
+  })
 })

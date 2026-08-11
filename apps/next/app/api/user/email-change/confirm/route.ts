@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // The identity transfer itself (PersonRecords): promote new → primary, demote
-    // old → recoverable secondary (14-day grace), re-point the login index.
+    // old → recoverable secondary (30-day grace), re-point the login index.
     const { oldEmail } = await personRepository.changePrimaryEmail(person.personId, newEmail)
 
     // Notify the OLD address — a paper trail + a path to raise the alarm.
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color:#333;">Your login email was changed</h2>
               <p>The login email for your Toronto East account was just changed to <strong>${maskEmail(newEmail)}</strong>.</p>
-              <p>If this was you, no action is needed. This address stays on your account as a secondary for 14 days, then is archived.</p>
+              <p>If this was you, no action is needed. This address stays on your account as a secondary for 30 days, then is archived.</p>
               <p style="color:#b00;"><strong>If this wasn't you</strong>, contact <a href="mailto:${SUPPORT_CONTACT}">${SUPPORT_CONTACT}</a> right away.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
               <p style="color:#999; font-size:12px;">Toronto East Christadelphian Ecclesia</p>
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
             'Your login email was changed',
             '',
             `The login email for your Toronto East account was just changed to ${maskEmail(newEmail)}.`,
-            'If this was you, no action is needed. This address stays on your account as a secondary for 14 days, then is archived.',
+            'If this was you, no action is needed. This address stays on your account as a secondary for 30 days, then is archived.',
             `If this wasn't you, contact ${SUPPORT_CONTACT} right away.`,
             '',
             'Toronto East Christadelphian Ecclesia',

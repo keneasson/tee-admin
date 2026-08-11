@@ -13,6 +13,8 @@ import {
   Star,
   Shield,
   X,
+  Info,
+  RotateCcw,
 } from '@tamagui/lucide-icons'
 import { moveEmailToFront } from './email-ordering'
 
@@ -27,6 +29,13 @@ export interface EmailEntry {
   /** A role this address represents (e.g. "Recording Brother"). Rendered read-only
    *  with a badge — it's managed elsewhere (ecclesia/RB settings), not editable here. */
   roleLabel?: string
+  /** A former-primary a login-email change demoted to a recoverable secondary.
+   *  Rendered as a "Retired" badge with an Undo affordance instead of the normal
+   *  controls, restorable until `retiredUntil`. */
+  retired?: boolean
+  /** When the retired address is eligible for archiving (ISO-8601). Drives the
+   *  "restore for N more days" copy. */
+  retiredUntil?: string
   // NOTE: `subscribed`/`subscriptionCount` used to render here; subscriptions now
   // live in their own tab. Kept optional so the API payload still type-checks.
   subscribed?: boolean
@@ -49,6 +58,8 @@ interface EmailManagerProps {
   onSetLogin: (email: string) => void
   /** Change the login/primary address (secure flow). */
   onChangeLogin: () => void
+  /** Restore a retired (demoted former-primary) address to a permanent secondary. */
+  onUndoRetire?: (emailId: string) => void | Promise<void>
   /**
    * Whether the secure change-login flow is available to this session (the
    * SECURE_EMAIL_CHANGE launch-dark flag). Gates the "Set as login" menu item and
@@ -66,6 +77,14 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+// Whole days from now until an ISO instant, floored at 0 (for the "restore for N
+// more days" copy on a retired address).
+function daysUntil(iso?: string): number {
+  if (!iso) return 0
+  const ms = new Date(iso).getTime() - Date.now()
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+}
+
 export const EmailManager: React.FC<EmailManagerProps> = ({
   emails,
   onAddEmail,
@@ -74,11 +93,13 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
   onSetPreferred,
   onSetLogin,
   onChangeLogin,
+  onUndoRetire,
   canChangeLogin,
   readOnly = false,
 }) => {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [openInfoId, setOpenInfoId] = useState<string | null>(null)
 
   // Inline "add a new address" editor (revealed by the Add button).
   const [adding, setAdding] = useState(false)
@@ -160,11 +181,12 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
           {emails.map((entry, index) => {
             const isLogin = !!entry.isPrimary
             const isRole = !!entry.roleLabel // e.g. Recording Brother — read-only
-            const isPreferred = index === 0 && !isRole
+            const isRetired = !!entry.retired // demoted former-primary — restorable
+            const isPreferred = index === 0 && !isRole && !isRetired
             const isEditing = editingId === entry.id
             const rowBusy = busyId === entry.id
-            const showMenu = !readOnly && entry.verified && !isLogin && !isRole
-            const canRename = !readOnly && !isLogin && !isRole
+            const showMenu = !readOnly && entry.verified && !isLogin && !isRole && !isRetired
+            const canRename = !readOnly && !isLogin && !isRole && !isRetired
 
             return (
               <Card
@@ -205,6 +227,63 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                     >
                       Save
                     </Button>
+                  </XStack>
+                ) : isRetired ? (
+                  // Retired (demoted former-primary) row: a Retired badge + an ⓘ
+                  // that explains the grace window, plus Undo. None of the normal
+                  // trash / verify / preferred / menu controls apply here.
+                  <XStack gap="$2" alignItems="flex-start">
+                    <XStack width={GUTTER} />
+                    <YStack flex={1} gap="$1" minWidth={0}>
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                        <Text fontSize="$4" fontWeight="500" color="$color11">
+                          {entry.email || 'No email'}
+                        </Text>
+                        <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
+                          <Text fontSize="$1" color="$gray11">Retired</Text>
+                        </Card>
+                        <Popover
+                          size="$3"
+                          allowFlip
+                          open={openInfoId === entry.id}
+                          onOpenChange={(open) => setOpenInfoId(open ? entry.id : null)}
+                        >
+                          <Popover.Trigger asChild>
+                            <Button
+                              size="$1"
+                              circular
+                              chromeless
+                              icon={Info}
+                              aria-label="Why is this address retired?"
+                            />
+                          </Popover.Trigger>
+                          <Popover.Content
+                            bordered
+                            elevate
+                            padding="$3"
+                            maxWidth={260}
+                            enterStyle={{ y: -6, opacity: 0 }}
+                            exitStyle={{ y: -6, opacity: 0 }}
+                            animation="quick"
+                          >
+                            <Text fontSize="$2" color="$color11">
+                              {`Changed by mistake? You can restore this address for ${daysUntil(entry.retiredUntil)} more ${daysUntil(entry.retiredUntil) === 1 ? 'day' : 'days'}.`}
+                            </Text>
+                          </Popover.Content>
+                        </Popover>
+                      </XStack>
+                    </YStack>
+                    {readOnly || !onUndoRetire ? null : (
+                      <Button
+                        size="$2"
+                        variant="outlined"
+                        icon={rowBusy ? <Spinner size="small" /> : RotateCcw}
+                        onPress={() => run(entry.id, () => onUndoRetire(entry.id))}
+                        disabled={rowBusy}
+                      >
+                        Undo
+                      </Button>
+                    )}
                   </XStack>
                 ) : (
                   <XStack gap="$2" alignItems="flex-start">
