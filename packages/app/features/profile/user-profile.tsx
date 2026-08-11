@@ -36,6 +36,13 @@ interface UserProfileProps {
   onChangeLogin?: () => void
   /** Launch the secure change-login flow pre-filled with an already-verified address. */
   onSetLogin?: (email: string) => void
+  /**
+   * Monotonic counter the platform layer bumps to force a re-fetch of the profile
+   * lists (e.g. after a login-email promote, so the new address shows as "Login"
+   * and the old one as "Retired"). Changing the value re-runs `fetchData`; the
+   * initial 0 is ignored so it never double-fetches on mount.
+   */
+  reloadSignal?: number
 }
 
 interface Address {
@@ -103,6 +110,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   canChangeLogin = false,
   onChangeLogin,
   onSetLogin,
+  reloadSignal = 0,
 }) => {
   const [loading, setLoading] = useState(true)
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -217,6 +225,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Re-fetch when the platform layer bumps reloadSignal (e.g. after a login-email
+  // promote). Skip the initial 0 so this never double-fetches on mount.
+  useEffect(() => {
+    if (reloadSignal > 0) fetchData()
+  }, [reloadSignal, fetchData])
 
   // Address handlers
   const handleAddAddress = async (address: Omit<Address, 'addressId'>) => {

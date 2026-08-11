@@ -17,8 +17,9 @@ export default function ProfilePage() {
 
   // Holds the mutation to re-run once a fresh-auth step-up (403 stepUpRequired
   // from require-fresh-auth) is satisfied via <Verify>. Wrapped in an object so a
-  // function value isn't mistaken for a state updater.
-  const [stepUp, setStepUp] = useState<{ retry: () => void } | null>(null)
+  // function value isn't mistaken for a state updater. `reason` tailors the
+  // <Verify> prompt (defaults to the generic account-changes copy).
+  const [stepUp, setStepUp] = useState<{ retry: () => void; reason?: string } | null>(null)
 
   // Is the secure change-login flow (SECURE_EMAIL_CHANGE) available to this
   // session? Probed once server-side; drives whether the "Set as login" menu item
@@ -33,9 +34,55 @@ export default function ProfilePage() {
     return () => { cancelled = true }
   }, [])
 
-  // Launch state for the secure change-login flow. `email` pre-fills the flow when
-  // promoting an already-verified address ("Set as login").
+  // Launch state for the secure change-login flow (full, code-based) — used only
+  // for the login-row pencil (changing to a brand-NEW address).
   const [changeLogin, setChangeLogin] = useState<{ open: boolean; email?: string }>({ open: false })
+
+  // Bumped after a successful promote to make UserProfile re-fetch its lists so the
+  // newly-promoted address shows as "Login" and the old one as "Retired".
+  const [reloadSignal, setReloadSignal] = useState(0)
+
+  // Brief, auto-dismissing confirmation/error banner for the verified-address
+  // fast-path ("Set as login" on an already-verified secondary).
+  const [promoteNotice, setPromoteNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!promoteNotice) return
+    const t = setTimeout(() => setPromoteNotice(null), 5000)
+    return () => clearTimeout(t)
+  }, [promoteNotice])
+
+  // Fast-path: promote an ALREADY-VERIFIED secondary address straight to the login
+  // identity — no confirmation code. On a 403 step-up we mount <Verify> and re-run
+  // the same POST on success. The user is NOT signed out (the old address stays a
+  // valid secondary, so the session keeps resolving).
+  const promoteToLogin = (email: string) => {
+    const run = async () => {
+      try {
+        const res = await fetch('/api/user/email-change/promote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        if (res.ok) {
+          setReloadSignal((n) => n + 1)
+          setPromoteNotice(`${email} is now your login email.`)
+          return
+        }
+        if (res.status === 403) {
+          const body = await res.clone().json().catch(() => ({} as any))
+          if (body?.stepUpRequired) {
+            setStepUp({ retry: run, reason: 'to change your login email' })
+            return
+          }
+        }
+        const body = await res.json().catch(() => ({} as any))
+        setPromoteNotice(body?.error || 'Could not change your login email.')
+      } catch {
+        setPromoteNotice('Network error — please try again.')
+      }
+    }
+    void run()
+  }
 
   if (!isHydrated || status === 'loading') {
     return (
@@ -73,11 +120,30 @@ export default function ProfilePage() {
         onStepUpRequired={(retry) => setStepUp({ retry })}
         canChangeLogin={canChangeLogin}
         onChangeLogin={() => setChangeLogin({ open: true })}
-        onSetLogin={(email) => setChangeLogin({ open: true, email })}
+        onSetLogin={(email) => promoteToLogin(email)}
+        reloadSignal={reloadSignal}
       />
 
-      {/* Secure login-email change — launched from the login-row pencil or the
-          per-address "Set as login" menu item; rendered as a modal overlay.
+      {/* Fast-path confirmation / error banner (auto-dismisses). */}
+      {promoteNotice ? (
+        <YStack
+          position="absolute"
+          top="$4"
+          left={0}
+          right={0}
+          zIndex={1100}
+          alignItems="center"
+          pointerEvents="none"
+        >
+          <Card elevate bordered padding="$3" backgroundColor="$background" maxWidth={480}>
+            <Text fontSize="$3">{promoteNotice}</Text>
+          </Card>
+        </YStack>
+      ) : null}
+
+      {/* Secure login-email change (full, code-based) — launched from the login-row
+          pencil to move to a brand-NEW address; rendered as a modal overlay.
+          (Promoting an already-verified secondary uses the no-code fast-path above.)
           Self-hides internally unless SECURE_EMAIL_CHANGE is on. */}
       {changeLogin.open ? (
         <YStack
@@ -118,7 +184,7 @@ export default function ProfilePage() {
         >
           <Card elevate bordered padding="$4" maxWidth={440} width="100%" backgroundColor="$background">
             <Verify
-              reason="to make account changes"
+              reason={stepUp.reason ?? 'to make account changes'}
               onVerified={() => {
                 const { retry } = stepUp
                 setStepUp(null)
