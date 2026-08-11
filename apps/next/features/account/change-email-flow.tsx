@@ -49,15 +49,30 @@ interface ChangeEmailFlowProps {
 export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps = {}) {
   const isHydrated = useHydrated()
 
-  // Launch-dark visibility resolved per session server-side (the client flag hook
-  // is presence-based and can't gate this). Null = not yet known → render nothing.
+  // Launch-dark visibility + current step-up freshness, resolved per session
+  // server-side (the client flag hook is presence-based and can't gate this).
+  // Null = not yet known → render nothing.
   const [available, setAvailable] = useState<boolean | null>(null)
+  const [freshAuth, setFreshAuth] = useState<boolean | null>(null)
+  // Escalate-first: a low-trust visitor (e.g. arrived via a newsletter deep-link)
+  // proves the ORIGIN up front, so the new-email form is only ever shown to a
+  // freshly-confirmed operator. True once that step-up is done OR the session was
+  // already fresh.
+  const [preAuthDone, setPreAuthDone] = useState(false)
   useEffect(() => {
     let cancelled = false
     fetch('/api/user/email-change/available')
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setAvailable(!!d?.available) })
-      .catch(() => { if (!cancelled) setAvailable(false) })
+      .then((d) => {
+        if (cancelled) return
+        setAvailable(!!d?.available)
+        setFreshAuth(!!d?.freshAuth)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAvailable(false)
+        setFreshAuth(false)
+      })
     return () => { cancelled = true }
   }, [])
 
@@ -166,6 +181,22 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
 
   if (!isHydrated || available !== true) return null
 
+  // Escalate-first (untrusted flow): confirm the ORIGIN before the new-email form,
+  // so we never ask a not-yet-verified visitor to "enter a new email" first and
+  // then surprise them with a step-up. Once fresh, the form below is confident —
+  // the only remaining proof is the code we send to the new address.
+  if (freshAuth === false && !preAuthDone) {
+    return (
+      <Card elevate bordered padding="$4" gap="$3">
+        <Verify
+          reason="to change your login email"
+          onVerified={() => setPreAuthDone(true)}
+          onCancel={onClose ?? (() => setPreAuthDone(false))}
+        />
+      </Card>
+    )
+  }
+
   // A step-up challenge takes over the whole card until it resolves or cancels.
   if (stepUp) {
     return (
@@ -191,7 +222,8 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
         <YStack gap="$2" flex={1}>
           <Heading size="$6" color="$color12">Change your login email</Heading>
           <Paragraph color="$color11">
-            Changing your email is simple if you can receive one more email — at your new address.
+            Changing your email is simple. Enter your new email and we’ll send a short code to it —
+            enter that code to verify the new address, and we’ll update your records.
           </Paragraph>
         </YStack>
         {onClose ? (
