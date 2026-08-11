@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { signOut } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Verify } from '@/components/verify/verify'
 import {
@@ -84,7 +83,6 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
   const [locked, setLocked] = useState<{ permanent: boolean; lockedUntil: number | null } | null>(null)
   const [doneMessage, setDoneMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [signingOut, setSigningOut] = useState(false)
 
   // When the server demands a fresh step-up, we mount <Verify>; on success it
   // fires `stepUp` (the retry that re-runs the mutation that was challenged).
@@ -154,21 +152,12 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
         setError(data?.error || 'That code has expired or was already used. Start again to get a new one.')
         return
       }
-      setDoneMessage(data.message || 'Your login email has been changed. Please sign in again with your new address.')
+      setDoneMessage(data.message || 'Your login email has been updated. You’re still signed in — nothing else to do.')
       setStep('done')
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleSignOut = async () => {
-    setSigningOut(true)
-    try {
-      await signOut({ redirect: false })
-    } finally {
-      window.location.href = '/auth/signin'
     }
   }
 
@@ -233,7 +222,7 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
             circular
             aria-label="Close"
             onPress={onClose}
-            disabled={loading || signingOut}
+            disabled={loading}
           >
             ✕
           </Button>
@@ -260,10 +249,8 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
           <Button
             onPress={startChange}
             size="$4"
+            variant="action"
             disabled={loading || !newEmail.includes('@')}
-            backgroundColor="$blue10"
-            color="white"
-            hoverStyle={{ backgroundColor: '$blue11' }}
           >
             {loading ? 'Sending…' : 'Send confirmation code'}
           </Button>
@@ -284,14 +271,14 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
               setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))
               setError('')
             }}
-            placeholder="ABC234"
+            placeholder="------"
             autoCapitalize="characters"
             autoComplete="one-time-code"
             maxLength={6}
             textAlign="center"
             fontFamily="$mono"
-            fontSize="$8"
-            letterSpacing={8}
+            fontSize="$9"
+            letterSpacing={12}
             size="$5"
           />
           {error ? <Paragraph color="$red10">{error}</Paragraph> : null}
@@ -305,10 +292,8 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
           <Button
             onPress={confirmChange}
             size="$4"
+            variant="action"
             disabled={loading || code.length !== 6 || !!locked}
-            backgroundColor="$blue10"
-            color="white"
-            hoverStyle={{ backgroundColor: '$blue11' }}
           >
             {loading ? 'Confirming…' : 'Confirm change'}
           </Button>
@@ -321,7 +306,7 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
               cursor="pointer"
               onPress={resetToEmail}
             >
-              Use a different email
+              ← Re-enter your new email
             </Text>
           </XStack>
         </YStack>
@@ -330,15 +315,8 @@ export function ChangeEmailFlow({ initialEmail, onClose }: ChangeEmailFlowProps 
       {step === 'done' ? (
         <YStack gap="$3">
           <Paragraph color="$color12">{doneMessage}</Paragraph>
-          <Button
-            onPress={handleSignOut}
-            size="$4"
-            disabled={signingOut}
-            backgroundColor="$blue10"
-            color="white"
-            hoverStyle={{ backgroundColor: '$blue11' }}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out and sign in again'}
+          <Button onPress={onClose ?? (() => {})} size="$4" variant="action">
+            Done
           </Button>
         </YStack>
       ) : null}

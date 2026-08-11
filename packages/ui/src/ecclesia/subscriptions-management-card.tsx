@@ -385,12 +385,7 @@ export function SubscriptionsManagementCard({
                           Plus
                         )
                       }
-                      backgroundColor="$blue10"
-                      color="white"
-                      borderColor="$blue10"
-                      borderWidth={1}
-                      hoverStyle={{ backgroundColor: '$blue11', borderColor: '$blue11' }}
-                      pressStyle={{ backgroundColor: '$blue9' }}
+                      variant="action"
                       onPress={handleAdd}
                       disabled={adding || !newPublisher}
                     >
