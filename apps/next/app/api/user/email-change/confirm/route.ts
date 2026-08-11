@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       newEmail,
-      message: 'Your login email has been changed. Please sign in again with your new address.',
+      message: 'Your login email has been updated. You’re still signed in — nothing else to do.',
     })
   } catch (error) {
     console.error('email-change/confirm error:', error)
