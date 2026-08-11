@@ -137,6 +137,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           <ThemeToggle onThemeChange={setTheme} />
           {/* Close button for mobile */}
           {media.sm ? <Button
+              variant="chromeless"
               size="$3"
               circular
               icon={X}
@@ -150,6 +151,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       <ScrollView flex={1} showsVerticalScrollIndicator={true}>
         <YStack gap="$3" paddingBottom="$4">
       {user ? <Button
+          variant="chromeless"
           onPress={navigateTo('/profile')}
           backgroundColor={colors.backgroundTertiary}
           padding="$2"
@@ -200,6 +202,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         </Text>
         {pages.map((page) => (
           <Button
+            variant="chromeless"
             key={page.path}
             onPress={navigateTo(page.path)}
             backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
@@ -237,6 +240,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             </Text>
             {emailAdminPages.map((page) => (
               <Button
+                variant="chromeless"
                 key={page.path}
                 onPress={navigateTo(page.path)}
                 backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
@@ -279,6 +283,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               const isActive = currentPath?.startsWith(page.path) ?? false
               return (
               <Button
+                variant="chromeless"
                 key={page.path}
                 onPress={navigateTo(page.path)}
                 backgroundColor={isActive ? colors.primary : 'transparent'}
@@ -323,6 +328,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             </Text>
             {contentManagerPages.map((page) => (
               <Button
+                variant="chromeless"
                 key={page.path}
                 onPress={navigateTo(page.path)}
                 backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
@@ -362,6 +368,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             </Text>
             {systemAdminPages.map((page) => (
               <Button
+                variant="chromeless"
                 key={page.path}
                 onPress={navigateTo(page.path)}
                 backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
@@ -401,6 +408,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             </Text>
             {brandAdminPages.map((page) => (
               <Button
+                variant="chromeless"
                 key={page.path}
                 onPress={navigateTo(page.path)}
                 backgroundColor={currentPath === page.path ? colors.primary : 'transparent'}
@@ -460,6 +468,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               />
             ) : null}
             <Button
+              variant="chromeless"
               size="$3"
               circular
               icon={Menu}
