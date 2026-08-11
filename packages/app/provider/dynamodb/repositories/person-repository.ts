@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
-import { QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient, tableNames } from '../config'
 import type {
@@ -430,7 +430,39 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /** Default grace before a demoted former-primary email may be archived. */
-  static readonly EMAIL_DEMOTE_GRACE_MS = 14 * 24 * 60 * 60 * 1000
+  static readonly EMAIL_DEMOTE_GRACE_MS = 30 * 24 * 60 * 60 * 1000
+
+  /**
+   * Undo the "retire" of a demoted former-primary email: clear its `archiveAfter`
+   * so it becomes a permanent secondary again (the mistake-recovery path behind
+   * the Retired ⓘ / Undo affordance). Restorative and low-risk — callers gate on
+   * session only, no fresh step-up.
+   *
+   * NOTE on the clear mechanism: the base `update()` helper builds a SET-only
+   * expression and drops `undefined`/`null` values, so it CANNOT remove an
+   * attribute — passing `archiveAfter: undefined` would silently leave the stale
+   * timestamp in place. We therefore issue a direct UpdateCommand with a REMOVE
+   * clause (mirroring how `countByEcclesia` drops to a raw command), which is the
+   * only way to actually delete the attribute in DynamoDB.
+   */
+  async undoEmailRetire(personId: string, emailId: string): Promise<void> {
+    const row = await this.getEmailById(personId, emailId)
+    if (!row) {
+      throw new Error(`Email ${emailId} not found for person ${personId}`)
+    }
+    if (row.emailType === 'primary') {
+      throw new Error('Cannot restore the primary login email — it is not retired')
+    }
+
+    const command = new UpdateCommand({
+      TableName: this.tableName,
+      Key: { pkey: `PERSON#${personId}`, skey: `EMAIL#${emailId}` },
+      UpdateExpression: 'REMOVE archiveAfter SET #lastUpdated = :lastUpdated',
+      ExpressionAttributeNames: { '#lastUpdated': 'lastUpdated' },
+      ExpressionAttributeValues: { ':lastUpdated': new Date().toISOString() },
+    })
+    await docClient.send(command)
+  }
 
   /**
    * Change a person's LOGIN email (identity transfer). Re-points the single

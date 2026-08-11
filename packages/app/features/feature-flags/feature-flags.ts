@@ -54,11 +54,12 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
   },
   [FEATURE_FLAGS.SECURE_EMAIL_CHANGE]: {
     // Launch-dark security feature. Read server-side with the request session; the
-    // email-change/start + confirm routes 404 while this is 'off', so the endpoints
-    // stay invisible until deliberately enabled. Default 'off' → disabled for
-    // everyone, including owner.
+    // email-change/start + confirm + undo routes 404 while this is 'off', so the
+    // endpoints stay invisible until deliberately enabled. Now 'owner' so it can be
+    // exercised in prod behind the flag (still dark for everyone else, including
+    // admins and members).
     description: 'Secure self-serve login-email change (fresh-auth step-up + confirmation code)',
-    visibleTo: 'off',
+    visibleTo: 'owner',
     users: [],
   },
 }

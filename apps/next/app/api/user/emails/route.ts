@@ -56,6 +56,14 @@ export async function GET() {
       isPrimary?: boolean
       /** A role this address represents (e.g. Recording Brother) — shown read-only. */
       roleLabel?: string
+      /**
+       * A former-primary that a login-email change demoted to a recoverable
+       * secondary. True only while its `archiveAfter` grace window is still in the
+       * future — the UI shows a Retired badge + Undo instead of the normal controls.
+       */
+      retired?: boolean
+      /** The instant the retired address is eligible for archiving (= archiveAfter). */
+      retiredUntil?: string
     }
 
     let emails: ClientEmail[] = []
@@ -107,18 +115,30 @@ export async function GET() {
       }
 
       const sorted = [...personEmails].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      const now = Date.now()
       emails = await Promise.all(
-        sorted.map(async (email) => ({
-          id: email.emailId,
-          email: email.email,
-          verified: email.verified,
-          verificationSentAt: pendingByEmail.get(email.email.toLowerCase()),
-          subscribed: email.sesSubscribed,
-          // How many public mailing lists this address is opted into (verified
-          // addresses only — no point querying SES for an unverified one).
-          subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
-          isPrimary: email.emailType === 'primary',
-        }))
+        sorted.map(async (email) => {
+          // "Retired" = a demoted former-primary still inside its archiveAfter grace
+          // window (a login-email change put it here). The primary itself never
+          // carries archiveAfter, so it can never read as retired.
+          const isRetired =
+            email.emailType !== 'primary' &&
+            !!email.archiveAfter &&
+            new Date(email.archiveAfter).getTime() > now
+          return {
+            id: email.emailId,
+            email: email.email,
+            verified: email.verified,
+            verificationSentAt: pendingByEmail.get(email.email.toLowerCase()),
+            subscribed: email.sesSubscribed,
+            // How many public mailing lists this address is opted into (verified
+            // addresses only — no point querying SES for an unverified one).
+            subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
+            isPrimary: email.emailType === 'primary',
+            retired: isRetired,
+            retiredUntil: isRetired ? email.archiveAfter : undefined,
+          }
+        })
       )
     }
 

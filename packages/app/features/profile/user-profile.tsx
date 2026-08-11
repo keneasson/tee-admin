@@ -335,6 +335,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     await handledStepUp(res, () => { void handleSendVerification(emailId) })
   }
 
+  // Restore a retired (demoted former-primary) address to a permanent secondary.
+  // Low-friction/session-gated on the server (no fresh step-up), but the 403 path
+  // is still routed for symmetry with the other mutations.
+  const handleUndoRetire = async (emailId: string) => {
+    const res = await fetch('/api/user/email-change/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailId }),
+    })
+    if (res.ok) {
+      await fetchData()
+      return
+    }
+    await handledStepUp(res, () => { void handleUndoRetire(emailId) })
+  }
+
   // Phone handlers for PhoneManager — each saves in place against the granular
   // phones endpoints, then refetches. A 403 { stepUpRequired } is routed through
   // the platform step-up mechanism (mirroring the email handlers) rather than
@@ -887,6 +903,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onSetPreferred={handleSetPreferred}
                   onSetLogin={(email) => onSetLogin?.(email)}
                   onChangeLogin={() => onChangeLogin?.()}
+                  onUndoRetire={handleUndoRetire}
                   canChangeLogin={canChangeLogin}
                 />
                 <Separator />
