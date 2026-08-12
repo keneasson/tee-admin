@@ -38,9 +38,6 @@ function OtpCallbackContent() {
   const [error, setError] = useState('')
 
   const token = searchParams?.get('token') ?? ''
-  // Display-only hint of who the link is for. The address actually used for
-  // sign-in comes from server-side token verification, never from this param.
-  const emailHint = searchParams?.get('email') ?? ''
 
   // IMPORTANT: no auto-submit on load. Consumption happens only in this
   // handler, which fires from the Confirm button's onPress (a human click).
@@ -110,14 +107,8 @@ function OtpCallbackContent() {
             Confirm sign-in
           </Heading>
           <Paragraph color="$color11" textAlign="center">
-            Click the button below to finish signing in
-            {emailHint ? ' as' : '.'}
+            Click the button below to finish signing in.
           </Paragraph>
-          {emailHint ? (
-            <Text fontWeight="700" fontSize="$5" color="$color12" textAlign="center">
-              {emailHint}
-            </Text>
-          ) : null}
           <Button
             onPress={handleConfirm}
             size="$4"

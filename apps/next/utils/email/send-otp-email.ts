@@ -37,14 +37,13 @@ export async function sendOtpEmail(
     opts.redirectPath && opts.redirectPath.startsWith('/') && !opts.redirectPath.startsWith('//')
       ? `&redirect=${encodeURIComponent(opts.redirectPath)}`
       : ''
-  // Display-only hint so the confirm page can show who the link is for. The
-  // address actually used to sign in comes from server-side token
-  // verification, not this param. The token is what's secret, not the email.
-  const emailHint = `&email=${encodeURIComponent(email)}`
   // Lands on a "Confirm sign-in" page that only consumes the single-use token
   // on an explicit human click — so email link-scanners that pre-fetch (GET)
   // the URL can't burn it before the user clicks (the "took two tries" bug).
-  const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}${redirect}${emailHint}`
+  // The email is deliberately NOT in the URL: it would leak a member address into
+  // server logs / browser history / referrer headers. The recipient already knows
+  // whose inbox it is; the token is the only secret the link needs to carry.
+  const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}${redirect}`
 
   const subject = `Your ${brandName} verification code`
 
