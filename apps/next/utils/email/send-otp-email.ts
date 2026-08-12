@@ -37,6 +37,12 @@ export async function sendOtpEmail(
     opts.redirectPath && opts.redirectPath.startsWith('/') && !opts.redirectPath.startsWith('//')
       ? `&redirect=${encodeURIComponent(opts.redirectPath)}`
       : ''
+  // Lands on a "Confirm sign-in" page that only consumes the single-use token
+  // on an explicit human click — so email link-scanners that pre-fetch (GET)
+  // the URL can't burn it before the user clicks (the "took two tries" bug).
+  // The email is deliberately NOT in the URL: it would leak a member address into
+  // server logs / browser history / referrer headers. The recipient already knows
+  // whose inbox it is; the token is the only secret the link needs to carry.
   const magicLinkUrl = `${baseUrl}/auth/otp-callback?token=${magicLinkToken}${redirect}`
 
   const subject = `Your ${brandName} verification code`
@@ -65,13 +71,13 @@ export async function sendOtpEmail(
           </div>
 
           <p style="color: #666; line-height: 1.6; text-align: center;">
-            Or click this link to verify automatically:
+            Or use this link to sign in:
           </p>
 
           <div style="text-align: center; margin: 20px 0;">
             <a href="${magicLinkUrl}"
                style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-              Verify Email Address
+              Sign in
             </a>
           </div>
 
@@ -103,7 +109,7 @@ Enter this code to verify your email address:
 
 ${otpCode}
 
-Or visit this link to verify automatically:
+Or use this link to sign in:
 ${magicLinkUrl}
 
 This code expires in 10 minutes. If you didn't request this code, you can safely ignore this email.
