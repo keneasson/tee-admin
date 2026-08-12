@@ -1,6 +1,9 @@
 import { BaseRepository } from './base-repository'
 import type { FeatureFlagRecord } from '../types'
-import type { FeatureFlagConfig } from '@my/app/features/feature-flags/feature-flags'
+import {
+  DEFAULT_FEATURE_FLAG_CONFIGS,
+  type FeatureFlagConfig,
+} from '@my/app/features/feature-flags/feature-flags'
 
 const CACHE_TTL_MS = 60 * 1000 // 60 seconds
 
@@ -52,7 +55,17 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
 
   /**
    * Get all flag configs with in-memory caching (60s TTL).
-   * Seeds from defaults if DynamoDB has no flags.
+   *
+   * Code defaults (DEFAULT_FEATURE_FLAG_CONFIGS) are the fallback for any flag
+   * missing from DynamoDB, with DB rows overriding on a per-flag basis. This
+   * means flipping a flag's default in code Just Works: a newly added flag
+   * resolves to its code default even when the DB already holds *other* flag
+   * rows (previously only an entirely empty DB triggered seeding, so a new flag
+   * added alongside existing rows stayed absent → resolved to false for
+   * everyone until a row was hand-created).
+   *
+   * Still seeds an entirely empty DB from defaults so the admin UI has rows to
+   * edit; the merge below is what guarantees correctness regardless of seeding.
    */
   async getAllCached(): Promise<Record<string, FeatureFlagConfig>> {
     const now = Date.now()
@@ -60,15 +73,21 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
       return flagCache.data
     }
 
-    let configs = await this.getAllAsConfigs()
+    let dbConfigs = await this.getAllAsConfigs()
 
-    if (Object.keys(configs).length === 0) {
+    if (Object.keys(dbConfigs).length === 0) {
       await this.seedFromDefaults()
-      configs = await this.getAllAsConfigs()
+      dbConfigs = await this.getAllAsConfigs()
     }
 
-    flagCache = { data: configs, timestamp: now }
-    return configs
+    // Code defaults as fallback; DB rows win per flag.
+    const merged: Record<string, FeatureFlagConfig> = {
+      ...DEFAULT_FEATURE_FLAG_CONFIGS,
+      ...dbConfigs,
+    }
+
+    flagCache = { data: merged, timestamp: now }
+    return merged
   }
 
   async createFlag(flagName: string, config: FeatureFlagConfig): Promise<FeatureFlagRecord> {
@@ -104,8 +123,6 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
   }
 
   private async seedFromDefaults(): Promise<void> {
-    const { DEFAULT_FEATURE_FLAG_CONFIGS } = await import('@my/app/features/feature-flags/feature-flags')
-
     for (const [flagName, config] of Object.entries(DEFAULT_FEATURE_FLAG_CONFIGS)) {
       const existing = await this.getByName(flagName)
       if (!existing) {
