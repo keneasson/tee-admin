@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Vercel — Node.js runtime bump 22 → 24 (deprecation of Node 20)
+- **Date**: 2026-08-14
+- **Branch**: `chore/node-24`
+- **Code change**: `engines.node` → `"24.x"` (a **range**, not an exact pin — Vercel only honours a major/range from `engines.node`; the previous exact `"22.17.0"` can be ignored, which is likely why a Node 20 deprecation notice appeared) and `.nvmrc` → `24`.
+- **Why it matters**: Vercel is deprecating Node 20. With `engines.node = "24.x"` the deploy should build on Node 24 automatically — the PR's **preview build log** will state the Node version it used; confirm it reads `24.x` before merging to prod.
+- **External action** (site owner, Vercel dashboard — belt-and-suspenders in case the dashboard setting overrides `engines`):
+  1. `vercel switch` to scope **`ken-eassons-projects`**.
+  2. For **both** projects — `tee-admin` and `echadhub` — open **Settings → Build & Deployment → Node.js Version** and set it to **24.x** (if it was pinned to 20/22 in the dashboard, that pin can win over `engines.node`).
+  3. Redeploy prod (merging to `main` triggers it) and confirm the build log shows Node 24.
+- **Status**: PENDING (repo pins updated; verify the Vercel preview build uses Node 24, then confirm/adjust the dashboard setting).
+
 ### Meta / Facebook Login — OAuth provider for sign-in + step-up "Confirm it's you"
 - **Date**: 2026-08-10
 - **Branch**: `feat/verify-modal-and-facebook`

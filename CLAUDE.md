@@ -388,7 +388,7 @@ TEE Admin includes a comprehensive brand system accessible at `/brand/*` routes 
 - **Review monthly** to keep knowledge current and actionable
 
 ### Current Version State (Post-Migration)
-- **Node.js**: 22 LTS ✅
+- **Node.js**: 24 LTS ✅
 - **Next.js**: 15.3.4 ✅
 - **React**: 19.x ✅
 - **Expo**: SDK 53.0.13 ✅
