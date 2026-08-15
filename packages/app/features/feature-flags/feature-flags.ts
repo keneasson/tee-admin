@@ -6,6 +6,7 @@ export const FEATURE_FLAGS = {
   UNIVERSAL_EMAIL_LOGIN: 'universal_email_login',
   CONSOLIDATED_CMS: 'consolidated_cms',
   SECURE_EMAIL_CHANGE: 'secure_email_change',
+  MAILING_LIST_REGISTRY: 'mailing_list_registry',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -60,6 +61,15 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // admins and members).
     description: 'Secure self-serve login-email change (fresh-auth step-up + confirmation code)',
     visibleTo: 'owner',
+    users: [],
+  },
+  [FEATURE_FLAGS.MAILING_LIST_REGISTRY]: {
+    // Launch-dark. Phase 1 only adds the model + repo + a dry-runnable backfill;
+    // nothing in the send path or UI reads mailing-list records yet. Kept 'off'
+    // so the whole in-house-lists surface stays invisible until deliberately
+    // enabled.
+    description: 'In-house multi-tenant mailing-list registry + subscriptions (SES becomes a suppression safety-net only)',
+    visibleTo: 'off',
     users: [],
   },
 }

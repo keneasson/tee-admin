@@ -5,6 +5,7 @@ export * from './repositories/schedule-repository'
 export * from './repositories/admin-repository'
 export * from './repositories/person-repository'
 export * from './repositories/post-repository'
+export * from './repositories/mailing-list-repository'
 export * from './table-definitions'
 
 // Repository instances (singletons)
