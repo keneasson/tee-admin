@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
-import { getContacts, updateContact, addContact } from '@/utils/email/contact'
+import { getContacts, updateContact, addContact, migrateSubscriptions } from '@/utils/email/contact'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import {
   DynamoDBDocumentClient,
@@ -533,39 +534,48 @@ async function handleMigrateEmail(body: any, session: any) {
   }
 
   try {
-    // 1. Get old email's subscriptions from SES
-    let oldSubscriptions: { [key in EmailListTypeKeys]?: boolean } = {}
-    const allContacts = await getContacts({ nextPageToken: undefined })
+    // 1-3. Move the SES topic subscriptions old → new. When a canonical
+    // PersonRecord exists we route through the shared migrateSubscriptions helper
+    // so its EMAIL# rows are written too — otherwise the one-way sync-ses-contacts
+    // cron would revert the SES change for a primary address (the historical drift
+    // bug this consolidate path had). Legacy DIRECTORY#MEMBERS contacts with no
+    // PersonRecord keep the SES-only path (best-effort, unchanged behavior).
+    let subscriptionsCopied: string[] = []
+    const person = await personRepository.getByEmail(oldEmail)
 
-    const oldContact = allContacts.Contacts?.find(
-      (c) => c.EmailAddress?.toLowerCase() === oldEmail.toLowerCase()
-    )
-
-    if (oldContact && oldContact.TopicPreferences) {
-      oldContact.TopicPreferences.forEach((pref) => {
-        oldSubscriptions[pref.TopicName as EmailListTypeKeys] = pref.SubscriptionStatus === 'OPT_IN'
+    if (person) {
+      const { movedTopics } = await migrateSubscriptions(oldEmail, newEmail, {
+        personId: person.personId,
       })
+      subscriptionsCopied = movedTopics
+    } else {
+      console.warn(
+        `handleMigrateEmail: no PersonRecord for ${oldEmail} — SES-only migrate (legacy directory contact)`
+      )
+      const oldSubscriptions: { [key in EmailListTypeKeys]?: boolean } = {}
+      const allContacts = await getContacts({ nextPageToken: undefined })
+      const oldContact = allContacts.Contacts?.find(
+        (c) => c.EmailAddress?.toLowerCase() === oldEmail.toLowerCase()
+      )
+      if (oldContact && oldContact.TopicPreferences) {
+        oldContact.TopicPreferences.forEach((pref) => {
+          oldSubscriptions[pref.TopicName as EmailListTypeKeys] =
+            pref.SubscriptionStatus === 'OPT_IN'
+        })
+      }
+      await addContact({ email: newEmail, lists: oldSubscriptions as any })
+      const unsubscribedLists = Object.keys(EmailListTypes).reduce(
+        (acc, key) => {
+          acc[key as EmailListTypeKeys] = false
+          return acc
+        },
+        {} as { [key in EmailListTypeKeys]: boolean }
+      )
+      await updateContact({ email: oldEmail, lists: unsubscribedLists as any })
+      subscriptionsCopied = Object.keys(oldSubscriptions).filter(
+        (k) => oldSubscriptions[k as EmailListTypeKeys]
+      )
     }
-
-    // 2. Add new email to SES with copied subscriptions
-    await addContact({
-      email: newEmail,
-      lists: oldSubscriptions as any,
-    })
-
-    // 3. Unsubscribe old email from all lists
-    const unsubscribedLists = Object.keys(EmailListTypes).reduce(
-      (acc, key) => {
-        acc[key as EmailListTypeKeys] = false
-        return acc
-      },
-      {} as { [key in EmailListTypeKeys]: boolean }
-    )
-
-    await updateContact({
-      email: oldEmail,
-      lists: unsubscribedLists as any,
-    })
 
     // 4. Update DynamoDB - set new email as primary (first position) and mark as active
     await docClient.send(
@@ -596,9 +606,7 @@ async function handleMigrateEmail(body: any, session: any) {
       admin: session.user.email,
       oldEmail,
       newEmail,
-      subscriptionsCopied: Object.keys(oldSubscriptions).filter(
-        (k) => oldSubscriptions[k as EmailListTypeKeys]
-      ),
+      subscriptionsCopied,
       timestamp: new Date().toISOString(),
     })
 
@@ -609,9 +617,7 @@ async function handleMigrateEmail(body: any, session: any) {
       message: 'Email migrated successfully',
       oldEmail,
       newEmail,
-      subscriptionsCopied: Object.keys(oldSubscriptions).filter(
-        (k) => oldSubscriptions[k as EmailListTypeKeys]
-      ),
+      subscriptionsCopied,
     })
   } catch (error) {
     console.error('❌ Migration failed:', error)
