@@ -57,6 +57,71 @@ export const REGION_LABELS: Record<Region, string> = {
   [REGIONS.AUSTRALIA_NZ]: 'Australia & New Zealand',
 }
 
+// ---------------------------------------------------------------------------
+// Continent — the scope level ABOVE region (ecclesia → region → continent →
+// global). A continent is a rollup of the regions above; it adds no new source
+// data, only a grouping used to offer/scope mailing lists and content.
+// ---------------------------------------------------------------------------
+export const CONTINENTS = {
+  CANADA: 'canada',
+  USA: 'usa',
+  LATIN_AMERICA: 'latin_america',
+  EUROPE: 'europe',
+  MIDDLE_EAST_AFRICA: 'middle_east_africa',
+  ASIA: 'asia',
+  OCEANIA: 'oceania',
+} as const
+
+export type Continent = typeof CONTINENTS[keyof typeof CONTINENTS]
+
+export const CONTINENT_LABELS: Record<Continent, string> = {
+  [CONTINENTS.CANADA]: 'Canada',
+  [CONTINENTS.USA]: 'United States',
+  [CONTINENTS.LATIN_AMERICA]: 'Latin America',
+  [CONTINENTS.EUROPE]: 'Europe',
+  [CONTINENTS.MIDDLE_EAST_AFRICA]: 'Middle East & Africa',
+  [CONTINENTS.ASIA]: 'Asia',
+  [CONTINENTS.OCEANIA]: 'Oceania',
+}
+
+/** Every region rolls up to exactly one continent. */
+export const REGION_TO_CONTINENT: Record<Region, Continent> = {
+  [REGIONS.CANADA_EAST]: CONTINENTS.CANADA,
+  [REGIONS.CANADA_WEST]: CONTINENTS.CANADA,
+  [REGIONS.US_NORTHEAST]: CONTINENTS.USA,
+  [REGIONS.US_SOUTHEAST]: CONTINENTS.USA,
+  [REGIONS.US_MIDWEST_WEST]: CONTINENTS.USA,
+  [REGIONS.CARIBBEAN]: CONTINENTS.LATIN_AMERICA,
+  [REGIONS.CENTRAL_AMERICA]: CONTINENTS.LATIN_AMERICA,
+  [REGIONS.SOUTH_AMERICA]: CONTINENTS.LATIN_AMERICA,
+  [REGIONS.UK]: CONTINENTS.EUROPE,
+  [REGIONS.EU]: CONTINENTS.EUROPE,
+  [REGIONS.REST_OF_EUROPE]: CONTINENTS.EUROPE,
+  [REGIONS.MIDDLE_EAST]: CONTINENTS.MIDDLE_EAST_AFRICA,
+  [REGIONS.AFRICA]: CONTINENTS.MIDDLE_EAST_AFRICA,
+  [REGIONS.SOUTH_ASIA]: CONTINENTS.ASIA,
+  [REGIONS.EAST_ASIA]: CONTINENTS.ASIA,
+  [REGIONS.SOUTHEAST_ASIA_PACIFIC]: CONTINENTS.ASIA,
+  [REGIONS.AUSTRALIA_NZ]: CONTINENTS.OCEANIA,
+}
+
+/** The continent a region belongs to. */
+export function getContinent(region: Region): Continent {
+  return REGION_TO_CONTINENT[region]
+}
+
+/** All continents as { id, label } for UI selection, ordered by label. */
+export function getContinentOptions(): Array<{ id: Continent; label: string }> {
+  return (Object.values(CONTINENTS) as Continent[])
+    .map((id) => ({ id, label: CONTINENT_LABELS[id] }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** True if the provided string is a valid, known continent identifier. */
+export function isValidContinent(value: string): value is Continent {
+  return (Object.values(CONTINENTS) as string[]).includes(value)
+}
+
 // Map Canadian provinces to regions
 export const PROVINCE_TO_REGION: Record<string, Region> = {
   ON: REGIONS.CANADA_EAST,
