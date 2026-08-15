@@ -20,7 +20,7 @@ Changes in this file flag code modifications that require **matching manual upda
   1. `vercel switch` to scope **`ken-eassons-projects`**.
   2. For **both** projects — `tee-admin` and `echadhub` — open **Settings → Build & Deployment → Node.js Version** and set it to **24.x** (if it was pinned to 20/22 in the dashboard, that pin can win over `engines.node`).
   3. Redeploy prod (merging to `main` triggers it) and confirm the build log shows Node 24.
-- **Status**: PENDING (repo pins updated; verify the Vercel preview build uses Node 24, then confirm/adjust the dashboard setting).
+- **Status**: DONE (2026-08-15). Dashboard **Node.js Version set to 24.x on both `tee-admin` and `echadhub`** (confirmed via API). A preview rebuilt on Node 24 — build log: *"Skipping build cache since Node.js version changed from 20.x to 24.x"*, and the Node-20 deprecation error is gone. Repo pins (`engines.node` + `.nvmrc`) set to the exact current LTS `24.19.0`.
 
 ### Meta / Facebook Login — OAuth provider for sign-in + step-up "Confirm it's you"
 - **Date**: 2026-08-10
