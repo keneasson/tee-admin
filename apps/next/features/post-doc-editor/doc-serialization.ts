@@ -11,10 +11,22 @@
  *    A run of prose (paragraph/heading nodes) collapses into ONE markdown
  *    TextBlock; each decorator node (`type: 'post-block'`) becomes its typed
  *    Block. ORDER IS PRESERVED.
- *  - {@link blocksToDocState}: the inverse — a TextBlock explodes back into
- *    paragraph/heading nodes; a typed Block becomes a `post-block` decorator
- *    node. Produces a `{ root: … }` editor-state JSON string-ready for Lexical's
- *    `initialConfig.editorState`.
+ *  - {@link blocksToDocState}: the inverse — a *plain* TextBlock explodes back
+ *    into paragraph/heading nodes; a typed Block (and a TextBlock that carries a
+ *    per-block `visibility` override or is flagged `containsPii`) becomes a
+ *    `post-block` decorator node. Produces a `{ root: … }` editor-state JSON
+ *    string-ready for Lexical's `initialConfig.editorState`.
+ *
+ * WHY metadata-bearing text is a decorator, not bare prose (a PII leak fix):
+ * bare paragraph/heading nodes are Lexical's BUILT-IN nodes — they have no place
+ * to hold a per-block `visibility`/`containsPii`/`id`, and Lexical strips any
+ * extra fields on the first reconcile. A members-only obituary/testimony text
+ * block exploded into bare prose therefore lost its `visibility` gate (and its
+ * `containsPii` flag) on every keystroke round-trip and silently became public.
+ * A `post-block` decorator node carries the FULL typed block as its payload —
+ * which Lexical preserves verbatim — so any text block with non-inheritable
+ * metadata rides there, exactly like every other typed block, and round-trips
+ * losslessly. Plain prose (no override, not PII) stays editable bare text.
  *
  * PURE + DEPENDENCY-LIGHT ON PURPOSE. It imports ONLY types + the pure `genId`
  * helper — never Lexical, never Tamagui — so the round-trip is unit-testable in
@@ -203,14 +215,21 @@ function childrenOf(state: unknown): LooseNode[] {
 /**
  * Walk a Lexical editor-state JSON (`{ root: { children } }`) into ordered Blocks.
  * Consecutive prose nodes collapse into ONE markdown TextBlock; each `post-block`
- * decorator node yields its carried typed Block. Empty/whitespace-only prose is
- * dropped (so editor spacer paragraphs never become phantom TextBlocks). Order
+ * decorator node yields its carried typed Block *verbatim* — including a TextBlock
+ * carried there for its `visibility`/`containsPii` metadata, whose fields ride
+ * through unchanged (this is the read half of the PII-leak fix: those overrides
+ * live on the decorator payload, never on bare prose). Empty/whitespace-only prose
+ * is dropped (so editor spacer paragraphs never become phantom TextBlocks). Order
  * is preserved exactly.
  */
 export function docToBlocks(state: unknown): Block[] {
   const out: Block[] = []
   let run: string[] = []
 
+  // A prose run is genuine plain text typed in the canvas: it carries no per-block
+  // metadata, so it defaults to `containsPii: false` and NO `visibility` (absent ⇒
+  // inherit the post's reach, NOT forced public). Any text block WITH an override
+  // is not here — it arrives via the `post-block` branch below, fields intact.
   const flush = () => {
     const body = run.filter((s) => s.trim().length > 0).join('\n\n')
     run = []
@@ -232,9 +251,23 @@ export function docToBlocks(state: unknown): Block[] {
 }
 
 /**
- * The inverse: ordered Blocks → a Lexical editor-state JSON. A TextBlock explodes
- * back into paragraph/heading nodes; every other Block kind becomes a `post-block`
- * decorator node carrying the full typed block. A trailing empty paragraph is
+ * True when a TextBlock carries per-block metadata that bare paragraph/heading
+ * nodes cannot hold: an explicit {@link Visibility} override, or a `containsPii`
+ * flag. Such a block MUST ride as a `post-block` decorator node (whose payload
+ * Lexical preserves verbatim) instead of exploding into bare prose — otherwise
+ * the override is silently dropped on the round-trip and the block leaks (see the
+ * module header). A plain text block (no override, not PII) stays editable prose.
+ */
+function textBlockNeedsWrapper(block: TextBlock): boolean {
+  return block.visibility !== undefined || block.containsPii === true
+}
+
+/**
+ * The inverse: ordered Blocks → a Lexical editor-state JSON. A *plain* TextBlock
+ * explodes back into paragraph/heading nodes; every other Block kind — and a
+ * TextBlock that {@link textBlockNeedsWrapper} (a `visibility` override or
+ * `containsPii`) — becomes a `post-block` decorator node carrying the full typed
+ * block, so its metadata round-trips losslessly. A trailing empty paragraph is
  * appended when the document is empty or ends on a decorator node, so the caret
  * always has editable prose to land in (and it is dropped again by
  * {@link docToBlocks}, keeping the round-trip stable).
@@ -242,7 +275,7 @@ export function docToBlocks(state: unknown): Block[] {
 export function blocksToDocState(blocks: Block[]): SerializedDocState {
   const children: SerializedTopNode[] = []
   for (const block of blocks) {
-    if (block.kind === 'text') {
+    if (block.kind === 'text' && !textBlockNeedsWrapper(block)) {
       children.push(...textBlockToNodes(block.body))
     } else {
       children.push({ type: POST_BLOCK_TYPE, block, version: 1 })
