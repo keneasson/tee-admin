@@ -5,6 +5,9 @@ import {
   SEED_CATEGORY_BY_TOPIC,
   TORONTO_EAST,
   buildSeedListDefs,
+  buildSeedTopicLookup,
+  isPendingListId,
+  pendingListId,
   planSeedLists,
   planSubscriptions,
   type SesContactForBackfill,
@@ -56,6 +59,35 @@ describe('planSeedLists — idempotent seeding', () => {
     expect(skipped.map((d) => d.sesTopic).sort()).toEqual(['memorial', 'newsletter'])
     expect(toSeed).toHaveLength(5)
     expect(toSeed.map((d) => d.sesTopic)).toContain('bibleClass')
+  })
+})
+
+describe('buildSeedTopicLookup — match against lists that WILL exist after seeding', () => {
+  it('covers all 7 topics with PENDING markers when nothing is seeded yet (dry-run case)', () => {
+    const lookup = buildSeedTopicLookup([])
+    expect(lookup.size).toBe(7)
+    for (const topic of SEED_TOPICS) {
+      const listId = lookup.get(topic)
+      expect(listId).toBe(pendingListId(topic))
+      expect(isPendingListId(listId!)).toBe(true)
+    }
+  })
+
+  it('lets an already-seeded real list win over the PENDING marker', () => {
+    const lookup = buildSeedTopicLookup([
+      { ownerName: 'Toronto East Ecclesia', sesTopic: 'newsletter', listId: 'real-newsletter' },
+    ])
+    expect(lookup.get('newsletter')).toBe('real-newsletter')
+    expect(isPendingListId(lookup.get('newsletter')!)).toBe(false)
+    // the rest stay PENDING
+    expect(lookup.get('memorial')).toBe(pendingListId('memorial'))
+  })
+
+  it('ignores a real list owned by a different tenant', () => {
+    const lookup = buildSeedTopicLookup([
+      { ownerName: 'Some Other Ecclesia', sesTopic: 'newsletter', listId: 'other-newsletter' },
+    ])
+    expect(lookup.get('newsletter')).toBe(pendingListId('newsletter'))
   })
 })
 
@@ -130,6 +162,29 @@ describe('planSubscriptions — SES contacts → subscriptions (canonical source
     ])
     // still counted as SES opt-in rows (2 OPT_INs), just not creatable
     expect(plan.subscriptionsFromSes).toBe(2)
+  })
+
+  it('DRY-RUN: still plans a subscription when NO lists are seeded yet (regression)', async () => {
+    // The bug: in dry-run the seed lists aren't written, so a lookup built only
+    // from existingLists ([]) matched nothing and every opt-in fell into
+    // "topics with no matching list". Building the lookup from the seed defs (as
+    // PENDING markers) merged with existing lists fixes the preview.
+    const dryRunLookup = buildSeedTopicLookup([]) // nothing seeded yet
+    const contacts: SesContactForBackfill[] = [
+      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
+    ]
+    const resolve = makeResolver({
+      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+    })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic: dryRunLookup, resolve })
+
+    expect(plan.toCreate).toHaveLength(1)
+    expect(plan.toCreate[0]).toMatchObject({ personId: 'p1', topic: 'newsletter' })
+    // listId is the PENDING marker (real id assigned at --apply time)
+    expect(isPendingListId(plan.toCreate[0].listId)).toBe(true)
+    // and crucially NOT dumped into the no-list anomaly bucket
+    expect(plan.anomalies.topicsWithNoList).toEqual({})
   })
 
   it('is idempotent — skips subscriptions that already exist', async () => {

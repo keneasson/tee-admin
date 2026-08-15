@@ -157,6 +157,42 @@ export function planSeedLists(existingLists: Pick<MailingListRecord, 'ownerName'
 }
 
 /**
+ * Marker listId for a seed list that will be created at `--apply` time but does
+ * not exist yet. In DRY-RUN the plan matches opt-in topics against these markers
+ * so the preview shows the real "to create" count instead of dumping every opt-in
+ * into "topics with no matching list". The REAL listId is assigned by
+ * `createList()` at apply time — `runBackfill` overwrites the marker before it
+ * ever writes a subscription, so no PENDING id is ever persisted.
+ */
+export const PENDING_LIST_ID_PREFIX = 'PENDING#'
+export const pendingListId = (sesTopic: string): string =>
+  `${PENDING_LIST_ID_PREFIX}${sesTopic}`
+export const isPendingListId = (listId: string): boolean =>
+  listId.startsWith(PENDING_LIST_ID_PREFIX)
+
+/**
+ * Topic → listId lookup for the lists that WILL exist after seeding: the 7 seed
+ * defs (as PENDING markers) merged with any already-seeded Toronto East lists
+ * (real listIds, which WIN on conflict). Used for matching opt-in topics → lists
+ * in BOTH dry-run and apply, so the dry-run preview isn't empty just because the
+ * seed lists haven't been written yet.
+ */
+export function buildSeedTopicLookup(
+  existingLists: Pick<MailingListRecord, 'ownerName' | 'sesTopic' | 'listId'>[]
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const def of buildSeedListDefs()) {
+    map.set(def.sesTopic, pendingListId(def.sesTopic))
+  }
+  for (const l of existingLists) {
+    if (l.ownerName === TORONTO_EAST.ownerName && l.sesTopic && l.listId) {
+      map.set(l.sesTopic, l.listId) // an already-seeded real list wins over the marker
+    }
+  }
+  return map
+}
+
+/**
  * One SES contact, reduced to what the plan needs: its email and its per-topic
  * opt-in/opt-out preferences (as read from `get-contact` TopicPreferences).
  */
@@ -296,10 +332,12 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
   )
   const { toSeed, skipped } = planSeedLists(existingLists)
 
-  const listIdByTopic = new Map<string, string>()
-  for (const l of existingLists) {
-    if (l.sesTopic) listIdByTopic.set(l.sesTopic, l.listId)
-  }
+  // Match opt-in topics against the lists that WILL exist after seeding, not just
+  // the ones already written. In DRY-RUN the to-be-seeded lists carry PENDING
+  // marker ids (so the preview shows the real count); in APPLY the seed loop below
+  // overwrites each marker with the real listId returned by createList() BEFORE
+  // any subscription is written.
+  const listIdByTopic = buildSeedTopicLookup(existingLists)
 
   console.log(`Lists: ${toSeed.length} to seed, ${skipped.length} already present.`)
   for (const def of toSeed) {
@@ -414,7 +452,25 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     }
   }
 
+  const pendingCount = plan.toCreate.filter((s) => isPendingListId(s.listId)).length
+  if (pendingCount > 0) {
+    console.log(
+      `  (${pendingCount} planned against lists not yet seeded — real listIds assigned at --apply time.)`
+    )
+  }
+
   if (opts.apply) {
+    // Safety: the seed loop above overwrote every PENDING marker with a real
+    // listId, so a PENDING id reaching a write means a seed step was skipped —
+    // refuse rather than persist a broken subscription.
+    const stillPending = plan.toCreate.filter((s) => isPendingListId(s.listId))
+    if (stillPending.length > 0) {
+      throw new Error(
+        `Refusing to write ${stillPending.length} subscription(s) with an unseeded PENDING listId ` +
+          `(topics: ${[...new Set(stillPending.map((s) => s.topic))].join(', ')}). ` +
+          `A seed list failed to create — aborting before any write.`
+      )
+    }
     let created = 0
     for (const sub of plan.toCreate) {
       await mailingListRepository.subscribe({
