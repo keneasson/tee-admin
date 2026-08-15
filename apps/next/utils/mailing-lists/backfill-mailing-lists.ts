@@ -335,6 +335,7 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     nextPageToken = page.NextToken
   } while (nextPageToken)
 
+  // SES caps contact operations at ~1/sec — pace get-contact calls or it 429s.
   for (const email of contactEmails) {
     const full = await getContact(email)
     const topicPreferences = (full?.TopicPreferences || [])
@@ -344,6 +345,7 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
         status: p.SubscriptionStatus as 'OPT_IN' | 'OPT_OUT',
       }))
     contacts.push({ email, topicPreferences })
+    await new Promise((resolve) => setTimeout(resolve, 1100))
   }
 
   // 3) Load existing SUB# items (for idempotent skips) ---------------------
