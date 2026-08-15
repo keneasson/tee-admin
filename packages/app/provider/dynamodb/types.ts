@@ -832,3 +832,95 @@ export interface OrganizationRecord extends BaseRecord {
 export function isOrganizationRecord(record: any): record is OrganizationRecord {
   return record && record.pkey && record.pkey.startsWith('ORGANIZATION#')
 }
+
+// ===== MAILING LIST REGISTRY (multi-tenant, in-house subscriptions) =====
+// Phase 1 of moving mailing-list subscriptions IN-HOUSE (SES becomes a
+// suppression safety-net only). Nothing reads these yet — everything is gated
+// behind the MAILING_LIST_REGISTRY feature flag and changes NO send behaviour.
+//
+// IMPORTANT: subscriptions live in their OWN items (ListSubscriptionRecord),
+// NOT in PersonEmailRecord.sesTopicPreferences. The cron + existing email
+// helpers enumerate the fixed EmailListTypes and would silently drop any
+// dynamic (per-tenant) list key, so registry subscriptions must never be folded
+// back into sesTopicPreferences.
+
+// Consent basis for a list.
+//   reminders               — service/class reminders (self-serve)
+//   newsletters             — periodicals / recaps (self-serve)
+//   ecclesial_correspondence— inter-ecclesia correspondence (self-serve)
+//   operational             — office/membership-conferred, NOT self-serve: a
+//                             member/office holder receives it by virtue of role.
+export type ConsentCategory =
+  | 'reminders'
+  | 'newsletters'
+  | 'ecclesial_correspondence'
+  | 'operational'
+
+// The scope a list is offered at. Scope ladder: ecclesia → region → continent → global.
+export type MailingListScope = 'ecclesia' | 'region' | 'continent' | 'global'
+
+// A tenant is an ecclesia OR an organization (ADR-0001) — keyed by ownerType + ownerName.
+export type MailingListOwnerType = 'ecclesia' | 'organization'
+
+// Mailing List Record — a subscribable list owned by a tenant, offered at a scope.
+// pkey: LIST#{listId}, skey: 'DETAILS'
+// GSI1 (list by tenant): gsi1pk = TENANT#{ownerType}#{ownerName}, gsi1sk = {scope}#{name}
+// GSI2 (list by scope):  gsi2pk = SCOPE#{scope}#{scopeValue},     gsi2sk = {ownerName}#{name}
+export interface MailingListRecord extends BaseRecord {
+  pkey: string           // LIST#{listId}
+  skey: string           // 'DETAILS'
+  gsi1pk: string         // TENANT#{ownerType}#{ownerName}
+  gsi1sk: string         // {scope}#{name}
+  gsi2pk: string         // SCOPE#{scope}#{scopeValue}
+  gsi2sk: string         // {ownerName}#{name}
+
+  listId: string         // uuid
+  ownerType: MailingListOwnerType
+  ownerName: string
+  scope: MailingListScope
+  scopeValue: string     // ecclesia name / region key / continent key / '' for global
+  category: ConsentCategory
+  key: string            // slug (e.g. 'newsletter')
+  name: string
+  description: string
+  defaultOptIn: boolean
+  status: 'active' | 'archived'
+  // LEGACY bridge: set ONLY on the 7 migrated Toronto East lists so the existing
+  // SES send path can keep routing them by topic. Omitted on every new list.
+  sesTopic?: string
+  createdAt: string
+}
+
+export function isMailingListRecord(record: any): record is MailingListRecord {
+  return record && record.pkey && record.pkey.startsWith('LIST#') && record.skey === 'DETAILS'
+}
+
+// List Subscription Record — one person's opt-in/opt-out for one list, per email.
+// Named ListSubscriptionRecord to avoid a name collision with the ecclesia-event
+// SubscriptionRecord (PK 'SUBSCRIPTION#...') defined above.
+// An opt-out is a status FLIP, never a delete — the row is kept for the audit trail.
+// pkey: PERSON#{personId}, skey: SUB#{listId}#{emailId}
+// GSI1 (send-path fan-out): gsi1pk = LISTSUB#{listId}, gsi1sk = {email}
+export interface ListSubscriptionRecord extends BaseRecord {
+  pkey: string           // PERSON#{personId}
+  skey: string           // SUB#{listId}#{emailId}
+  gsi1pk: string         // LISTSUB#{listId}
+  gsi1sk: string         // {email}
+
+  listId: string
+  emailId: string
+  email: string
+  status: 'opt_in' | 'opt_out'
+  source: 'self' | 'migration' | 'rb-assist' | 'default'
+  basis: 'express' | 'implied' | 'migrated'
+  subscribedAt: string
+}
+
+export function isListSubscriptionRecord(record: any): record is ListSubscriptionRecord {
+  return (
+    record &&
+    record.pkey &&
+    record.pkey.startsWith('PERSON#') &&
+    record.skey?.startsWith('SUB#')
+  )
+}
