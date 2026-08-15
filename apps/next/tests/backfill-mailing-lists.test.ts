@@ -8,7 +8,7 @@ import {
   planSeedLists,
   planSubscriptions,
   type EmailItemForBackfill,
-} from '../scripts/backfill-mailing-lists'
+} from '../utils/mailing-lists/backfill-mailing-lists'
 
 describe('backfill mapping — topic → consent category', () => {
   it('maps every one of the 7 topics to the documented category', () => {
