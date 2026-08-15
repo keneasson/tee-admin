@@ -130,6 +130,54 @@ describe('round-trip: blocks → doc → blocks (order + content stable)', () =>
   it('an empty document round-trips to no blocks', () => {
     expect(docToBlocks(blocksToDocState([]))).toEqual([])
   })
+
+  // REGRESSION GUARD (PII leak): a text block authored with a per-block
+  // `visibility` override and/or `containsPii` must NOT explode into bare prose
+  // (which drops both, silently making a members-only obituary/testimony public).
+  // It rides as a `post-block` decorator node and survives the round-trip EXACTLY
+  // — id included — not just modulo id like plain prose.
+  it('preserves visibility + containsPii + id on a metadata-bearing text block', () => {
+    const obituary: TextBlock = {
+      id: 'obit-1',
+      kind: 'text',
+      body: '## In loving memory\n\nA private testimony, **members only**.',
+      visibility: 'members',
+      containsPii: true,
+    }
+    const doc = blocksToDocState([obituary])
+    // It must be carried as a decorator node, not exploded into prose.
+    const carrier = doc.root.children.find((c) => c.type === POST_BLOCK_TYPE)
+    expect(carrier).toBeDefined()
+    expect((carrier as { block: Block }).block).toBe(obituary)
+
+    const round = docToBlocks(doc)
+    expect(round).toHaveLength(1)
+    // Exact equality — id preserved (NOT re-minted), visibility gate intact,
+    // containsPii NOT reset to false.
+    expect(round[0]).toEqual(obituary)
+  })
+
+  it('preserves a members-only text block even when it has no containsPii flag', () => {
+    const gated: TextBlock = {
+      id: 'gated-1',
+      kind: 'text',
+      body: 'Members-only announcement.',
+      visibility: 'members',
+      containsPii: false,
+    }
+    const round = docToBlocks(blocksToDocState([gated]))
+    expect(round).toEqual([gated])
+  })
+
+  it('plain prose text stays editable bare prose (unchanged behavior)', () => {
+    // No visibility override, not PII ⇒ explodes into paragraph/heading nodes,
+    // NOT a decorator; round-trips modulo id (a fresh run id is expected).
+    const plain = text('plain-1', 'Just some public prose.')
+    const doc = blocksToDocState([plain])
+    expect(doc.root.children.some((c) => c.type === POST_BLOCK_TYPE)).toBe(false)
+    const round = docToBlocks(doc)
+    expect(round.map(norm)).toEqual([norm(plain)])
+  })
 })
 
 describe('armed-tool insert (pure state transition of ArmedToolPlugin)', () => {
