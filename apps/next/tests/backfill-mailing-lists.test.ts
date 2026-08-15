@@ -7,7 +7,9 @@ import {
   buildSeedListDefs,
   planSeedLists,
   planSubscriptions,
-  type EmailItemForBackfill,
+  type SesContactForBackfill,
+  type ContactResolver,
+  type ResolvedContact,
 } from '../utils/mailing-lists/backfill-mailing-lists'
 
 describe('backfill mapping — topic → consent category', () => {
@@ -57,7 +59,7 @@ describe('planSeedLists — idempotent seeding', () => {
   })
 })
 
-describe('planSubscriptions — sesTopicPreferences → subscriptions', () => {
+describe('planSubscriptions — SES contacts → subscriptions (canonical source)', () => {
   const listIdByTopic = new Map<string, string>([
     ['newsletter', 'list-newsletter'],
     ['memorial', 'list-memorial'],
@@ -68,20 +70,30 @@ describe('planSubscriptions — sesTopicPreferences → subscriptions', () => {
     ['testList', 'list-testList'],
   ])
 
-  it('creates one opt_in per topic where the pref is exactly true', () => {
-    const emailItems: EmailItemForBackfill[] = [
+  // A mock resolver backed by a fixed email → PersonRecord row table. Any email
+  // not in the table resolves to null (unresolved), exercising the report path
+  // without hitting AWS.
+  function makeResolver(table: Record<string, ResolvedContact>): ContactResolver {
+    return async (email: string) => table[email.toLowerCase()] ?? null
+  }
+
+  it('creates one opt_in per OPT_IN topic for a resolved contact; ignores OPT_OUT', async () => {
+    const contacts: SesContactForBackfill[] = [
       {
-        pkey: 'PERSON#p1',
-        emailId: 'e1',
-        email: 'a@x.com',
-        sesTopicPreferences: {
-          newsletter: true,
-          memorial: true,
-          bibleClass: false, // opted out → not created
-        },
+        email: 'A@x.com',
+        topicPreferences: [
+          { topic: 'newsletter', status: 'OPT_IN' },
+          { topic: 'memorial', status: 'OPT_IN' },
+          { topic: 'bibleClass', status: 'OPT_OUT' }, // ignored
+        ],
       },
     ]
-    const plan = planSubscriptions({ emailItems, listIdByTopic })
+    const resolve = makeResolver({
+      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+    })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
+
     expect(plan.toCreate).toHaveLength(2)
     const byTopic = Object.fromEntries(plan.toCreate.map((s) => [s.topic, s]))
     expect(byTopic.newsletter).toMatchObject({
@@ -92,43 +104,98 @@ describe('planSubscriptions — sesTopicPreferences → subscriptions', () => {
     })
     expect(byTopic.memorial.listId).toBe('list-memorial')
     expect(byTopic.bibleClass).toBeUndefined()
+    // subscriptionsFromSes counts OPT_IN rows only (the 2 opt-ins).
+    expect(plan.subscriptionsFromSes).toBe(2)
+    expect(plan.unresolvedSubscribers).toHaveLength(0)
   })
 
-  it('is idempotent — skips subscriptions that already exist', () => {
-    const emailItems: EmailItemForBackfill[] = [
-      { pkey: 'PERSON#p1', emailId: 'e1', email: 'a@x.com', sesTopicPreferences: { newsletter: true } },
+  it('reports an unresolved email (no PersonRecord) instead of dropping it', async () => {
+    const contacts: SesContactForBackfill[] = [
+      {
+        email: 'sanjaymondol80@gmail.com',
+        topicPreferences: [
+          { topic: 'newsletter', status: 'OPT_IN' },
+          { topic: 'bibleClass', status: 'OPT_IN' },
+          { topic: 'memorial', status: 'OPT_OUT' },
+        ],
+      },
     ]
+    const resolve = makeResolver({}) // resolves nothing
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
+
+    expect(plan.toCreate).toHaveLength(0)
+    expect(plan.unresolvedSubscribers).toEqual([
+      { email: 'sanjaymondol80@gmail.com', topics: ['newsletter', 'bibleClass'] },
+    ])
+    // still counted as SES opt-in rows (2 OPT_INs), just not creatable
+    expect(plan.subscriptionsFromSes).toBe(2)
+  })
+
+  it('is idempotent — skips subscriptions that already exist', async () => {
+    const contacts: SesContactForBackfill[] = [
+      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
+    ]
+    const resolve = makeResolver({
+      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+    })
     const existingSubKeys = new Set(['p1#list-newsletter#e1'])
-    const plan = planSubscriptions({ emailItems, listIdByTopic, existingSubKeys })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve, existingSubKeys })
+
     expect(plan.toCreate).toHaveLength(0)
     expect(plan.anomalies.alreadyExists).toBe(1)
   })
 
-  it('flags an opt-in for a topic with no matching list as an anomaly', () => {
-    const emailItems: EmailItemForBackfill[] = [
-      { pkey: 'PERSON#p1', emailId: 'e1', email: 'a@x.com', sesTopicPreferences: { legacyTopic: true } },
+  it('flags an OPT_IN for a topic with no matching list as an anomaly', async () => {
+    const contacts: SesContactForBackfill[] = [
+      { email: 'a@x.com', topicPreferences: [{ topic: 'legacyTopic', status: 'OPT_IN' }] },
     ]
-    const plan = planSubscriptions({ emailItems, listIdByTopic })
+    const resolve = makeResolver({
+      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+    })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
+
     expect(plan.toCreate).toHaveLength(0)
     expect(plan.anomalies.topicsWithNoList).toEqual({ legacyTopic: 1 })
   })
 
-  it('flags EMAIL# items whose pkey is not a PERSON# key', () => {
-    const emailItems: EmailItemForBackfill[] = [
-      { pkey: 'USER#a@x.com', emailId: 'e1', email: 'a@x.com', sesTopicPreferences: { newsletter: true } },
+  it('skips a contact with no OPT_IN topics entirely (no resolve, no rows)', async () => {
+    let resolveCalls = 0
+    const resolve: ContactResolver = async (email) => {
+      resolveCalls++
+      return { personId: 'p1', emailId: 'e1', email }
+    }
+    const contacts: SesContactForBackfill[] = [
+      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_OUT' }] },
+      { email: 'b@x.com', topicPreferences: [] },
     ]
-    const plan = planSubscriptions({ emailItems, listIdByTopic })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
+
     expect(plan.toCreate).toHaveLength(0)
-    expect(plan.anomalies.emailsWithNoPerson).toEqual([{ pkey: 'USER#a@x.com', email: 'a@x.com' }])
+    expect(plan.subscriptionsFromSes).toBe(0)
+    expect(plan.unresolvedSubscribers).toHaveLength(0)
+    expect(resolveCalls).toBe(0) // never resolves a contact with zero opt-ins
   })
 
-  it('handles missing/empty sesTopicPreferences without creating anything', () => {
-    const emailItems: EmailItemForBackfill[] = [
-      { pkey: 'PERSON#p1', emailId: 'e1', email: 'a@x.com' },
-      { pkey: 'PERSON#p2', emailId: 'e2', email: 'b@x.com', sesTopicPreferences: {} },
+  it('mixes resolved + unresolved contacts in one pass', async () => {
+    const contacts: SesContactForBackfill[] = [
+      { email: 'known@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
+      { email: 'unknown@x.com', topicPreferences: [{ topic: 'memorial', status: 'OPT_IN' }] },
     ]
-    const plan = planSubscriptions({ emailItems, listIdByTopic })
-    expect(plan.toCreate).toHaveLength(0)
-    expect(plan.anomalies.emailsWithNoPerson).toHaveLength(0)
+    const resolve = makeResolver({
+      'known@x.com': { personId: 'p1', emailId: 'e1', email: 'known@x.com' },
+    })
+
+    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
+
+    expect(plan.toCreate).toHaveLength(1)
+    expect(plan.toCreate[0]).toMatchObject({ personId: 'p1', topic: 'newsletter' })
+    expect(plan.unresolvedSubscribers).toEqual([
+      { email: 'unknown@x.com', topics: ['memorial'] },
+    ])
+    expect(plan.subscriptionsFromSes).toBe(2)
   })
 })

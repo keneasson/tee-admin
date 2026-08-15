@@ -1,24 +1,38 @@
 #!/usr/bin/env tsx
 /**
  * Backfill: seed the 7 Toronto East mailing lists into the in-house registry and
- * migrate existing SES topic opt-ins (PersonEmailRecord.sesTopicPreferences) into
- * ListSubscriptionRecord items.
+ * migrate existing opt-ins into ListSubscriptionRecord items.
+ *
+ * SUBSCRIPTION SOURCE — SES, not PersonRecord.
+ *  The canonical opt-in state lives in the SES `TEEAdmin` contact list, on each
+ *  contact's per-topic `TopicPreferences`. The PersonRecord EMAIL# rows' mirror
+ *  field `sesTopicPreferences` is EMPTY in prod (0 of ~192 EMAIL# items populated),
+ *  so sourcing from it would migrate ZERO subscriptions and effectively unsubscribe
+ *  everyone at cutover. This backfill therefore reads subscriptions from SES.
  *
  * SAFETY
  *  - DRY-RUN by default. Pass `--apply` to actually write.
  *  - IDEMPOTENT: skips lists that already exist (matched by ownerName + sesTopic)
  *    and subscriptions that already exist (matched by person#list#email).
- *  - ADDITIVE: never modifies or deletes any existing SES contact, topic list, or
- *    PersonEmailRecord.sesTopicPreferences. It only ADDS new registry items.
+ *  - ADDITIVE: never modifies or deletes any SES contact, topic list, or
+ *    PersonRecord field. It only ADDS new registry items.
+ *  - Only migrates OPT_IN topics. OPT_OUT topics are ignored (no row written).
+ *  - Contacts whose email resolves to NO PersonRecord are NOT dropped: they are
+ *    collected into `unresolvedSubscribers` and printed in the summary. This
+ *    backfill NEVER creates person records — that is a separate decision.
  *  - DO NOT run against prod as part of CI. The pure planning functions below are
  *    unit-tested against fixtures; only `runBackfill` touches AWS.
  *
  * Usage:
- *   tsx apps/next/scripts/backfill-mailing-lists.ts            # dry-run (counts only)
- *   tsx apps/next/scripts/backfill-mailing-lists.ts --apply    # perform writes
+ *   tsx apps/next/utils/mailing-lists/backfill-mailing-lists.ts            # dry-run (counts only)
+ *   tsx apps/next/utils/mailing-lists/backfill-mailing-lists.ts --apply    # perform writes
  */
 
-import type { ConsentCategory, MailingListRecord } from '@my/app/provider/dynamodb/types'
+import type {
+  ConsentCategory,
+  MailingListRecord,
+  PersonRecord,
+} from '@my/app/provider/dynamodb/types'
 
 // ---------------------------------------------------------------------------
 // The 7 current SES topics (packages/app/types.ts EmailListTypes).
@@ -142,13 +156,28 @@ export function planSeedLists(existingLists: Pick<MailingListRecord, 'ownerName'
   }
 }
 
-/** Minimal shape of an EMAIL# item this backfill reads. */
-export interface EmailItemForBackfill {
-  pkey: string // PERSON#{personId}
-  emailId: string
+/**
+ * One SES contact, reduced to what the plan needs: its email and its per-topic
+ * opt-in/opt-out preferences (as read from `get-contact` TopicPreferences).
+ */
+export interface SesContactForBackfill {
   email: string
-  sesTopicPreferences?: Record<string, boolean>
+  topicPreferences: Array<{ topic: string; status: 'OPT_IN' | 'OPT_OUT' }>
 }
+
+/**
+ * The PersonRecord an SES contact email resolves to: the owning person plus the
+ * specific EMAIL# row (its emailId) that carries the address.
+ */
+export interface ResolvedContact {
+  personId: string
+  emailId: string
+  /** The matched EMAIL# row's stored address (may differ in case from the input). */
+  email: string
+}
+
+/** Resolve an SES contact email → PersonRecord EMAIL# row, or null if unknown. */
+export type ContactResolver = (email: string) => Promise<ResolvedContact | null>
 
 export interface PlannedSubscription {
   personId: string
@@ -160,63 +189,83 @@ export interface PlannedSubscription {
 
 export interface SubscriptionPlan {
   toCreate: PlannedSubscription[]
+  /** Total OPT_IN topic-rows read from SES contacts (the raw source signal). */
+  subscriptionsFromSes: number
+  /**
+   * SES contacts with ≥1 OPT_IN topic whose email resolves to NO PersonRecord.
+   * Reported, never dropped. NOT turned into person records here.
+   */
+  unresolvedSubscribers: Array<{ email: string; topics: string[] }>
   anomalies: {
-    /** topic → count of true-prefs that had no matching seeded list */
+    /** topic → count of OPT_INs (for a resolved contact) that had no matching seeded list */
     topicsWithNoList: Record<string, number>
-    /** EMAIL# items whose pkey was not a PERSON# key */
-    emailsWithNoPerson: Array<{ pkey: string; email: string }>
     /** subscriptions skipped because they already exist */
     alreadyExists: number
   }
 }
 
 /**
- * Turn EMAIL# items into the ListSubscriptionRecords to create. For every
- * `sesTopicPreferences[topic] === true`, emit an opt_in for the Toronto-East list
- * whose topic matches. Idempotent via `existingSubKeys` (`personId#listId#emailId`).
+ * Turn SES contacts into the ListSubscriptionRecords to create. For every contact
+ * with at least one `OPT_IN` topic, resolve its email to a PersonRecord EMAIL# row
+ * and emit one opt_in per OPT_IN topic against the Toronto-East list whose sesTopic
+ * matches. Idempotent via `existingSubKeys` (`personId#listId#emailId`).
+ *
+ * Pure except for the injected `resolve` function (the only I/O), which tests mock.
  */
-export function planSubscriptions(input: {
-  emailItems: EmailItemForBackfill[]
+export async function planSubscriptions(input: {
+  contacts: SesContactForBackfill[]
   listIdByTopic: Map<string, string>
+  resolve: ContactResolver
   existingSubKeys?: Set<string>
-}): SubscriptionPlan {
+}): Promise<SubscriptionPlan> {
   const existing = input.existingSubKeys ?? new Set<string>()
   const toCreate: PlannedSubscription[] = []
   const topicsWithNoList: Record<string, number> = {}
-  const emailsWithNoPerson: Array<{ pkey: string; email: string }> = []
+  const unresolvedSubscribers: Array<{ email: string; topics: string[] }> = []
+  let subscriptionsFromSes = 0
   let alreadyExists = 0
 
-  for (const item of input.emailItems) {
-    if (!item.pkey?.startsWith('PERSON#')) {
-      emailsWithNoPerson.push({ pkey: item.pkey, email: item.email })
+  for (const contact of input.contacts) {
+    const optInTopics = contact.topicPreferences
+      .filter((p) => p.status === 'OPT_IN')
+      .map((p) => p.topic)
+
+    if (optInTopics.length === 0) continue // nothing to migrate for this contact
+    subscriptionsFromSes += optInTopics.length
+
+    const resolved = await input.resolve(contact.email)
+    if (!resolved) {
+      unresolvedSubscribers.push({ email: contact.email, topics: optInTopics })
       continue
     }
-    const personId = item.pkey.slice('PERSON#'.length)
-    const prefs = item.sesTopicPreferences || {}
 
-    for (const [topic, on] of Object.entries(prefs)) {
-      if (on !== true) continue
+    for (const topic of optInTopics) {
       const listId = input.listIdByTopic.get(topic)
       if (!listId) {
         topicsWithNoList[topic] = (topicsWithNoList[topic] || 0) + 1
         continue
       }
-      const key = `${personId}#${listId}#${item.emailId}`
+      const key = `${resolved.personId}#${listId}#${resolved.emailId}`
       if (existing.has(key)) {
         alreadyExists++
         continue
       }
       toCreate.push({
-        personId,
+        personId: resolved.personId,
         listId,
-        emailId: item.emailId,
-        email: item.email,
+        emailId: resolved.emailId,
+        email: resolved.email,
         topic,
       })
     }
   }
 
-  return { toCreate, anomalies: { topicsWithNoList, emailsWithNoPerson, alreadyExists } }
+  return {
+    toCreate,
+    subscriptionsFromSes,
+    unresolvedSubscribers,
+    anomalies: { topicsWithNoList, alreadyExists },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,13 +274,17 @@ export function planSubscriptions(input: {
 
 async function runBackfill(opts: { apply: boolean }): Promise<void> {
   // Imported lazily so importing this module for its pure helpers (in tests)
-  // never constructs the DynamoDB client.
+  // never constructs the DynamoDB / SES clients.
   const { ScanCommand } = await import('@aws-sdk/lib-dynamodb')
   const { docClient, tableNames } = await import('@my/app/provider/dynamodb/config')
   const { mailingListRepository } = await import(
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
   )
+  const { personRepository } = await import(
+    '@my/app/provider/dynamodb/repositories/person-repository'
+  )
   const { isListSubscriptionRecord } = await import('@my/app/provider/dynamodb/types')
+  const { getContacts, getContact } = await import('../email/contact')
 
   const mode = opts.apply ? 'APPLY' : 'DRY-RUN'
   console.log(`\n=== Mailing-list backfill (${mode}) ===\n`)
@@ -267,28 +320,46 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     }
   }
 
-  // 2) Scan EMAIL# items + existing SUB# items -----------------------------
-  const emailItems: EmailItemForBackfill[] = []
+  // 2) Read the CANONICAL subscription state from SES ----------------------
+  //    Page every opted-in contact in the TEEAdmin list, then `get-contact` each
+  //    for its FULL per-topic TopicPreferences (ListContacts only returns a
+  //    summary; the complete per-topic map comes from GetContact).
+  const contacts: SesContactForBackfill[] = []
+  let nextPageToken: string | undefined
+  const contactEmails: string[] = []
+  do {
+    const page = await getContacts({ nextPageToken })
+    for (const c of page.Contacts || []) {
+      if (c.EmailAddress) contactEmails.push(c.EmailAddress)
+    }
+    nextPageToken = page.NextToken
+  } while (nextPageToken)
+
+  for (const email of contactEmails) {
+    const full = await getContact(email)
+    const topicPreferences = (full?.TopicPreferences || [])
+      .filter((p) => p.TopicName && p.SubscriptionStatus)
+      .map((p) => ({
+        topic: p.TopicName as string,
+        status: p.SubscriptionStatus as 'OPT_IN' | 'OPT_OUT',
+      }))
+    contacts.push({ email, topicPreferences })
+  }
+
+  // 3) Load existing SUB# items (for idempotent skips) ---------------------
   const existingSubKeys = new Set<string>()
   let lastKey: Record<string, any> | undefined
   do {
     const res = await docClient.send(
       new ScanCommand({
         TableName: tableNames.admin,
-        FilterExpression: 'begins_with(skey, :email) OR begins_with(skey, :sub)',
-        ExpressionAttributeValues: { ':email': 'EMAIL#', ':sub': 'SUB#' },
+        FilterExpression: 'begins_with(skey, :sub)',
+        ExpressionAttributeValues: { ':sub': 'SUB#' },
         ExclusiveStartKey: lastKey,
       })
     )
     for (const item of res.Items || []) {
-      if ((item.skey as string)?.startsWith('EMAIL#')) {
-        emailItems.push({
-          pkey: item.pkey,
-          emailId: item.emailId,
-          email: item.email,
-          sesTopicPreferences: item.sesTopicPreferences,
-        })
-      } else if (isListSubscriptionRecord(item)) {
+      if (isListSubscriptionRecord(item)) {
         const pid = (item.pkey as string).slice('PERSON#'.length)
         existingSubKeys.add(`${pid}#${item.listId}#${item.emailId}`)
       }
@@ -296,20 +367,49 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     lastKey = res.LastEvaluatedKey
   } while (lastKey)
 
-  // 3) Plan + (optionally) write subscriptions -----------------------------
-  const plan = planSubscriptions({ emailItems, listIdByTopic, existingSubKeys })
+  // 4) Resolve each SES contact email → PersonRecord EMAIL# row -------------
+  const resolve: ContactResolver = async (email) => {
+    const lower = email.toLowerCase()
+    // getByEmail resolves both primary (PROFILE) and secondary (EMAIL#) addresses;
+    // fall back to getAllPersonsByEmail per the spec for the shared-address case.
+    let persons: PersonRecord[] = []
+    const primary = await personRepository.getByEmail(lower)
+    if (primary) {
+      persons = [primary]
+    } else {
+      persons = await personRepository.getAllPersonsByEmail(lower)
+    }
+    for (const person of persons) {
+      const emails = await personRepository.getEmails(person.personId)
+      const row = emails.find((e) => e.email.toLowerCase() === lower)
+      if (row) {
+        return { personId: person.personId, emailId: row.emailId, email: row.email }
+      }
+    }
+    return null
+  }
+
+  // 5) Plan + (optionally) write subscriptions -----------------------------
+  const plan = await planSubscriptions({ contacts, listIdByTopic, resolve, existingSubKeys })
 
   console.log(
     `\nSubscriptions: ${plan.toCreate.length} to create, ${plan.anomalies.alreadyExists} already present.`
   )
-  console.log(`Scanned ${emailItems.length} EMAIL# items.`)
+  console.log(
+    `Read ${contacts.length} SES contact(s); ${plan.subscriptionsFromSes} OPT_IN topic-row(s) sourced from SES.`
+  )
   const noList = Object.entries(plan.anomalies.topicsWithNoList)
   if (noList.length > 0) {
-    console.log('  Anomaly — opt-ins for topics with no matching list:')
+    console.log('  Anomaly — OPT_INs for topics with no matching list:')
     for (const [topic, n] of noList) console.log(`    ${topic}: ${n}`)
   }
-  if (plan.anomalies.emailsWithNoPerson.length > 0) {
-    console.log(`  Anomaly — ${plan.anomalies.emailsWithNoPerson.length} EMAIL# item(s) with no PERSON# owner.`)
+  if (plan.unresolvedSubscribers.length > 0) {
+    console.log(
+      `\n  ⚠ ${plan.unresolvedSubscribers.length} SES contact(s) with OPT_INs but NO PersonRecord (NOT migrated, NOT created):`
+    )
+    for (const u of plan.unresolvedSubscribers) {
+      console.log(`    ${u.email} → [${u.topics.join(', ')}]`)
+    }
   }
 
   if (opts.apply) {
