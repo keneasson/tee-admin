@@ -1,6 +1,7 @@
 'use client'
 
 import { YStack, XStack, Text, H2, H4, Separator, Card, Image } from 'tamagui'
+import { MarkdownLiteText } from '../markdown-lite-text'
 import { Button } from '../Button'
 import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
 import { Event, EventSection, getPlatformDisplayName } from '@my/app/types/events'
@@ -600,17 +601,13 @@ export function EventDetailView({
               />
               {(event as any).aboutDeceased ? (
                 <YStack flex={1} minWidth={250}>
-                  <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
-                    {(event as any).aboutDeceased}
-                  </Text>
+                  <MarkdownLiteText text={(event as any).aboutDeceased} fontSize="$4" color="$gray11" lineHeight="$5" />
                 </YStack>
               ) : null}
             </XStack>
           ) : (event as any).aboutDeceased ? (
             // Just text, no photo
-            <Text fontSize="$4" color="$gray11" lineHeight="$5" whiteSpace="pre-wrap">
-              {(event as any).aboutDeceased}
-            </Text>
+            <MarkdownLiteText text={(event as any).aboutDeceased} fontSize="$4" color="$gray11" lineHeight="$5" />
           ) : null}
         </YStack>
       ) : null}
