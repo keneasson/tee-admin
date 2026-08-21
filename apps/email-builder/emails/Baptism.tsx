@@ -98,13 +98,28 @@ function formatDate(date: string | Date | undefined): string {
   })
 }
 
+// Time is derived from the SAME baptismDate as formatDate (Toronto time), so the
+// email matches the newsletter/details. It must never fall back to a mock string.
+function formatTime(date: string | Date | undefined): string {
+  if (!date) return ''
+  const d = typeof date === 'string' ? new Date(date) : date
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/Toronto',
+  })
+}
+
 const BaptismEmail: React.FC<BaptismEmailProps> = ({
   title = mockBaptismData.title,
   candidate = mockBaptismData.candidate,
   aboutCandidate = mockBaptismData.aboutCandidate,
   candidatePhoto,
   baptismDate = mockBaptismData.baptismDate,
-  baptismTime = mockBaptismData.baptismTime,
+  // No mock default — an unset baptismTime must derive from baptismDate below,
+  // never leak the placeholder "11:00 AM (during Memorial Service)" string.
+  baptismTime,
   location = mockBaptismData.location,
   onlineMeeting,
   hostingEcclesia,
@@ -119,6 +134,9 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
     : 'Our New Brother/Sister'
 
   const formattedDate = formatDate(baptismDate)
+  // Prefer an explicit baptismTime (rare — the editor has no such field today);
+  // otherwise derive it from baptismDate so it always matches the actual time.
+  const formattedTime = baptismTime || formatTime(baptismDate)
   const ecclesiaName = typeof hostingEcclesia === 'string'
     ? hostingEcclesia
     : hostingEcclesia?.name || ''
@@ -239,7 +257,7 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
                 {formattedDate ? (
                   <Text style={{ ...defaultText, margin: '0 0 8px 0', color: textColor }}>
                     <strong>{formattedDate}</strong>
-                    {baptismTime ? <><br /><AutoLinkText text={baptismTime} /></> : null}
+                    {formattedTime ? <><br />{formattedTime}</> : null}
                   </Text>
                 ) : null}
                 {location ? (
