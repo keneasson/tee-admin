@@ -18,6 +18,7 @@ import BusinessMeeting from 'email-builder/emails/BusinessMeeting'
 import CustomEmail from 'email-builder/emails/CustomEmail'
 import FuneralEmail from 'email-builder/emails/Funeral'
 import BaptismEmail from 'email-builder/emails/Baptism'
+import WeddingEmail from 'email-builder/emails/Wedding'
 import InterEcclesiaWrapper from 'email-builder/emails/InterEcclesiaWrapper'
 import { StudyWeekendContent } from 'email-builder/components/StudyWeekendContent'
 import { getEventById } from '@my/app/services/event-service'
@@ -503,6 +504,67 @@ export const getEmailContent = async (
           { plainText: true }
         )
         return [baptismHtml, baptismText]
+      } else if (event.type === 'wedding') {
+        // Format location for wedding email template.
+        // Weddings store the venue on event.location (see event-detail-view),
+        // with ceremonyLocation as a fallback per the WeddingEvent type.
+        const formatWeddingLocation = (loc: LocationInfo | undefined) => {
+          if (!loc) return undefined
+          return {
+            name: loc.name || '',
+            address: loc.address,
+            city: loc.city,
+            province: loc.province,
+            postalCode: loc.postalCode,
+            mapsUrl: loc.mapsUrl,
+          }
+        }
+        const weddingLoc = event.location || (event as any).ceremonyLocation
+        const weddingLocation = formatWeddingLocation(weddingLoc)
+        const weddingOnlineMeeting = weddingLoc?.onlineMeeting
+
+        const weddingHtml = await render(
+          <WeddingEmail
+            title={event.title}
+            couple={(event as any).couple}
+            ceremonyDate={(event as any).ceremonyDate}
+            location={weddingLocation}
+            onlineMeeting={weddingOnlineMeeting}
+            hostingEcclesia={event.hostingEcclesia}
+            description={event.description}
+            note={note}
+            eventUrl={eventUrl}
+          />
+        )
+        const weddingText = await render(
+          <WeddingEmail
+            title={event.title}
+            couple={(event as any).couple}
+            ceremonyDate={(event as any).ceremonyDate}
+            location={weddingLocation}
+            onlineMeeting={weddingOnlineMeeting}
+            hostingEcclesia={event.hostingEcclesia}
+            description={event.description}
+            note={note}
+            eventUrl={eventUrl}
+          />,
+          { plainText: true }
+        )
+
+        // Build custom subject: "Wedding of {bride} & {groom}"
+        const couple = (event as any).couple
+        const brideName = couple?.bride
+          ? `${couple.bride.firstName || ''} ${couple.bride.lastName || ''}`.trim()
+          : ''
+        const groomName = couple?.groom
+          ? `${couple.groom.firstName || ''} ${couple.groom.lastName || ''}`.trim()
+          : ''
+        const coupleName = brideName && groomName
+          ? `${brideName} & ${groomName}`
+          : brideName || groomName
+        const weddingSubject = coupleName ? `Wedding of ${coupleName}` : undefined
+
+        return [weddingHtml, weddingText, weddingSubject]
       } else {
         throw new Error(`Unsupported event type for announcement: ${event.type}`)
       }
