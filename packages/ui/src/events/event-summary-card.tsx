@@ -2,7 +2,12 @@
 
 import { Card, YStack, XStack, Text, H3, Square } from 'tamagui'
 import { Calendar, MapPin, Users } from '@tamagui/lucide-icons'
-import { Event, getPlatformDisplayName } from '@my/app/types/events'
+import {
+  Event,
+  getPlatformDisplayName,
+  getBaptismCandidates,
+  formatCandidateNames,
+} from '@my/app/types/events'
 import { formatDate, formatLocation } from './event-utils'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import {
@@ -93,14 +98,13 @@ export function EventSummaryCard({
         {/* Formatted Event Info */}
         <YStack gap="$1">
           {/* Baptism announcement - show first, right after title */}
-          {event.type === 'baptism' && event.candidate ? (() => {
-            const candidateName = `${event.candidate.firstName || ''} ${event.candidate.lastName || ''}`.trim()
-            return candidateName && (
-              <Text fontSize="$4" color="$gray11">
-                After a good confession of Faith, {candidateName} will be baptized into the saving name of our Lord.
-              </Text>
-            )
-          })() : null}
+          {event.type === 'baptism' && getBaptismCandidates(event).length > 0 ? (
+            <Text fontSize="$4" color="$gray11">
+              After a good confession of Faith,{' '}
+              {formatCandidateNames(getBaptismCandidates(event))} will be baptized into the
+              saving name of our Lord.
+            </Text>
+          ) : null}
 
           {/* About the Candidate - for baptisms */}
           {event.type === 'baptism' && (event as any).aboutCandidate ? (

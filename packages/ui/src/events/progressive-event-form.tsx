@@ -1,4 +1,11 @@
-import { Event, EventType, EventStatus, EventSharingScope } from '@my/app/types/events'
+import {
+  Event,
+  EventType,
+  EventStatus,
+  EventSharingScope,
+  getBaptismCandidates,
+  formatCandidateNames,
+} from '@my/app/types/events'
 import { EventValidator } from '@my/app/utils/event-validation'
 import { TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
@@ -19,7 +26,7 @@ import {
   Layers,
 } from '@tamagui/lucide-icons'
 import { useState, useCallback, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { Card, Circle, Input, Separator, Text, XStack, YStack, AlertDialog } from 'tamagui'
 import { Button } from '../Button'
 import { CheckboxWithCheck } from '../form/checkbox-with-check'
@@ -482,15 +489,15 @@ function StepSummary({
                 {formData.title || 'Untitled'}
               </Text>
             </XStack>
-            {currentSelectedType === 'baptism' && formData.candidate ? (
+            {currentSelectedType === 'baptism' &&
+            getBaptismCandidates(formData).length > 0 ? (
               <XStack space="$2" alignItems="center">
                 <Text fontSize="$3" fontWeight="600" color="$blue11">
-                  Candidate:
+                  Candidate(s):
                 </Text>
-                <Text
-                  fontSize="$3"
-                  color="$blue11"
-                >{`${formData.candidate.firstName} ${formData.candidate.lastName}`}</Text>
+                <Text fontSize="$3" color="$blue11">
+                  {formatCandidateNames(getBaptismCandidates(formData))}
+                </Text>
               </XStack>
             ) : null}
             {currentSelectedType === 'study-weekend' && formData.theme ? (
@@ -798,6 +805,11 @@ export function ProgressiveEventForm({
           testimony: '',
           baptismStatement: '',
         },
+        candidates: initialData?.candidates?.length
+          ? initialData.candidates
+          : initialData?.candidate?.firstName
+            ? [initialData.candidate]
+            : [{ firstName: '', lastName: '' }],
         aboutCandidate: initialData?.aboutCandidate || '',
         candidatePhoto: initialData?.candidatePhoto || undefined,
         hostingEcclesia: normalizeHostingEcclesia(initialData?.hostingEcclesia),
@@ -859,6 +871,13 @@ export function ProgressiveEventForm({
       }),
     },
   })
+
+  // Baptism candidates field array (supports unlimited candidates / double baptism)
+  const {
+    fields: candidateFields,
+    append: appendCandidate,
+    remove: removeCandidate,
+  } = useFieldArray({ control, name: 'candidates' as any })
 
   const getAvailableComponents = (): ComponentButton[] => {
     const baseComponents: ComponentButton[] = [
@@ -1368,6 +1387,23 @@ export function ProgressiveEventForm({
       active: eventPublishDate ? new Date(eventPublishDate).getTime() <= Date.now() : false, // @deprecated — derived from publishDate
       status, // Legacy: kept for backward compatibility
     }
+
+    // Baptism: keep single `candidate` (backward compat) in sync with the
+    // `candidates` array. Drop blank rows; write candidate = candidates[0].
+    if (currentSelectedType === 'baptism') {
+      const namedCandidates = getBaptismCandidates(eventData as any)
+      eventData.candidates = namedCandidates
+      if (namedCandidates.length > 0) {
+        const [first] = namedCandidates
+        eventData.candidate = {
+          // Preserve any legacy testimony/statement already attached to candidate
+          ...(eventData.candidate || {}),
+          firstName: first.firstName,
+          lastName: first.lastName,
+        }
+      }
+    }
+
     await onSave(eventData)
   }
 
@@ -1984,25 +2020,46 @@ export function ProgressiveEventForm({
             {currentSelectedType === 'baptism' ? <>
                 <YStack space="$3">
                   <Text fontSize="$5" fontWeight="600">
-                    Candidate Information
+                    Candidates
                   </Text>
-                  <XStack space="$3">
-                    <YStack flex={1}>
-                      <EventFormInput
-                        control={control}
-                        name="candidate.firstName"
-                        label="Candidate First Name"
-                        required
-                      />
-                    </YStack>
-                    <YStack flex={1}>
-                      <EventFormInput
-                        control={control}
-                        name="candidate.lastName"
-                        label="Candidate Last Name"
-                        required
-                      />
-                    </YStack>
+                  {candidateFields.map((field, index) => (
+                    <XStack key={field.id} space="$3" alignItems="flex-end">
+                      <YStack flex={1}>
+                        <EventFormInput
+                          control={control}
+                          name={`candidates.${index}.firstName`}
+                          label="Candidate First Name"
+                          required
+                        />
+                      </YStack>
+                      <YStack flex={1}>
+                        <EventFormInput
+                          control={control}
+                          name={`candidates.${index}.lastName`}
+                          label="Candidate Last Name"
+                          required
+                        />
+                      </YStack>
+                      {candidateFields.length > 1 ? (
+                        <Button
+                          size="$3"
+                          variant="outlined"
+                          onPress={() => removeCandidate(index)}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </XStack>
+                  ))}
+                  <XStack>
+                    <Button
+                      size="$3"
+                      variant="action"
+                      icon={Plus}
+                      onPress={() => appendCandidate({ firstName: '', lastName: '' })}
+                    >
+                      Add Candidate
+                    </Button>
                   </XStack>
                 </YStack>
 
@@ -2042,13 +2099,13 @@ export function ProgressiveEventForm({
                   placeholder="If you have a photo of the candidate, upload here"
                 />
 
-                {/* About the Candidate */}
+                {/* Details */}
                 <YStack space="$2">
                   <Text fontSize="$5" fontWeight="600">
-                    About the Candidate
+                    Details
                   </Text>
                   <Text fontSize="$3" color="$gray11">
-                    Share a brief biography or testimony. You can include links by typing the full URL.
+                    Share any details, biography, or testimony. Type a full URL to add a link.
                   </Text>
                   <OptimizedTextarea
                     control={control}
@@ -2675,16 +2732,11 @@ export function ProgressiveEventForm({
                   </XStack> : null}
 
                 {/* Type-specific details */}
-                {currentSelectedType === 'baptism' && currentFormData.candidate ? <>
+                {currentSelectedType === 'baptism' ? <>
                     <XStack space="$2" alignItems="center">
-                      <Text fontWeight="600">Candidate:</Text>
+                      <Text fontWeight="600">Candidate(s):</Text>
                       <Text>
-                        {(() => {
-                          const firstName = currentFormData.candidate.firstName || ''
-                          const lastName = currentFormData.candidate.lastName || ''
-                          const fullName = `${firstName} ${lastName}`.trim()
-                          return fullName || 'TBA'
-                        })()}
+                        {formatCandidateNames(getBaptismCandidates(currentFormData)) || 'TBA'}
                       </Text>
                     </XStack>
                     <XStack space="$2" alignItems="center">

@@ -286,6 +286,7 @@ export interface Event extends BaseEvent {
     testimony?: string
     baptismStatement?: string
   }
+  candidates?: Array<{ firstName: string; lastName: string }> // Multiple baptism candidates (e.g. double baptism); falls back to [candidate]
   aboutCandidate?: string // Biography/testimony text for the candidate
   candidatePhoto?: {
     url: string
@@ -428,6 +429,65 @@ export type BaptismEvent = Event & {
     testimony?: string
     baptismStatement?: string
   }
+  candidates?: Array<{ firstName: string; lastName: string }>
+}
+
+// --- Baptism candidate helpers (backward-compatible with single `candidate`) ---
+
+/**
+ * Returns the list of baptism candidates for an event.
+ * Prefers the `candidates` array (rows that have a name); falls back to the
+ * single legacy `candidate` when the array is empty; otherwise returns [].
+ */
+export function getBaptismCandidates(
+  event: {
+    candidate?: { firstName?: string; lastName?: string } | null
+    candidates?: Array<{ firstName?: string; lastName?: string }> | null
+  } | null | undefined
+): Array<{ firstName: string; lastName: string }> {
+  const hasName = (c?: { firstName?: string; lastName?: string } | null) =>
+    !!c && !!((c.firstName || '').trim() || (c.lastName || '').trim())
+
+  const fromArray = (event?.candidates || [])
+    .filter(hasName)
+    .map((c) => ({ firstName: c.firstName || '', lastName: c.lastName || '' }))
+  if (fromArray.length > 0) {
+    return fromArray
+  }
+
+  if (hasName(event?.candidate)) {
+    return [
+      {
+        firstName: event!.candidate!.firstName || '',
+        lastName: event!.candidate!.lastName || '',
+      },
+    ]
+  }
+
+  return []
+}
+
+/**
+ * Joins candidate full names into a human-readable string:
+ * 0 -> '', 1 -> "First Last", 2 -> "A and B", 3+ -> "A, B and C".
+ */
+export function formatCandidateNames(
+  cands: Array<{ firstName?: string; lastName?: string }> | null | undefined
+): string {
+  const names = (cands || [])
+    .map((c) => `${c.firstName || ''} ${c.lastName || ''}`.trim())
+    .filter((n) => n.length > 0)
+
+  if (names.length === 0) {
+    return ''
+  }
+  if (names.length === 1) {
+    return names[0]
+  }
+  if (names.length === 2) {
+    return `${names[0]} and ${names[1]}`
+  }
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
 export type GeneralEvent = Event & {

@@ -19,7 +19,7 @@ import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { Check, Send, AlertCircle, Users, Calendar, Filter } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
-import { Event } from '@my/app/types/events'
+import { Event, getBaptismCandidates, formatCandidateNames } from '@my/app/types/events'
 import { AuthSession, AuthStatus } from '@my/app/types'
 
 // Confirmation dialog state type
@@ -128,10 +128,8 @@ export const InterEcclesiaEmailSender: React.FC<InterEcclesiaEmailSenderProps> =
           ? `${deceased.title || ''} ${deceased.firstName || ''} ${deceased.lastName || ''}`.trim()
           : event.title
       case 'baptism':
-        const candidate = (event as any).candidate
-        return candidate
-          ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim()
-          : event.title
+        const baptismNames = formatCandidateNames(getBaptismCandidates(event))
+        return baptismNames || event.title
       case 'wedding':
         const couple = (event as any).couple
         if (couple) {

@@ -9,7 +9,12 @@ import {
   SundayEvents,
   SundaySchoolType,
 } from '@my/app/types'
-import { Event, LocationInfo } from '@my/app/types/events'
+import {
+  Event,
+  LocationInfo,
+  getBaptismCandidates,
+  formatCandidateNames,
+} from '@my/app/types/events'
 import MemorialService from 'email-builder/emails/Memorial'
 import Newsletter from 'email-builder/emails/Newsletter'
 import { emailReasons } from './email-send'
@@ -475,6 +480,7 @@ export const getEmailContent = async (
           <BaptismEmail
             title={event.title}
             candidate={event.candidate}
+            candidates={event.candidates}
             aboutCandidate={event.aboutCandidate}
             candidatePhoto={event.candidatePhoto}
             baptismDate={event.baptismDate}
@@ -491,6 +497,7 @@ export const getEmailContent = async (
           <BaptismEmail
             title={event.title}
             candidate={event.candidate}
+            candidates={event.candidates}
             aboutCandidate={event.aboutCandidate}
             candidatePhoto={event.candidatePhoto}
             baptismDate={event.baptismDate}
@@ -715,6 +722,7 @@ export const getEmailContent = async (
           <BaptismEmail
             title={interEcclesiaEvent.title}
             candidate={interEcclesiaEvent.candidate}
+            candidates={interEcclesiaEvent.candidates}
             aboutCandidate={interEcclesiaEvent.aboutCandidate}
             candidatePhoto={interEcclesiaEvent.candidatePhoto}
             baptismDate={interEcclesiaEvent.baptismDate}
@@ -733,10 +741,7 @@ export const getEmailContent = async (
         innerEventHtml = bodyMatch ? bodyMatch[1] : baptismFullHtml
 
         // Build subject
-        const candidate = interEcclesiaEvent.candidate
-        const candidateName = candidate
-          ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim()
-          : ''
+        const candidateName = formatCandidateNames(getBaptismCandidates(interEcclesiaEvent))
         interEcclesiaSubject = candidateName ? `Baptism of ${candidateName}` : 'Baptism Announcement'
 
       } else if (interEcclesiaEvent.type === 'study-weekend') {
