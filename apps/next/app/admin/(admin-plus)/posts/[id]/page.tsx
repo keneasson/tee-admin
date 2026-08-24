@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { YStack, XStack, Text, Spinner, Heading, Button } from '@my/ui'
 import { PostEditor, createEmptyPost, validateForPublish } from '@my/ui/src/post-editor'
+import { PostDocEditorChrome } from '@/features/post-doc-editor'
 import { useAdminAccess } from '@/hooks/use-admin-access'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { getPost, createPost, updatePost, getPostSeries } from '@my/app/provider/get-data'
@@ -35,6 +36,10 @@ export default function AdminPostEditorPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [seriesPosts, setSeriesPosts] = useState<Array<{ id: string; title: string }>>([])
+  // Which editor is mounted. The Google-Docs-style document canvas is the
+  // default (Consolidated CMS keystone); the block-form editor is kept as a
+  // one-click rollout fallback — both honour the same value/onChange contract.
+  const [editorMode, setEditorMode] = useState<'doc' | 'classic'>('doc')
 
   // The server-assigned id once the draft has been created (starts '' for new).
   const savedIdRef = useRef<string>('')
@@ -194,24 +199,43 @@ export default function AdminPostEditorPage() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <XStack justifyContent="space-between" alignItems="center">
+      <XStack justifyContent="space-between" alignItems="center" gap="$3" flexWrap="wrap">
         <Heading size="$7">{routeId === 'new' ? 'New post' : 'Edit post'}</Heading>
-        <Text
-          fontSize="$2"
-          color={saveState === 'error' ? '$red10' : '$color10'}
-          minHeight={16}
-        >
-          {saveLabel}
-        </Text>
+        <XStack alignItems="center" gap="$3">
+          <Text
+            fontSize="$2"
+            color={saveState === 'error' ? '$red10' : '$color10'}
+            minHeight={16}
+          >
+            {saveLabel}
+          </Text>
+          <Button
+            size="$2"
+            variant="outlined"
+            onPress={() => setEditorMode((m) => (m === 'doc' ? 'classic' : 'doc'))}
+          >
+            {editorMode === 'doc' ? 'Use classic editor' : 'Use document editor'}
+          </Button>
+        </XStack>
       </XStack>
 
-      <PostEditor
-        value={post}
-        onChange={handleChange}
-        onPublish={handlePublish}
-        seriesPosts={seriesPosts}
-        onSeriesPostPress={(id) => router.push(`/admin/posts/${id}`)}
-      />
+      {editorMode === 'doc' ? (
+        <PostDocEditorChrome
+          value={post}
+          onChange={handleChange}
+          onPublish={handlePublish}
+          seriesPosts={seriesPosts}
+          onSeriesPostPress={(id) => router.push(`/admin/posts/${id}`)}
+        />
+      ) : (
+        <PostEditor
+          value={post}
+          onChange={handleChange}
+          onPublish={handlePublish}
+          seriesPosts={seriesPosts}
+          onSeriesPostPress={(id) => router.push(`/admin/posts/${id}`)}
+        />
+      )}
     </YStack>
   )
 }

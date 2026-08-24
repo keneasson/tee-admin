@@ -10,6 +10,21 @@
 export { PostDocEditor, type PostDocEditorProps } from './post-doc-editor'
 export { PostDocEditorShowcase } from './post-doc-editor-showcase'
 
+// The metadata chrome around the doc-canvas editor — same controlled contract as
+// the block-form PostEditor, so the authoring page can swap either editor in.
+export {
+  PostDocEditorChrome,
+  type PostDocEditorChromeProps,
+} from './post-doc-editor-chrome'
+
+// Occasion-aware PII defaulting for canvas prose (pure; unit-testable).
+export {
+  PII_BEARING_OCCASIONS,
+  occasionIsPiiBearing,
+  gatePiiProse,
+  ungatePiiProse,
+} from './pii-occasion-defaults'
+
 // Pure serialization bijection — unit-tested in isolation (no Lexical/Tamagui).
 export {
   docToBlocks,
