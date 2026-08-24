@@ -1446,8 +1446,13 @@ export function ProgressiveEventForm({
     setStep(nextStep)
   }
 
-  // Helper for triggering saves on important field changes
-  const handleFieldChange = async () => {
+  // Helper for triggering saves on important field changes.
+  // Declared as a hoisted `function` (not a `const` arrow) so it is available
+  // when getAvailableComponents() runs eagerly above — the wedding branch's
+  // reception EventDatePicker references it via onDateChange, and an arrow
+  // const would be in the temporal dead zone at that point (TDZ crash on the
+  // wedding path only, since it's the sole reference inside getAvailableComponents).
+  async function handleFieldChange() {
     // Save after short delay to allow form state to update
     setTimeout(() => {
       if (isDirty) {
