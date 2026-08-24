@@ -52,6 +52,7 @@ export type EmailReasonType =
   | 'event-announcement'
   | 'inter-ecclesia'
   | 'news-alert'
+  | 'post-announcement'
 
 /**
  * Sub-reason for categorizing the purpose of an email send.
