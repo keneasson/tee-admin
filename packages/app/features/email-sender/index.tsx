@@ -56,7 +56,7 @@ function formatSavedTimestamp(iso: string): string {
 }
 
 // Build the display label for an event announcement card / confirmation dialog.
-// Supports funeral, baptism, wedding and engagement event shapes.
+// Supports funeral, baptism, wedding, engagement and general event shapes.
 function getEventAnnouncementLabel(event: Event): string {
   if (event.type === 'funeral') {
     const name = `${event.deceased?.title || ''} ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`.trim()
@@ -71,6 +71,10 @@ function getEventAnnouncementLabel(event: Event): string {
   if (event.type === 'engagement') {
     const names = [event.engagementProposed, event.engagementTo].filter(Boolean).join(' & ')
     return `Engagement: ${names || event.title}`
+  }
+  if (event.type === 'general') {
+    // General events have no person/occasion — the title is the announcement.
+    return `Event: ${event.title}`
   }
   const name = `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
   return `Baptism: ${name}`
@@ -198,7 +202,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     }
   }, [noteReason])
 
-  // Load recent funeral/baptism/wedding/engagement events (created within 2 weeks)
+  // Load recent funeral/baptism/wedding/engagement/general events (created within 2 weeks)
   useEffect(() => {
     const loadRecentEvents = async () => {
       try {
@@ -213,7 +217,8 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
             event.type === 'funeral' ||
             event.type === 'baptism' ||
             event.type === 'wedding' ||
-            event.type === 'engagement'
+            event.type === 'engagement' ||
+            event.type === 'general'
           const createdAt = new Date(event.createdAt)
           const isRecent = createdAt >= twoWeeksAgo
           return isRecentType && isRecent
@@ -795,7 +800,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                   </XStack>
                 ) : (
                   <Text fontSize="$3" color="$gray10">
-                    No recent funeral, baptism, wedding or engagement events to announce.
+                    No recent funeral, baptism, wedding, engagement or general events to announce.
                   </Text>
                 )}
               </YStack>

@@ -19,6 +19,7 @@ import CustomEmail from 'email-builder/emails/CustomEmail'
 import FuneralEmail from 'email-builder/emails/Funeral'
 import BaptismEmail from 'email-builder/emails/Baptism'
 import WeddingEmail from 'email-builder/emails/Wedding'
+import GeneralEmail from 'email-builder/emails/General'
 import InterEcclesiaWrapper from 'email-builder/emails/InterEcclesiaWrapper'
 import { StudyWeekendContent } from 'email-builder/components/StudyWeekendContent'
 import { getEventById } from '@my/app/services/event-service'
@@ -566,6 +567,42 @@ export const getEmailContent = async (
         const weddingSubject = coupleName ? `Wedding of ${coupleName}` : undefined
 
         return [weddingHtml, weddingText, weddingSubject]
+      } else if (event.type === 'general') {
+        // General events use the standard `event.location` field (unlike wedding's
+        // ceremonyLocation), `startDate`/`endDate`, a free-form `description`, and
+        // optional attached `documents` (e.g. a flyer PDF).
+        const formatGeneralLocation = (loc: LocationInfo | undefined) => {
+          if (!loc) return undefined
+          return {
+            name: loc.name || '',
+            address: loc.address,
+            city: loc.city,
+            province: loc.province,
+            postalCode: loc.postalCode,
+            mapsUrl: loc.mapsUrl,
+          }
+        }
+        const generalLocation = formatGeneralLocation(event.location)
+
+        const generalProps = {
+          title: event.title,
+          description: event.description,
+          startDate: (event as any).startDate,
+          endDate: (event as any).endDate,
+          location: generalLocation,
+          documents: (event as any).documents,
+          hostingEcclesia: event.hostingEcclesia,
+          note,
+          eventUrl,
+        }
+
+        const generalHtml = await render(<GeneralEmail {...generalProps} />)
+        const generalText = await render(<GeneralEmail {...generalProps} />, {
+          plainText: true,
+        })
+
+        const generalSubject = event.title || undefined
+        return [generalHtml, generalText, generalSubject]
       } else {
         throw new Error(`Unsupported event type for announcement: ${event.type}`)
       }
