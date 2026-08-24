@@ -26,7 +26,7 @@ import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingN
 import { CustomEmailCreator } from '../custom-email-creator'
 import { DirectRecipientSend } from './direct-recipient-send'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
-import { Event } from '@my/app/types/events'
+import { Event, isEventActive } from '@my/app/types/events'
 import { NewsItem, isNewsActive } from '@my/app/types/news'
 
 const DISPLAY_TIMEZONE = 'America/Toronto'
@@ -221,7 +221,10 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
             event.type === 'general'
           const createdAt = new Date(event.createdAt)
           const isRecent = createdAt >= twoWeeksAgo
-          return isRecentType && isRecent
+          // Never surface DRAFT events for sending — /api/admin/events returns
+          // all events incl. drafts; isEventActive gates on publishDate/active/status.
+          const isActive = isEventActive(event)
+          return isRecentType && isRecent && isActive
         })
 
         setRecentEvents(recent)
