@@ -26,7 +26,12 @@ import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingN
 import { CustomEmailCreator } from '../custom-email-creator'
 import { DirectRecipientSend } from './direct-recipient-send'
 import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
-import { Event, isEventActive } from '@my/app/types/events'
+import {
+  Event,
+  isEventActive,
+  getBaptismCandidates,
+  formatCandidateNames,
+} from '@my/app/types/events'
 import { NewsItem, isNewsActive } from '@my/app/types/news'
 
 const DISPLAY_TIMEZONE = 'America/Toronto'
@@ -76,7 +81,7 @@ function getEventAnnouncementLabel(event: Event): string {
     // General events have no person/occasion — the title is the announcement.
     return `Event: ${event.title}`
   }
-  const name = `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
+  const name = formatCandidateNames(getBaptismCandidates(event))
   return `Baptism: ${name}`
 }
 

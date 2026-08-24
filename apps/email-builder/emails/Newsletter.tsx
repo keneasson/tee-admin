@@ -514,6 +514,20 @@ const isElectionActive = (event: Event): boolean => {
 
 // Helper function to display event dates for different event types
 // IMPORTANT: All dates are stored as EST, so we must format in Toronto timezone
+// Format one-or-more baptism candidate names (backward-compatible with single `candidate`).
+// Inlined here to avoid a cross-package import in the email-builder app.
+const baptismCandidateNames = (event: any): string => {
+  const list: Array<{ firstName?: string; lastName?: string }> =
+    event?.candidates?.length ? event.candidates : event?.candidate ? [event.candidate] : []
+  const names = list
+    .map((c) => `${c.firstName || ''} ${c.lastName || ''}`.trim())
+    .filter((n) => n.length > 0)
+  if (names.length === 0) return ''
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 const EventDateDisplay = (event: Event): string => {
   if (event.hideDates) {
     return ''
@@ -1393,14 +1407,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         event.type !== 'engagement' &&
                         EventDateDisplay(event)}
                       {/* Baptism-specific wording */}
-                      {event.type === 'baptism' && (event as any).candidate && (
+                      {event.type === 'baptism' && baptismCandidateNames(event) && (
                         <>
                           <br />
                           <br />
                           After a good confession of Faith,{' '}
-                          <strong>
-                            {`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}
-                          </strong>{' '}
+                          <strong>{baptismCandidateNames(event)}</strong>{' '}
                           will be baptized into the saving name of our Lord.
                         </>
                       )}
@@ -2233,14 +2245,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </>
                           )}
                           {/* Baptism-specific wording */}
-                          {event.type === 'baptism' && (event as any).candidate && (
+                          {event.type === 'baptism' && baptismCandidateNames(event) && (
                             <>
                               <br />
                               <br />
                               After a good confession of Faith,{' '}
-                              <strong>
-                                {`${(event as any).candidate.firstName || ''} ${(event as any).candidate.lastName || ''}`.trim()}
-                              </strong>{' '}
+                              <strong>{baptismCandidateNames(event)}</strong>{' '}
                               will be baptized into the saving name of our Lord.
                             </>
                           )}

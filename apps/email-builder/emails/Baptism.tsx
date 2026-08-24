@@ -32,6 +32,7 @@ export interface BaptismEmailProps {
     firstName: string
     lastName: string
   }
+  candidates?: Array<{ firstName: string; lastName: string }>
   aboutCandidate?: string
   candidatePhoto?: {
     url: string
@@ -114,6 +115,7 @@ function formatTime(date: string | Date | undefined): string {
 const BaptismEmail: React.FC<BaptismEmailProps> = ({
   title = mockBaptismData.title,
   candidate = mockBaptismData.candidate,
+  candidates,
   aboutCandidate = mockBaptismData.aboutCandidate,
   candidatePhoto,
   baptismDate = mockBaptismData.baptismDate,
@@ -129,9 +131,19 @@ const BaptismEmail: React.FC<BaptismEmailProps> = ({
   eventUrl = mockBaptismData.eventUrl,
   identity,
 }) => {
-  const candidateName = candidate
-    ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim()
-    : 'Our New Brother/Sister'
+  // Support multiple candidates (double baptism) while remaining backward-compatible
+  // with the single `candidate`. Inlined join to avoid a cross-package import here.
+  const candidateList = (candidates?.length ? candidates : candidate ? [candidate] : [])
+    .map((c) => `${c.firstName || ''} ${c.lastName || ''}`.trim())
+    .filter((n) => n.length > 0)
+  const candidateName =
+    candidateList.length === 0
+      ? 'Our New Brother/Sister'
+      : candidateList.length === 1
+        ? candidateList[0]
+        : candidateList.length === 2
+          ? `${candidateList[0]} and ${candidateList[1]}`
+          : `${candidateList.slice(0, -1).join(', ')} and ${candidateList[candidateList.length - 1]}`
 
   const formattedDate = formatDate(baptismDate)
   // Prefer an explicit baptismTime (rare — the editor has no such field today);

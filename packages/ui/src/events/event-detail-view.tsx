@@ -4,7 +4,13 @@ import { YStack, XStack, Text, H2, H4, Separator, Card, Image } from 'tamagui'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import { Button } from '../Button'
 import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
-import { Event, EventSection, getPlatformDisplayName } from '@my/app/types/events'
+import {
+  Event,
+  EventSection,
+  getPlatformDisplayName,
+  getBaptismCandidates,
+  formatCandidateNames,
+} from '@my/app/types/events'
 import {
   formatDateInTimezone,
   formatTimeInTimezone,
@@ -368,16 +374,11 @@ export function EventDetailView({
         })() : null}
 
         {/* Baptism announcement - right after title, before date */}
-        {event.type === 'baptism' && event.candidate ? (
+        {event.type === 'baptism' && getBaptismCandidates(event).length > 0 ? (
           <Text fontSize="$5" color="$gray11">
-            {(() => {
-              const firstName = event.candidate.firstName || ''
-              const lastName = event.candidate.lastName || ''
-              const fullName = `${firstName} ${lastName}`.trim()
-              return fullName
-                ? `After a good confession of Faith, ${fullName} will be baptized into the saving name of our Lord.`
-                : ''
-            })()}
+            {`After a good confession of Faith, ${formatCandidateNames(
+              getBaptismCandidates(event)
+            )} will be baptized into the saving name of our Lord.`}
           </Text>
         ) : null}
 
