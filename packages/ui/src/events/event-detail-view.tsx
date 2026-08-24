@@ -419,11 +419,18 @@ export function EventDetailView({
         </YStack>
       ) : null}
 
-      {/* Location - for events that have location data (non-funeral) */}
-      {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') && (event as any).location ? (
+      {/* Location - for events that have location data (non-funeral).
+          Weddings save the venue on ceremonyLocation (the editor leaves
+          location empty), so resolve that first with location as a legacy
+          fallback. */}
+      {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') &&
+      (event.type === 'wedding' ? ((event as any).ceremonyLocation || (event as any).location) : (event as any).location) ? (
         <YStack gap="$3">
           {(() => {
-            const location = (event as any).location
+            const location =
+              event.type === 'wedding'
+                ? (event as any).ceremonyLocation || (event as any).location
+                : (event as any).location
             const isStudyWeekend = event.type === 'study-weekend'
 
             // Handle string location (legacy)

@@ -55,6 +55,27 @@ function formatSavedTimestamp(iso: string): string {
   })
 }
 
+// Build the display label for an event announcement card / confirmation dialog.
+// Supports funeral, baptism, wedding and engagement event shapes.
+function getEventAnnouncementLabel(event: Event): string {
+  if (event.type === 'funeral') {
+    const name = `${event.deceased?.title || ''} ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`.trim()
+    return `Funeral: ${name}`
+  }
+  if (event.type === 'wedding') {
+    const bride = `${event.couple?.bride?.firstName || ''} ${event.couple?.bride?.lastName || ''}`.trim()
+    const groom = `${event.couple?.groom?.firstName || ''} ${event.couple?.groom?.lastName || ''}`.trim()
+    const names = [bride, groom].filter(Boolean).join(' & ')
+    return `Wedding: ${names || event.title}`
+  }
+  if (event.type === 'engagement') {
+    const names = [event.engagementProposed, event.engagementTo].filter(Boolean).join(' & ')
+    return `Engagement: ${names || event.title}`
+  }
+  const name = `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
+  return `Baptism: ${name}`
+}
+
 // Confirmation dialog state type
 interface ConfirmDialogState {
   isOpen: boolean
@@ -177,7 +198,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     }
   }, [noteReason])
 
-  // Load recent funeral/baptism events (created within 2 weeks)
+  // Load recent funeral/baptism/wedding/engagement events (created within 2 weeks)
   useEffect(() => {
     const loadRecentEvents = async () => {
       try {
@@ -186,9 +207,13 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
         const twoWeeksAgo = new Date()
         twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-        // Filter for funerals and baptisms created within 2 weeks
+        // Filter for funerals, baptisms, weddings and engagements created within 2 weeks
         const recent = events.filter((event: Event) => {
-          const isRecentType = event.type === 'funeral' || event.type === 'baptism'
+          const isRecentType =
+            event.type === 'funeral' ||
+            event.type === 'baptism' ||
+            event.type === 'wedding' ||
+            event.type === 'engagement'
           const createdAt = new Date(event.createdAt)
           const isRecent = createdAt >= twoWeeksAgo
           return isRecentType && isRecent
@@ -312,12 +337,10 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   const composerAudienceLabel =
     availableLists.find((l) => l.key === composerAudience)?.label ?? composerAudience
 
-  // Send event-specific email (funeral/baptism announcement) to the audience
-  // chosen in the shared composer (defaults to the newsletter list).
+  // Send event-specific email (funeral/baptism/wedding/engagement announcement)
+  // to the audience chosen in the shared composer (defaults to the newsletter list).
   const sendEventEmail = async (event: Event) => {
-    const emailName = event.type === 'funeral'
-      ? `Funeral: ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`
-      : `Baptism: ${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`
+    const emailName = getEventAnnouncementLabel(event)
 
     showSendConfirmation(
       emailName,
@@ -732,13 +755,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                 ) : recentEvents.length > 0 ? (
                   <XStack gap="$3" flexWrap="wrap">
                     {recentEvents.map((event) => {
-                      const personName = event.type === 'funeral'
-                        ? `${event.deceased?.title || ''} ${event.deceased?.firstName || ''} ${event.deceased?.lastName || ''}`.trim()
-                        : `${event.candidate?.firstName || ''} ${event.candidate?.lastName || ''}`.trim()
-
-                      const eventLabel = event.type === 'funeral'
-                        ? `Funeral: ${personName}`
-                        : `Baptism: ${personName}`
+                      const eventLabel = getEventAnnouncementLabel(event)
 
                       const createdDate = new Date(event.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
@@ -778,7 +795,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                   </XStack>
                 ) : (
                   <Text fontSize="$3" color="$gray10">
-                    No recent funeral or baptism events to announce.
+                    No recent funeral, baptism, wedding or engagement events to announce.
                   </Text>
                 )}
               </YStack>

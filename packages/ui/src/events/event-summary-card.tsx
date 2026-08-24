@@ -346,9 +346,16 @@ export function EventSummaryCard({
             ) : null
           })() : null}
 
-          {/* Location - for all event types that have it */}
-          {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') && (event as any).location ? (() => {
-            const location = (event as any).location
+          {/* Location - for all event types that have it.
+              Weddings save the venue on ceremonyLocation (the editor leaves
+              location empty), so resolve that first with location as a
+              legacy fallback. */}
+          {(event.type === 'general' || event.type === 'study-weekend' || event.type === 'baptism' || event.type === 'wedding') &&
+          (event.type === 'wedding' ? ((event as any).ceremonyLocation || (event as any).location) : (event as any).location) ? (() => {
+            const location =
+              event.type === 'wedding'
+                ? (event as any).ceremonyLocation || (event as any).location
+                : (event as any).location
 
             // Handle string location (legacy)
             if (typeof location === 'string') {
@@ -487,21 +494,31 @@ export function EventSummaryCard({
             )
           })() : null}
 
-          {/* Online Meeting / Streaming Link - spelled out for print/sharing */}
-          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.onlineMeeting?.link ? (
-            <Text fontSize="$3" color="$gray11">
-              Streaming:{' '}
-              <Text
-                fontSize="$3"
-                color="$blue10"
-                textDecorationLine="underline"
-                cursor="pointer"
-                onPress={() => window.open((event as any).location.onlineMeeting.link, '_blank')}
-              >
-                {(event as any).location.onlineMeeting.link}
+          {/* Online Meeting / Streaming Link - spelled out for print/sharing.
+              Weddings carry the meeting on ceremonyLocation. */}
+          {(() => {
+            const streamLoc =
+              event.type === 'wedding'
+                ? (event as any).ceremonyLocation || (event as any).location
+                : (event as any).location
+            const link =
+              streamLoc && typeof streamLoc !== 'string' ? streamLoc.onlineMeeting?.link : undefined
+            if (!link) return null
+            return (
+              <Text fontSize="$3" color="$gray11">
+                Streaming:{' '}
+                <Text
+                  fontSize="$3"
+                  color="$blue10"
+                  textDecorationLine="underline"
+                  cursor="pointer"
+                  onPress={() => window.open(link, '_blank')}
+                >
+                  {link}
+                </Text>
               </Text>
-            </Text>
-          ) : null}
+            )
+          })()}
 
           {/* Registration Link */}
           {(event as any).registration?.registrationUrl ? (

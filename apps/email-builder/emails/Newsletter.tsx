@@ -1746,42 +1746,93 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </>
                           )
                         })()}
-                      {/* Location - for non-funeral events */}
-                      {event.type !== 'funeral' && (event as any).location && (
-                        <>
-                          <br />
-                          <br />
-                          {typeof (event as any).location === 'string' ? (
-                            (event as any).location
-                          ) : (
+                      {/* Location - for non-funeral events.
+                          Weddings save the venue on ceremonyLocation (the editor
+                          leaves location empty), so resolve that first with
+                          location as a legacy fallback. */}
+                      {event.type !== 'funeral' &&
+                        (() => {
+                          const resolvedLoc =
+                            event.type === 'wedding'
+                              ? (event as any).ceremonyLocation || (event as any).location
+                              : (event as any).location
+                          if (!resolvedLoc) return null
+                          const onlineMeeting =
+                            event.type === 'wedding' && typeof resolvedLoc !== 'string'
+                              ? resolvedLoc.onlineMeeting
+                              : undefined
+                          return (
                             <>
-                              {((event as any).location.name || (event as any).location.placeName) && (
-                                <strong>{(event as any).location.name || (event as any).location.placeName}</strong>
-                              )}
-                              {(event as any).location.address && (
+                              <br />
+                              <br />
+                              {typeof resolvedLoc === 'string' ? (
+                                resolvedLoc
+                              ) : (
                                 <>
-                                  <br />
-                                  {(event as any).location.address}
+                                  {(resolvedLoc.name || resolvedLoc.placeName) && (
+                                    <strong>{resolvedLoc.name || resolvedLoc.placeName}</strong>
+                                  )}
+                                  {resolvedLoc.address && (
+                                    <>
+                                      <br />
+                                      {resolvedLoc.address}
+                                    </>
+                                  )}
+                                  {resolvedLoc.directions && (
+                                    <>
+                                      <br />
+                                      <em>{resolvedLoc.directions}</em>
+                                    </>
+                                  )}
+                                  {resolvedLoc.mapsUrl && (
+                                    <>
+                                      <br />
+                                      <Link href={resolvedLoc.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                        Get Directions
+                                      </Link>
+                                    </>
+                                  )}
                                 </>
                               )}
-                              {(event as any).location.directions && (
+                              {/* Online meeting (wedding hybrid/online ceremonies) */}
+                              {onlineMeeting && onlineMeeting.link && (
                                 <>
                                   <br />
-                                  <em>{(event as any).location.directions}</em>
-                                </>
-                              )}
-                              {(event as any).location.mapsUrl && (
-                                <>
                                   <br />
-                                  <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
-                                    Get Directions
+                                  <strong>Join Online</strong>
+                                  <br />
+                                  <Link href={onlineMeeting.link} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
+                                    {onlineMeeting.link}
                                   </Link>
+                                  {onlineMeeting.platform && (
+                                    <>
+                                      <br />
+                                      Platform: {onlineMeeting.platform}
+                                    </>
+                                  )}
+                                  {onlineMeeting.meetingId && (
+                                    <>
+                                      <br />
+                                      Meeting ID: {onlineMeeting.meetingId}
+                                    </>
+                                  )}
+                                  {onlineMeeting.password && (
+                                    <>
+                                      <br />
+                                      Password: {onlineMeeting.password}
+                                    </>
+                                  )}
+                                  {onlineMeeting.additionalInfo && (
+                                    <>
+                                      <br />
+                                      <em>{onlineMeeting.additionalInfo}</em>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </>
-                          )}
-                        </>
-                      )}
+                          )
+                        })()}
                       {/* Description if provided */}
                       {event.description && (
                         <>

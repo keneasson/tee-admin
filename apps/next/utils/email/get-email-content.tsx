@@ -506,8 +506,9 @@ export const getEmailContent = async (
         return [baptismHtml, baptismText]
       } else if (event.type === 'wedding') {
         // Format location for wedding email template.
-        // Weddings store the venue on event.location (see event-detail-view),
-        // with ceremonyLocation as a fallback per the WeddingEvent type.
+        // The wedding editor saves the venue on event.ceremonyLocation (per the
+        // WeddingEvent type), so prefer it; fall back to event.location for any
+        // legacy wedding that stored the venue there.
         const formatWeddingLocation = (loc: LocationInfo | undefined) => {
           if (!loc) return undefined
           return {
@@ -519,7 +520,7 @@ export const getEmailContent = async (
             mapsUrl: loc.mapsUrl,
           }
         }
-        const weddingLoc = event.location || (event as any).ceremonyLocation
+        const weddingLoc = (event as any).ceremonyLocation || event.location
         const weddingLocation = formatWeddingLocation(weddingLoc)
         const weddingOnlineMeeting = weddingLoc?.onlineMeeting
 
