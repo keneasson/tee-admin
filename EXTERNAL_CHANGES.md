@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### GitHub Actions — secrets for the weekly Vercel deployment-prune job
+- **Date**: 2026-09-04
+- **Branch**: `chore/vercel-deploy-prune`
+- **Code change**: Added `.github/workflows/vercel-deployment-prune.yml` (weekly cron + manual `workflow_dispatch`) running `scripts/prune-vercel-deployments.mjs`, which keeps the live production deployment + the newest 5 per project and deletes the rest. Prevents recurrence of the "Deployment Storage 100% of 10 GB" incident (184 retained builds).
+- **Why it matters**: Vercel never auto-deletes deployments; without this job they accumulate until the free-tier storage cap is hit again. The job needs two repo secrets to authenticate to the Vercel API — until they're set it will simply fail with "VERCEL_TOKEN and VERCEL_TEAM_ID are required. Nothing deleted." (safe: it never deletes without them).
+- **External action** (site owner, GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**):
+  1. `VERCEL_TOKEN` — a Vercel access token (Vercel dashboard → **Account Settings → Tokens**, scoped to the **`ken-eassons-projects`** team). Treat like a password.
+  2. `VERCEL_TEAM_ID` — `team_vwApqYX2oh48OUB9tx1TTTgR`.
+  3. (Optional) Verify with a manual run: **Actions → "Prune old Vercel deployments" → Run workflow** with **dry_run = true** — it logs what it *would* delete without deleting.
+- **Status**: PENDING — secrets not yet added. The workflow is merged but is a no-op (fails safely) until the two secrets exist.
+
 ### Vercel — Node.js runtime bump 22 → 24 (deprecation of Node 20)
 - **Date**: 2026-08-14
 - **Branch**: `chore/node-24`
