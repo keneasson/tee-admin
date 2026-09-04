@@ -1,0 +1,42 @@
+name: Prune old Vercel deployments
+
+# Vercel never auto-deletes deployments, so they accumulate against the free-tier
+# "Deployment Storage" cap (we hit 100% of 10 GB at 184 retained builds). This
+# prunes weekly, keeping the live production deployment + the newest few per project.
+
+on:
+  schedule:
+    # Mondays 08:00 UTC (weekly)
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: 'How many newest deployments to keep per project (in addition to production)'
+        required: false
+        default: '5'
+      dry_run:
+        description: 'Log what would be deleted without deleting'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: vercel-deployment-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prune deployments
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          PROJECTS: tee-admin,echadhub
+          KEEP: ${{ github.event.inputs.keep || '5' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: node scripts/prune-vercel-deployments.mjs
