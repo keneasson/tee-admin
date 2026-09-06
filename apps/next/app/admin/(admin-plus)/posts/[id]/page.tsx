@@ -30,6 +30,7 @@ export default function AdminPostEditorPage() {
       onOpenPost={(id) => router.push(`/admin/posts/${id}`)}
       onBack={() => router.push('/admin')}
       renderDocEditor={(props) => <PostDocEditorChrome {...props} />}
+      confirmSend={(message) => window.confirm(message)}
     />
   )
 }

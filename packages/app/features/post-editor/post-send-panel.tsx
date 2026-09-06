@@ -15,7 +15,7 @@ import {
   YStack,
 } from '@my/ui'
 import { Check, ChevronDown, ChevronUp } from '@tamagui/lucide-icons'
-import { getContactsList } from '@my/app/provider/get-data'
+import { getContactsList, sendPostAnnouncement } from '../../provider/get-data'
 
 type Audience = { key: string; label: string }
 
@@ -34,10 +34,28 @@ type Audience = { key: string; label: string }
  *   - The server hard-routes test sends to the test list and re-checks the gate,
  *     status, and tenant — this panel is the convenience layer, not the guard.
  *
- * apps/next-only (uses the send route + shared, next-auth-free data helpers). No
- * hand-rolled button colors — @my/ui Button variants only. No `&&` in JSX.
+ * Cross-platform (ADR-0003). Two platform couplings were lifted out:
+ *   - the send call goes through `sendPostAnnouncement` in the shared data
+ *     provider, so the API origin is decided in one place rather than by a
+ *     relative-URL `fetch` that only resolves in a browser;
+ *   - confirmation arrives as the `confirmSend` prop. `window.confirm` blocks
+ *     the whole page on web and does not exist on native, so the platform
+ *     supplies its own affirmative-confirmation step.
+ *
+ * No hand-rolled button colors — @my/ui Button variants only. No `&&` in JSX.
  */
-export function PostSendPanel({ postId, ready }: { postId: string; ready: boolean }) {
+export interface PostSendPanelProps {
+  postId: string
+  /** Only a published (`ready`) post can be sent — the server re-checks this. */
+  ready: boolean
+  /**
+   * Platform confirmation. Returns true to proceed. Passed in because a blocking
+   * `window.confirm` is web-only (and freezes the page); native supplies its own.
+   */
+  confirmSend: (message: string) => boolean | Promise<boolean>
+}
+
+export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps) {
   const [audiences, setAudiences] = useState<Audience[]>([])
   const [audience, setAudience] = useState<string>('newsletter')
   const [live, setLive] = useState(false)
@@ -74,21 +92,13 @@ export function PostSendPanel({ postId, ready }: { postId: string; ready: boolea
     const confirmMsg = live
       ? `Send this announcement LIVE to "${audienceLabel}"? This emails the whole audience.`
       : `Send a TEST announcement to the test list? (Live target would be: ${audienceLabel})`
-    if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return
+    if (!(await confirmSend(confirmMsg))) return
 
     setSending(true)
     setMessage(null)
     setIsError(false)
     try {
-      const res = await fetch(`/api/admin/posts/${postId}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test: !live, list: audience }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.error || 'Send failed')
-      }
+      const data = await sendPostAnnouncement(postId, { test: !live, list: audience })
       setIsError(false)
       setMessage(
         `Sent ${data.test ? '(TEST — test list)' : `to ${audienceLabel}`}: ${data.sentCount} sent, ${data.skippedCount} skipped.`
@@ -180,8 +190,9 @@ export function PostSendPanel({ postId, ready }: { postId: string; ready: boolea
           onPress={handleSend}
           disabled={!ready || sending || !audience}
           alignSelf="flex-end"
+          icon={sending ? <Spinner size="small" /> : undefined}
         >
-          {sending ? <Spinner size="small" /> : live ? 'Send LIVE' : 'Send test'}
+          {sending ? 'Sending…' : live ? 'Send LIVE' : 'Send test'}
         </Button>
       </XStack>
 
