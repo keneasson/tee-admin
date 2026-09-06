@@ -38,7 +38,7 @@ import {
   isLocationResolved,
   pickUniqueMatch,
   canEditEcclesiaClient,
-} from './location-resolve'
+} from '@my/app/features/post-editor/resolvers/location-resolve'
 
 interface PlacePrediction {
   placeId: string

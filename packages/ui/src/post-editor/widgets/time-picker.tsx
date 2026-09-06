@@ -18,11 +18,12 @@
  */
 
 import { useState } from 'react'
-import { YStack, XStack, Text, Button, Input, Separator } from '@my/ui'
+import { YStack, XStack, Text, Input, Separator } from 'tamagui'
+import { Button } from '../../Button'
 import { Clock, CheckSquare, Square, ChevronDown, ChevronRight } from '@tamagui/lucide-icons'
 import type { ReminderOffset, TimeBlock } from '@my/app/types/post'
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from '@my/app/utils/timezone'
-import { combineWall, utcToWallParts, wallTimeToUtc } from './time-resolve'
+import { combineWall, utcToWallParts, wallTimeToUtc } from '@my/app/features/post-editor/resolvers/time-resolve'
 
 export interface TimePickerProps {
   block: TimeBlock

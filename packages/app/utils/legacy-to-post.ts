@@ -32,6 +32,7 @@ import type {
   TimeBlock,
   Visibility,
 } from '../types/post'
+import { occasionIsPiiBearing } from './occasion-pii'
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -59,21 +60,10 @@ function joinBio(...parts: Array<string | undefined>): string | undefined {
 }
 
 /**
- * Occasions that can carry sensitive PII in FREE TEXT / pixels. Under these, a
- * TextBlock and a FlyerBlock default to `members` reach (design §5, §8.3) — the
- * redactor can't parse names out of prose or images, so anon simply doesn't see
- * them.
+ * PII-bearing occasions come from the canonical set in `occasion-pii.ts` — the
+ * ONE home shared by this adapter and both editors (see that file for why).
  */
-const PII_BEARING_OCCASIONS: ReadonlySet<OccasionTag> = new Set([
-  'funeral',
-  'baptism',
-  'engagement',
-  'medical',
-])
-
-function isPiiBearing(occasion: OccasionTag[]): boolean {
-  return occasion.some((o) => PII_BEARING_OCCASIONS.has(o))
-}
+const isPiiBearing = occasionIsPiiBearing
 
 const EVENT_TYPE_TO_OCCASION: Record<EventType, OccasionTag> = {
   'study-weekend': 'study-weekend',

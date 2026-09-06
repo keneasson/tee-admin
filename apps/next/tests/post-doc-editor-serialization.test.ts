@@ -5,8 +5,8 @@ import {
   insertBlockNodeAt,
   POST_BLOCK_TYPE,
   type SerializedTopNode,
-} from '../features/post-doc-editor/doc-serialization'
-import { makeToolBlock } from '../features/post-doc-editor/tool-blocks'
+} from '@my/app/features/post-editor/doc-serialization'
+import { makeToolBlock } from '@my/app/features/post-editor/tool-blocks'
 import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 
 /**

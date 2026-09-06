@@ -10,9 +10,9 @@
  * Web-only; URL helpers are unit-tested in {@link link-resolve.ts}.
  */
 
-import { YStack, Text, Input } from '@my/ui'
+import { YStack, Text, Input } from 'tamagui'
 import type { LinkBlock } from '@my/app/types/post'
-import { normalizeUrl } from './link-resolve'
+import { normalizeUrl } from '@my/app/features/post-editor/resolvers/link-resolve'
 
 export interface LinkEditorProps {
   block: LinkBlock

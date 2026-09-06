@@ -56,6 +56,7 @@ const emailAdminPages: MainPageType[] = [
 // Content managers — available to content authors (admin/owner + rep/recorder/RB).
 // Per-ecclesia scoping is enforced by the routes themselves.
 const contentManagerPages: MainPageType[] = [
+  { path: '/admin/posts', label: 'Posts (New CMS)' },
   { path: '/admin/events', label: 'Event Manager' },
   { path: '/admin/news', label: 'News Manager' },
   { path: '/admin/meetings', label: 'Meeting Manager' },

@@ -13,7 +13,7 @@ import { useState } from 'react'
 import { YStack, XStack, H2, H4, Paragraph, Separator, Text, Button } from '@my/ui'
 import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 import { PostDocEditor } from './post-doc-editor'
-import { TemplatePicker } from './template-picker'
+import { TemplatePicker } from '@my/ui/src/post-editor/template-picker'
 
 const text = (body: string): TextBlock => ({
   id: `seed_${Math.random().toString(36).slice(2, 8)}`,

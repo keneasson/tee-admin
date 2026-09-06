@@ -3,7 +3,7 @@ import {
   OBITUARY_TEMPLATE,
   TEMPLATES,
   applyTemplate,
-} from '../features/post-doc-editor/templates'
+} from '@my/app/features/post-editor/templates'
 import type { Block } from '@my/app/types/post'
 
 /**

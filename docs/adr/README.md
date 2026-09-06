@@ -19,3 +19,4 @@ References. Keep it to a page. Number sequentially, `NNNN-kebab-title.md`.
 |-----|-------|--------|
 | [0001](0001-tenancy-model.md) | Tenancy model — a tenant is an Ecclesia or a Christadelphian Organization | Accepted |
 | [0002](0002-privilege-escalation-and-anti-abuse.md) | Privilege escalation & anti-abuse — trust model for creating tenants, adding members, assigning Recording Brother | Accepted |
+| [0003](0003-ui-layering-and-the-design-language-seam.md) | UI layering — route files are mount points; `@my/ui` is the design-language seam | Accepted |

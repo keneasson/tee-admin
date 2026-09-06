@@ -12,10 +12,11 @@
  */
 
 import { useMemo, useState } from 'react'
-import { YStack, XStack, Text, Button, Separator } from '@my/ui'
+import { YStack, XStack, Text, Separator } from 'tamagui'
+import { Button } from '../Button'
 import { CheckSquare, Square, FileText, Wand2 } from '@tamagui/lucide-icons'
 import type { Block } from '@my/app/types/post'
-import { TEMPLATES, applyTemplate, type TemplateDef } from './templates'
+import { TEMPLATES, applyTemplate, type TemplateDef } from '@my/app/features/post-editor/templates'
 
 export interface TemplatePickerProps {
   onApply: (blocks: Block[]) => void

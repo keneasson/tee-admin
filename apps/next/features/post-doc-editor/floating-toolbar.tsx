@@ -37,15 +37,15 @@ import type {
 } from '@my/app/types/post'
 import { getBlockDef } from '@my/ui/src/post-editor/registry'
 import { registerDefaultBlocks } from '@my/ui/src/post-editor/register-default-blocks'
-import { TOOLS, type ToolKind } from './tool-blocks'
+import { TOOLS, type ToolKind } from '@my/app/features/post-editor/tool-blocks'
 import { useEditSession } from './edit-session'
 import { $isPostBlockNode } from './post-block-node'
 import { LocationResolver } from './widgets/location-resolver'
 import { PersonResolver } from './widgets/person-resolver'
-import { TimePicker } from './widgets/time-picker'
-import { LinkEditor } from './widgets/link-editor'
+import { TimePicker } from '@my/ui/src/post-editor/widgets/time-picker'
+import { LinkEditor } from '@my/ui/src/post-editor/widgets/link-editor'
 import { FlyerUploader } from './widgets/flyer-uploader'
-import { RegistrationEditor } from './widgets/registration-editor'
+import { RegistrationEditor } from '@my/ui/src/post-editor/widgets/registration-editor'
 
 // Populate the block registry (idempotent) so Edit mode can look up each kind's
 // encapsulated editor. Same registry the block-form editor uses.

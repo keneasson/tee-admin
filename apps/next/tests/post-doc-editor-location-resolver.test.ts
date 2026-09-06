@@ -9,15 +9,15 @@ import {
   pickUniqueMatch,
   canEditEcclesiaClient,
   type EcclesiaSuggestion,
-} from '../features/post-doc-editor/widgets/location-resolve'
-import { makeToolBlock, makeSeededToolBlock } from '../features/post-doc-editor/tool-blocks'
+} from '@my/app/features/post-editor/resolvers/location-resolve'
+import { makeToolBlock, makeSeededToolBlock } from '@my/app/features/post-editor/tool-blocks'
 import {
   docToBlocks,
   blocksToDocState,
   insertBlockNodeAt,
   POST_BLOCK_TYPE,
   type SerializedTopNode,
-} from '../features/post-doc-editor/doc-serialization'
+} from '@my/app/features/post-editor/doc-serialization'
 import type { LocationBlock, TextBlock } from '@my/app/types/post'
 
 /**
