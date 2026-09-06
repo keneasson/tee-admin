@@ -4,7 +4,7 @@ import {
   occasionIsPiiBearing,
   gatePiiProse,
   ungatePiiProse,
-} from '../features/post-doc-editor/pii-occasion-defaults'
+} from '@my/app/features/post-editor/pii-occasion-defaults'
 import type { Block, FlyerBlock, LocationBlock, TextBlock } from '@my/app/types/post'
 
 /**

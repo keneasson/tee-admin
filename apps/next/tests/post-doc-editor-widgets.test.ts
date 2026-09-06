@@ -8,21 +8,21 @@ import {
   addPerson,
   removePerson,
   patchPerson,
-} from '../features/post-doc-editor/widgets/person-resolve'
+} from '@my/app/features/post-editor/resolvers/person-resolve'
 import {
   wallTimeToUtc,
   utcToWallTime,
   utcToWallParts,
   combineWall,
-} from '../features/post-doc-editor/widgets/time-resolve'
-import { looksLikeUrl, normalizeUrl } from '../features/post-doc-editor/widgets/link-resolve'
-import { isImageMime, hasFlyerImage } from '../features/post-doc-editor/widgets/flyer-resolve'
+} from '@my/app/features/post-editor/resolvers/time-resolve'
+import { looksLikeUrl, normalizeUrl } from '@my/app/features/post-editor/resolvers/link-resolve'
+import { isImageMime, hasFlyerImage } from '@my/app/features/post-editor/resolvers/flyer-resolve'
 import {
   parseFee,
   formatFee,
   deadlineDateToIso,
   isoToDeadlineDate,
-} from '../features/post-doc-editor/widgets/registration-resolve'
+} from '@my/app/features/post-editor/resolvers/registration-resolve'
 import type { FlyerBlock } from '@my/app/types/post'
 
 /**

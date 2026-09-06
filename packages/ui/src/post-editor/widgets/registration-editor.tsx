@@ -17,7 +17,8 @@
  */
 
 import { useState } from 'react'
-import { YStack, XStack, Text, Button, Input, TextArea, Separator } from '@my/ui'
+import { YStack, XStack, Text, Input, TextArea, Separator } from 'tamagui'
+import { Button } from '../../Button'
 import {
   ClipboardCheck,
   CheckSquare,
@@ -27,13 +28,13 @@ import {
 } from '@tamagui/lucide-icons'
 import type { ReminderOffset, RegistrationBlock } from '@my/app/types/post'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
-import { normalizeUrl } from './link-resolve'
+import { normalizeUrl } from '@my/app/features/post-editor/resolvers/link-resolve'
 import {
   deadlineDateToIso,
   formatFee,
   isoToDeadlineDate,
   parseFee,
-} from './registration-resolve'
+} from '@my/app/features/post-editor/resolvers/registration-resolve'
 
 export interface RegistrationEditorProps {
   block: RegistrationBlock

@@ -33,7 +33,7 @@ import {
 } from 'lexical'
 import { $insertNodeToNearestRoot } from '@lexical/utils'
 import { $createPostBlockNode } from './post-block-node'
-import { makeToolBlock, makeSeededToolBlock, type ToolKind } from './tool-blocks'
+import { makeToolBlock, makeSeededToolBlock, type ToolKind } from '@my/app/features/post-editor/tool-blocks'
 import { useEditSession } from './edit-session'
 
 export interface ArmedToolPluginProps {

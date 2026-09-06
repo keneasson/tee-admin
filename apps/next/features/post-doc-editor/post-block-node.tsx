@@ -19,7 +19,7 @@
 import type { ReactNode } from 'react'
 import { DecoratorNode, type LexicalNode, type NodeKey, type SerializedLexicalNode } from 'lexical'
 import type { Block } from '@my/app/types/post'
-import { POST_BLOCK_TYPE, type SerializedPostBlockNode } from './doc-serialization'
+import { POST_BLOCK_TYPE, type SerializedPostBlockNode } from '@my/app/features/post-editor/doc-serialization'
 import { BlockWidget } from './block-widget'
 
 export class PostBlockNode extends DecoratorNode<ReactNode> {

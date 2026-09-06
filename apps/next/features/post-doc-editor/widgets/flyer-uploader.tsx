@@ -23,7 +23,7 @@ import { ImagePlus, UploadCloud, RefreshCw } from '@tamagui/lucide-icons'
 import type { DocumentAttachment } from '@my/app/types/events'
 import type { FlyerBlock } from '@my/app/types/post'
 import { looksLikeImage } from '@my/ui/src/post-view/post-view-format'
-import { FLYER_ACCEPT, hasFlyerImage } from './flyer-resolve'
+import { FLYER_ACCEPT, hasFlyerImage } from '@my/app/features/post-editor/resolvers/flyer-resolve'
 
 export interface FlyerUploaderProps {
   block: FlyerBlock

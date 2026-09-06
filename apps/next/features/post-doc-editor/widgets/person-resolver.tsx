@@ -31,7 +31,7 @@ import {
   plainNameToPerson,
   removePerson,
   suggestionToPerson,
-} from './person-resolve'
+} from '@my/app/features/post-editor/resolvers/person-resolve'
 
 export interface PersonResolverProps {
   block: PersonBlock

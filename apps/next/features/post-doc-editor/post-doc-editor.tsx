@@ -33,8 +33,8 @@ import { PostBlockNode } from './post-block-node'
 import { ArmedToolPlugin } from './armed-tool-plugin'
 import { FloatingToolbar } from './floating-toolbar'
 import { EditSessionProvider } from './edit-session'
-import { blocksToDocState, docToBlocks } from './doc-serialization'
-import { type ToolKind } from './tool-blocks'
+import { blocksToDocState, docToBlocks } from '@my/app/features/post-editor/doc-serialization'
+import { type ToolKind } from '@my/app/features/post-editor/tool-blocks'
 
 export interface PostDocEditorProps {
   /** Seeds the document (order preserved). Read once at mount. */

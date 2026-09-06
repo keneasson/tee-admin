@@ -1,7 +1,6 @@
 'use client'
 
-import { YStack } from 'tamagui'
-import { PostView } from '@my/ui'
+import { YStack, PostView } from '@my/ui'
 import type { Post } from '@my/app/types/post'
 
 /**

@@ -41,3 +41,20 @@ export {
   makeRegistrationBlock,
 } from './blocks/registration-block-editor'
 export { LinkBlockEditor, makeLinkBlock } from './blocks/link-block-editor'
+
+// Document-canvas chrome (Consolidated CMS Phase 2R). Cross-platform: the canvas
+// itself arrives through `renderCanvas` (Lexical on web, native on Expo).
+export {
+  PostDocChrome,
+  type PostDocChromeProps,
+  type PostDocCanvasProps,
+} from './post-doc-chrome'
+
+// Document-canvas widget UIs that are already platform-free (Tamagui only).
+// The remaining three (location / person / flyer) still reach for relative-URL
+// fetches and stay in apps/next until they get a shared data seam — see the
+// follow-up issue referenced in docs/adr/0003.
+export { TemplatePicker } from './template-picker'
+export { LinkEditor } from './widgets/link-editor'
+export { RegistrationEditor } from './widgets/registration-editor'
+export { TimePicker } from './widgets/time-picker'

@@ -24,8 +24,8 @@ import type {
 } from '@my/app/types/post'
 import { genId } from '@my/ui/src/post-editor/post-reducer'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
-import { plainNameToPerson } from './widgets/person-resolve'
-import { looksLikeUrl, normalizeUrl } from './widgets/link-resolve'
+import { plainNameToPerson } from './resolvers/person-resolve'
+import { looksLikeUrl, normalizeUrl } from './resolvers/link-resolve'
 
 export type ToolKind = 'location' | 'person' | 'time' | 'flyer' | 'registration' | 'link'
 

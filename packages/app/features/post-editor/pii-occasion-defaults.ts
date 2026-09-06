@@ -19,23 +19,19 @@
  * without ever mutating the editor — so gating is fully reversible and never
  * fragments prose into widgets.
  *
- * Pure + dependency-light: types only, unit-testable in a plain node env.
+ * Pure + dependency-light: types only, unit-testable in a plain node env — and
+ * cross-platform, so an Expo canvas gets the same PII gate for free. It lives in
+ * `packages/app` (NOT the web app) because the gate is a rule about posts, not a
+ * property of the Lexical canvas that happens to render them.
  */
 
-import type { Block, OccasionTag, TextBlock } from '@my/app/types/post'
+import type { Block, OccasionTag, TextBlock } from '../../types/post'
+import { occasionIsPiiBearing } from '../../utils/occasion-pii'
 
-/**
- * Occasions whose posts routinely carry PII in free prose the redactor can't
- * locate (obituary, testimony, a medical update). A post tagged with ANY of
- * these gates its prose to members by default. Occasion is DATA — this is a
- * small membership set, never a code path per occasion (design §8.5).
- */
-export const PII_BEARING_OCCASIONS: readonly OccasionTag[] = ['funeral', 'medical', 'baptism']
-
-/** True when a post's occasion tags include at least one PII-bearing occasion. */
-export function occasionIsPiiBearing(occasion: OccasionTag[]): boolean {
-  return occasion.some((tag) => PII_BEARING_OCCASIONS.includes(tag))
-}
+// The membership set itself lives in `utils/occasion-pii.ts` — the ONE home
+// shared with the Phase 0 adapter. Re-exported here purely for callers that
+// already reach for the editor module.
+export { PII_BEARING_OCCASIONS, occasionIsPiiBearing } from '../../utils/occasion-pii'
 
 /** The signature of a text block auto-gated by {@link gatePiiProse}. */
 function isAutoGated(block: TextBlock): boolean {
