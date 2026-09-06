@@ -62,3 +62,6 @@ export * from './resolvers/registration-resolve'
 
 // The post list screen (ADR-0003: the route is a mount point).
 export { PostListScreen, type PostListScreenProps } from './post-list-screen'
+
+// Post → announcement email send bridge (epic #131 §4).
+export { PostSendPanel, type PostSendPanelProps } from './post-send-panel'

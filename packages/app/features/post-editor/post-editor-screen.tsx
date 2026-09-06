@@ -22,6 +22,7 @@ import { Text, XStack, YStack, Button, LoadingState, ErrorState, PageHeader } fr
 import { PostEditor } from '@my/ui/src/post-editor'
 import type { Post } from '../../types/post'
 import { usePostEditorState, type SaveState } from './use-post-editor-state'
+import { PostSendPanel } from './post-send-panel'
 
 /** What a platform's document canvas receives — the editor's controlled contract. */
 export interface PostDocEditorSlotProps {
@@ -50,6 +51,13 @@ export interface PostEditorScreenProps {
    * the block-form editor then stands alone and the toggle is hidden.
    */
   renderDocEditor?: (props: PostDocEditorSlotProps) => ReactNode
+  /**
+   * Platform confirmation for the "Send announcement" panel. Omit it and the
+   * panel is not rendered at all — a platform with no confirmation affordance
+   * must not be able to fire a live send by accident (the send bridge is also
+   * gated server-side on auth, CONSOLIDATED_CMS, `ready` status and tenant).
+   */
+  confirmSend?: (message: string) => boolean | Promise<boolean>
 }
 
 const SAVE_LABELS: Record<SaveState, string> = {
@@ -68,6 +76,7 @@ export function PostEditorScreen({
   onOpenPost,
   onBack,
   renderDocEditor,
+  confirmSend,
 }: PostEditorScreenProps) {
   // Which editor is mounted. The document canvas is the default (Consolidated
   // CMS keystone); the block-form editor stays a one-click rollout fallback —
@@ -125,6 +134,14 @@ export function PostEditorScreen({
       />
 
       {showDoc ? renderDocEditor!(editorProps) : <PostEditor {...editorProps} />}
+
+      {confirmSend ? (
+        <PostSendPanel
+          postId={post.id}
+          ready={post.status === 'ready'}
+          confirmSend={confirmSend}
+        />
+      ) : null}
     </YStack>
   )
 }

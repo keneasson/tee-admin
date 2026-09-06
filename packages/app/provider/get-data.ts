@@ -544,6 +544,32 @@ export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post
  * auto-joins the source's series (Connect/series). Returns the new draft —
  * callers navigate to `/admin/posts/{newId}`.
  */
+/**
+ * Send a Post as an announcement email (Consolidated CMS send bridge, epic #131).
+ *
+ * TEST IS THE DEFAULT: omit `test` and the server routes to the test list. Only
+ * an explicit `test: false` opts into a live send, and the server re-checks the
+ * gate, the post's `ready` status and tenant isolation regardless of what is
+ * passed here — this helper is the transport, never the guard.
+ */
+export const sendPostAnnouncement = async (
+  id: string,
+  options: { test?: boolean; list: string }
+): Promise<{ test: boolean; sentCount: number; skippedCount: number }> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/send`
+  const response = await fetch(url, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ test: options.test !== false, list: options.list }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error || `Send failed (${response.status})`)
+  }
+  return data
+}
+
 export const duplicatePost = async (id: string): Promise<Post> => {
   const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/duplicate`
   const response = await fetch(url, { cache: 'no-store', method: 'POST' })

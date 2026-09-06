@@ -100,6 +100,17 @@ const senders = {
     contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
+  // Consolidated CMS send bridge (epic #131 §4-C). One occasion-agnostic reason
+  // for sending ANY Post as an announcement — funeral/baptism/wedding/general all
+  // flow through here. Subject is always the post title (passed as customSubject);
+  // this static value is only the fallback. The audience is caller-chosen
+  // (customList); 'newsletter' is a safe default, and test mode still hard-routes
+  // to testList in emailSend.
+  'post-announcement': {
+    subject: 'Announcement',
+    contactList: 'newsletter',
+    replyTo: REPLY_TO,
+  },
 }
 
 /**
