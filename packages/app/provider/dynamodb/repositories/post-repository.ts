@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { BaseRepository } from './base-repository'
 import type { Post } from '@my/app/types/post'
+import { normalizePost } from '../../../utils/normalize-post'
 
 /**
  * PostRepository — native storage for the unified {@link Post} model
@@ -137,7 +138,12 @@ export class PostRepository extends BaseRepository<PostRecord> {
     }
   }
 
-  /** Strip storage attributes → a clean domain Post (no key/gsi/version leakage). */
+  /**
+   * Strip storage attributes → a clean domain Post (no key/gsi/version leakage),
+   * then normalize. The normalize step repairs `convertEmptyValues: true` damage
+   * (stored `''` reads back as `null`), so every consumer downstream of this ONE
+   * boundary gets the shape the types promise — see `normalize-post.ts` (#214).
+   */
   private static toPost(record: PostRecord): Post {
     const {
       pkey: _pkey,
@@ -150,7 +156,7 @@ export class PostRepository extends BaseRepository<PostRecord> {
       lastUpdated: _lastUpdated,
       ...post
     } = record
-    return post
+    return normalizePost(post)
   }
 
   /**

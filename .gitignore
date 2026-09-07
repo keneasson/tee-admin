@@ -56,4 +56,7 @@ thumbs.db
 
 # Claude AI settings (local configuration)
 .claude/settings.local.json
+# Claude Code per-session worktrees — checkouts of OTHER branches. Staging these
+# adds embedded git repositories to the index (nearly happened on #215).
+.claude/worktrees/
 tee-smtp-credentials_credentials.csv
