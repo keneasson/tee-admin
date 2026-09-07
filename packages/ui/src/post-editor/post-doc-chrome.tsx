@@ -34,14 +34,15 @@
  */
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
-import { YStack, XStack, Text, Input, Popover } from 'tamagui'
+import { YStack, XStack, Text, Input, Popover, Separator } from 'tamagui'
 import {
   CalendarClock,
+  Eye,
+  EyeOff,
   Globe,
   LayoutTemplate,
   Lock,
   Save,
-  Upload,
   X,
 } from '@tamagui/lucide-icons'
 import type { Block, OccasionTag, Post, Visibility } from '@my/app/types/post'
@@ -181,6 +182,7 @@ export function PostDocChrome({
   const publishErrors = validateForPublish(value)
   const canPublish = publishErrors.length === 0
   const isPublic = value.visibility === 'public'
+  const isPublished = value.status === 'ready'
 
   return (
     <YStack flex={1} gap="$2">
@@ -204,28 +206,46 @@ export function PostDocChrome({
           focusStyle={{ backgroundColor: '$background', borderWidth: 1, borderColor: '$blue8' }}
         />
 
-        {/* 1. PUBLISH — the act, and who it reaches. Visibility lives here
-            rather than in its own icon: "publish" is inseparable from "to
-            whom", and Docs' Share works the same way. The globe/lock badge
-            keeps the current reach readable without spending a slot. */}
+        {/* 1. DRAFT ↔ PUBLISHED — EXPOSURE, not sharing. The question this
+            control answers is "does this exist for readers yet?", which is
+            exactly what `status` already encodes: only 'ready' is ever served
+            publicly, 'draft' is a placeholder nobody sees.
+
+            Audience ("who can see it") is a DIFFERENT axis and stays a separate
+            setting below, not folded into the same word — a members-only post
+            can be published, and a public post can be a draft. */}
         <ToolbarPopover
-          icon={Upload}
-          label={`Publish — ${isPublic ? 'public' : 'restricted'}`}
-          active={!isPublic}
+          icon={isPublished ? Eye : EyeOff}
+          label={isPublished ? 'Published' : 'Draft'}
+          active={isPublished}
           open={openPanel === 'publish'}
           onOpenChange={(o) => setOpenPanel(o ? 'publish' : null)}
         >
-          <YStack gap="$3" minWidth={240}>
+          <YStack gap="$3" minWidth={260}>
             <XStack alignItems="center" gap="$2">
-              {isPublic ? <Globe size={14} /> : <Lock size={14} />}
-              <PlainSelect
-                label="Who can see this"
-                value={value.visibility}
-                options={VISIBILITY_OPTIONS}
-                onValueChange={(v) => patch({ visibility: v as Visibility })}
-              />
+              {isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
+              <Text fontSize="$3" fontWeight="600">
+                {isPublished ? 'Published' : 'Draft'}
+              </Text>
             </XStack>
-            {onPublish ? (
+            <Text fontSize="$2" color="$color10">
+              {isPublished
+                ? 'Readers can see this post.'
+                : 'A placeholder — nobody but editors can see this yet.'}
+            </Text>
+
+            {isPublished ? (
+              <Button
+                size="$2"
+                variant="outlined"
+                onPress={() => {
+                  setOpenPanel(null)
+                  patch({ status: 'draft' })
+                }}
+              >
+                Return to draft
+              </Button>
+            ) : onPublish ? (
               <Button
                 size="$2"
                 variant="action"
@@ -235,7 +255,7 @@ export function PostDocChrome({
                   onPublish(value)
                 }}
               >
-                Publish now
+                Publish
               </Button>
             ) : null}
             {publishErrors.length > 0 ? (
@@ -243,6 +263,19 @@ export function PostDocChrome({
                 {publishErrors.join(' · ')}
               </Text>
             ) : null}
+
+            <Separator />
+
+            {/* A separate question: exposure says WHETHER, audience says WHO. */}
+            <XStack alignItems="center" gap="$2">
+              {isPublic ? <Globe size={14} /> : <Lock size={14} />}
+              <PlainSelect
+                label="Audience"
+                value={value.visibility}
+                options={VISIBILITY_OPTIONS}
+                onValueChange={(v) => patch({ visibility: v as Visibility })}
+              />
+            </XStack>
           </YStack>
         </ToolbarPopover>
 
