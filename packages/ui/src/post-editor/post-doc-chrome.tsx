@@ -35,7 +35,15 @@
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { YStack, XStack, Text, Input, Popover } from 'tamagui'
-import { Calendar, Globe, Lock, Save, Tag, Upload, X } from '@tamagui/lucide-icons'
+import {
+  CalendarClock,
+  Globe,
+  LayoutTemplate,
+  Lock,
+  Save,
+  Upload,
+  X,
+} from '@tamagui/lucide-icons'
 import type { Block, OccasionTag, Post, Visibility } from '@my/app/types/post'
 // Deep import, NOT the '@my/app/features/post-editor' barrel: that barrel also
 // exports the screens, which import '@my/ui' — going through it would make
@@ -97,7 +105,7 @@ export function PostDocChrome({
   onSwitchEditor,
 }: PostDocChromeProps) {
   // Which top-bar popover is open (only one at a time).
-  const [openPanel, setOpenPanel] = useState<'date' | 'visibility' | 'occasion' | null>(null)
+  const [openPanel, setOpenPanel] = useState<'publish' | 'date' | 'occasion' | null>(null)
   // Author opt-out of the PII members-default for prose (design §2 make-public).
   const [makePublic, setMakePublic] = useState(false)
 
@@ -196,25 +204,63 @@ export function PostDocChrome({
           focusStyle={{ backgroundColor: '$background', borderWidth: 1, borderColor: '$blue8' }}
         />
 
-        {/* Save — the disk. Explicit save alongside the autosave indicator. */}
-        <ToolbarIcon
-          icon={Save}
-          label="Save now"
-          onPress={() => onSave?.(value)}
-          disabled={!onSave}
-        />
-
-        {/* Publish date */}
+        {/* 1. PUBLISH — the act, and who it reaches. Visibility lives here
+            rather than in its own icon: "publish" is inseparable from "to
+            whom", and Docs' Share works the same way. The globe/lock badge
+            keeps the current reach readable without spending a slot. */}
         <ToolbarPopover
-          icon={Calendar}
-          label={value.lifecycle.publishDate || 'Publish date'}
+          icon={Upload}
+          label={`Publish — ${isPublic ? 'public' : 'restricted'}`}
+          active={!isPublic}
+          open={openPanel === 'publish'}
+          onOpenChange={(o) => setOpenPanel(o ? 'publish' : null)}
+        >
+          <YStack gap="$3" minWidth={240}>
+            <XStack alignItems="center" gap="$2">
+              {isPublic ? <Globe size={14} /> : <Lock size={14} />}
+              <PlainSelect
+                label="Who can see this"
+                value={value.visibility}
+                options={VISIBILITY_OPTIONS}
+                onValueChange={(v) => patch({ visibility: v as Visibility })}
+              />
+            </XStack>
+            {onPublish ? (
+              <Button
+                size="$2"
+                variant="action"
+                disabled={!canPublish}
+                onPress={() => {
+                  setOpenPanel(null)
+                  onPublish(value)
+                }}
+              >
+                Publish now
+              </Button>
+            ) : null}
+            {publishErrors.length > 0 ? (
+              <Text fontSize="$2" color="$red10">
+                {publishErrors.join(' · ')}
+              </Text>
+            ) : null}
+          </YStack>
+        </ToolbarPopover>
+
+        {/* 2. SCHEDULE — when it goes out. */}
+        <ToolbarPopover
+          icon={CalendarClock}
+          label={
+            value.lifecycle.publishDate
+              ? `Scheduled ${value.lifecycle.publishDate}`
+              : 'Schedule post'
+          }
           active={Boolean(value.lifecycle.publishDate)}
           open={openPanel === 'date'}
           onOpenChange={(o) => setOpenPanel(o ? 'date' : null)}
         >
           <YStack gap="$2" minWidth={220}>
             <Text fontSize="$2" color="$color10">
-              Publish date
+              Schedule post
             </Text>
             <Input
               value={value.lifecycle.publishDate ?? ''}
@@ -229,30 +275,21 @@ export function PostDocChrome({
           </YStack>
         </ToolbarPopover>
 
-        {/* Visibility — a globe when public, a lock when not. */}
-        <ToolbarPopover
-          icon={isPublic ? Globe : Lock}
-          label={isPublic ? 'Public' : 'Restricted'}
-          active={!isPublic}
-          open={openPanel === 'visibility'}
-          onOpenChange={(o) => setOpenPanel(o ? 'visibility' : null)}
-        >
-          <YStack gap="$2" minWidth={220}>
-            <PlainSelect
-              label="Who can see this"
-              value={value.visibility}
-              options={VISIBILITY_OPTIONS}
-              onValueChange={(v) => patch({ visibility: v as Visibility })}
-            />
-          </YStack>
-        </ToolbarPopover>
+        {/* 3. SAVE — the disk, alongside the autosave indicator. */}
+        <ToolbarIcon
+          icon={Save}
+          label="Save now"
+          onPress={() => onSave?.(value)}
+          disabled={!onSave}
+        />
 
-        {/* Occasion tags. They do not sort or filter anything — their one real
-            job is the PII gate (funeral/baptism/engagement/medical force prose
-            to members). So they belong here, not in a card in the document. */}
+        {/* 4. OCCASION TAGS / TEMPLATES — one control, because they are one
+            idea: choosing an occasion is what seeds that occasion's starting
+            structure (applyOccasionDefaults). Tags sort and filter NOTHING;
+            their one load-bearing job is the PII gate. */}
         <ToolbarPopover
-          icon={Tag}
-          label={value.occasion.length > 0 ? value.occasion.join(', ') : 'Occasion'}
+          icon={LayoutTemplate}
+          label={value.occasion.length > 0 ? value.occasion.join(', ') : 'Occasion & template'}
           active={value.occasion.length > 0}
           open={openPanel === 'occasion'}
           onOpenChange={(o) => setOpenPanel(o ? 'occasion' : null)}
@@ -307,19 +344,6 @@ export function PostDocChrome({
           </Button>
         ) : null}
 
-        {/* Publish */}
-        {onPublish ? (
-          <Button
-            size="$2"
-            variant="action"
-            icon={Upload}
-            disabled={!canPublish}
-            onPress={() => onPublish(value)}
-            {...(publishErrors.length > 0 ? { 'aria-label': publishErrors.join(' · ') } : null)}
-          >
-            Publish
-          </Button>
-        ) : null}
       </XStack>
 
       {/* PII notice stays visible — it changes who can read the post, so it is
