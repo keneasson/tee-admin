@@ -334,3 +334,56 @@ export function getPostDisplayState(
 export function isPostActive(post: Post, now: Date = new Date()): boolean {
   return getPostDisplayState(post, now).active
 }
+
+// ---- Exposure: the ONE answer to "is this live?" ----------------------------
+
+/**
+ * THE single predicate for "is this post included in aggregated surfaces?" —
+ * the public web feed and the newsletter.
+ *
+ * WHY THIS EXISTS: "published" had grown four spellings across two models, and
+ * they disagreed.
+ *
+ *   Events (legacy) resolved liveness through a fallback chain in
+ *   `isEventActive()`: `publishDate` first, then a deprecated `active: boolean`,
+ *   then an older `status: 'published' | 'ready'`.
+ *
+ *   Post (this model) had TWO of its own: `status === 'ready'` — the only one
+ *   any read path actually enforced — and `lifecycle.publishDate`, which
+ *   `computeLifecycle` honoured but nothing called, so a post scheduled for
+ *   November was served today (#227).
+ *
+ * There is now one rule, and it folds scheduling into exposure rather than
+ * leaving them as two competing switches:
+ *
+ *   - `draft`     — a placeholder. Never live. (Still SENDABLE as an atomic
+ *                   email — see below.)
+ *   - `archived`  — retired. Never live.
+ *   - `ready`     — live, UNLESS `lifecycle.publishDate` is in the future, in
+ *                   which case it is *scheduled* and not live yet.
+ *
+ * NOTE THE DELIBERATE ASYMMETRY. This gates AGGREGATION only. A single
+ * announcement email is atomic and testable on its own, independently of the
+ * newsletter's aggregation, so the send path deliberately does NOT use this
+ * predicate to hide drafts — it sends them with a DRAFT warning instead.
+ * "Not ready to appear in the newsletter" and "not ready to be emailed to one
+ * test address" are different questions, and conflating them made the editor
+ * untestable.
+ */
+export function isPostLive(post: Post, now: Date = new Date()): boolean {
+  if (post.status !== 'ready') return false
+  // `lifecycle` is required by the type but this predicate now gates EVERY
+  // public read, so a single record missing it would 500 the whole feed rather
+  // than hide one post. Same lesson as the `body: null` crash (#214): a gate
+  // this load-bearing does not get to trust the declared shape.
+  const publishDate = parseDate(post.lifecycle?.publishDate)
+  if (publishDate && publishDate.getTime() > now.getTime()) return false
+  return true
+}
+
+/** True when the post is `ready` but its publish date has not arrived yet. */
+export function isPostScheduled(post: Post, now: Date = new Date()): boolean {
+  if (post.status !== 'ready') return false
+  const publishDate = parseDate(post.lifecycle?.publishDate)
+  return Boolean(publishDate && publishDate.getTime() > now.getTime())
+}

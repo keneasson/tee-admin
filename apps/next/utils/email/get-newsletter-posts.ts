@@ -1,5 +1,5 @@
 import { getPostsForViewer } from '@my/app/services/post-service'
-import { resolvePostNextDate } from '@my/app/utils/post-lifecycle'
+import { isPostLive, resolvePostNextDate } from '@my/app/utils/post-lifecycle'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import type { Post } from '@my/app/types/post'
@@ -72,7 +72,9 @@ export async function getNewsletterNativePosts(
   })
 
   // A broadcast surface never sends drafts/archived (unified read doesn't gate status).
-  const ready = posts.filter((p) => p.status === 'ready')
+  // ONE liveness rule (isPostLive) — same gate as the public feed, so a
+  // scheduled post cannot appear in the newsletter before its date (#227).
+  const ready = posts.filter((p) => isPostLive(p, now))
 
   // Event-shaped (upcoming happening) first, then news-shaped.
   const eventShaped: Post[] = []

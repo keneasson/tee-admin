@@ -282,5 +282,19 @@ export interface Post {
 
   createdAt: string
   updatedAt: string
+  /**
+   * EXPOSURE — the single answer to "is this ready for readers?".
+   *
+   *  - `draft`    — a placeholder. Never appears on the web feed or in the
+   *                 newsletter. Still SENDABLE as a one-off announcement email
+   *                 (atomic and independently testable), which carries a DRAFT
+   *                 warning.
+   *  - `ready`    — live, unless `lifecycle.publishDate` is still in the future,
+   *                 in which case it is scheduled.
+   *  - `archived` — retired; never live.
+   *
+   * Do not add a second liveness flag. Read it through `isPostLive()` — see the
+   * note there on the four spellings this replaced.
+   */
   status: 'draft' | 'ready' | 'archived'
 }

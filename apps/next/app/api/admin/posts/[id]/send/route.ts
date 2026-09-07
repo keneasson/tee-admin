@@ -8,6 +8,7 @@ import { EmailListTypes } from '@my/app/types'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { getPostAnnouncementContent } from '../../../../../../utils/email/get-post-announcement-content'
 import { emailSend } from '../../../../../../utils/email/email-send'
+import { isPostLive, isPostScheduled } from '@my/app/utils/post-lifecycle'
 
 export const config = {
   maxDuration: 60,
@@ -63,7 +64,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params
 
-    let body: { test?: boolean; list?: string; note?: string } = {}
+    let body: {
+      test?: boolean
+      list?: string
+      note?: string
+      /** Explicit opt-in to LIVE-sending a post that is not yet live. */
+      allowDraft?: boolean
+    } = {}
     try {
       body = await request.json()
     } catch {
@@ -87,10 +94,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
     }
 
-    // Never send a draft/archived post.
-    if (post.status !== 'ready') {
+    // A single announcement is ATOMIC and independently testable — it does not
+    // depend on the newsletter's aggregation — so a draft is NOT hidden from
+    // "send now". Being unfit for the newsletter and being unfit to email to one
+    // test address are different questions; conflating them made the editor
+    // untestable.
+    //
+    // Archived is still refused: it is retired content, not work in progress.
+    if (post.status === 'archived') {
       return NextResponse.json(
-        { error: `Post is not ready to send (status: ${post.status}).` },
+        { error: 'Archived posts cannot be sent.' },
+        { status: 422 }
+      )
+    }
+
+    const live = isPostLive(post)
+
+    // A TEST send of a draft is free — that is the point. A LIVE send of one
+    // broadcasts unfinished content to the real list, so it needs a second,
+    // deliberate key rather than the single `test: false`.
+    if (!live && !isTest && body.allowDraft !== true) {
+      return NextResponse.json(
+        {
+          error:
+            `This post is not live (status: ${post.status}` +
+            `${isPostScheduled(post) ? ', scheduled' : ''}). ` +
+            'Send a test, or pass allowDraft:true to send it live anyway.',
+          draft: true,
+        },
         { status: 422 }
       )
     }
@@ -106,7 +137,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim() : undefined
 
-    const [html, text, subject] = await getPostAnnouncementContent(id, tenant, note)
+    const [html, text, baseSubject] = await getPostAnnouncementContent(id, tenant, note)
+    // The warning the author asked for: a send of a not-yet-live post is
+    // unmistakable in the inbox, so a test can never be mistaken for the real
+    // announcement.
+    const subject = live ? baseSubject : `[DRAFT] ${baseSubject}`
 
     const result = await emailSend({
       reason: 'post-announcement',
