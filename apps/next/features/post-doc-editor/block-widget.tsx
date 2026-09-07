@@ -43,9 +43,14 @@ import { FlyerCanvas } from './flyer-canvas'
 export interface BlockWidgetProps {
   nodeKey: NodeKey
   block: Block
+  /**
+   * True when this widget sits inside a paragraph — the value is a phrase in the
+   * author's sentence, so it renders in the line box instead of as a panel.
+   */
+  inline?: boolean
 }
 
-export function BlockWidget({ nodeKey, block }: BlockWidgetProps) {
+export function BlockWidget({ nodeKey, block, inline = false }: BlockWidgetProps) {
   const [editor] = useLexicalComposerContext()
   const { editingKey, beginEdit } = useEditSession()
   const [hovered, setHovered] = useState(false)
@@ -101,6 +106,40 @@ export function BlockWidget({ nodeKey, block }: BlockWidgetProps) {
   }
 
   const empty = isBlockEmpty(block)
+
+  // INLINE: the value is a phrase inside the author's sentence, so it must sit
+  // in the line box — no vertical margin, no block display, and a tight ring so
+  // it reads as part of the text rather than as an embedded panel. The words
+  // around it stay ordinary prose, which is what lets the author add the one
+  // extra detail a fixed widget could never hold.
+  if (inline) {
+    return (
+      <span
+        contentEditable={false}
+        suppressContentEditableWarning
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={onEdit}
+        style={{
+          position: 'relative',
+          display: 'inline',
+          cursor: 'pointer',
+          borderRadius: 4,
+          padding: '0 2px',
+          // A dotted underline is the only editor-space hint — enough to say
+          // "this carries meaning", quiet enough to still read as a sentence.
+          textDecoration: 'underline',
+          textDecorationStyle: 'dotted',
+          textDecorationColor: isEditing ? 'var(--blue8)' : 'var(--blue6)',
+          textUnderlineOffset: 3,
+          backgroundColor: isEditing ? 'var(--blue3)' : hovered ? 'var(--blue2)' : 'transparent',
+          transition: 'background-color 120ms ease',
+        }}
+      >
+        {empty ? <PlaceholderChip block={block} onPress={onEdit} /> : <BlockView block={block} inline />}
+      </span>
+    )
+  }
 
   return (
     // contentEditable=false so the element is an atomic object in the prose flow

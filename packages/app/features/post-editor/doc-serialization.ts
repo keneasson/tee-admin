@@ -41,6 +41,7 @@
 
 import type { Block, TextBlock } from '@my/app/types/post'
 import { genId } from '@my/ui/src/post-editor/post-reducer'
+import { findMarkers, markerFor, segmentBody } from './inline-markers'
 
 // ---- Node type discriminators (mirror Lexical's serialized `type` field) ----
 export const POST_BLOCK_TYPE = 'post-block'
@@ -68,9 +69,12 @@ export interface SerializedTextNode {
   version: 1
 }
 
+/** A paragraph's children: text runs, plus inline `post-block` decorators. */
+export type SerializedInlineChild = SerializedTextNode | SerializedPostBlockNode
+
 export interface SerializedParagraphNode {
   type: typeof PARAGRAPH_TYPE
-  children: SerializedTextNode[]
+  children: SerializedInlineChild[]
   direction: 'ltr' | null
   format: ''
   indent: 0
@@ -92,6 +96,13 @@ export interface SerializedHeadingNode {
 export interface SerializedPostBlockNode {
   type: typeof POST_BLOCK_TYPE
   block: Block
+  /**
+   * True when this decorator sits INSIDE a paragraph — i.e. the value is a
+   * phrase in the author's sentence rather than a standalone element. Derived
+   * from position at serialization time, never stored on the Block itself:
+   * layout is a consequence of where the marker sits, not a field somebody sets.
+   */
+  inline?: boolean
   version: 1
 }
 
@@ -117,11 +128,22 @@ function textNode(text: string, format: number): SerializedTextNode {
   return { type: TEXT_TYPE, text, format, detail: 0, mode: 'normal', style: '', version: 1 }
 }
 
-/** Render a run of serialized text nodes back to markdown (bold/italic marks). */
-function renderInline(children: unknown): string {
+/**
+ * Render a run of serialized inline children back to markdown (bold/italic
+ * marks). An inline `post-block` decorator becomes its `{{kind:id}}` marker and
+ * its carried block is pushed to `collected` — this is what lets a typed value
+ * keep its exact place in the author's own words instead of being torn out onto
+ * a line of its own.
+ */
+function renderInline(children: unknown, collected?: Block[]): string {
   if (!Array.isArray(children)) return ''
   return children
     .map((n) => {
+      const node = n as SerializedPostBlockNode
+      if (node && node.type === POST_BLOCK_TYPE && node.block) {
+        collected?.push(node.block)
+        return markerFor(node.block)
+      }
       if (!n || typeof (n as SerializedTextNode).text !== 'string') return ''
       let s = (n as SerializedTextNode).text
       const f = typeof (n as SerializedTextNode).format === 'number' ? (n as SerializedTextNode).format : 0
@@ -153,7 +175,7 @@ function parseInline(md: string): SerializedTextNode[] {
 
 // ---- Prose block ⇄ paragraph/heading nodes ----------------------------------
 
-function paragraphNode(children: SerializedTextNode[]): SerializedParagraphNode {
+function paragraphNode(children: SerializedInlineChild[]): SerializedParagraphNode {
   return {
     type: PARAGRAPH_TYPE,
     children,
@@ -180,7 +202,11 @@ function headingNode(level: number, children: SerializedTextNode[]): SerializedH
  * this guard is belt-and-braces — a malformed block anywhere else must degrade
  * to an empty paragraph, never white-screen the whole editor (#214).
  */
-function textBlockToNodes(body: string): SerializedTopNode[] {
+function textBlockToNodes(
+  body: string,
+  inlineById?: Map<string, Block>,
+  consumed?: Set<string>
+): SerializedTopNode[] {
   const nodes: SerializedTopNode[] = []
   for (const raw of (typeof body === 'string' ? body : '').split(/\n{2,}/)) {
     const chunk = raw.trim()
@@ -189,20 +215,54 @@ function textBlockToNodes(body: string): SerializedTopNode[] {
     if (h && !chunk.includes('\n')) {
       nodes.push(headingNode(h[1].length, parseInline(h[2])))
     } else {
-      nodes.push(paragraphNode(parseInline(chunk.replace(/\n+/g, ' '))))
+      nodes.push(paragraphNode(inlineChildren(chunk.replace(/\n+/g, ' '), inlineById, consumed)))
     }
   }
   if (nodes.length === 0) nodes.push(paragraphNode([textNode('', 0)]))
   return nodes
 }
 
+/**
+ * One paragraph's markdown → its children, with `{{kind:id}}` markers expanded
+ * into INLINE `post-block` decorator nodes sitting between the text runs. This
+ * is what keeps "First class starts at {{time:t2}}" a single flowing sentence
+ * instead of three stacked siblings (design §2.2, revised).
+ *
+ * A marker whose block is missing (deleted, or redacted away) simply collapses —
+ * never a literal `{{…}}` leaking into the document.
+ */
+function inlineChildren(
+  markdown: string,
+  inlineById?: Map<string, Block>,
+  consumed?: Set<string>
+): SerializedInlineChild[] {
+  if (!inlineById || inlineById.size === 0) return parseInline(markdown)
+
+  const out: SerializedInlineChild[] = []
+  for (const seg of segmentBody(markdown)) {
+    if (seg.type === 'text') {
+      if (seg.text) out.push(...parseInline(seg.text))
+      continue
+    }
+    const block = inlineById.get(seg.marker.id)
+    if (!block) continue
+    consumed?.add(block.id)
+    out.push({ type: POST_BLOCK_TYPE, block, version: 1 })
+  }
+  if (out.length === 0) out.push(textNode('', 0))
+  return out
+}
+
 /** One prose node → its markdown string (for {@link docToBlocks} accumulation). */
-function proseNodeToMarkdown(node: SerializedParagraphNode | SerializedHeadingNode): string {
+function proseNodeToMarkdown(
+  node: SerializedParagraphNode | SerializedHeadingNode,
+  collected?: Block[]
+): string {
   if (node.type === HEADING_TYPE) {
     const level = node.tag === 'h1' ? 1 : node.tag === 'h2' ? 2 : 3
-    return `${'#'.repeat(level)} ${renderInline(node.children)}`
+    return `${'#'.repeat(level)} ${renderInline(node.children, collected)}`
   }
-  return renderInline(node.children)
+  return renderInline(node.children, collected)
 }
 
 // ---- The bijection ----------------------------------------------------------
@@ -233,6 +293,10 @@ function childrenOf(state: unknown): LooseNode[] {
 export function docToBlocks(state: unknown): Block[] {
   const out: Block[] = []
   let run: string[] = []
+  // Blocks found INSIDE the current prose run (inline decorators). They are
+  // emitted right after the TextBlock that references them, so `Post.blocks[]`
+  // keeps document order and every existing extractor still sees them.
+  let inlineRun: Block[] = []
 
   // A prose run is genuine plain text typed in the canvas: it carries no per-block
   // metadata, so it defaults to `containsPii: false` and NO `visibility` (absent ⇒
@@ -240,9 +304,16 @@ export function docToBlocks(state: unknown): Block[] {
   // is not here — it arrives via the `post-block` branch below, fields intact.
   const flush = () => {
     const body = run.filter((s) => s.trim().length > 0).join('\n\n')
+    const inline = inlineRun
     run = []
-    if (body.length === 0) return
+    inlineRun = []
+    if (body.length === 0) {
+      // Prose gone but its inline values survive — keep them rather than lose data.
+      out.push(...inline)
+      return
+    }
     out.push({ id: genId(), kind: 'text', body, containsPii: false } satisfies TextBlock)
+    out.push(...inline)
   }
 
   for (const child of childrenOf(state)) {
@@ -250,7 +321,12 @@ export function docToBlocks(state: unknown): Block[] {
       flush()
       out.push(child.block)
     } else if (child.type === PARAGRAPH_TYPE || child.type === HEADING_TYPE) {
-      run.push(proseNodeToMarkdown(child as unknown as SerializedParagraphNode | SerializedHeadingNode))
+      run.push(
+        proseNodeToMarkdown(
+          child as unknown as SerializedParagraphNode | SerializedHeadingNode,
+          inlineRun
+        )
+      )
     }
     // Unknown node kinds are ignored (defensive against future Lexical nodes).
   }
@@ -281,13 +357,35 @@ function textBlockNeedsWrapper(block: TextBlock): boolean {
  * {@link docToBlocks}, keeping the round-trip stable).
  */
 export function blocksToDocState(blocks: Block[]): SerializedDocState {
+  // A block is placed by the PROSE, not by a field on itself: if some text
+  // block's body carries `{{kind:id}}`, the block is emitted there. Everything
+  // else keeps a top-level slot, which is exactly today's behaviour — so posts
+  // authored before markers existed round-trip unchanged.
+  const referenced = new Set<string>()
+  for (const b of blocks) {
+    if (b.kind === 'text' && typeof b.body === 'string') {
+      for (const mk of findMarkers(b.body)) referenced.add(mk.id)
+    }
+  }
+  const byId = new Map(blocks.map((b) => [b.id, b] as const))
+  const consumed = new Set<string>()
+
   const children: SerializedTopNode[] = []
   for (const block of blocks) {
+    if (referenced.has(block.id)) continue // emitted at its marker
     if (block.kind === 'text' && !textBlockNeedsWrapper(block)) {
-      children.push(...textBlockToNodes(block.body))
+      children.push(...textBlockToNodes(block.body, byId, consumed))
     } else {
       children.push({ type: POST_BLOCK_TYPE, block, version: 1 })
     }
+  }
+
+  // A marker can name a block that no longer exists; conversely a referenced
+  // block whose host prose was deleted would vanish. Re-append the survivors at
+  // top level so nothing is ever silently lost.
+  for (const id of referenced) {
+    const block = byId.get(id)
+    if (block && !consumed.has(id)) children.push({ type: POST_BLOCK_TYPE, block, version: 1 })
   }
   const last = children[children.length - 1]
   if (!last || last.type === POST_BLOCK_TYPE) {

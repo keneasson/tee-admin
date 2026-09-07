@@ -34,6 +34,7 @@ import {
 import { $insertNodeToNearestRoot } from '@lexical/utils'
 import { $createPostBlockNode } from './post-block-node'
 import { makeToolBlock, makeSeededToolBlock, type ToolKind } from '@my/app/features/post-editor/tool-blocks'
+import { isPhraseKind } from '@my/app/types/post'
 import { useEditSession } from './edit-session'
 
 export interface ArmedToolPluginProps {
@@ -56,9 +57,27 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
       if (!$isRangeSelection(sel) || sel.isCollapsed()) return
       const text = sel.getTextContent().trim()
       if (text.length === 0) return
-      // Delete the selected range, then drop the seeded widget at the caret.
+
+      const block = makeSeededToolBlock(armed, text)
+
+      // A phrase kind stays WHERE THE AUTHOR WROTE IT. Identifying "11:00 AM" as
+      // a Time must not tear it out of "First class starts at 11:00 AM in the
+      // hall" and restack it — that is what made the editor feel like a form,
+      // and it is what stops the author adding the one extra detail a fixed
+      // widget has no slot for. `insertNodes` puts the inline node at the caret
+      // inside the paragraph; `$insertNodeToNearestRoot` would lift it to root.
+      if (isPhraseKind(block.kind)) {
+        sel.removeText()
+        const node = $createPostBlockNode(block, true)
+        sel.insertNodes([node])
+        convertedKey = node.getKey()
+        return
+      }
+
+      // A flyer or a registration panel is genuinely standalone — it still takes
+      // its own line.
       sel.removeText()
-      const node = $createPostBlockNode(makeSeededToolBlock(armed, text))
+      const node = $createPostBlockNode(block)
       $insertNodeToNearestRoot(node)
       convertedKey = node.getKey()
     })
