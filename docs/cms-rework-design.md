@@ -84,14 +84,45 @@ The editor at `/admin/posts/[id]` becomes:
 │ Beloved brother John Smith fell      │   │ [Location][When]│
 │ asleep… (prose, typed or pasted)     │   │ [Name][Link]    │
 │                                      │   │ [Flyer][Regist.]│
-│ ▸ When: Sat Aug 30, 2026, 2:00pm     │   │  Insert │ Edit  │
-│ ▸ Where: TEE Hall · 940 Pape Ave …🗺 │   └─────────────────┘
+│ When: Sat Aug 30, 2:00pm (doors 1:30)│   │  Insert │ Edit  │
+│ Where: TEE Hall, 940 Pape Ave —      │   └─────────────────┘
+│        parking behind the building   │
 └──────────────────────────────────────┘
 ```
 
+**Every line above is prose.** `Sat Aug 30, 2:00pm` is a typed Time and
+`TEE Hall, 940 Pape Ave` a resolved Location — but "When:", "(doors 1:30)" and
+"parking behind the building" are the author's own words, sitting either side of
+the value. That is the difference from a fixed widget: a form-shaped block has no
+slot for "doors 1:30", so the author either loses the detail or abandons the
+structure. Prose always has room.
+
+**Layout is derived, never declared.** A value whose marker sits alone on its
+line renders stacked; a value among words flows inline
+("First class starts at **11:00 AM** in the hall"). The stack just *happens* to
+be stacked — and often will be — because that is where the author put the words,
+not because a `placement` field said so. A block that no prose references keeps
+its own standalone slot, so every post authored before this revision renders
+exactly as it did.
+
+> **Revision note (supersedes the original §2.2).** The first version of this
+> section specified `▸ When:` / `▸ Where:` as full-width widgets on their own
+> lines, and the implementation followed it faithfully. In use that forced every
+> post into a fixed A/B/C/D shape: converting a selection *deleted the phrase*
+> and restacked it, so the act of identifying a date destroyed the sentence.
+> Structure and prose were alternating siblings; they should be one flow with
+> typed values inside it.
+
 - **Prose is just typed or pasted.** Markdown bold + auto-linked URLs render live.
 - **Enhancers are applied in one click** via the existing armed-tool mechanic (`armed-tool-plugin.tsx`, `floating-toolbar.tsx`), which has two modes:
-  - **Convert-selection:** select text → click a tool → the selection is replaced by a seeded widget pre-filled with that text, which auto-resolves. _This is literally the paste-email→select-hall→click-Location flow._
+  - **Convert-selection:** select text → click a tool → the selection *becomes* a
+    seeded, auto-resolving value **in place**, with the surrounding words
+    untouched. _This is literally the paste-email→select-hall→click-Location
+    flow._ Phrase kinds (Time, Person, Location, Link) stay inline; Flyer and
+    Registration are genuinely standalone and still take their own line.
+    Storage: the prose keeps a `{{kind:id}}` marker and the block stays in
+    `Post.blocks[]`, so every extractor (email, newsletter, summaries) reads it
+    exactly as before, and stripping markers leaves clean prose.
   - **Insert-at-caret:** click a tool with nothing selected → the next canvas click drops a blank widget and opens its editor in the floating tool.
 - **Complexity stays hidden:** all form affordances (address fields, meeting link, dates) live in the **detached floating tool** (`EditPanel`), never on the canvas. The canvas always shows the final look.
 

@@ -9,11 +9,20 @@
  * display (see {@link BlockWidget}) — never a form. Editing happens in the
  * floating tool, not in the document.
  *
- * The node carries the FULL typed block as its payload (`__block`). It is block-
- * level (`isInline() === false`) so it lives as a direct child of the root,
- * interleaved with paragraphs — exactly the ordered `Post.blocks[]` shape. Its
- * `exportJSON` emits `{ type: 'post-block', block }`, which is what
- * `docToBlocks` walks; `importJSON` restores it from `blocksToDocState` output.
+ * The node carries the FULL typed block as its payload (`__block`), plus where
+ * it sits (`__inline`):
+ *
+ *  - **block-level** (default) — a direct child of the root, interleaved with
+ *    paragraphs. A flyer or a registration panel is genuinely standalone.
+ *  - **inline** — a child of a paragraph, so the value is a phrase inside the
+ *    author's own sentence: "First class starts at 11:00 AM (doors 1:30)". The
+ *    words around it stay prose, which is the whole point — a fixed widget can
+ *    never hold that one extra detail, and prose always can.
+ *
+ * Placement is DERIVED from where the `{{kind:id}}` marker sits in the prose
+ * (see `inline-markers.ts`), never declared on the Block. The stack just happens
+ * to be stacked. `exportJSON` emits `{ type: 'post-block', block, inline }`,
+ * which is what `docToBlocks` walks; `importJSON` restores it.
  */
 
 import type { ReactNode } from 'react'
@@ -24,29 +33,37 @@ import { BlockWidget } from './block-widget'
 
 export class PostBlockNode extends DecoratorNode<ReactNode> {
   __block: Block
+  __inline: boolean
 
   static getType(): string {
     return POST_BLOCK_TYPE
   }
 
   static clone(node: PostBlockNode): PostBlockNode {
-    return new PostBlockNode(node.__block, node.__key)
+    return new PostBlockNode(node.__block, node.__inline, node.__key)
   }
 
   // Param widened to the base signature (SerializedLexicalNode) so the static
   // side stays assignable to DecoratorNode under strictFunctionTypes; the `block`
   // payload is read back off the concrete shape.
   static importJSON(json: SerializedLexicalNode): PostBlockNode {
-    return new PostBlockNode((json as SerializedPostBlockNode).block)
+    const j = json as SerializedPostBlockNode
+    return new PostBlockNode(j.block, j.inline === true)
   }
 
-  constructor(block: Block, key?: NodeKey) {
+  constructor(block: Block, inline = false, key?: NodeKey) {
     super(key)
     this.__block = block
+    this.__inline = inline
   }
 
   exportJSON(): SerializedPostBlockNode {
-    return { type: POST_BLOCK_TYPE, block: this.__block, version: 1 }
+    return {
+      type: POST_BLOCK_TYPE,
+      block: this.__block,
+      inline: this.__inline,
+      version: 1,
+    }
   }
 
   getBlock(): Block {
@@ -59,14 +76,16 @@ export class PostBlockNode extends DecoratorNode<ReactNode> {
     writable.__block = next
   }
 
-  isInline(): false {
-    return false
+  isInline(): boolean {
+    return this.__inline
   }
 
   createDOM(): HTMLElement {
-    const div = document.createElement('div')
-    div.className = 'post-block-node'
-    return div
+    // A span so the value sits in the line box with the surrounding words; a div
+    // would force a break and re-create the stacking this exists to avoid.
+    const el = document.createElement(this.__inline ? 'span' : 'div')
+    el.className = this.__inline ? 'post-block-node post-block-node--inline' : 'post-block-node'
+    return el
   }
 
   updateDOM(): false {
@@ -74,12 +93,12 @@ export class PostBlockNode extends DecoratorNode<ReactNode> {
   }
 
   decorate(): ReactNode {
-    return <BlockWidget nodeKey={this.getKey()} block={this.__block} />
+    return <BlockWidget nodeKey={this.getKey()} block={this.__block} inline={this.__inline} />
   }
 }
 
-export function $createPostBlockNode(block: Block): PostBlockNode {
-  return new PostBlockNode(block)
+export function $createPostBlockNode(block: Block, inline = false): PostBlockNode {
+  return new PostBlockNode(block, inline)
 }
 
 export function $isPostBlockNode(node: LexicalNode | null | undefined): node is PostBlockNode {

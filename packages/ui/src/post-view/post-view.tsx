@@ -30,6 +30,12 @@ import type {
   TextBlock,
   TimeBlock,
 } from '@my/app/types/post'
+import { inlineSummary } from './inline-summary'
+import {
+  blockIndex,
+  findMarkers,
+  flattenMarkers,
+} from '@my/app/features/post-editor/inline-markers'
 import { getPlatformDisplayName } from '@my/app/types/events'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import { ExtLink } from '../ext-link'
@@ -84,9 +90,22 @@ function BlockHeader({
   )
 }
 
-function TextBlockView({ block }: { block: TextBlock }) {
-  if (!block.body.trim()) return null
-  return <MarkdownLiteText text={block.body} fontSize="$4" color="$color12" />
+/**
+ * Prose, with any `{{kind:id}}` marker resolved to its value's one-line reading —
+ * so "First class starts at {{time:t1}} (doors 1:30)" publishes as one sentence,
+ * with the author's own words around the typed value preserved.
+ *
+ * A marker whose block is absent (deleted, or REDACTED AWAY for this viewer)
+ * collapses to nothing rather than leaking `{{…}}`.
+ */
+function TextBlockView({ block, blocks }: { block: TextBlock; blocks?: Block[] }) {
+  const body = flattenMarkers(
+    block.body ?? '',
+    inlineSummary,
+    blockIndex(blocks ?? [])
+  )
+  if (!body.trim()) return null
+  return <MarkdownLiteText text={body} fontSize="$4" color="$color12" />
 }
 
 function PersonBlockView({ block }: { block: PersonBlock }) {
@@ -339,10 +358,24 @@ function LinkBlockView({ block }: { block: LinkBlock }) {
  * published appearance inline (the "document is the final version" contract); the
  * editor NEVER shows a form in the doc — editing happens in the floating tool.
  */
-export function BlockView({ block }: { block: Block }) {
+export function BlockView({
+  block,
+  inline = false,
+  blocks,
+}: {
+  block: Block
+  inline?: boolean
+  /** Sibling blocks, so prose can resolve its inline markers. */
+  blocks?: Block[]
+}) {
+  // Inside prose a block collapses to its one-line reading so the sentence still
+  // reads as a sentence; the full stacked panel is for standalone blocks.
+  if (inline) {
+    return <Text>{inlineSummary(block)}</Text>
+  }
   switch (block.kind) {
     case 'text':
-      return <TextBlockView block={block} />
+      return <TextBlockView block={block} blocks={blocks} />
     case 'person':
       return <PersonBlockView block={block} />
     case 'location':
@@ -365,6 +398,16 @@ export function BlockView({ block }: { block: Block }) {
 export function PostView({ post }: PostViewProps) {
   const dateFacet = formatDateFacet(post)
   const occasions = formatOccasions(post.occasion)
+
+  // A block whose marker already places it inside prose must NOT also render as
+  // its own card — it would publish twice. Everything else keeps its own slot,
+  // which is exactly the behaviour posts authored before markers existed get.
+  const placedInProse = new Set(
+    post.blocks.flatMap((b) =>
+      b.kind === 'text' && typeof b.body === 'string' ? findMarkers(b.body).map((m) => m.id) : []
+    )
+  )
+  const standaloneBlocks = post.blocks.filter((b) => !placedInProse.has(b.id))
 
   return (
     <YStack gap="$4" maxWidth={720} width="100%">
@@ -394,13 +437,13 @@ export function PostView({ post }: PostViewProps) {
       <Separator />
 
       {/* ---- Blocks ---- */}
-      {post.blocks.length === 0 ? (
+      {standaloneBlocks.length === 0 ? (
         <Text color="$color10">This post has no content to display.</Text>
       ) : (
         <YStack gap="$4">
-          {post.blocks.map((block) => (
+          {standaloneBlocks.map((block) => (
             <Card key={block.id} bordered padding="$4">
-              <BlockView block={block} />
+              <BlockView block={block} blocks={post.blocks} />
             </Card>
           ))}
         </YStack>
