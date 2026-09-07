@@ -18,11 +18,10 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { Text, XStack, YStack, Button, LoadingState, ErrorState, PageHeader } from '@my/ui'
+import { XStack, YStack, Button, LoadingState, ErrorState } from '@my/ui'
 import { PostEditor } from '@my/ui/src/post-editor'
 import type { Post } from '../../types/post'
 import { usePostEditorState, type SaveState } from './use-post-editor-state'
-import { PostSendPanel } from './post-send-panel'
 
 /** What a platform's document canvas receives — the editor's controlled contract. */
 export interface PostDocEditorSlotProps {
@@ -31,6 +30,13 @@ export interface PostDocEditorSlotProps {
   onPublish: (post: Post) => void
   seriesPosts: Array<{ id: string; title: string }>
   onSeriesPostPress: (postId: string) => void
+  /** Autosave state, shown quietly in the editor's own top bar. */
+  saveLabel?: string
+  saveIsError?: boolean
+  /** Explicit save (the disk icon), alongside the autosave. */
+  onSave?: (post: Post) => void
+  /** Drop back to the block-form editor (the rollout fallback). */
+  onSwitchEditor?: () => void
 }
 
 export interface PostEditorScreenProps {
@@ -51,13 +57,6 @@ export interface PostEditorScreenProps {
    * the block-form editor then stands alone and the toggle is hidden.
    */
   renderDocEditor?: (props: PostDocEditorSlotProps) => ReactNode
-  /**
-   * Platform confirmation for the "Send announcement" panel. Omit it and the
-   * panel is not rendered at all — a platform with no confirmation affordance
-   * must not be able to fire a live send by accident (the send bridge is also
-   * gated server-side on auth, CONSOLIDATED_CMS, `ready` status and tenant).
-   */
-  confirmSend?: (message: string) => boolean | Promise<boolean>
 }
 
 const SAVE_LABELS: Record<SaveState, string> = {
@@ -76,7 +75,6 @@ export function PostEditorScreen({
   onOpenPost,
   onBack,
   renderDocEditor,
-  confirmSend,
 }: PostEditorScreenProps) {
   // Which editor is mounted. The document canvas is the default (Consolidated
   // CMS keystone); the block-form editor stays a one-click rollout fallback —
@@ -107,41 +105,29 @@ export function PostEditorScreen({
     onSeriesPostPress: onOpenPost,
   }
 
+  // The document IS the page. No page header above the editor: title, save state
+  // and every metadata control live in the editor's own top bar (the Docs
+  // pattern), so the document keeps the full width.
   return (
-    <YStack flex={1} padding="$4" gap="$3">
-      <PageHeader
-        title={routeId === 'new' ? 'New post' : 'Edit post'}
-        actions={
-          <>
-            <Text
-              fontSize="$2"
-              color={saveState === 'error' ? '$red10' : '$color10'}
-              minHeight={16}
-            >
-              {SAVE_LABELS[saveState]}
-            </Text>
-            {renderDocEditor ? (
-              <Button
-                size="$2"
-                variant="outlined"
-                onPress={() => setEditorMode((m) => (m === 'doc' ? 'classic' : 'doc'))}
-              >
-                {showDoc ? 'Use classic editor' : 'Use document editor'}
-              </Button>
-            ) : null}
-          </>
-        }
-      />
-
-      {showDoc ? renderDocEditor!(editorProps) : <PostEditor {...editorProps} />}
-
-      {confirmSend ? (
-        <PostSendPanel
-          postId={post.id}
-          ready={post.status === 'ready'}
-          confirmSend={confirmSend}
-        />
-      ) : null}
+    <YStack flex={1} paddingHorizontal="$4" paddingBottom="$4" gap="$2">
+      {showDoc ? (
+        renderDocEditor!({
+          ...editorProps,
+          saveLabel: SAVE_LABELS[saveState],
+          saveIsError: saveState === 'error',
+          onSave: onChange,
+          onSwitchEditor: () => setEditorMode('classic'),
+        })
+      ) : (
+        <>
+          <XStack justifyContent="flex-end" paddingVertical="$2">
+            <Button size="$2" variant="outlined" onPress={() => setEditorMode('doc')}>
+              Use document editor
+            </Button>
+          </XStack>
+          <PostEditor {...editorProps} />
+        </>
+      )}
     </YStack>
   )
 }

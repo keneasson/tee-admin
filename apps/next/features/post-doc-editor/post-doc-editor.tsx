@@ -99,7 +99,7 @@ export function PostDocEditor({ initialBlocks = [], onBlocksChange }: PostDocEdi
                 lineHeight: 1.7,
                 cursor: armed ? 'crosshair' : 'text',
               }}
-              aria-placeholder="Write your post… pick a tool from the floating toolbar to drop in a Location, Speaker, Date, and more."
+              aria-placeholder="Start here…"
               placeholder={
                 <div
                   style={{
@@ -110,7 +110,7 @@ export function PostDocEditor({ initialBlocks = [], onBlocksChange }: PostDocEdi
                     pointerEvents: 'none',
                   }}
                 >
-                  Write your post… use the floating toolbar to drop in structured elements.
+                  Start here…
                 </div>
               }
             />
