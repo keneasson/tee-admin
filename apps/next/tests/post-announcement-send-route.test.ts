@@ -69,7 +69,7 @@ function readyPost(over: Record<string, any> = {}) {
     id: 'p1',
     tenant: 'Toronto East Ecclesia',
     title: 'Baptism of A. Believer',
-    status: 'ready',
+    status: 'published',
     occasion: ['baptism'],
     blocks: [],
     ...over,

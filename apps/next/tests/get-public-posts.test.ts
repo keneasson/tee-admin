@@ -59,7 +59,7 @@ function basePost(overrides: Partial<Post>): Post {
     blocks: [],
     createdAt: '2026-07-01T00:00:00.000Z',
     updatedAt: '2026-07-01T00:00:00.000Z',
-    status: 'ready',
+    status: 'published',
     ...overrides,
   }
 }

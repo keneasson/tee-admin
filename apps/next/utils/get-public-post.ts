@@ -18,7 +18,7 @@ import type { Post } from '@my/app/types/post'
  *      OFF the public route 404s and nothing about the unified model is exposed
  *      (fails closed on any flag-store error — see `checkFeatureFlagFromDB`).
  *   2. MISSING post → `null`.
- *   3. NOT publicly viewable → `null`. Only `status: 'ready'` posts are served;
+ *   3. NOT publicly viewable → `null`. Only `status: 'published'` posts are served;
  *      drafts and archived posts never leak through the public door.
  *   4. VIEWER CANNOT REACH → `null`. `redactPost` reach-gates by visibility and,
  *      crucially, PII-scrubs every surviving block for the resolved viewer at the
@@ -38,7 +38,7 @@ export async function getPublicPost(id: string): Promise<Post | null> {
   if (!post) return null
 
   // Only published/ready posts are publicly viewable — never leak a draft.
-  if (post.status !== 'ready') return null
+  if (post.status !== 'published') return null
 
   // Redact for the resolved viewer at the hard public-web tier. Returns null when
   // the viewer cannot reach the post's visibility at all.

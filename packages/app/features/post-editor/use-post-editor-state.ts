@@ -157,11 +157,11 @@ export function usePostEditorState({
       const errors = validateForPublish(toPublish)
       if (errors.length > 0) return // editor already surfaces these inline
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      const ready: Post = { ...toPublish, status: 'ready' }
+      const ready: Post = { ...toPublish, status: 'published' }
       const result = await persist(ready)
       if (result) {
         // Same editor stays mounted (one-editor principle) — status is now
-        // 'ready'. A dedicated posts list / router redirect is a later slice.
+        // 'published'. A dedicated posts list / router redirect is a later slice.
         setPost(result)
       }
     },

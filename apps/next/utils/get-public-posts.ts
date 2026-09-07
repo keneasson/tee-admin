@@ -35,7 +35,7 @@ const EMPTY: PublicPosts = { events: [], news: [] }
  *      `public-web` tier and lifecycle-filters to ACTIVE at `now` — so a surname /
  *      precise address is present only if this viewer may see it, and only
  *      currently-active posts survive.
- *   4. Drafts/archived never leak: only `status: 'ready'` posts are kept (the
+ *   4. Drafts/archived never leak: only `status: 'published'` posts are kept (the
  *      unified read does not itself filter status — this public door does).
  *
  * Facet split uses the ONE lifecycle engine: {@link resolvePostNextDate} — a post

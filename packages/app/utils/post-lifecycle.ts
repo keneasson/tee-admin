@@ -348,7 +348,7 @@ export function isPostActive(post: Post, now: Date = new Date()): boolean {
  *   `isEventActive()`: `publishDate` first, then a deprecated `active: boolean`,
  *   then an older `status: 'published' | 'ready'`.
  *
- *   Post (this model) had TWO of its own: `status === 'ready'` — the only one
+ *   Post (this model) had TWO of its own: `status === 'published'` — the only one
  *   any read path actually enforced — and `lifecycle.publishDate`, which
  *   `computeLifecycle` honoured but nothing called, so a post scheduled for
  *   November was served today (#227).
@@ -371,7 +371,7 @@ export function isPostActive(post: Post, now: Date = new Date()): boolean {
  * untestable.
  */
 export function isPostLive(post: Post, now: Date = new Date()): boolean {
-  if (post.status !== 'ready') return false
+  if (post.status !== 'published') return false
   // `lifecycle` is required by the type but this predicate now gates EVERY
   // public read, so a single record missing it would 500 the whole feed rather
   // than hide one post. Same lesson as the `body: null` crash (#214): a gate
@@ -383,7 +383,7 @@ export function isPostLive(post: Post, now: Date = new Date()): boolean {
 
 /** True when the post is `ready` but its publish date has not arrived yet. */
 export function isPostScheduled(post: Post, now: Date = new Date()): boolean {
-  if (post.status !== 'ready') return false
+  if (post.status !== 'published') return false
   const publishDate = parseDate(post.lifecycle?.publishDate)
   return Boolean(publishDate && publishDate.getTime() > now.getTime())
 }

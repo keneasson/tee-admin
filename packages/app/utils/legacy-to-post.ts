@@ -373,7 +373,7 @@ function eventToPost(event: Event): Post {
     blocks,
     createdAt: toIso(event.createdAt) ?? '',
     updatedAt: toIso(event.updatedAt) ?? '',
-    status: 'ready',
+    status: 'published',
   }
 }
 
@@ -414,7 +414,7 @@ function newsToPost(item: NewsItem): Post {
     blocks,
     createdAt: toIso(item.createdAt) ?? '',
     updatedAt: toIso(item.updatedAt) ?? '',
-    status: 'ready',
+    status: 'published',
   }
 }
 

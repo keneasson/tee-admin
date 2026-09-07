@@ -197,7 +197,7 @@ describe('redactPost — reach gating', () => {
     lifecycle: {},
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
-    status: 'ready',
+    status: 'published',
   }
 
   it('post-level members visibility → anon gets null', () => {

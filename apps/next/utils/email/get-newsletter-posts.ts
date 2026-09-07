@@ -32,7 +32,7 @@ import type { Viewer } from '@my/app/utils/viewer-pii'
  *      via the ONE display-rules engine — so a "shower" Post with a FUTURE
  *      TimeBlock stays in the Thursday newsletter until the shower, then lingers
  *      its retrospective window (the whole point of the unified lifecycle).
- *   5. Drafts/archived never leak: only `status: 'ready'` posts are kept (the
+ *   5. Drafts/archived never leak: only `status: 'published'` posts are kept (the
  *      unified read does not gate status — this door does).
  *
  * Ordering: event-shaped (an upcoming happening at `now`) FIRST, then news-shaped,

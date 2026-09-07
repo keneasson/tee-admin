@@ -30,7 +30,7 @@
  * Pure + I/O-free. Cross-platform.
  */
 
-import type { Block, Post } from '../types/post'
+import type { Block, Post, PostStatus } from '../types/post'
 
 /** Required (non-optional) string fields, by block kind. */
 const REQUIRED_BLOCK_STRINGS: Partial<Record<Block['kind'], readonly string[]>> = {
@@ -71,11 +71,24 @@ function normalizeBlock(block: Block): Block {
   return cleaned
 }
 
+/**
+ * `'ready'` was the old spelling of `'published'`. Records written before the
+ * rename still carry it, so it is translated HERE — at the one read boundary —
+ * rather than by teaching every consumer both words. Nothing writes `'ready'`.
+ */
+function normalizeStatus(status: unknown): PostStatus {
+  if (status === 'ready') return 'published'
+  if (status === 'draft' || status === 'published' || status === 'archived') return status
+  // An unrecognised status must not silently become live.
+  return 'draft'
+}
+
 /** Normalize a Post read out of storage back to its declared shape. */
 export function normalizePost(post: Post): Post {
   const cleaned = dropNulls(post as unknown as Record<string, unknown>) as unknown as Post
 
   if (typeof cleaned.title !== 'string') cleaned.title = ''
+  cleaned.status = normalizeStatus(cleaned.status)
   cleaned.occasion = Array.isArray(cleaned.occasion) ? cleaned.occasion : []
   cleaned.lifecycle = cleaned.lifecycle ? dropNulls(cleaned.lifecycle) : {}
   cleaned.blocks = Array.isArray(cleaned.blocks) ? cleaned.blocks.map(normalizeBlock) : []

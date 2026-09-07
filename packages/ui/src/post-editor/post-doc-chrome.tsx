@@ -183,7 +183,7 @@ export function PostDocChrome({
   const publishErrors = validateForPublish(value)
   const canPublish = publishErrors.length === 0
   const isPublic = value.visibility === 'public'
-  const isPublished = value.status === 'ready'
+  const isPublished = value.status === 'published'
 
   return (
     <YStack flex={1} gap="$2">
@@ -209,7 +209,7 @@ export function PostDocChrome({
 
         {/* 1. DRAFT ↔ PUBLISHED — EXPOSURE, not sharing. The question this
             control answers is "does this exist for readers yet?", which is
-            exactly what `status` already encodes: only 'ready' is ever served
+            exactly what `status` already encodes: only 'published' is ever served
             publicly, 'draft' is a placeholder nobody sees.
 
             Audience ("who can see it") is a DIFFERENT axis and stays a separate

@@ -39,6 +39,14 @@ export type SharingScope = EventSharingScope
  * tags free-combine (e.g. `['wedding','shower']`). Legacy `EventType` values and
  * news categories map onto these during adaptation — no new code per occasion.
  */
+/**
+ * Exposure states. `'ready'` is the LEGACY spelling of `'published'`, accepted
+ * on read so records written before the rename still load; it is normalized
+ * away at the read boundary and never written.
+ */
+export type PostStatus = 'draft' | 'published' | 'archived'
+export type LegacyPostStatus = PostStatus | 'ready'
+
 export type OccasionTag =
   | 'baptism'
   | 'wedding'
@@ -285,16 +293,22 @@ export interface Post {
   /**
    * EXPOSURE — the single answer to "is this ready for readers?".
    *
-   *  - `draft`    — a placeholder. Never appears on the web feed or in the
-   *                 newsletter. Still SENDABLE as a one-off announcement email
-   *                 (atomic and independently testable), which carries a DRAFT
-   *                 warning.
-   *  - `ready`    — live, unless `lifecycle.publishDate` is still in the future,
-   *                 in which case it is scheduled.
-   *  - `archived` — retired; never live.
+   *  - `draft`     — a placeholder. Never appears on the web feed or in the
+   *                  newsletter. Still SENDABLE as a one-off announcement email
+   *                  (atomic and independently testable), which carries a DRAFT
+   *                  warning.
+   *  - `published` — live, unless `lifecycle.publishDate` is still in the
+   *                  future, in which case it is scheduled.
+   *  - `archived`  — END of the lifecycle: keep the record, drop it from the
+   *                  lists. Not deleted, not live, not listed. Already honoured
+   *                  by the repository (`archivePost`, and list reads filter it
+   *                  out); deliberately NOT surfaced in the editor yet — it is a
+   *                  retirement concern, not an authoring one.
    *
-   * Do not add a second liveness flag. Read it through `isPostLive()` — see the
-   * note there on the four spellings this replaced.
+   * ONE word for exposure: **publish**. `'ready'` was the old spelling of
+   * `'published'` and is accepted on read for records written before the rename
+   * (`normalizePost` maps it); nothing writes it any more. Do not add a second
+   * liveness flag — read it through `isPostLive()`.
    */
-  status: 'draft' | 'ready' | 'archived'
+  status: PostStatus
 }

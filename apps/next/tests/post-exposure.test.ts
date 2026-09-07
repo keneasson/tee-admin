@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isPostLive, isPostScheduled } from '@my/app/utils/post-lifecycle'
+import { normalizePost } from '@my/app/utils/normalize-post'
 import type { Post } from '@my/app/types/post'
 
 /**
@@ -20,7 +21,7 @@ const post = (over: Partial<Post> = {}): Post =>
     sharingScope: 'own',
     lifecycle: {},
     blocks: [],
-    status: 'ready',
+    status: 'published',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,
@@ -61,5 +62,25 @@ describe('isPostLive — the single liveness rule', () => {
   it('a draft is never "scheduled" either — scheduling only applies to ready', () => {
     const p = post({ status: 'draft', lifecycle: { publishDate: '2026-11-02' } } as Partial<Post>)
     expect(isPostScheduled(p, NOW)).toBe(false)
+  })
+})
+
+describe('legacy status spelling — no data migration required', () => {
+  it("maps a stored 'ready' to 'published' at the read boundary", () => {
+    const legacy = normalizePost(post({ status: 'ready' } as unknown as Partial<Post>))
+    expect(legacy.status).toBe('published')
+    expect(isPostLive(legacy, NOW)).toBe(true)
+  })
+
+  it('leaves the current spellings alone', () => {
+    for (const status of ['draft', 'published', 'archived'] as const) {
+      expect(normalizePost(post({ status })).status).toBe(status)
+    }
+  })
+
+  it('an unrecognised status falls back to draft — never silently live', () => {
+    const weird = normalizePost(post({ status: 'wat' } as unknown as Partial<Post>))
+    expect(weird.status).toBe('draft')
+    expect(isPostLive(weird, NOW)).toBe(false)
   })
 })
