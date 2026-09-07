@@ -171,10 +171,18 @@ function headingNode(level: number, children: SerializedTextNode[]): SerializedH
   return { type: HEADING_TYPE, tag, children, direction: 'ltr', format: '', indent: 0, version: 1 }
 }
 
-/** A TextBlock's markdown body → the paragraph/heading nodes it represents. */
+/**
+ * A TextBlock's markdown body → the paragraph/heading nodes it represents.
+ *
+ * Defensive on `body`: the type says `string`, but stored posts can carry
+ * `body: null` (the `convertEmptyValues` corruption described in
+ * `normalize-post.ts`). `normalizePost` repairs that at the read boundary, so
+ * this guard is belt-and-braces — a malformed block anywhere else must degrade
+ * to an empty paragraph, never white-screen the whole editor (#214).
+ */
 function textBlockToNodes(body: string): SerializedTopNode[] {
   const nodes: SerializedTopNode[] = []
-  for (const raw of body.split(/\n{2,}/)) {
+  for (const raw of (typeof body === 'string' ? body : '').split(/\n{2,}/)) {
     const chunk = raw.trim()
     if (!chunk) continue
     const h = /^(#{1,3})\s+(.*)$/.exec(chunk)
