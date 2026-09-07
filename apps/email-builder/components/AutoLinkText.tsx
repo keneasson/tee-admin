@@ -1,8 +1,11 @@
 import React from 'react'
 import { Link } from '@react-email/components'
 
-// Inline regex: matches **bold** markers OR URLs
-const INLINE_REGEX = /\*\*(.+?)\*\*|(?:https?:\/\/|www\.)[^\s<>[\]{}|\\^`"']+/gi
+// Inline regex: ***bold+italic*** OR **bold** OR *italic* OR URLs. Bold-italic
+// and bold come FIRST so `**x**` is never mis-read as `*` + `*x*`.
+// Kept in sync with the web renderer, packages/ui/src/markdown-lite-text.tsx.
+const INLINE_REGEX =
+  /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|(?:https?:\/\/|www\.)[^\s<>[\]{}|\\^`"']+/gi
 
 // Heading regex: matches lines starting with # (up to ###)
 const HEADING_REGEX = /^(#{1,3})\s+(.+)$/
@@ -30,7 +33,15 @@ function parseInline(text: string, linkStyle: React.CSSProperties, keyPrefix: st
     }
 
     if (match[1] !== undefined) {
-      parts.push(<strong key={`${keyPrefix}-${match.index}`}>{match[1]}</strong>)
+      parts.push(
+        <strong key={`${keyPrefix}-bi-${match.index}`}>
+          <em>{match[1]}</em>
+        </strong>
+      )
+    } else if (match[2] !== undefined) {
+      parts.push(<strong key={`${keyPrefix}-b-${match.index}`}>{match[2]}</strong>)
+    } else if (match[3] !== undefined) {
+      parts.push(<em key={`${keyPrefix}-i-${match.index}`}>{match[3]}</em>)
     } else {
       const url = match[0]
       const href = url.startsWith('www.') ? `https://${url}` : url

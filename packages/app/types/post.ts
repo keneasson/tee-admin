@@ -14,6 +14,7 @@
  */
 
 import type { DocumentAttachment, EventSharingScope, OnlineMeetingInfo } from './events'
+import type { RichNode } from '../features/post-editor/rich-text'
 
 // Re-export so the post model is a single import surface for consumers. The
 // canonical PiiClass definition lives in viewer-pii.ts (the redaction primitive);
@@ -98,7 +99,26 @@ export interface BlockBase {
  */
 export interface TextBlock extends BlockBase {
   kind: 'text'
+  /**
+   * The plain-markdown PROJECTION of {@link TextBlock.rich} — always derived
+   * from it when `rich` is present, never hand-edited.
+   *
+   * It is not deprecated. It is the graceful-degradation path (plain-text mail
+   * parts, summaries, search) and the reason every renderer that predates
+   * `rich` keeps working unchanged. Lossy by design: a mark markdown cannot
+   * spell (underline, highlight, alignment) is absent here but preserved on
+   * `rich`. See ADR-0004.
+   */
   body: string
+  /**
+   * Lossless rich text. Source of truth when present.
+   *
+   * Storage captures every mark the editor can produce, whether or not any
+   * renderer displays it yet; renderers upgrade one at a time and ignore marks
+   * they do not know. Portable JSON — no Lexical or DOM types — so an Expo
+   * canvas can read and write it (ADR-0003 §3, ADR-0004).
+   */
+  rich?: RichNode[]
   containsPii: boolean
 }
 

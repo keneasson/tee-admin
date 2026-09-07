@@ -8,7 +8,7 @@ import { Anchor, Paragraph, Text, YStack } from 'tamagui'
  * renderer (apps/email-builder/components/AutoLinkText.tsx) so the same source
  * text formats identically in emails and on screen. Supports:
  *   - `# / ## / ###` headings
- *   - `**bold**`
+ *   - `**bold**`, `*italic*`, `***both***`
  *   - `- ` or `* ` bullet lists
  *   - bare URLs / www. links (auto-linked)
  *
@@ -19,8 +19,10 @@ import { Anchor, Paragraph, Text, YStack } from 'tamagui'
  *     card previews.
  */
 
-// Matches **bold** OR a URL (http(s):// or www.)
-const INLINE_REGEX = /\*\*(.+?)\*\*|(?:https?:\/\/|www\.)[^\s<>[\]{}|\\^`"']+/gi
+// Matches ***bold+italic*** OR **bold** OR *italic* OR a URL (http(s):// or www.).
+// Bold-italic and bold come FIRST so `**x**` is never mis-read as `*` + `*x*`.
+const INLINE_REGEX =
+  /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|(?:https?:\/\/|www\.)[^\s<>[\]{}|\\^`"']+/gi
 const HEADING_REGEX = /^(#{1,3})\s+(.+)$/
 const BULLET_REGEX = /^\s*[-*]\s+(.+)$/
 
@@ -41,8 +43,20 @@ function parseInline(text: string, keyPrefix: string): React.ReactNode[] {
 
     if (match[1] !== undefined) {
       parts.push(
-        <Text key={`${keyPrefix}-b-${match.index}`} fontWeight="700">
+        <Text key={`${keyPrefix}-bi-${match.index}`} fontWeight="700" fontStyle="italic">
           {match[1]}
+        </Text>
+      )
+    } else if (match[2] !== undefined) {
+      parts.push(
+        <Text key={`${keyPrefix}-b-${match.index}`} fontWeight="700">
+          {match[2]}
+        </Text>
+      )
+    } else if (match[3] !== undefined) {
+      parts.push(
+        <Text key={`${keyPrefix}-i-${match.index}`} fontStyle="italic">
+          {match[3]}
         </Text>
       )
     } else {
