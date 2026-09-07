@@ -33,6 +33,7 @@ import {
   type Channel,
   type Viewer,
 } from './viewer-pii'
+import { findMarkers, flattenMarkers, markerFor } from '../features/post-editor/inline-markers'
 
 interface RedactOptions {
   channel?: Channel
@@ -204,7 +205,39 @@ export function redactPost(
     if (redacted) blocks.push(redacted)
   }
 
-  return { ...post, blocks }
+  // An inline value the author placed in a sentence leaves a `{{kind:id}}` marker
+  // in the surrounding prose. If redaction just dropped that block for this
+  // viewer, the marker must go too — otherwise the redacted Post is internally
+  // inconsistent, and any consumer reading `body` directly (a summary line, a
+  // plain-text mail part, search indexing) would ship a literal `{{person:p3}}`
+  // where a withheld name used to be. Renderers already collapse an unresolvable
+  // marker; this makes the DATA correct rather than relying on every reader to
+  // be careful.
+  return { ...post, blocks: dropDanglingMarkers(blocks) }
+}
+
+/**
+ * Remove markers whose target block did not survive redaction, leaving clean
+ * prose. Markers whose block IS present are untouched.
+ */
+function dropDanglingMarkers(blocks: Block[]): Block[] {
+  const survivors = new Set(blocks.map((b) => b.id))
+  return blocks.map((block) => {
+    if (block.kind !== 'text' || typeof block.body !== 'string') return block
+    const markers = findMarkers(block.body)
+    if (markers.length === 0) return block
+    if (markers.every((m) => survivors.has(m.id))) return block
+    return {
+      ...block,
+      body: flattenMarkers(
+        block.body,
+        // A surviving block keeps its marker (the renderer resolves it); only a
+        // dropped one collapses, which `flattenMarkers` does for a missing id.
+        (b) => markerFor(b),
+        new Map(blocks.filter((b) => survivors.has(b.id)).map((b) => [b.id, b] as const))
+      ),
+    }
+  })
 }
 
 /** Redact a list of posts, dropping any the viewer cannot reach. */
