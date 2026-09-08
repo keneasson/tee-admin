@@ -6,12 +6,20 @@
  * the rest — the time analogue of the Location resolver's "resolve first, disclose
  * details later" intention.
  *
- *   • Precise mode (default): a date + time input. Stored as a UTC `startsAt` in
- *     the block's `timezone` (wall-clock⇄UTC in {@link time-resolve.ts}), so what
- *     the author types in Toronto is the correct instant across DST.
- *   • "Describe it instead": for recurring/fuzzy times, one free-text field writes
- *     `display` (e.g. "7:30pm every Wednesday") and clears the precise instant.
- *   • Add details: end time, timezone, and newsletter reminder offsets.
+ * THE DATES ARE THE DATA. `startsAt`/`endsAt` are what the lifecycle engine
+ * sorts posts by and expires them on (`resolvePostNextDate`). A DESCRIBED time
+ * has no `startsAt`, so it contributes no happening at all: the post cannot be
+ * ordered by event date and never expires when the event ends — it falls back to
+ * a flat window from publish, which is exactly the class of bug that made a
+ * shower notice expire before the shower. So real dates are the default and the
+ * free-text field is an explicit, warned escape hatch.
+ *
+ *   • Start and END are both first-class and always visible. Most posts are a
+ *     single non-recurring date RANGE ("Sept 18–20"); hiding the end behind a
+ *     disclosure made that unexpressible.
+ *   • Times are OPTIONAL. Plenty of events simply run until they are done, so a
+ *     date with no time is a first-class answer, not an incomplete one.
+ *   • Timezone and reminders stay behind "More" — they have sensible defaults.
  *
  * Web-only (native date/time inputs); pure conversions are unit-tested in
  * {@link time-resolve.ts}.
@@ -52,63 +60,96 @@ export function TimePicker({ block, onChange }: TimePickerProps) {
   const [mode, setMode] = useState<'precise' | 'text'>(() =>
     block.display && !block.startsAt ? 'text' : 'precise'
   )
-  const [showDetails, setShowDetails] = useState(false)
+  const [showMore, setShowMore] = useState(false)
 
   const start = utcToWallParts(block.startsAt, tz)
   const end = utcToWallParts(block.endsAt, tz)
 
   const setStart = (date: string, time: string) => {
-    // Writing a precise instant clears any free-text fallback.
-    const startsAt = wallTimeToUtc(combineWall(date, time), tz)
-    onChange({ ...block, startsAt, display: undefined })
+    if (!date) {
+      onChange({ ...block, startsAt: undefined })
+      return
+    }
+    onChange({ ...block, startsAt: wallTimeToUtc(combineWall(date, time), tz), display: undefined })
   }
+
   const setEnd = (date: string, time: string) => {
+    if (!date) {
+      onChange({ ...block, endsAt: undefined })
+      return
+    }
     onChange({ ...block, endsAt: wallTimeToUtc(combineWall(date, time), tz) })
   }
 
-  const toggleRemind = (v: ReminderOffset) => {
-    const set = new Set(block.remind ?? [])
-    if (set.has(v)) set.delete(v)
-    else set.add(v)
-    const next = Array.from(set)
-    onChange({ ...block, remind: next.length ? next : undefined })
+  const toggleReminder = (value: ReminderOffset) => {
+    const current = block.remind ?? ['eve-of']
+    const next = current.includes(value)
+      ? current.filter((r) => r !== value)
+      : [...current, value]
+    onChange({ ...block, remind: next })
   }
 
   return (
     <YStack gap="$3">
       <XStack alignItems="center" gap="$2">
-        <Clock size={16} color="$color10" />
-        <Text fontSize="$2" fontWeight="600" color="$color11">
+        <Clock size={14} />
+        <Text fontSize="$4" fontWeight="700">
           When is it?
         </Text>
       </XStack>
 
       {mode === 'precise' ? (
-        <YStack gap="$2">
-          <XStack gap="$2">
-            <YStack flex={1.4} gap="$1">
-              <Text fontSize="$2" color="$color11">
-                Date
-              </Text>
+        <YStack gap="$3">
+          {/* START — date required, time optional. */}
+          <YStack gap="$1">
+            <Text fontSize="$2" fontWeight="600" color="$color11">
+              Starts
+            </Text>
+            <XStack gap="$2">
               <input
                 type="date"
-                style={nativeField}
+                aria-label="Start date"
+                style={{ ...nativeField, flex: 1.4 }}
                 value={start.date}
                 onChange={(e) => setStart(e.target.value, start.time)}
               />
-            </YStack>
-            <YStack flex={1} gap="$1">
-              <Text fontSize="$2" color="$color11">
-                Time
-              </Text>
               <input
                 type="time"
-                style={nativeField}
+                aria-label="Start time (optional)"
+                style={{ ...nativeField, flex: 1 }}
                 value={start.time}
                 onChange={(e) => setStart(start.date, e.target.value)}
               />
-            </YStack>
-          </XStack>
+            </XStack>
+          </YStack>
+
+          {/* END — first-class, not hidden. A multi-day range is the common case. */}
+          <YStack gap="$1">
+            <Text fontSize="$2" fontWeight="600" color="$color11">
+              Ends
+            </Text>
+            <XStack gap="$2">
+              <input
+                type="date"
+                aria-label="End date"
+                style={{ ...nativeField, flex: 1.4 }}
+                value={end.date}
+                onChange={(e) => setEnd(e.target.value, end.time)}
+              />
+              <input
+                type="time"
+                aria-label="End time (optional)"
+                style={{ ...nativeField, flex: 1 }}
+                value={end.time}
+                onChange={(e) => setEnd(end.date, e.target.value)}
+              />
+            </XStack>
+          </YStack>
+
+          <Text fontSize="$2" color="$color10">
+            Leave a time blank if it just runs until it is done.
+          </Text>
+
           <Button
             size="$2"
             chromeless
@@ -118,19 +159,21 @@ export function TimePicker({ block, onChange }: TimePickerProps) {
               onChange({ ...block, startsAt: undefined, endsAt: undefined })
             }}
           >
-            Can't pin an exact date? Describe it instead →
+            Can&apos;t pin a date? Describe it instead →
           </Button>
         </YStack>
       ) : (
         <YStack gap="$2">
-          <Text fontSize="$2" color="$color11">
-            Describe the time
-          </Text>
           <Input
             value={block.display ?? ''}
             onChangeText={(t) => onChange({ ...block, display: t || undefined })}
             placeholder="e.g. 7:30pm every Wednesday"
           />
+          {/* The cost of describing rather than dating, stated where it is paid. */}
+          <Text fontSize="$2" color="$orange10">
+            A described time can&apos;t be sorted with other posts, and won&apos;t
+            clear itself once the event is over.
+          </Text>
           <Button
             size="$2"
             chromeless
@@ -140,57 +183,25 @@ export function TimePicker({ block, onChange }: TimePickerProps) {
               onChange({ ...block, display: undefined })
             }}
           >
-            ← Use an exact date &amp; time
+            ← Use real dates
           </Button>
         </YStack>
       )}
 
-      <YStack gap="$1">
-        <Text fontSize="$2" color="$color11">
-          Label (optional)
-        </Text>
-        <Input
-          value={block.label ?? ''}
-          onChangeText={(t) => onChange({ ...block, label: t || undefined })}
-          placeholder="e.g. Service, Reception, Baptism"
-        />
-      </YStack>
-
       <Separator />
+
       <Button
         size="$2"
         chromeless
-        icon={showDetails ? ChevronDown : ChevronRight}
         justifyContent="flex-start"
-        onPress={() => setShowDetails((s) => !s)}
+        icon={showMore ? ChevronDown : ChevronRight}
+        onPress={() => setShowMore((v) => !v)}
       >
-        Add details (end time, timezone, reminders)
+        More (timezone, reminders)
       </Button>
 
-      {showDetails ? (
+      {showMore ? (
         <YStack gap="$3" paddingLeft="$2">
-          {mode === 'precise' ? (
-            <YStack gap="$1">
-              <Text fontSize="$2" fontWeight="600" color="$color11">
-                Ends (optional)
-              </Text>
-              <XStack gap="$2">
-                <input
-                  type="date"
-                  style={{ ...nativeField, flex: 1.4 }}
-                  value={end.date}
-                  onChange={(e) => setEnd(e.target.value, end.time)}
-                />
-                <input
-                  type="time"
-                  style={{ ...nativeField, flex: 1 }}
-                  value={end.time}
-                  onChange={(e) => setEnd(end.date, e.target.value)}
-                />
-              </XStack>
-            </YStack>
-          ) : null}
-
           <YStack gap="$1">
             <Text fontSize="$2" fontWeight="600" color="$color11">
               Timezone
@@ -213,7 +224,7 @@ export function TimePicker({ block, onChange }: TimePickerProps) {
               Send a reminder
             </Text>
             {REMINDERS.map((r) => {
-              const on = (block.remind ?? []).includes(r.value)
+              const on = (block.remind ?? ['eve-of']).includes(r.value)
               return (
                 <Button
                   key={r.value}
@@ -221,8 +232,7 @@ export function TimePicker({ block, onChange }: TimePickerProps) {
                   chromeless
                   justifyContent="flex-start"
                   icon={on ? CheckSquare : Square}
-                  theme={on ? 'blue' : undefined}
-                  onPress={() => toggleRemind(r.value)}
+                  onPress={() => toggleReminder(r.value)}
                 >
                   {r.label}
                 </Button>

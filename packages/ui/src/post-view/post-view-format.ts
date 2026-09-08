@@ -122,6 +122,7 @@ export function formatTimeBlock(block: TimeBlock): FormattedTime {
       eventTimezone: timezone,
       userTimezone: timezone,
     })
+    let dateLine = start.dateDisplay
     let timeLine = start.timeDisplay
     if (block.endsAt) {
       const end = formatScheduleDateTime({
@@ -129,9 +130,17 @@ export function formatTimeBlock(block: TimeBlock): FormattedTime {
         eventTimezone: timezone,
         userTimezone: timezone,
       })
-      if (end.timeDisplay) timeLine = `${timeLine} – ${end.timeDisplay}`
+      // A MULTI-DAY range must show both dates. Previously only the end TIME was
+      // appended, so "Sept 18–20" published as a single date and the range was
+      // invisible to the reader — the most common shape of all.
+      if (end.dateDisplay && end.dateDisplay !== start.dateDisplay) {
+        dateLine = `${start.dateDisplay} – ${end.dateDisplay}`
+      }
+      if (end.timeDisplay) {
+        timeLine = timeLine ? `${timeLine} – ${end.timeDisplay}` : end.timeDisplay
+      }
     }
-    return { label: block.label || undefined, dateLine: start.dateDisplay, timeLine }
+    return { label: block.label || undefined, dateLine, timeLine }
   }
 
   // No ISO instant — fall back to free-text time.

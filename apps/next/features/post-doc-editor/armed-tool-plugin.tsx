@@ -32,7 +32,8 @@ import {
   COMMAND_PRIORITY_LOW,
 } from 'lexical'
 import { $insertNodeToNearestRoot } from '@lexical/utils'
-import { $createPostBlockNode } from './post-block-node'
+import { $createPostBlockNode, $isPostBlockNode } from './post-block-node'
+import { $getRoot } from 'lexical'
 import { makeToolBlock, makeSeededToolBlock, type ToolKind } from '@my/app/features/post-editor/tool-blocks'
 import { isPhraseKind } from '@my/app/types/post'
 import { useEditSession } from './edit-session'
@@ -40,6 +41,32 @@ import { useEditSession } from './edit-session'
 export interface ArmedToolPluginProps {
   armed: ToolKind | null
   onInserted: () => void
+}
+
+/**
+ * Resolve a decorator's CURRENT Lexical key by the stable id of the block it
+ * carries. Node keys are Lexical's own identity and can change across an
+ * insertion; the block id is ours and does not.
+ */
+function findNodeKeyByBlockId(
+  editor: ReturnType<typeof useLexicalComposerContext>[0],
+  blockId: string
+): string | null {
+  let key: string | null = null
+  editor.getEditorState().read(() => {
+    const walk = (nodes: ReturnType<typeof $getRoot>['getChildren'] extends () => infer R ? R : never) => {
+      for (const node of nodes as any[]) {
+        if ($isPostBlockNode(node) && node.getBlock().id === blockId) {
+          key = node.getKey()
+          return
+        }
+        if (typeof node.getChildren === 'function') walk(node.getChildren())
+        if (key) return
+      }
+    }
+    walk($getRoot().getChildren() as any)
+  })
+  return key
 }
 
 export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
@@ -51,7 +78,14 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
 
     // CONVERT-SELECTION: if there is a live non-collapsed selection when the tool
     // is armed, replace it with a seeded block immediately (no canvas click).
-    let convertedKey: string | null = null
+    //
+    // The key is resolved AFTER the update commits, by looking the node up by
+    // its block id. `sel.insertNodes()` may clone the node during normalisation,
+    // so a key captured before insertion can already be stale — which showed up
+    // as "This element is no longer in the document." the moment the floating
+    // editor opened. `$insertNodeToNearestRoot` did not have that problem, so
+    // the bug arrived with inline placement.
+    let convertedId: string | null = null
     editor.update(() => {
       const sel = $getSelection()
       if (!$isRangeSelection(sel) || sel.isCollapsed()) return
@@ -68,24 +102,23 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
       // inside the paragraph; `$insertNodeToNearestRoot` would lift it to root.
       if (isPhraseKind(block.kind)) {
         sel.removeText()
-        const node = $createPostBlockNode(block, true)
-        sel.insertNodes([node])
-        convertedKey = node.getKey()
+        sel.insertNodes([$createPostBlockNode(block, true)])
+        convertedId = block.id
         return
       }
 
       // A flyer or a registration panel is genuinely standalone — it still takes
       // its own line.
       sel.removeText()
-      const node = $createPostBlockNode(block)
-      $insertNodeToNearestRoot(node)
-      convertedKey = node.getKey()
+      $insertNodeToNearestRoot($createPostBlockNode(block))
+      convertedId = block.id
     })
-    if (convertedKey) {
+    if (convertedId) {
       onInserted()
+      const key = findNodeKeyByBlockId(editor, convertedId)
       // Open the seeded element in the floating tool so its resolver (pre-filled
       // with the selected text) is ready to confirm — never an inline form.
-      beginEdit(convertedKey)
+      if (key) beginEdit(key)
       return
     }
 
@@ -93,17 +126,18 @@ export function ArmedToolPlugin({ armed, onInserted }: ArmedToolPluginProps) {
     return editor.registerCommand(
       CLICK_COMMAND,
       () => {
-        let newKey: string | null = null
+        let newId: string | null = null
         editor.update(() => {
-          const node = $createPostBlockNode(makeToolBlock(armed))
-          $insertNodeToNearestRoot(node)
-          newKey = node.getKey()
+          const block = makeToolBlock(armed)
+          $insertNodeToNearestRoot($createPostBlockNode(block))
+          newId = block.id
         })
         onInserted()
         // Open the freshly-placed element straight into the floating editor —
         // the user never meets an inline form; the element lands as its (empty)
         // final display and its editor opens in the tool.
-        if (newKey) beginEdit(newKey)
+        const key = newId ? findNodeKeyByBlockId(editor, newId) : null
+        if (key) beginEdit(key)
         return true
       },
       COMMAND_PRIORITY_LOW
