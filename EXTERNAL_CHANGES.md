@@ -104,3 +104,28 @@ Changes in this file flag code modifications that require **matching manual upda
 | AWS SES configuration | AWS Console → SES | AWS account owner |
 | DNS / Domain settings | Domain registrar | Domain owner |
 | Vercel cron jobs | `apps/next/vercel.json` (auto-deployed) | Via code |
+
+## GOOGLE_PLACES_API_KEY — missing in production (2026-09-08)
+
+**Symptom:** the address lookup when adding an ecclesia returns nothing, with no
+error shown.
+
+**Cause:** `GOOGLE_PLACES_API_KEY` is not set on the Vercel `tee-admin` project.
+`/api/places/autocomplete` and `/api/places/details` both check for it and return
+`{ success: true, configured: false, predictions: [] }` — a SILENT no-op that is
+indistinguishable in the UI from "no matches found".
+
+**Consequence:** with no address parsed, province and city were left empty, and
+the ecclesia create path (which required only `name`) wrote a record whose key
+is `ECCLESIA#CA|` + `#Grand River` — successfully saved and permanently
+invisible, because every directory read filters on the geographic prefix.
+
+**Action required (outside the repo):**
+1. Create a Google Places API key and add `GOOGLE_PLACES_API_KEY` to the Vercel
+   `tee-admin` project (Production + Preview).
+2. Until then the lookup stays unavailable; the form now says so rather than
+   silently returning no results, and province/city must be entered by hand.
+
+Validation is fixed in-repo regardless (province/city are required at both the
+route and the write), so a failed lookup can no longer produce an invisible
+record. Google Places was always listed as deferred — design Slice 10, #224.

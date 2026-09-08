@@ -249,6 +249,25 @@ export async function createEcclesia(data: {
     updatedAt: now,
   }
 
+  // Last line of defence at the WRITE, not just at the route: these fields are
+  // key material, and a record written with an empty one is invisible to every
+  // read (they all filter on the geographic prefix) yet reports success. Fail
+  // loudly here so a bad record can never reach the table again, whichever
+  // caller is at fault.
+  for (const [field, value] of [
+    ['country', data.country],
+    ['province', data.province],
+    ['city', data.city],
+    ['name', data.name],
+  ] as const) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(
+        `createEcclesia: '${field}' must be a non-empty string — it is part of the ` +
+          `directory key, and an ecclesia saved without it cannot be listed or searched.`
+      )
+    }
+  }
+
   try {
     await client.put({
       TableName: TABLE_NAME,
