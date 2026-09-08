@@ -102,6 +102,8 @@ export function createEmptyPost(tenant: string, authorId: string): Post {
 export function validateForPublish(post: Post): string[] {
   const errors: string[] = []
   if (!post.title.trim()) errors.push('A title is required')
-  if (post.blocks.length === 0) errors.push('Add at least one block')
+  // NO "add at least one block" rule. Nobody sets out to publish an empty post,
+  // and the empty document says so far better than a validation message can —
+  // the editor should not nag about the obvious (it is a document, not a form).
   return errors
 }

@@ -37,14 +37,15 @@ describe('createEmptyPost', () => {
 })
 
 describe('validateForPublish', () => {
-  it('requires a title and at least one block', () => {
-    expect(validateForPublish(draft())).toEqual([
-      'A title is required',
-      'Add at least one block',
-    ])
+  it('requires a title', () => {
+    expect(validateForPublish(draft())).toEqual(['A title is required'])
   })
   it('passes with a title + a block', () => {
     const p: Post = { ...draft([text('a', 'hello')]), title: 'Hi' }
+    expect(validateForPublish(p)).toEqual([])
+  })
+  it('does NOT nag about an empty body — the empty document already says that', () => {
+    const p: Post = { ...draft(), title: 'Hi' }
     expect(validateForPublish(p)).toEqual([])
   })
   it('treats whitespace-only titles as empty', () => {

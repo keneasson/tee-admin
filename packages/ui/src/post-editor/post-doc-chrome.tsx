@@ -34,8 +34,18 @@
  */
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
-import { YStack, XStack, Card, Text, Input, Label, Separator, H3, Paragraph } from 'tamagui'
-import { X } from '@tamagui/lucide-icons'
+import { YStack, XStack, Text, Input, Popover, Separator } from 'tamagui'
+import {
+  CalendarClock,
+  Eye,
+  EyeOff,
+  Globe,
+  Layers,
+  LayoutTemplate,
+  Lock,
+  Save,
+  X,
+} from '@tamagui/lucide-icons'
 import type { Block, OccasionTag, Post, Visibility } from '@my/app/types/post'
 // Deep import, NOT the '@my/app/features/post-editor' barrel: that barrel also
 // exports the screens, which import '@my/ui' — going through it would make
@@ -75,6 +85,13 @@ export interface PostDocChromeProps {
    * THE cross-platform seam: everything else in this file is shared.
    */
   renderCanvas: (props: PostDocCanvasProps) => ReactNode
+  /** Explicit save (the disk icon). Autosave still runs; this is the deliberate one. */
+  onSave?: (post: Post) => void
+  /** Autosave state text, e.g. "All changes saved". Rendered quietly in the bar. */
+  saveLabel?: string
+  saveIsError?: boolean
+  /** Drop back to the block-form editor (the rollout fallback). */
+  onSwitchEditor?: () => void
 }
 
 export function PostDocChrome({
@@ -84,7 +101,13 @@ export function PostDocChrome({
   seriesPosts,
   onSeriesPostPress,
   renderCanvas,
+  onSave,
+  saveLabel,
+  saveIsError,
+  onSwitchEditor,
 }: PostDocChromeProps) {
+  // Which top-bar popover is open (only one at a time).
+  const [openPanel, setOpenPanel] = useState<'publish' | 'date' | 'occasion' | 'series' | null>(null)
   // Author opt-out of the PII members-default for prose (design §2 make-public).
   const [makePublic, setMakePublic] = useState(false)
 
@@ -159,81 +182,121 @@ export function PostDocChrome({
 
   const publishErrors = validateForPublish(value)
   const canPublish = publishErrors.length === 0
+  const isPublic = value.visibility === 'public'
+  const isPublished = value.status === 'ready'
 
   return (
-    <YStack gap="$4">
-      {/* ---- Post metadata chrome ------------------------------------------ */}
-      <Card bordered padding="$4" gap="$3">
-        <H3>Post</H3>
+    <YStack flex={1} gap="$2">
+      {/* ---- Docs-style top bar ------------------------------------------- */}
+      <XStack alignItems="center" gap="$2" paddingVertical="$2" flexWrap="wrap">
+        {/* Title: click to edit, in place. Never a labelled form field. */}
+        <Input
+          id="post-title"
+          flex={1}
+          minWidth={180}
+          maxWidth={360}
+          value={value.title}
+          onChangeText={(title) => patch({ title })}
+          placeholder="Untitled post"
+          fontSize="$5"
+          fontWeight="600"
+          borderWidth={0}
+          backgroundColor="transparent"
+          paddingHorizontal="$2"
+          hoverStyle={{ backgroundColor: '$backgroundHover' }}
+          focusStyle={{ backgroundColor: '$background', borderWidth: 1, borderColor: '$blue8' }}
+        />
 
-        <YStack gap="$2">
-          <Label htmlFor="post-title" fontSize="$3" fontWeight="600">
-            Title
-          </Label>
-          <Input
-            id="post-title"
-            value={value.title}
-            onChangeText={(title) => patch({ title })}
-            placeholder="Post title"
-          />
-        </YStack>
+        {/* 1. DRAFT ↔ PUBLISHED — EXPOSURE, not sharing. The question this
+            control answers is "does this exist for readers yet?", which is
+            exactly what `status` already encodes: only 'ready' is ever served
+            publicly, 'draft' is a placeholder nobody sees.
 
-        {/* Occasion tags — free-combining DATA, not a code path. */}
-        <YStack gap="$2">
-          <Label fontSize="$3" fontWeight="600">
-            Occasion tags
-          </Label>
-          <XStack gap="$2" flexWrap="wrap">
-            {value.occasion.map((tag) => (
-              <XStack
-                key={tag}
-                alignItems="center"
-                gap="$1"
-                paddingHorizontal="$2"
-                paddingVertical="$1"
-                borderRadius="$3"
-                backgroundColor="$blue4"
+            Audience ("who can see it") is a DIFFERENT axis and stays a separate
+            setting below, not folded into the same word — a members-only post
+            can be published, and a public post can be a draft. */}
+        <ToolbarPopover
+          icon={isPublished ? Eye : EyeOff}
+          label={isPublished ? 'Published' : 'Draft'}
+          active={isPublished}
+          open={openPanel === 'publish'}
+          onOpenChange={(o) => setOpenPanel(o ? 'publish' : null)}
+        >
+          <YStack gap="$3" minWidth={260}>
+            <XStack alignItems="center" gap="$2">
+              {isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
+              <Text fontSize="$3" fontWeight="600">
+                {isPublished ? 'Published' : 'Draft'}
+              </Text>
+            </XStack>
+            <Text fontSize="$2" color="$color10">
+              {isPublished
+                ? 'Readers can see this post.'
+                : 'A placeholder — nobody but editors can see this yet.'}
+            </Text>
+
+            {isPublished ? (
+              <Button
+                size="$2"
+                variant="outlined"
+                onPress={() => {
+                  setOpenPanel(null)
+                  patch({ status: 'draft' })
+                }}
               >
-                <Text fontSize="$2">{tag}</Text>
-                <Button
-                  size="$1"
-                  circular
-                  variant="chromeless"
-                  icon={X}
-                  aria-label={`Remove ${tag}`}
-                  onPress={() => removeOccasionTag(tag)}
-                />
-              </XStack>
-            ))}
-          </XStack>
-          {availableOccasions.length > 0 ? (
-            <XStack maxWidth={260}>
+                Return to draft
+              </Button>
+            ) : onPublish ? (
+              <Button
+                size="$2"
+                variant="action"
+                disabled={!canPublish}
+                onPress={() => {
+                  setOpenPanel(null)
+                  onPublish(value)
+                }}
+              >
+                Publish
+              </Button>
+            ) : null}
+            {publishErrors.length > 0 ? (
+              <Text fontSize="$2" color="$red10">
+                {publishErrors.join(' · ')}
+              </Text>
+            ) : null}
+
+            <Separator />
+
+            {/* A separate question: exposure says WHETHER, audience says WHO. */}
+            <XStack alignItems="center" gap="$2">
+              {isPublic ? <Globe size={14} /> : <Lock size={14} />}
               <PlainSelect
-                value=""
-                placeholder="Add a tag…"
-                options={availableOccasions}
-                onValueChange={(tag) => addOccasionTag(tag as OccasionTag)}
+                label="Audience"
+                value={value.visibility}
+                options={VISIBILITY_OPTIONS}
+                onValueChange={(v) => patch({ visibility: v as Visibility })}
               />
             </XStack>
-          ) : null}
-        </YStack>
-
-        <XStack gap="$4" flexWrap="wrap">
-          <YStack minWidth={200} flex={1}>
-            <PlainSelect
-              label="Visibility"
-              value={value.visibility}
-              options={VISIBILITY_OPTIONS}
-              onValueChange={(v) => patch({ visibility: v as Visibility })}
-            />
           </YStack>
+        </ToolbarPopover>
 
-          <YStack gap="$2" minWidth={200} flex={1}>
-            <Label htmlFor="post-publish-date" fontSize="$3" fontWeight="600">
-              Publish date
-            </Label>
+        {/* 2. SCHEDULE — when it goes out. */}
+        <ToolbarPopover
+          icon={CalendarClock}
+          label={
+            value.lifecycle.publishDate
+              ? `Scheduled ${value.lifecycle.publishDate}`
+              : 'Schedule post'
+          }
+          active={Boolean(value.lifecycle.publishDate)}
+          open={openPanel === 'date'}
+          onOpenChange={(o) => setOpenPanel(o ? 'date' : null)}
+        >
+          <YStack gap="$2" minWidth={220}>
+            <Text fontSize="$2" color="$color10">
+              Schedule post
+            </Text>
             <Input
-              id="post-publish-date"
               value={value.lifecycle.publishDate ?? ''}
               onChangeText={(publishDate) =>
                 patch({
@@ -244,85 +307,215 @@ export function PostDocChrome({
               autoCapitalize="none"
             />
           </YStack>
-        </XStack>
+        </ToolbarPopover>
 
-        {/* PII gate notice + make-public opt-out (design §2). */}
-        {piiBearing ? (
-          <YStack
-            gap="$1"
-            padding="$3"
-            borderRadius="$3"
-            backgroundColor="$yellow2"
-            borderColor="$yellow6"
-            borderWidth={1}
-          >
-            <Text fontSize="$3" fontWeight="600">
-              Sensitive occasion — prose is members-only by default
-            </Text>
-            <Paragraph fontSize="$2" color="$color10">
-              Because this post carries a sensitive occasion tag (e.g. funeral,
-              medical, baptism), text you write on the canvas is hidden from
-              anonymous visitors (members-only) so obituary / testimony / medical
-              detail is never exposed publicly. Structured widgets keep their own
-              per-block visibility.
-            </Paragraph>
-            <PlainCheckbox
-              checked={makePublic}
-              onCheckedChange={toggleMakePublic}
-              label="Make this post's prose public (I have confirmed there is no sensitive detail)"
-            />
+        {/* 3. SAVE — the disk, alongside the autosave indicator. */}
+        <ToolbarIcon
+          icon={Save}
+          label="Save now"
+          onPress={() => onSave?.(value)}
+          disabled={!onSave}
+        />
+
+        {/* 4. OCCASION TAGS / TEMPLATES — one control, because they are one
+            idea: choosing an occasion is what seeds that occasion's starting
+            structure (applyOccasionDefaults). Tags sort and filter NOTHING;
+            their one load-bearing job is the PII gate. */}
+        <ToolbarPopover
+          icon={LayoutTemplate}
+          label={value.occasion.length > 0 ? value.occasion.join(', ') : 'Occasion & template'}
+          active={value.occasion.length > 0}
+          open={openPanel === 'occasion'}
+          onOpenChange={(o) => setOpenPanel(o ? 'occasion' : null)}
+        >
+          <YStack gap="$2" minWidth={240}>
+            <XStack gap="$2" flexWrap="wrap">
+              {value.occasion.map((tag) => (
+                <XStack
+                  key={tag}
+                  alignItems="center"
+                  gap="$1"
+                  paddingHorizontal="$2"
+                  paddingVertical="$1"
+                  borderRadius="$3"
+                  backgroundColor="$blue4"
+                >
+                  <Text fontSize="$2">{tag}</Text>
+                  <Button
+                    size="$1"
+                    circular
+                    variant="chromeless"
+                    icon={X}
+                    aria-label={`Remove ${tag}`}
+                    onPress={() => removeOccasionTag(tag)}
+                  />
+                </XStack>
+              ))}
+            </XStack>
+            {availableOccasions.length > 0 ? (
+              <PlainSelect
+                value=""
+                placeholder="Add a tag…"
+                options={availableOccasions}
+                onValueChange={(tag) => addOccasionTag(tag as OccasionTag)}
+              />
+            ) : null}
           </YStack>
-        ) : null}
-      </Card>
+        </ToolbarPopover>
 
-      {/* ---- Connect/series indicator -------------------------------------- */}
-      {(seriesPosts?.length ?? 0) > 0 ? (
-        <Card bordered padding="$3" gap="$2" backgroundColor="$blue2">
-          <Text fontSize="$3" fontWeight="600">
-            Part of a series — {seriesPosts!.length} related
+        <XStack flex={1} minWidth={8} />
+
+        {/* Autosave state — Docs' "All changes saved". */}
+        {saveLabel ? (
+          <Text fontSize="$2" color={saveIsError ? '$red10' : '$color10'}>
+            {saveLabel}
           </Text>
-          <XStack gap="$2" flexWrap="wrap">
-            {seriesPosts!.map((sibling) => (
-              <Button
-                key={sibling.id}
-                size="$2"
-                variant="chromeless"
-                onPress={() => onSeriesPostPress?.(sibling.id)}
-              >
-                {sibling.title || 'Untitled post'}
-              </Button>
-            ))}
-          </XStack>
-        </Card>
+        ) : null}
+
+        {/* SERIES — only when the post actually belongs to one, so it costs no
+            slot in the common case. The chrome rewrite had dropped this
+            indicator entirely while still accepting the props. */}
+        {(seriesPosts?.length ?? 0) > 0 ? (
+          <ToolbarPopover
+            icon={Layers}
+            label={`Part of a series — ${seriesPosts!.length} related`}
+            active
+            open={openPanel === 'series'}
+            onOpenChange={(o) => setOpenPanel(o ? 'series' : null)}
+          >
+            <YStack gap="$2" minWidth={220}>
+              <Text fontSize="$2" color="$color10">
+                Part of a series — {seriesPosts!.length} related
+              </Text>
+              {seriesPosts!.map((sibling) => (
+                <Button
+                  key={sibling.id}
+                  size="$2"
+                  variant="chromeless"
+                  onPress={() => {
+                    setOpenPanel(null)
+                    onSeriesPostPress?.(sibling.id)
+                  }}
+                >
+                  {sibling.title || 'Untitled post'}
+                </Button>
+              ))}
+            </YStack>
+          </ToolbarPopover>
+        ) : null}
+
+        {onSwitchEditor ? (
+          <Button size="$2" variant="chromeless" onPress={onSwitchEditor}>
+            Classic
+          </Button>
+        ) : null}
+
+      </XStack>
+
+      {/* PII notice stays visible — it changes who can read the post, so it is
+          never hidden behind an icon. Compact, inline, one line. */}
+      {piiBearing ? (
+        <XStack
+          alignItems="center"
+          gap="$2"
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          borderRadius="$3"
+          backgroundColor="$yellow2"
+          borderColor="$yellow6"
+          borderWidth={1}
+        >
+          <Text fontSize="$2" flex={1}>
+            Sensitive occasion — your text is hidden from anonymous visitors.
+          </Text>
+          <PlainCheckbox
+            checked={makePublic}
+            onCheckedChange={toggleMakePublic}
+            label="Make public"
+          />
+        </XStack>
       ) : null}
 
-      {/* ---- Document canvas (Lexical) ------------------------------------- */}
-      <YStack gap="$2">
-        <H3>Document</H3>
-        <Text fontSize="$2" color="$color10">
-          Write freely. Arm a tool from the floating toolbar to drop in a Location,
-          Speaker, Date, Image, Link or Registration where you place the caret.
-        </Text>
-        {renderCanvas({ canvasKey: editorKey, initialBlocks, onBlocksChange })}
-      </YStack>
-
-      <Separator />
-
-      {/* ---- Publish (validate-on-publish only) ---------------------------- */}
-      {onPublish ? (
-        <YStack gap="$2">
-          {publishErrors.length > 0 ? (
-            <Text fontSize="$3" color="$red10">
-              {publishErrors.join(' · ')}
-            </Text>
-          ) : null}
-          <XStack>
-            <Button variant="action" disabled={!canPublish} onPress={() => onPublish(value)}>
-              Publish
-            </Button>
-          </XStack>
-        </YStack>
-      ) : null}
+      {/* ---- The document ------------------------------------------------- */}
+      {renderCanvas({ canvasKey: editorKey, initialBlocks, onBlocksChange })}
     </YStack>
+  )
+}
+
+// ---- Top-bar affordances -----------------------------------------------------
+
+function ToolbarIcon({
+  icon: Icon,
+  label,
+  onPress,
+  disabled,
+  active,
+}: {
+  icon: typeof Save
+  label: string
+  onPress?: () => void
+  disabled?: boolean
+  active?: boolean
+}) {
+  return (
+    <Button
+      size="$2"
+      circular
+      variant="chromeless"
+      icon={<Icon size={16} />}
+      aria-label={label}
+      disabled={disabled}
+      onPress={onPress}
+      backgroundColor={active ? '$blue4' : 'transparent'}
+      hoverStyle={{ backgroundColor: '$backgroundHover' }}
+    />
+  )
+}
+
+/**
+ * An icon in the top bar that opens its settings in a small popover — the Docs
+ * pattern. The document keeps the full width; metadata is one click away and
+ * never occupies the page.
+ */
+function ToolbarPopover({
+  icon: Icon,
+  label,
+  active,
+  open,
+  onOpenChange,
+  children,
+}: {
+  icon: typeof Save
+  label: string
+  active?: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: ReactNode
+}) {
+  return (
+    <Popover open={open} onOpenChange={onOpenChange} placement="bottom-start">
+      <Popover.Trigger asChild>
+        <Button
+          size="$2"
+          circular
+          variant="chromeless"
+          icon={<Icon size={16} />}
+          aria-label={label}
+          backgroundColor={active ? '$blue4' : 'transparent'}
+          hoverStyle={{ backgroundColor: '$backgroundHover' }}
+        />
+      </Popover.Trigger>
+      <Popover.Content
+        bordered
+        elevate
+        padding="$3"
+        zIndex={200000}
+        enterStyle={{ opacity: 0, y: -4 }}
+        exitStyle={{ opacity: 0, y: -4 }}
+      >
+        <Popover.Arrow />
+        {children}
+      </Popover.Content>
+    </Popover>
   )
 }
