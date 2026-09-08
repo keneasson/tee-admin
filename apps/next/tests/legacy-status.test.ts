@@ -26,12 +26,12 @@ const event = (over: Partial<Event> = {}): Partial<Event> => ({
 describe('eventToPostStatus — the precedence isEventActive already used', () => {
   it('archived wins outright — retirement is not overridden by a date', () => {
     expect(
-      eventToPostStatus(event({ status: 'archived', publishDate: '2020-01-01' } as Partial<Event>))
+      eventToPostStatus(event({ status: 'archived', publishDate: new Date('2020-01-01') } as Partial<Event>))
     ).toBe('archived')
   })
 
   it('a publishDate means published (scheduling is decided later, by isPostLive)', () => {
-    expect(eventToPostStatus(event({ publishDate: '2030-01-01' } as Partial<Event>))).toBe(
+    expect(eventToPostStatus(event({ publishDate: new Date('2030-01-01') } as Partial<Event>))).toBe(
       'published'
     )
   })
@@ -62,7 +62,7 @@ describe('the adapter derives status instead of asserting it', () => {
   })
 
   it('a future-dated event is published but not yet live — scheduling survives', () => {
-    const post = legacyToPost(event({ publishDate: '2030-01-01' }) as Event)
+    const post = legacyToPost(event({ publishDate: new Date('2030-01-01') }) as Event)
     expect(post.status).toBe('published')
     expect(isPostLive(post, new Date('2026-09-08'))).toBe(false)
     expect(isPostScheduled(post, new Date('2026-09-08'))).toBe(true)
