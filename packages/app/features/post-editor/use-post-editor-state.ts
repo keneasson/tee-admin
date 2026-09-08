@@ -17,7 +17,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createEmptyPost, validateForPublish } from '@my/ui/src/post-editor'
-import { getPost, createPost, updatePost, getPostSeries } from '../../provider/get-data'
+import {
+  getPost,
+  createPost,
+  updatePost,
+  getPostSeries,
+  deleteDraftPost,
+} from '../../provider/get-data'
 import type { Post } from '../../types/post'
 
 /** How long edits settle before a save is flushed. */
@@ -43,6 +49,11 @@ export interface PostEditorState {
   seriesPosts: Array<{ id: string; title: string }>
   onChange: (next: Post) => void
   onPublish: (toPublish: Post) => Promise<void>
+  /**
+   * Discard this draft permanently. Resolves true once it is gone, so the caller
+   * can navigate away. Refused server-side for anything that is not a draft.
+   */
+  onDiscard: () => Promise<boolean>
 }
 
 export function usePostEditorState({
@@ -168,5 +179,28 @@ export function usePostEditorState({
     [persist]
   )
 
-  return { post, loadError, saveState, seriesPosts, onChange, onPublish }
+  // ---- Discard (drafts only) -----------------------------------------------
+  const onDiscard = useCallback(async (): Promise<boolean> => {
+    // Cancel any queued autosave first: letting a debounced PUT land after the
+    // delete would recreate the row we just removed.
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    const id = savedIdRef.current
+    // A draft that was never saved has no server row — discarding is just
+    // walking away, and reporting success is correct.
+    if (!id) return true
+
+    try {
+      await deleteDraftPost(id)
+      savedIdRef.current = ''
+      setPost(null)
+      return true
+    } catch (err) {
+      console.error('Discard failed:', err)
+      setLoadError(err instanceof Error ? err.message : 'Failed to discard draft')
+      return false
+    }
+  }, [])
+
+  return { post, loadError, saveState, seriesPosts, onChange, onPublish, onDiscard }
 }

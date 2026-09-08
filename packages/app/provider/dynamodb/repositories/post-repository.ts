@@ -268,6 +268,36 @@ export class PostRepository extends BaseRepository<PostRecord> {
   }
 
   /**
+   * PERMANENTLY delete a post. Drafts only.
+   *
+   * A draft never existed for readers, was never emailed and is in nobody's
+   * newsletter, so discarding one destroys nothing anybody saw — that is what
+   * makes hard deletion the right answer for it rather than a euphemism.
+   *
+   * A PUBLISHED post is different: it has been seen, possibly linked to, and
+   * possibly emailed. Retiring one is `archivePost` — keep the record, drop it
+   * from the lists — which is the end-of-lifecycle concept, not deletion.
+   * Refusing here rather than silently archiving keeps "delete" honest: the
+   * caller asked to destroy something, and gets told it will not happen.
+   */
+  async deleteDraft(postId: string): Promise<void> {
+    const current = await this.getPost(postId)
+    if (!current) return
+
+    if (current.status !== 'draft') {
+      throw new Error(
+        `Only drafts can be deleted. This post is '${current.status}' — archive it instead ` +
+          `so the record is kept and simply drops out of the lists.`
+      )
+    }
+
+    await this.delete(
+      PostRepository.basePk(current.tenant),
+      PostRepository.baseSk(current.id)
+    )
+  }
+
+  /**
    * List every native post across all tenants (scan). Used by the unified read
    * when no tenant is scoped. The native store is small during the Phase 1
    * transition, so a scan is acceptable here.

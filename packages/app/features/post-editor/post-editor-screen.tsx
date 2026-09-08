@@ -37,6 +37,8 @@ export interface PostDocEditorSlotProps {
   onSave?: (post: Post) => void
   /** Drop back to the block-form editor (the rollout fallback). */
   onSwitchEditor?: () => void
+  /** Discard this draft permanently. Only offered while the post IS a draft. */
+  onDiscard?: () => void
 }
 
 export interface PostEditorScreenProps {
@@ -52,6 +54,12 @@ export interface PostEditorScreenProps {
   /** Platform navigation, passed down. */
   onOpenPost: (postId: string) => void
   onBack: () => void
+  /**
+   * Platform confirmation for discarding a draft. Omit it and no discard action
+   * is offered — a destructive action must never fire without an affirmative
+   * step, and `window.confirm` is web-only.
+   */
+  confirmDiscard?: (message: string) => boolean | Promise<boolean>
   /**
    * The document canvas (Lexical on web). Omit on a platform that has none —
    * the block-form editor then stands alone and the toggle is hidden.
@@ -74,6 +82,7 @@ export function PostEditorScreen({
   isAuthLoading,
   onOpenPost,
   onBack,
+  confirmDiscard,
   renderDocEditor,
 }: PostEditorScreenProps) {
   // Which editor is mounted. The document canvas is the default (Consolidated
@@ -81,7 +90,8 @@ export function PostEditorScreen({
   // both honour the same value/onChange contract.
   const [editorMode, setEditorMode] = useState<'doc' | 'classic'>('doc')
 
-  const { post, loadError, saveState, seriesPosts, onChange, onPublish } = usePostEditorState({
+  const { post, loadError, saveState, seriesPosts, onChange, onPublish, onDiscard } =
+    usePostEditorState({
     routeId,
     tenant,
     authorId,
@@ -117,6 +127,16 @@ export function PostEditorScreen({
           saveIsError: saveState === 'error',
           onSave: onChange,
           onSwitchEditor: () => setEditorMode('classic'),
+          // Only a draft may be discarded; the server refuses anything else, and
+          // offering the action on a published post would be a false promise.
+          onDiscard:
+            post.status === 'draft' && confirmDiscard
+              ? async () => {
+                  const label = post.title.trim() || 'this untitled draft'
+                  if (!(await confirmDiscard(`Discard ${label}? This cannot be undone.`))) return
+                  if (await onDiscard()) onBack()
+                }
+              : undefined,
         })
       ) : (
         <>

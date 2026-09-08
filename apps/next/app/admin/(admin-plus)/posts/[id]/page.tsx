@@ -28,7 +28,8 @@ export default function AdminPostEditorPage() {
       hasAccess={Boolean(hasAccess)}
       isAuthLoading={!isHydrated || isLoading}
       onOpenPost={(id) => router.push(`/admin/posts/${id}`)}
-      onBack={() => router.push('/admin')}
+      onBack={() => router.push('/admin/posts')}
+      confirmDiscard={(message) => window.confirm(message)}
       renderDocEditor={(props) => <PostDocEditorChrome {...props} />}
     />
   )
