@@ -32,10 +32,23 @@ export function splitPersonName(full: string): { firstName: string; lastName?: s
   return rest.length > 0 ? { firstName, lastName: rest.join(' ') } : { firstName }
 }
 
-/** A directory match → a fresh BlockPerson entry (snapshot; directory id dropped). */
+/**
+ * A directory match → a fresh BlockPerson entry.
+ *
+ * The display fields are a SNAPSHOT (the post must still render if the record
+ * changes, and redaction works on the copied values), but the directory id is
+ * now KEPT as `personId` so the rendered name can link back to the Contact List
+ * record it came from. Snapshot AND pointer, not one or the other.
+ */
 export function suggestionToPerson(s: PersonSuggestion): BlockPerson {
   const { firstName, lastName } = splitPersonName(s.name)
-  return { id: genId(), firstName, lastName, ecclesia: s.ecclesia || undefined }
+  return {
+    id: genId(),
+    personId: s.id || undefined,
+    firstName,
+    lastName,
+    ecclesia: s.ecclesia || undefined,
+  }
 }
 
 /** A typed, unresolved name → a plain BlockPerson (visiting speaker / off-directory). */

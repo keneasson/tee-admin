@@ -118,9 +118,20 @@ function PersonBlockView({ block }: { block: PersonBlock }) {
           const meta = personMetaLine(person)
           return (
             <YStack key={person.id} gap="$1">
-              <Text fontSize="$4" fontWeight="600" color="$color12">
-                {formatPersonName(person)}
-              </Text>
+              {/* LINKAGE, not a new field: a person picked from the Contact List
+                  keeps its `personId`, so the name links to that record —
+                  `/people/{id}` is the route the Contact List itself uses
+                  (directory/people/page.tsx). Absent for a visiting speaker or a
+                  free-typed name, and stripped by redaction below member tier. */}
+              {person.personId ? (
+                <ExtLink href={`/people/${encodeURIComponent(person.personId)}`}>
+                  {formatPersonName(person)}
+                </ExtLink>
+              ) : (
+                <Text fontSize="$4" fontWeight="600" color="$color12">
+                  {formatPersonName(person)}
+                </Text>
+              )}
               {meta ? (
                 <Text fontSize="$2" color="$color10">
                   {meta}
@@ -171,6 +182,14 @@ function LocationBlockView({ block }: { block: LocationBlock }) {
             </Text>
           ))}
         </YStack>
+      ) : null}
+      {/* LINKAGE, not a new field: `ecclesiaRef` already holds the ecclesia NAME,
+          which is exactly the key the Ecclesial Directory routes on
+          (directory/ecclesias/page.tsx). It was stored and never used. */}
+      {block.mode === 'ecclesia' && block.ecclesiaRef ? (
+        <ExtLink href={`/directory/ecclesias/${encodeURIComponent(block.ecclesiaRef)}`}>
+          {block.ecclesiaRef} in the Ecclesial Directory
+        </ExtLink>
       ) : null}
       {mapsHref ? (
         <ExtLink href={mapsHref}>Get directions</ExtLink>
