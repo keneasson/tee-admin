@@ -10,10 +10,29 @@ const dbClientConfig: DynamoDBClientConfig = {
   region: 'ca-central-1',
 }
 
-// Document client marshall options (matches existing working pattern)
+// Document client marshall options.
+//
+// `convertEmptyValues` is OFF. It is legacy AWS SDK v2 behaviour that rewrites
+// every empty string to a DynamoDB NULL on write — DynamoDB has allowed empty
+// strings on non-key attributes since 2020, so it corrupts data for no benefit,
+// silently, across every repository on this shared client.
+//
+// It has caused two production defects already:
+//   - the doc-editor crashed on any post with an untouched text block, because
+//     `{ body: '' }` read back as `{ body: null }` and `body.split()` threw
+//     (#214);
+//   - an ecclesia saved with an unparsed address stored province/city as NULL,
+//     producing the key `ECCLESIA#CA|` + `#Grand River` — written successfully
+//     and then permanently unlistable and unsearchable.
+//
+// A live scan also found NULL `firstName`/`lastName`/`displayName` on real
+// PersonRecords — the always-shown PII floor.
+//
+// `removeUndefinedValues` stays ON: dropping an absent field is correct, and is
+// what optional fields mean.
 const dynamoConfig = {
   marshallOptions: {
-    convertEmptyValues: true,
+    convertEmptyValues: false,
     removeUndefinedValues: true,
     convertClassInstanceToMap: true,
   },
