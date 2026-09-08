@@ -23,6 +23,12 @@ import {
   personMetaLine,
   personRoleLabel,
 } from '@my/ui/src/post-view/post-view-format'
+import { inlineSummary } from '@my/ui/src/post-view/inline-summary'
+import {
+  blockIndex,
+  findMarkers,
+  flattenMarkers,
+} from '@my/app/features/post-editor/inline-markers'
 import { AutoLinkText } from './AutoLinkText'
 
 /**
@@ -72,12 +78,19 @@ const blockSection: React.CSSProperties = { margin: '0 0 16px 0' }
 
 // ---- per-kind block renderers (mirror PostView's coverage) -------------------
 
-function TextBlockView({ block }: { block: TextBlock }) {
-  if (!block.body.trim()) return null
+/**
+ * Prose with its `{{kind:id}}` markers resolved to the value's one-line reading,
+ * so an inline value emails as part of the sentence the author wrote — and a
+ * marker whose block was REDACTED AWAY for this audience collapses to nothing
+ * rather than shipping a literal `{{time:t1}}` to the list.
+ */
+function TextBlockView({ block, blocks }: { block: TextBlock; blocks?: Block[] }) {
+  const body = flattenMarkers(block.body ?? '', inlineSummary, blockIndex(blocks ?? []))
+  if (!body.trim()) return null
   return (
     <Section style={blockSection}>
       <Text style={{ ...bodyText, whiteSpace: 'pre-wrap' }}>
-        <AutoLinkText text={block.body} />
+        <AutoLinkText text={body} />
       </Text>
     </Section>
   )
@@ -268,10 +281,25 @@ function LinkBlockView({ block }: { block: LinkBlock }) {
 }
 
 /** Render a single block by kind — mirrors the editor/PostView 7-kind coverage. */
-function BlockView({ block }: { block: Block }) {
+/**
+ * Blocks that still need their own slot. A block the prose already places by
+ * marker must NOT also render standalone — it would appear twice in the email.
+ * A block nothing references keeps its slot, so posts authored before markers
+ * existed email exactly as they always did.
+ */
+function standaloneBlocks(blocks: Block[]): Block[] {
+  const placedInProse = new Set(
+    blocks.flatMap((b) =>
+      b.kind === 'text' && typeof b.body === 'string' ? findMarkers(b.body).map((m) => m.id) : []
+    )
+  )
+  return blocks.filter((b) => !placedInProse.has(b.id))
+}
+
+function BlockView({ block, blocks }: { block: Block; blocks?: Block[] }) {
   switch (block.kind) {
     case 'text':
-      return <TextBlockView block={block} />
+      return <TextBlockView block={block} blocks={blocks} />
     case 'person':
       return <PersonBlockView block={block} />
     case 'location':
@@ -328,7 +356,9 @@ export function PostEmailView({ post }: PostEmailViewProps) {
       {post.blocks.length === 0 ? (
         <Text style={metaLine}>This post has no content to display.</Text>
       ) : (
-        post.blocks.map((block) => <BlockView key={block.id} block={block} />)
+        standaloneBlocks(post.blocks).map((block) => (
+          <BlockView key={block.id} block={block} blocks={post.blocks} />
+        ))
       )}
     </Section>
   )

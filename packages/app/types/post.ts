@@ -61,6 +61,24 @@ export type BlockKind =
   | 'registration'
   | 'link'
 
+/**
+ * Kinds that read naturally as a phrase inside prose. A flyer or a registration
+ * panel is structurally standalone; a time, a person, a place or a link is a
+ * value the author is likely to mention mid-sentence.
+ *
+ * NOTE this is a hint for the toolbar, NOT a layout property. Where a block
+ * renders is DERIVED from where its marker sits in the prose (see
+ * `inline-markers.ts`): a marker alone on its line stacks; a marker among words
+ * flows inline. Layout is never a field an author sets — the stack just happens
+ * to be stacked.
+ */
+export const PHRASE_KINDS = ['time', 'person', 'location', 'link'] as const
+export type PhraseKind = (typeof PHRASE_KINDS)[number]
+
+export function isPhraseKind(kind: BlockKind): kind is PhraseKind {
+  return (PHRASE_KINDS as readonly string[]).includes(kind)
+}
+
 export interface BlockBase {
   id: string
   kind: BlockKind
