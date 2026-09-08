@@ -40,6 +40,7 @@ import {
   Eye,
   EyeOff,
   Globe,
+  Layers,
   LayoutTemplate,
   Lock,
   Save,
@@ -106,7 +107,7 @@ export function PostDocChrome({
   onSwitchEditor,
 }: PostDocChromeProps) {
   // Which top-bar popover is open (only one at a time).
-  const [openPanel, setOpenPanel] = useState<'publish' | 'date' | 'occasion' | null>(null)
+  const [openPanel, setOpenPanel] = useState<'publish' | 'date' | 'occasion' | 'series' | null>(null)
   // Author opt-out of the PII members-default for prose (design §2 make-public).
   const [makePublic, setMakePublic] = useState(false)
 
@@ -369,6 +370,38 @@ export function PostDocChrome({
           <Text fontSize="$2" color={saveIsError ? '$red10' : '$color10'}>
             {saveLabel}
           </Text>
+        ) : null}
+
+        {/* SERIES — only when the post actually belongs to one, so it costs no
+            slot in the common case. The chrome rewrite had dropped this
+            indicator entirely while still accepting the props. */}
+        {(seriesPosts?.length ?? 0) > 0 ? (
+          <ToolbarPopover
+            icon={Layers}
+            label={`Part of a series — ${seriesPosts!.length} related`}
+            active
+            open={openPanel === 'series'}
+            onOpenChange={(o) => setOpenPanel(o ? 'series' : null)}
+          >
+            <YStack gap="$2" minWidth={220}>
+              <Text fontSize="$2" color="$color10">
+                Part of a series — {seriesPosts!.length} related
+              </Text>
+              {seriesPosts!.map((sibling) => (
+                <Button
+                  key={sibling.id}
+                  size="$2"
+                  variant="chromeless"
+                  onPress={() => {
+                    setOpenPanel(null)
+                    onSeriesPostPress?.(sibling.id)
+                  }}
+                >
+                  {sibling.title || 'Untitled post'}
+                </Button>
+              ))}
+            </YStack>
+          </ToolbarPopover>
         ) : null}
 
         {onSwitchEditor ? (
