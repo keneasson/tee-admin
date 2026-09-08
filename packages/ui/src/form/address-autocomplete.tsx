@@ -37,6 +37,8 @@ export function AddressAutocomplete({
   country,
 }: AddressAutocompleteProps) {
   const [predictions, setPredictions] = useState<PlacePrediction[]>([])
+  /** True once the endpoint reports the Places key is not configured. */
+  const [lookupUnavailable, setLookupUnavailable] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isFetchingDetails, setIsFetchingDetails] = useState(false)
@@ -69,6 +71,12 @@ export function AddressAutocomplete({
         }),
       })
       const data = await response.json()
+
+      // The endpoint answers `{ success: true, configured: false, predictions: [] }`
+      // when GOOGLE_PLACES_API_KEY is unset — a SILENT no-op that looked exactly
+      // like "no matches found". Surfacing it is the difference between "there is
+      // no such address" and "lookup is switched off, type it yourself".
+      if (data.configured === false) setLookupUnavailable(true)
 
       if (data.success) {
         const results = data.predictions || []
@@ -205,6 +213,13 @@ export function AddressAutocomplete({
             <MapPin size="$1" color="$gray11" style={{ pointerEvents: 'none' }} />
           )}
         </XStack>
+
+        {lookupUnavailable ? (
+          <Text fontSize="$2" color="$orange10" marginTop="$1">
+            Address lookup is unavailable — type the full address and the city,
+            province and postal code will be filled in from it.
+          </Text>
+        ) : null}
 
         {showDropdown && predictions.length > 0 ? (
           <YStack

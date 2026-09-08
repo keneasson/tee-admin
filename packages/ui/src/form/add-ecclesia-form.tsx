@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { YStack, XStack, Text, Label, Input } from 'tamagui'
 import { Button } from '../Button'
 import { AddressAutocomplete } from './address-autocomplete'
+import { parseAddressLine } from '@my/app/utils/parse-address-line'
 import type { ParsedAddress } from '@my/app/types/address-autocomplete'
 
 interface EcclesiaFormData {
@@ -67,12 +68,24 @@ export function AddEcclesiaForm({
     }
   }
 
-  // Validate form - only name is required now
+  /**
+   * Province and city are NOT optional. They are KEY MATERIAL — the record is
+   * stored at `ECCLESIA#{country}|{province}` / `{city}#{name}`, so saving
+   * without them writes an ecclesia that succeeds and is then permanently
+   * invisible to every list and search. That is exactly how "Grand River"
+   * disappeared.
+   */
   const validateForm = (): boolean => {
     const newErrors: Partial<EcclesiaFormData> = {}
 
     if (!formData.name.trim()) {
       newErrors.name = 'Ecclesia name is required'
+    }
+    if (!formData.province.trim()) {
+      newErrors.province = 'Province is required — it is part of the directory address'
+    }
+    if (!formData.city.trim()) {
+      newErrors.city = 'City is required — it is part of the directory address'
     }
 
     setErrors(newErrors)
@@ -134,7 +147,23 @@ export function AddEcclesiaForm({
       {/* Address Field (Optional) - Google Places autocomplete */}
       <AddressAutocomplete
         value={formData.address || ''}
-        onChangeText={(text) => updateField('address', text)}
+        onChangeText={(text) => {
+          // Parse locally as the author types. Google Places is an ACCELERATOR,
+          // never a dependency: a complete address typed by hand must fill the
+          // same fields, because the lookup can be unconfigured (and fails
+          // silently when it is). Only fills blanks — never overwrites a value
+          // the author set deliberately.
+          const parsed = parseAddressLine(text)
+          setFormData((prev) => ({
+            ...prev,
+            address: text,
+            city: prev.city || parsed.city || '',
+            province: prev.province || parsed.province || '',
+            postalCode: prev.postalCode || parsed.postalCode || '',
+            country: parsed.country || prev.country,
+          }))
+          if (errors.address) setErrors((e) => ({ ...e, address: undefined }))
+        }}
         onAddressSelect={(parsed: ParsedAddress) => {
           setFormData((prev) => ({
             ...prev,
@@ -149,6 +178,59 @@ export function AddEcclesiaForm({
         label="Address (Optional)"
         disabled={isLoading}
       />
+
+      {/* City / Province — ALWAYS visible and editable. Previously these existed
+          only in state and were set solely by the Places callback, so when the
+          lookup returned nothing there was no way to supply them at all. */}
+      <XStack gap="$3">
+        <YStack gap="$2" flex={2}>
+          <Label fontSize="$4" fontWeight="600">
+            City
+          </Label>
+          <Input
+            value={formData.city}
+            onChangeText={(text) => updateField('city', text)}
+            placeholder="e.g. Paris"
+            borderWidth={2}
+            borderColor={errors.city ? '$error' : '$textTertiary'}
+            backgroundColor="$background"
+            focusStyle={{ borderColor: errors.city ? '$error' : '$primary', borderWidth: 2 }}
+            paddingHorizontal="$3"
+            paddingVertical="$2.5"
+            disabled={isLoading}
+          />
+          {errors.city ? (
+            <Text color="$red11" fontSize="$3">
+              {errors.city}
+            </Text>
+          ) : null}
+        </YStack>
+
+        <YStack gap="$2" flex={1}>
+          <Label fontSize="$4" fontWeight="600">
+            Province
+          </Label>
+          <Input
+            value={formData.province}
+            onChangeText={(text) => updateField('province', text.toUpperCase())}
+            placeholder="ON"
+            autoCapitalize="characters"
+            maxLength={2}
+            borderWidth={2}
+            borderColor={errors.province ? '$error' : '$textTertiary'}
+            backgroundColor="$background"
+            focusStyle={{ borderColor: errors.province ? '$error' : '$primary', borderWidth: 2 }}
+            paddingHorizontal="$3"
+            paddingVertical="$2.5"
+            disabled={isLoading}
+          />
+          {errors.province ? (
+            <Text color="$red11" fontSize="$3">
+              {errors.province}
+            </Text>
+          ) : null}
+        </YStack>
+      </XStack>
 
       {/* Venue Field (Optional) - auto-filled from Google place name */}
       <YStack gap="$2">
