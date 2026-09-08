@@ -554,14 +554,18 @@ export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post
  */
 export const sendPostAnnouncement = async (
   id: string,
-  options: { test?: boolean; list: string }
+  options: { test?: boolean; list: string; allowDraft?: boolean }
 ): Promise<{ test: boolean; sentCount: number; skippedCount: number }> => {
   const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/send`
   const response = await fetch(url, {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ test: options.test !== false, list: options.list }),
+    body: JSON.stringify({
+      test: options.test !== false,
+      list: options.list,
+      ...(options.allowDraft ? { allowDraft: true } : null),
+    }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {

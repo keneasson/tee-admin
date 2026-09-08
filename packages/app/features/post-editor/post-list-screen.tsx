@@ -42,7 +42,7 @@ function formatUpdatedAt(iso: string): string {
 
 const STATUS_COLOR: Record<Post['status'], string> = {
   draft: '$yellow4',
-  ready: '$green4',
+  published: '$green4',
   archived: '$gray4',
 }
 

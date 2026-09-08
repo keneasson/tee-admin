@@ -49,7 +49,7 @@ function storedRecord(overrides: Partial<Post> = {}): Record<string, any> {
     blocks: [{ id: 'b1', kind: 'text', body: 'Rejoice', containsPii: false }],
     createdAt: '2026-07-01T00:00:00.000Z',
     updatedAt: '2026-07-01T00:00:00.000Z',
-    status: 'ready',
+    status: 'published',
     ...overrides,
   }
   return {
@@ -89,7 +89,7 @@ describe('PostRepository', () => {
         sharingScope: 'own',
         lifecycle: { publishDate: '2026-08-01T00:00:00.000Z' },
         blocks: [{ id: 'b1', kind: 'text', body: 'Rejoice', containsPii: false }],
-        status: 'ready',
+        status: 'published',
       }
 
       const result = await repository.createPost(input)
@@ -110,14 +110,14 @@ describe('PostRepository', () => {
         gsi2sk: '2026-08-01T00:00:00.000Z#test-post-uuid',
         id: 'test-post-uuid',
         tenant: 'Toronto East',
-        status: 'ready',
+        status: 'published',
       })
       // blocks embedded as a native list (not a JSON string).
       expect(Array.isArray(putCall.params.Item.blocks)).toBe(true)
       expect(putCall.params.Item.blocks[0]).toMatchObject({ id: 'b1', kind: 'text' })
 
       // Returned value is a clean domain Post (no storage keys leaked).
-      expect(result).toMatchObject({ id: 'test-post-uuid', tenant: 'Toronto East', status: 'ready' })
+      expect(result).toMatchObject({ id: 'test-post-uuid', tenant: 'Toronto East', status: 'published' })
       expect(result).not.toHaveProperty('pkey')
       expect(result).not.toHaveProperty('gsi1pk')
       expect(result.createdAt).toBe(result.updatedAt)
@@ -173,7 +173,7 @@ describe('PostRepository', () => {
     it('queries gsi2 by tenant, newest-first, and filters out archived by default', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [
-          storedRecord({ id: 'p1', status: 'ready' }),
+          storedRecord({ id: 'p1', status: 'published' }),
           storedRecord({ id: 'p2', status: 'archived' }),
         ],
       })
@@ -193,7 +193,7 @@ describe('PostRepository', () => {
     it('includes archived when includeArchived is set', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [
-          storedRecord({ id: 'p1', status: 'ready' }),
+          storedRecord({ id: 'p1', status: 'published' }),
           storedRecord({ id: 'p2', status: 'archived' }),
         ],
       })
@@ -262,7 +262,7 @@ describe('PostRepository', () => {
     it('scans for POST# items and drops archived by default', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [
-          storedRecord({ id: 'p1', status: 'ready' }),
+          storedRecord({ id: 'p1', status: 'published' }),
           storedRecord({ id: 'p2', status: 'archived' }),
         ],
         LastEvaluatedKey: undefined,

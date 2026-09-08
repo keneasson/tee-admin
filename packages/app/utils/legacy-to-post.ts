@@ -33,6 +33,7 @@ import type {
   Visibility,
 } from '../types/post'
 import { occasionIsPiiBearing } from './occasion-pii'
+import { eventToPostStatus, newsToPostStatus } from './legacy-status'
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -373,7 +374,10 @@ function eventToPost(event: Event): Post {
     blocks,
     createdAt: toIso(event.createdAt) ?? '',
     updatedAt: toIso(event.updatedAt) ?? '',
-    status: 'ready',
+    // DERIVED, not asserted. Hardcoding 'published' here was safe only because
+    // the one caller pre-filters with getPublishedEvents(); any other caller
+    // would have silently turned a draft event into a published Post.
+    status: eventToPostStatus(event),
   }
 }
 
@@ -414,7 +418,10 @@ function newsToPost(item: NewsItem): Post {
     blocks,
     createdAt: toIso(item.createdAt) ?? '',
     updatedAt: toIso(item.updatedAt) ?? '',
-    status: 'ready',
+    // News has no draft concept — its lifetime is a window (`expiresAt`),
+    // handled by the lifecycle engine, not by status. Named rather than
+    // literal so the assumption is visible if News ever gains drafts.
+    status: newsToPostStatus(item),
   }
 }
 

@@ -50,7 +50,7 @@ function samplePost(): Post {
     visibility: 'public',
     sharingScope: 'own',
     lifecycle: { publishDate: '2026-08-01' },
-    status: 'ready',
+    status: 'published',
     createdAt: now,
     updatedAt: now,
     blocks: [

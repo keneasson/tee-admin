@@ -5,7 +5,9 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
  * Guard + audience/safety matrix for POST /api/admin/posts/[id]/send — the
  * Consolidated CMS send bridge (epic #131 §4). The safety-critical bits:
  *   - three-way gate (auth → owner/admin → CONSOLIDATED_CMS flag → 404),
- *   - status MUST be 'ready' (422 otherwise — never send a draft),
+ *   - a DRAFT is sendable as a TEST (an announcement is atomic and testable
+ *     independently of the newsletter's aggregation) but a LIVE send of one
+ *     needs an explicit `allowDraft`; archived is refused outright,
  *   - tenant isolation (403 when the post belongs to another ecclesia),
  *   - TEST BY DEFAULT (only an explicit `test: false` opts into a live send),
  *   - occasion-agnostic: emailSend is always reason 'post-announcement', the
@@ -67,7 +69,7 @@ function readyPost(over: Record<string, any> = {}) {
     id: 'p1',
     tenant: 'Toronto East Ecclesia',
     title: 'Baptism of A. Believer',
-    status: 'ready',
+    status: 'published',
     occasion: ['baptism'],
     blocks: [],
     ...over,
@@ -120,8 +122,39 @@ describe('POST /api/admin/posts/[id]/send — safety', () => {
     expect(h.emailSend).not.toHaveBeenCalled()
   })
 
-  it('422 when the post is not ready (never send a draft)', async () => {
+  it('a DRAFT can be TEST-sent — atomic email is testable without publishing', async () => {
     h.getPost.mockResolvedValue(readyPost({ status: 'draft' }))
+    const res = await POST(req({}), ctx())
+    expect(res.status).toBe(200)
+    expect(h.emailSend).toHaveBeenCalled()
+  })
+
+  it('marks a draft send [DRAFT] in the subject so it cannot be mistaken', async () => {
+    h.getPost.mockResolvedValue(readyPost({ status: 'draft' }))
+    await POST(req({}), ctx())
+    const args = h.emailSend.mock.calls[0][0]
+    expect(args.customSubject).toMatch(/^\[DRAFT\] /)
+  })
+
+  it('422 on a LIVE send of a draft without an explicit allowDraft', async () => {
+    h.getPost.mockResolvedValue(readyPost({ status: 'draft' }))
+    const res = await POST(req({ test: false, list: 'newsletter' }), ctx())
+    expect(res.status).toBe(422)
+    expect(h.emailSend).not.toHaveBeenCalled()
+  })
+
+  it('allows a LIVE send of a draft when allowDraft is explicit', async () => {
+    h.getPost.mockResolvedValue(readyPost({ status: 'draft' }))
+    const res = await POST(
+      req({ test: false, list: 'newsletter', allowDraft: true }),
+      ctx()
+    )
+    expect(res.status).toBe(200)
+    expect(h.emailSend).toHaveBeenCalled()
+  })
+
+  it('422 for an archived post — retired content, not work in progress', async () => {
+    h.getPost.mockResolvedValue(readyPost({ status: 'archived' }))
     const res = await POST(req({}), ctx())
     expect(res.status).toBe(422)
     expect(h.emailSend).not.toHaveBeenCalled()

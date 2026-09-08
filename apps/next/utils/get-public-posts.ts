@@ -1,7 +1,7 @@
 import { auth } from './auth'
 import { resolveViewer } from './resolve-viewer'
 import { getPostsForViewer } from '@my/app/services/post-service'
-import { resolvePostNextDate } from '@my/app/utils/post-lifecycle'
+import { isPostLive, resolvePostNextDate } from '@my/app/utils/post-lifecycle'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import type { Post } from '@my/app/types/post'
@@ -35,7 +35,7 @@ const EMPTY: PublicPosts = { events: [], news: [] }
  *      `public-web` tier and lifecycle-filters to ACTIVE at `now` — so a surname /
  *      precise address is present only if this viewer may see it, and only
  *      currently-active posts survive.
- *   4. Drafts/archived never leak: only `status: 'ready'` posts are kept (the
+ *   4. Drafts/archived never leak: only `status: 'published'` posts are kept (the
  *      unified read does not itself filter status — this public door does).
  *
  * Facet split uses the ONE lifecycle engine: {@link resolvePostNextDate} — a post
@@ -60,8 +60,11 @@ export async function getPublicPosts(now: Date = new Date()): Promise<PublicPost
   const events: Post[] = []
   const news: Post[] = []
   for (const post of posts) {
-    // A public surface never shows drafts/archived (unified read doesn't gate status).
-    if (post.status !== 'ready') continue
+    // ONE liveness rule (isPostLive): drafts and archived never appear, and a
+    // post scheduled for a future publishDate stays hidden until its date. That
+    // scheduling half was previously written but never enforced (#227) — the
+    // status check alone let a post scheduled for November be served today.
+    if (!isPostLive(post, now)) continue
     if (resolvePostNextDate(post, now)) events.push(post)
     else news.push(post)
   }

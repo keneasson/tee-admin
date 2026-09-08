@@ -42,7 +42,7 @@ function makeSamplePost(): Post {
       publishDate: '2026-08-01',
       startsAt: '2026-09-12T14:00:00.000Z',
     },
-    status: 'ready',
+    status: 'published',
     createdAt: now,
     updatedAt: now,
     blocks: [

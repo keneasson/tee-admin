@@ -41,7 +41,7 @@ function makePost(overrides: Partial<Post> = {}): Post {
     blocks: [],
     createdAt: iso(2026, 7, 1),
     updatedAt: iso(2026, 7, 1),
-    status: 'ready',
+    status: 'published',
     ...overrides,
   }
 }

@@ -290,7 +290,7 @@ export const createOneOfEachEventType = (): Event[] => [
  */
 export const createEventsWithStatuses = () => ({
   draft: mockGeneralEvent({ status: 'draft', published: false }),
-  ready: mockGeneralEvent({ status: 'ready', published: false }),
+  ready: mockGeneralEvent({ status: 'published', published: false }),
   published: mockGeneralEvent({ status: 'published', published: true }),
   archived: mockGeneralEvent({ status: 'archived', published: false }),
 })

@@ -42,7 +42,7 @@ const postWith = (body: string, blocks: Post['blocks']): Post =>
     visibility: 'public',
     sharingScope: 'own',
     lifecycle: {},
-    status: 'ready',
+    status: 'published',
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
     blocks: [{ id: 'txt', kind: 'text', body, containsPii: false } as TextBlock, ...blocks],

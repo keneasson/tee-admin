@@ -1377,7 +1377,7 @@ export function ProgressiveEventForm({
 
     // Check if event passes validation for legacy status field
     const validation = EventValidator.canPublish({ ...cleanedData, type: currentSelectedType } as Partial<Event>)
-    const status: EventStatus = validation.isValid ? 'ready' : 'draft'
+    const status: EventStatus = validation.isValid ? 'published' : 'draft'
 
     const eventData = {
       ...cleanedData,

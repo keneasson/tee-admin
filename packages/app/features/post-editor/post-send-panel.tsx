@@ -28,7 +28,10 @@ type Audience = { key: string; label: string }
  * baptism / wedding / general all send with no per-type code).
  *
  * Safety UX (backed by server-side enforcement):
- *   - Enabled only when the post is `ready` (a draft can't be sent).
+ *   - A DRAFT can still be sent. A single announcement is atomic and testable
+ *     on its own, independently of the newsletter's aggregation, so being unfit
+ *     for the newsletter does not make a post unfit to email to one test
+ *     address. It is labelled DRAFT here and its subject is prefixed [DRAFT].
  *   - TEST MODE IS THE DEFAULT — the Live toggle is off until the author flips it,
  *     and a live send requires an explicit confirmation naming the audience.
  *   - The server hard-routes test sends to the test list and re-checks the gate,
@@ -46,7 +49,11 @@ type Audience = { key: string; label: string }
  */
 export interface PostSendPanelProps {
   postId: string
-  /** Only a published (`ready`) post can be sent — the server re-checks this. */
+  /**
+   * Whether the post is LIVE (published, and past any scheduled date). A
+   * non-live post is still sendable — it is labelled DRAFT and a live send of
+   * one needs an explicit extra confirmation.
+   */
   ready: boolean
   /**
    * Platform confirmation. Returns true to proceed. Passed in because a blocking
@@ -90,7 +97,8 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
 
   const handleSend = async () => {
     const confirmMsg = live
-      ? `Send this announcement LIVE to "${audienceLabel}"? This emails the whole audience.`
+      ? `${ready ? '' : 'This post is still a DRAFT. '}` +
+        `Send this announcement LIVE to "${audienceLabel}"? This emails the whole audience.`
       : `Send a TEST announcement to the test list? (Live target would be: ${audienceLabel})`
     if (!(await confirmSend(confirmMsg))) return
 
@@ -98,7 +106,13 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
     setMessage(null)
     setIsError(false)
     try {
-      const data = await sendPostAnnouncement(postId, { test: !live, list: audience })
+      const data = await sendPostAnnouncement(postId, {
+        test: !live,
+        list: audience,
+        // Only ever set for a deliberate live send of a not-yet-live post; the
+        // server refuses that combination without it.
+        allowDraft: live && !ready ? true : undefined,
+      })
       setIsError(false)
       setMessage(
         `Sent ${data.test ? '(TEST — test list)' : `to ${audienceLabel}`}: ${data.sentCount} sent, ${data.skippedCount} skipped.`
@@ -115,9 +129,24 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
     <Card bordered padding="$4" gap="$3">
       <Heading size="$5">Send announcement</Heading>
       {ready ? null : (
-        <Text fontSize="$3" color="$color10">
-          Publish this post (status “ready”) to enable sending.
-        </Text>
+        <XStack
+          alignItems="center"
+          gap="$2"
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          borderRadius="$3"
+          backgroundColor="$yellow2"
+          borderColor="$yellow6"
+          borderWidth={1}
+        >
+          <Text fontSize="$2" fontWeight="600">
+            DRAFT
+          </Text>
+          <Text fontSize="$2" flex={1}>
+            Not live on the site or in the newsletter. You can still send it —
+            the subject will be prefixed “[DRAFT]”.
+          </Text>
+        </XStack>
       )}
 
       <XStack gap="$3" alignItems="center" flexWrap="wrap">
@@ -130,7 +159,7 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
             onValueChange={setAudience}
             disablePreventBodyScroll
           >
-            <Select.Trigger width={220} iconAfter={ChevronDown} disabled={!ready || sending}>
+            <Select.Trigger width={220} iconAfter={ChevronDown} disabled={sending}>
               <Select.Value placeholder="Select audience" />
             </Select.Trigger>
 
@@ -177,7 +206,7 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
               size="$3"
               checked={live}
               onCheckedChange={(v) => setLive(!!v)}
-              disabled={!ready || sending}
+              disabled={sending}
             >
               <Switch.Thumb animation="quick" />
             </Switch>
@@ -188,7 +217,7 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
         <Button
           variant={live ? 'danger' : 'action'}
           onPress={handleSend}
-          disabled={!ready || sending || !audience}
+          disabled={sending || !audience}
           alignSelf="flex-end"
           icon={sending ? <Spinner size="small" /> : undefined}
         >

@@ -164,7 +164,7 @@ describe('formatDateFacet', () => {
     blocks: [],
     createdAt: '',
     updatedAt: '',
-    status: 'ready',
+    status: 'published',
   }
   it('uses a future startsAt for event-shaped posts', () => {
     const facet = formatDateFacet({ ...base, lifecycle: { startsAt: '2026-09-12T14:00:00.000Z' } })

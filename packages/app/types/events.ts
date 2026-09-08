@@ -1,8 +1,17 @@
+import type { LegacyPostStatus } from './post'
 // Event Management System Types
 export type EventType = 'study-weekend' | 'funeral' | 'wedding' | 'baptism' | 'engagement' | 'general' | 'recurring' | 'election-cycle'
 
-// DEPRECATED: Use `active: boolean` instead. Kept for backward compatibility during migration.
-export type EventStatus = 'draft' | 'ready' | 'published' | 'archived'
+/**
+ * Event exposure — the SAME vocabulary as {@link PostStatus} (News = Events =
+ * one Post). `'ready'` is the legacy spelling of `'published'`: still accepted
+ * on read so existing EVENT# records load, never written by new code.
+ *
+ * Resolve a record to a single state with `eventToPostStatus()` rather than
+ * reading this field directly — it also folds in `publishDate` and the
+ * deprecated `active` boolean.
+ */
+export type EventStatus = LegacyPostStatus
 
 export type LocationMode = 'in-person' | 'online' | 'hybrid'
 

@@ -14,6 +14,7 @@
  */
 
 import type { DocumentAttachment, EventSharingScope, OnlineMeetingInfo } from './events'
+import type { RichNode } from '../features/post-editor/rich-text'
 
 // Re-export so the post model is a single import surface for consumers. The
 // canonical PiiClass definition lives in viewer-pii.ts (the redaction primitive);
@@ -38,6 +39,14 @@ export type SharingScope = EventSharingScope
  * tags free-combine (e.g. `['wedding','shower']`). Legacy `EventType` values and
  * news categories map onto these during adaptation — no new code per occasion.
  */
+/**
+ * Exposure states. `'ready'` is the LEGACY spelling of `'published'`, accepted
+ * on read so records written before the rename still load; it is normalized
+ * away at the read boundary and never written.
+ */
+export type PostStatus = 'draft' | 'published' | 'archived'
+export type LegacyPostStatus = PostStatus | 'ready'
+
 export type OccasionTag =
   | 'baptism'
   | 'wedding'
@@ -98,7 +107,26 @@ export interface BlockBase {
  */
 export interface TextBlock extends BlockBase {
   kind: 'text'
+  /**
+   * The plain-markdown PROJECTION of {@link TextBlock.rich} — always derived
+   * from it when `rich` is present, never hand-edited.
+   *
+   * It is not deprecated. It is the graceful-degradation path (plain-text mail
+   * parts, summaries, search) and the reason every renderer that predates
+   * `rich` keeps working unchanged. Lossy by design: a mark markdown cannot
+   * spell (underline, highlight, alignment) is absent here but preserved on
+   * `rich`. See ADR-0004.
+   */
   body: string
+  /**
+   * Lossless rich text. Source of truth when present.
+   *
+   * Storage captures every mark the editor can produce, whether or not any
+   * renderer displays it yet; renderers upgrade one at a time and ignore marks
+   * they do not know. Portable JSON — no Lexical or DOM types — so an Expo
+   * canvas can read and write it (ADR-0003 §3, ADR-0004).
+   */
+  rich?: RichNode[]
   containsPii: boolean
 }
 
@@ -262,5 +290,25 @@ export interface Post {
 
   createdAt: string
   updatedAt: string
-  status: 'draft' | 'ready' | 'archived'
+  /**
+   * EXPOSURE — the single answer to "is this ready for readers?".
+   *
+   *  - `draft`     — a placeholder. Never appears on the web feed or in the
+   *                  newsletter. Still SENDABLE as a one-off announcement email
+   *                  (atomic and independently testable), which carries a DRAFT
+   *                  warning.
+   *  - `published` — live, unless `lifecycle.publishDate` is still in the
+   *                  future, in which case it is scheduled.
+   *  - `archived`  — END of the lifecycle: keep the record, drop it from the
+   *                  lists. Not deleted, not live, not listed. Already honoured
+   *                  by the repository (`archivePost`, and list reads filter it
+   *                  out); deliberately NOT surfaced in the editor yet — it is a
+   *                  retirement concern, not an authoring one.
+   *
+   * ONE word for exposure: **publish**. `'ready'` was the old spelling of
+   * `'published'` and is accepted on read for records written before the rename
+   * (`normalizePost` maps it); nothing writes it any more. Do not add a second
+   * liveness flag — read it through `isPostLive()`.
+   */
+  status: PostStatus
 }
