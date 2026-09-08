@@ -137,6 +137,16 @@ export interface BlockPerson {
   lastName?: string // pii:'name' — dropped below reveal tier
   bio?: string // pii:'bio' — obituary / testimony / about — hidden below member
   contact?: string // pii:'contact' — phone / personal email — hidden below member
+  /**
+   * pii:'none' — LINKAGE to the Contact List record this person is, when they
+   * were picked from the directory (`/api/people` → `/people/{personId}`).
+   *
+   * The display fields stay a SNAPSHOT so the post still renders if the record
+   * later changes and so redaction operates on the copied values; this is the
+   * pointer alongside it, not a replacement for it. Absent for a visiting
+   * speaker or anyone typed free-hand.
+   */
+  personId?: string
   ecclesia?: string // pii:'none'
   title?: string // pii:'none' — honorific (Brother/Sister/…)
   age?: number // pii:'none'

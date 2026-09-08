@@ -91,6 +91,12 @@ function redactPerson(block: PersonBlock, viewer: Viewer, channel: Channel): Per
       if (bio) out.bio = bio
       // contact-class — dropped below reveal tier.
       if (p.contact && canRevealPii(viewer, channel)) out.contact = p.contact
+      // LINKAGE to the Contact List record. Carried only at the tier that may
+      // see contact-class detail: the Contact List is itself member-gated, so a
+      // link shown to anon would both 403 and reveal that the person is in the
+      // directory. redactPerson rebuilds by allowlist, so omitting it here is
+      // what keeps it out — it is never carried by accident.
+      if (p.personId && canRevealPii(viewer, channel)) out.personId = p.personId
       // pii:'none' — always carried.
       if (p.ecclesia) out.ecclesia = p.ecclesia
       if (p.title) out.title = p.title
