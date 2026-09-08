@@ -68,16 +68,47 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Province and city are NOT optional, whatever the old comment said: they are
+    // KEY MATERIAL. `createEcclesia` builds `pkey = ECCLESIA#{country}|{province}`
+    // and `skey = {city}#{name}`, so an empty one yields `ECCLESIA#CA|` + `#Name`
+    // — a record that is written successfully and can then never be listed or
+    // searched, because every read filters on the geographic prefix. That is how
+    // "Grand River" was created and then vanished.
+    //
+    // They must also be STRINGS. A non-string here previously reached
+    // `.trim()`/template interpolation and produced a corrupt key rather than a
+    // clear error.
+    const provinceRaw = typeof province === 'string' ? province.trim() : ''
+    const cityRaw = typeof city === 'string' ? city.trim() : ''
+    const missing = [
+      provinceRaw ? null : 'province',
+      cityRaw ? null : 'city',
+    ].filter(Boolean)
+
+    if (missing.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `${missing.join(' and ')} ${missing.length === 1 ? 'is' : 'are'} required — ` +
+            'they form the directory key, and an ecclesia saved without them cannot ' +
+            'be listed or searched.',
+          missingFields: missing,
+        },
+        { status: 400 }
+      )
+    }
+
     const ecclesia = await createEcclesia({
       name: name.trim(),
       country: (country || 'CA').trim().toUpperCase(),
-      province: (province || '').trim().toUpperCase(),
-      city: (city || '').trim(),
-      address: address?.trim(),
-      postalCode: postalCode?.trim(),
-      venue: venue?.trim(),
+      province: provinceRaw.toUpperCase(),
+      city: cityRaw,
+      address: typeof address === 'string' ? address.trim() : undefined,
+      postalCode: typeof postalCode === 'string' ? postalCode.trim() : undefined,
+      venue: typeof venue === 'string' ? venue.trim() : undefined,
     })
-    
+
     return NextResponse.json({
       success: true,
       data: ecclesia,
