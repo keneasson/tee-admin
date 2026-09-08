@@ -44,6 +44,7 @@ import {
   LayoutTemplate,
   Lock,
   Save,
+  Trash2,
   X,
 } from '@tamagui/lucide-icons'
 import type { Block, OccasionTag, Post, Visibility } from '@my/app/types/post'
@@ -92,6 +93,8 @@ export interface PostDocChromeProps {
   saveIsError?: boolean
   /** Drop back to the block-form editor (the rollout fallback). */
   onSwitchEditor?: () => void
+  /** Discard this draft permanently. Absent unless the post IS a draft. */
+  onDiscard?: () => void
 }
 
 export function PostDocChrome({
@@ -105,6 +108,7 @@ export function PostDocChrome({
   saveLabel,
   saveIsError,
   onSwitchEditor,
+  onDiscard,
 }: PostDocChromeProps) {
   // Which top-bar popover is open (only one at a time).
   const [openPanel, setOpenPanel] = useState<'publish' | 'date' | 'occasion' | 'series' | null>(null)
@@ -263,6 +267,24 @@ export function PostDocChrome({
               <Text fontSize="$2" color="$red10">
                 {publishErrors.join(' · ')}
               </Text>
+            ) : null}
+
+            {/* Discard sits here because it answers the SAME question the panel
+                does — should this exist at all? — and it keeps the icon row at
+                four. Offered only for a draft: a published post is retired by
+                archiving, never destroyed. */}
+            {onDiscard ? (
+              <Button
+                size="$2"
+                variant="danger"
+                icon={Trash2}
+                onPress={() => {
+                  setOpenPanel(null)
+                  onDiscard()
+                }}
+              >
+                Discard draft
+              </Button>
             ) : null}
 
             <Separator />

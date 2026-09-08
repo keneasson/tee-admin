@@ -552,6 +552,19 @@ export const updatePost = async (id: string, patch: Partial<Post>): Promise<Post
  * gate, the post's `ready` status and tenant isolation regardless of what is
  * passed here — this helper is the transport, never the guard.
  */
+/**
+ * Discard a DRAFT permanently. The server refuses anything that is not a draft
+ * (409) — a published post is retired by archiving, not deleted.
+ */
+export const deleteDraftPost = async (id: string): Promise<void> => {
+  const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}`
+  const response = await fetch(url, { method: 'DELETE', cache: 'no-store' })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to discard draft (${response.status})`)
+  }
+}
+
 export const sendPostAnnouncement = async (
   id: string,
   options: { test?: boolean; list: string; allowDraft?: boolean }
