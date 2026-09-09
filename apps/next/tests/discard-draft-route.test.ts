@@ -25,7 +25,9 @@ vi.mock('@my/app/provider/dynamodb/repositories/post-repository', () => ({
   postRepository: { getPost: h.getPost, deleteDraft: h.deleteDraft },
 }))
 
-const { DELETE } = await import('../app/api/admin/posts/[id]/route')
+// Static import: vi.mock is hoisted above imports, so the mocks are in place.
+// (Top-level await is not permitted by this tsconfig's module target.)
+import { DELETE } from '../app/api/admin/posts/[id]/route'
 
 const ctx = () => ({ params: Promise.resolve({ id: 'p1' }) })
 const req = () => new Request('http://x/api/admin/posts/p1', { method: 'DELETE' }) as never
