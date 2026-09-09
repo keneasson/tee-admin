@@ -558,6 +558,28 @@ export interface PersonAddressRecord extends BaseRecord {
   country: string
   isHousehold: boolean
   householdId?: string
+
+  /**
+   * Confirmation state. Absent or false ⇒ the value is PROPOSED but not yet
+   * confirmed, and every viewer sees it flagged as such alongside the value it
+   * would replace — so nobody drives to an address that may be wrong.
+   *
+   * Addresses and phones previously had no verification concept at all (only
+   * emails did), so an edit overwrote the record silently and nothing anywhere
+   * indicated a change had been made.
+   */
+  verified?: boolean
+  /** Who proposed this value, and when — so "update pending" can say by whom. */
+  proposedBy?: string
+  proposedAt?: string
+  /** Who confirmed it (Recording Brother, Rep, or admin), and when. */
+  verifiedBy?: string
+  verifiedAt?: string
+  /**
+   * The record this value would replace. Kept as a pointer rather than
+   * overwriting, so both values stay visible until the change is confirmed.
+   */
+  supersedesId?: string
 }
 
 // Person Phone Record - Using personId instead of email
@@ -571,6 +593,28 @@ export interface PersonPhoneRecord extends BaseRecord {
   isPrimary: boolean
   isHousehold: boolean
   order: number
+
+  /**
+   * Confirmation state. Absent or false ⇒ the value is PROPOSED but not yet
+   * confirmed, and every viewer sees it flagged as such alongside the value it
+   * would replace — so nobody drives to an address that may be wrong.
+   *
+   * Addresses and phones previously had no verification concept at all (only
+   * emails did), so an edit overwrote the record silently and nothing anywhere
+   * indicated a change had been made.
+   */
+  verified?: boolean
+  /** Who proposed this value, and when — so "update pending" can say by whom. */
+  proposedBy?: string
+  proposedAt?: string
+  /** Who confirmed it (Recording Brother, Rep, or admin), and when. */
+  verifiedBy?: string
+  verifiedAt?: string
+  /**
+   * The record this value would replace. Kept as a pointer rather than
+   * overwriting, so both values stay visible until the change is confirmed.
+   */
+  supersedesId?: string
 }
 
 // Privacy tiers for viewing data

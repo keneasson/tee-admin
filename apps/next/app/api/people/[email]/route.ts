@@ -45,8 +45,16 @@ interface MemberProfile {
     number: string
     isPrimary: boolean
     isHousehold: boolean
+    verified?: boolean
+    proposedBy?: string
+    proposedAt?: string
+    supersedesId?: string
   }>
   addresses?: Array<{
+    verified?: boolean
+    proposedBy?: string
+    proposedAt?: string
+    supersedesId?: string
     addressId?: string
     type: string
     label?: string
@@ -224,6 +232,10 @@ export async function GET(
         number: p.number,
         isPrimary: p.isPrimary,
         isHousehold: p.isHousehold,
+        verified: p.verified,
+        proposedBy: p.proposedBy,
+        proposedAt: p.proposedAt,
+        supersedesId: p.supersedesId,
         ...(profile.canEdit ? { phoneId: p.phoneId } : {}),
       }))
     }
@@ -242,6 +254,14 @@ export async function GET(
         country: a.country,
         isPrimary: a.isPrimary,
         isHousehold: a.isHousehold,
+        // Verification state goes to EVERYONE who can see the address, not just
+        // editors: the whole point is that a member sees "update pending" before
+        // driving to a house that may be wrong. Only the id — the handle needed
+        // to act on it — stays editor-only.
+        verified: a.verified,
+        proposedBy: a.proposedBy,
+        proposedAt: a.proposedAt,
+        supersedesId: a.supersedesId,
         ...(profile.canEdit ? { addressId: a.addressId } : {}),
       }))
     }
