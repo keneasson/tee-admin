@@ -107,21 +107,65 @@ export async function POST(request: NextRequest) {
     } else if (firstName) {
       // New path: name provided, find or create person
       if (email) {
-        // Check if person exists with this email
-        const existingPerson = await personRepository.getByEmail(email)
-        if (existingPerson) {
-          familyMemberEmail = email
+        // An email can belong to MORE THAN ONE PERSON — a married couple sharing
+        // one household address is the normal case, and `getAllPersonsByEmail`
+        // exists precisely for that. The old code called the single-owner
+        // `getByEmail`, found whoever happened to own the address, and linked to
+        // THEM while silently discarding the name that was typed. Adding
+        // "Brian" against his wife's shared address therefore made Georgina her
+        // own spouse — and, historically, the same email-as-identity assumption
+        // is what overwrote Brian's record when Georgina was added.
+        const sharing = await personRepository.getAllPersonsByEmail(email)
+        const wanted = `${firstName} ${lastName || ''}`.trim().toLowerCase()
+        const match = sharing.find(
+          (p) => `${p.firstName} ${p.lastName || ''}`.trim().toLowerCase() === wanted
+        )
+
+        if (match) {
+          // The named person really is the one who holds this address.
+          familyMemberEmail = match.primaryEmail
         } else {
-          // Create new person with email
+          // Nobody by that NAME holds this address. Whether or not somebody else
+          // does, this is a NEW person who happens to share it. Give them their
+          // own identity rather than borrowing someone else's.
           const userPerson = await personRepository.getByEmail(session.user.email)
-          const newPerson = await personRepository.create({
-            email,
+
+          // Relationships are keyed by email (RelationshipRecord PK/SK), so two
+          // people sharing one address cannot both be addressed by it. The
+          // person gets a distinct key address — the same mechanism already used
+          // for family members with no email — and the SHARED address is added
+          // as a secondary so it still reaches them.
+          const keyEmail =
+            sharing.length > 0
+              ? `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
+              : email
+
+          const created = await personRepository.create({
+            email: keyEmail,
             firstName,
             lastName: lastName || '',
             ecclesia: userPerson?.ecclesia || 'Toronto East',
             memberStatus: getMemberStatusFromRelationship(relationshipType),
           })
-          familyMemberEmail = email
+
+          if (keyEmail !== email) {
+            try {
+              await personRepository.addEmail(created.personId, {
+                email: email.toLowerCase(),
+                emailType: 'secondary',
+                order: 1,
+                verified: false,
+                sesSubscribed: false,
+                sesStatus: 'active',
+              })
+            } catch (err) {
+              // Non-fatal: the person exists and is linked; the shared address
+              // can be attached by hand. Better than losing the person again.
+              console.error('Failed to attach shared email to new person:', err)
+            }
+          }
+
+          familyMemberEmail = keyEmail
         }
       } else {
         // No email - create person without email (use generated placeholder)
