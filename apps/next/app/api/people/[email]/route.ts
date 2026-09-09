@@ -38,6 +38,7 @@ interface MemberProfile {
     email: string
     emailType: string
     emailId?: string
+    verified?: boolean
   }>
   phones?: Array<{
     phoneId?: string
@@ -213,7 +214,7 @@ export async function GET(
       profile.emails = emailRecords.map(e => ({
         email: e.email,
         emailType: e.emailType,
-        ...(profile.canEdit ? { emailId: e.emailId } : {}),
+        ...(profile.canEdit ? { emailId: e.emailId, verified: e.verified } : {}),
       }))
     }
 

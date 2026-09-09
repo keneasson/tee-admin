@@ -45,6 +45,7 @@ interface MemberProfile {
     email: string
     emailType: string
     emailId?: string
+    verified?: boolean
   }>
   phones?: Array<{
     phoneId?: string
@@ -174,6 +175,12 @@ export default function MemberProfilePage() {
   const [contactSaving, setContactSaving] = useState(false)
   const [contactError, setContactError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Assist-a-member: change/promote the member's login email on their behalf
+  const [changingLogin, setChangingLogin] = useState(false)
+  const [newLoginEmail, setNewLoginEmail] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [loginMessage, setLoginMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const memberId = decodeURIComponent((params?.email as string) || '')
   const sessionEmail = session?.user?.email?.toLowerCase() || ''
@@ -457,6 +464,39 @@ export default function MemberProfilePage() {
       // ignore
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  // Assist a member: change their login email (brand-new address) or promote an
+  // existing verified secondary to be the login. Posts to the admin-attested
+  // email-change route (no member confirmation round-trip — canEdit vouches).
+  const changeLoginEmail = async (payload: { promoteEmailId?: string; email?: string; newEmail?: string }) => {
+    if (!profile?.personId) return
+    setLoginBusy(true)
+    setLoginMessage(null)
+    try {
+      const res = await fetch(`/api/admin/people/${encodeURIComponent(profile.personId)}/email-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        const moved: string[] = Array.isArray(data.movedTopics) ? data.movedTopics : []
+        const movedText = moved.length > 0
+          ? ` Moved ${moved.length} subscription${moved.length === 1 ? '' : 's'} (${moved.join(', ')}).`
+          : ' No subscriptions to move.'
+        setLoginMessage({ type: 'success', text: `Login changed to ${data.newEmail}.${movedText}` })
+        setChangingLogin(false)
+        setNewLoginEmail('')
+        fetchProfile()
+      } else {
+        setLoginMessage({ type: 'error', text: data.error || 'Failed to change login email' })
+      }
+    } catch {
+      setLoginMessage({ type: 'error', text: 'An error occurred' })
+    } finally {
+      setLoginBusy(false)
     }
   }
 
@@ -924,7 +964,7 @@ export default function MemberProfilePage() {
               </XStack>
               {profile.emails && profile.emails.length > 0 ? (
                 profile.emails.map((emailEntry, index) => (
-                  <XStack key={index} gap="$2" alignItems="center">
+                  <XStack key={index} gap="$2" alignItems="center" flexWrap="wrap">
                     <Text
                       fontSize="$4"
                       color="$blue10"
@@ -934,6 +974,26 @@ export default function MemberProfilePage() {
                     >
                       {emailEntry.email}
                     </Text>
+                    {emailEntry.emailType === 'primary' ? (
+                      <Text fontSize="$2" theme="alt2">• Login</Text>
+                    ) : null}
+                    {canEdit && emailEntry.emailType !== 'primary' && emailEntry.verified ? (
+                      <Button
+                        size="$2"
+                        variant="outlined"
+                        disabled={loginBusy}
+                        aria-label={`Set ${emailEntry.email} as login email`}
+                        onPress={() =>
+                          changeLoginEmail(
+                            emailEntry.emailId
+                              ? { promoteEmailId: emailEntry.emailId }
+                              : { email: emailEntry.email }
+                          )
+                        }
+                      >
+                        Set as login email
+                      </Button>
+                    ) : null}
                     {canEdit && emailEntry.emailId ? (
                       <Button
                         size="$2"
@@ -989,6 +1049,63 @@ export default function MemberProfilePage() {
                     </XStack>
                   </YStack>
                 </Card>
+              ) : null}
+              {/* Assist a member: change their sign-in (login) email on their behalf */}
+              {canEdit && profile.personId ? (
+                <YStack gap="$2">
+                  {changingLogin ? (
+                    <Card padding="$3" backgroundColor="$backgroundHover">
+                      <YStack gap="$2">
+                        <Text fontSize="$3" fontWeight="600">Change login email</Text>
+                        <Text fontSize="$2" theme="alt2">
+                          Set this member&apos;s sign-in email to a new address. Their email
+                          subscriptions move with it and the old address is notified.
+                        </Text>
+                        <Input
+                          placeholder="New login email"
+                          value={newLoginEmail}
+                          onChangeText={setNewLoginEmail}
+                          autoFocus
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                        />
+                        <XStack gap="$2" justifyContent="flex-end">
+                          <Button
+                            size="$3"
+                            icon={X}
+                            variant="outlined"
+                            onPress={() => { setChangingLogin(false); setNewLoginEmail(''); setLoginMessage(null) }}
+                            disabled={loginBusy}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="$3"
+                            variant="action"
+                            onPress={() => changeLoginEmail({ newEmail: newLoginEmail.trim() })}
+                            disabled={loginBusy || !newLoginEmail.includes('@')}
+                          >
+                            {loginBusy ? 'Changing...' : 'Change login'}
+                          </Button>
+                        </XStack>
+                      </YStack>
+                    </Card>
+                  ) : (
+                    <Button
+                      size="$2"
+                      variant="outlined"
+                      alignSelf="flex-start"
+                      onPress={() => { setChangingLogin(true); setLoginMessage(null) }}
+                    >
+                      Change login email
+                    </Button>
+                  )}
+                  {loginMessage ? (
+                    <Text fontSize="$3" color={loginMessage.type === 'success' ? '$green10' : '$red10'}>
+                      {loginMessage.text}
+                    </Text>
+                  ) : null}
+                </YStack>
               ) : null}
             </YStack>
           ) : (
