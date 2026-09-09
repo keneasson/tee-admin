@@ -164,11 +164,29 @@ export async function POST(
         if (!validPhoneTypes.includes(phoneType)) {
           return NextResponse.json({ error: 'Phone type must be mobile, home, work, or other' }, { status: 400 })
         }
-        const record = await personRepository.addPhone(targetPerson.personId, {
-          type: phoneType,
-          number: number.trim(),
+        // PROPOSE, like addresses: a changed number that nobody confirmed is
+        // shown next to the one it would replace, not silently swapped in.
+        const existingPhones = await personRepository.getPhones(targetPerson.personId)
+        const supersedesPhone = (body as { supersedesId?: string }).supersedesId
+          || existingPhones.find((ph) => ph.isPrimary && ph.verified !== false)?.phoneId
+
+        const record = await personRepository.proposePhone(
+          targetPerson.personId,
+          { type: phoneType, number: number.trim() },
+          session.user.email,
+          supersedesPhone
+        )
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          record: {
+            phoneId: record.phoneId,
+            type: record.type,
+            number: record.number,
+            verified: false,
+            supersedesId: record.supersedesId,
+          },
         })
-        return NextResponse.json({ success: true, record: { phoneId: record.phoneId, type: record.type, number: record.number } })
       }
 
       case 'address': {
@@ -182,7 +200,14 @@ export async function POST(
         if (!validAddressTypes.includes(addressType)) {
           return NextResponse.json({ error: 'Address type must be home, residence, work, mailing, or other' }, { status: 400 })
         }
-        const record = await personRepository.addAddress(targetPerson.personId, {
+        // PROPOSE, do not overwrite. The existing address stays primary and
+        // visible until somebody entitled to confirm it does — otherwise a
+        // change is invisible and people drive to the old house.
+        const existingAddresses = await personRepository.getAddresses(targetPerson.personId)
+        const supersedes = (body as { supersedesId?: string }).supersedesId
+          || existingAddresses.find((a) => a.isPrimary && a.verified !== false)?.addressId
+
+        const record = await personRepository.proposeAddress(targetPerson.personId, {
           type: addressType,
           street1: street1.trim(),
           street2: street2?.trim(),
@@ -190,8 +215,19 @@ export async function POST(
           province: province.trim(),
           postalCode: postalCode.trim(),
           country: country?.trim() || 'Canada',
+        }, session.user.email, supersedes)
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          record: {
+            addressId: record.addressId,
+            type: record.type,
+            street1: record.street1,
+            city: record.city,
+            verified: false,
+            supersedesId: record.supersedesId,
+          },
         })
-        return NextResponse.json({ success: true, record: { addressId: record.addressId, type: record.type, street1: record.street1, city: record.city } })
       }
 
       case 'relationship': {
@@ -289,5 +325,76 @@ export async function DELETE(
   } catch (error) {
     console.error('Admin delete contact info error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
+ * PATCH — confirm a proposed contact change.
+ *
+ * Body: `{ type: 'address' | 'phone', id: string }`
+ *
+ * Gated by the SAME `checkPermission` used for editing, which already allows
+ * owner, admin, Recording Brother and Rep — the people who would actually know
+ * whether an address is right. Confirming promotes the proposal to primary and
+ * removes the value it replaced.
+ *
+ * This exists because the only approval path was an emailed token aimed at the
+ * profile owner. For a 92-year-old member that is the wrong mechanism: the
+ * people who can confirm her address are her Recording Brother and her Rep, in
+ * the app, not her clicking a link in an email.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ email: string }> }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { email } = await params
+    const targetPerson = await personRepository.getByEmail(decodeURIComponent(email))
+    if (!targetPerson) {
+      return NextResponse.json({ error: 'Person not found' }, { status: 404 })
+    }
+
+    const permResult = await checkPermission(session, targetPerson)
+    if (!permResult.allowed) {
+      return permResult.response
+    }
+
+    const body = await request.json()
+    const { type, id } = body as { type?: string; id?: string }
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
+
+    switch (type) {
+      case 'address': {
+        const record = await personRepository.verifyAddress(
+          targetPerson.personId,
+          id,
+          session.user.email
+        )
+        return NextResponse.json({ success: true, verified: true, record })
+      }
+      case 'phone': {
+        const record = await personRepository.verifyPhone(
+          targetPerson.personId,
+          id,
+          session.user.email
+        )
+        return NextResponse.json({ success: true, verified: true, record })
+      }
+      default:
+        return NextResponse.json(
+          { error: "type must be 'address' or 'phone'" },
+          { status: 400 }
+        )
+    }
+  } catch (error) {
+    console.error('Error verifying contact change:', error)
+    return NextResponse.json({ error: 'Failed to verify change' }, { status: 500 })
   }
 }

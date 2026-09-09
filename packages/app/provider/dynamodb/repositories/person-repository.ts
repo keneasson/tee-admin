@@ -674,6 +674,116 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     await this.delete(`PERSON#${personId}`, `ADDRESS#${addressId}`)
   }
 
+  // ===== PROPOSE / VERIFY =====================================================
+  //
+  // Addresses and phones had no verification concept, so an edit silently
+  // overwrote the record and nothing indicated a change had been made. A change
+  // is now PROPOSED alongside the value it replaces — both stay visible, and the
+  // old one keeps being the primary — until somebody entitled to confirm it
+  // does. Nobody should drive to an address that has not been confirmed.
+
+  /**
+   * Propose a replacement address. The existing record is left untouched and
+   * keeps `isPrimary`; the proposal is stored unverified and points at what it
+   * would replace.
+   */
+  async proposeAddress(
+    personId: string,
+    address: Parameters<PersonRepository['addAddress']>[1],
+    proposedBy: string,
+    supersedesId?: string
+  ): Promise<PersonAddressRecord> {
+    const record = await this.addAddress(personId, {
+      ...address,
+      // Never primary while unconfirmed — the known-good value stays in charge.
+      isPrimary: false,
+    })
+    return this.updateAddress(personId, record.addressId, {
+      verified: false,
+      proposedBy,
+      proposedAt: new Date().toISOString(),
+      supersedesId,
+    })
+  }
+
+  /**
+   * Confirm a proposed address. It becomes the primary, and the record it
+   * replaced is removed — the proposal has been checked by someone entitled to
+   * check it, so keeping the stale value would be the confusing outcome.
+   */
+  async verifyAddress(
+    personId: string,
+    addressId: string,
+    verifiedBy: string
+  ): Promise<PersonAddressRecord> {
+    const addresses = await this.getAddresses(personId)
+    const proposal = addresses.find((a) => a.addressId === addressId)
+    if (!proposal) throw new Error(`Address ${addressId} not found`)
+
+    const confirmed = await this.updateAddress(personId, addressId, {
+      verified: true,
+      verifiedBy,
+      verifiedAt: new Date().toISOString(),
+      isPrimary: true,
+      supersedesId: undefined,
+    })
+
+    if (proposal.supersedesId) {
+      // Best-effort: the confirmation is what matters, and a leftover old
+      // record is visibly stale rather than dangerous.
+      try {
+        await this.deleteAddress(personId, proposal.supersedesId)
+      } catch (err) {
+        console.error('Failed to remove superseded address:', err)
+      }
+    }
+    return confirmed
+  }
+
+  /** Propose a replacement phone number. Same contract as {@link proposeAddress}. */
+  async proposePhone(
+    personId: string,
+    phone: Parameters<PersonRepository['addPhone']>[1],
+    proposedBy: string,
+    supersedesId?: string
+  ): Promise<PersonPhoneRecord> {
+    const record = await this.addPhone(personId, { ...phone, isPrimary: false })
+    return this.update(`PERSON#${personId}`, `PHONE#${record.phoneId}`, {
+      verified: false,
+      proposedBy,
+      proposedAt: new Date().toISOString(),
+      supersedesId,
+    } as unknown as Partial<PersonRecord>) as unknown as PersonPhoneRecord
+  }
+
+  /** Confirm a proposed phone number. Same contract as {@link verifyAddress}. */
+  async verifyPhone(
+    personId: string,
+    phoneId: string,
+    verifiedBy: string
+  ): Promise<PersonPhoneRecord> {
+    const phones = await this.getPhones(personId)
+    const proposal = phones.find((ph) => ph.phoneId === phoneId)
+    if (!proposal) throw new Error(`Phone ${phoneId} not found`)
+
+    const confirmed = (await this.update(`PERSON#${personId}`, `PHONE#${phoneId}`, {
+      verified: true,
+      verifiedBy,
+      verifiedAt: new Date().toISOString(),
+      isPrimary: true,
+      supersedesId: undefined,
+    } as unknown as Partial<PersonRecord>)) as unknown as PersonPhoneRecord
+
+    if (proposal.supersedesId) {
+      try {
+        await this.deletePhone(personId, proposal.supersedesId)
+      } catch (err) {
+        console.error('Failed to remove superseded phone:', err)
+      }
+    }
+    return confirmed
+  }
+
   // ===== PRIVACY & PROFILE VIEW =====
 
   /**
