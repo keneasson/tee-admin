@@ -93,6 +93,9 @@ export async function GET(request: NextRequest) {
  *   - currentValue?: string (optional)
  *   - message?: string (optional)
  */
+/** Internal sentinel: the notification was intentionally coalesced, not failed. */
+class SkipNotification extends Error {}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -158,8 +161,42 @@ export async function POST(request: NextRequest) {
       message
     )
 
+    // COALESCE the notification.
+    //
+    // Each field is its own dialog and its own request, so changing an address
+    // and a phone number produced TWO emails to the same person minutes apart.
+    // For an elderly member that is not a minor annoyance — it reads as two
+    // separate alarming events.
+    //
+    // If this requester already has a pending request against this person that
+    // was notified within the window, the earlier email already told them to
+    // review their pending changes, so a second one adds nothing. The link in
+    // it goes to the full list, which now includes this change too.
+    const COALESCE_WINDOW_MS = 15 * 60 * 1000
+    let alreadyNotified = false
+    try {
+      const pending = await editRequestRepository.getPendingRequests(targetEmail)
+      const cutoff = Date.now() - COALESCE_WINDOW_MS
+      alreadyNotified = pending.some(
+        (req) =>
+          req.requestId !== editRequest.requestId &&
+          req.requesterEmail === session.user!.email &&
+          Date.parse(req.createdAt) >= cutoff
+      )
+    } catch (lookupError) {
+      // If the lookup fails, fall through and send — a duplicate notification
+      // is a far better failure than a silent one.
+      console.error('Coalescing lookup failed; sending notification:', lookupError)
+    }
+
     // Send email notification to target user
     try {
+      if (alreadyNotified) {
+        console.info(
+          `Coalesced: '${field}' change for ${targetEmail} joins a notification already sent by ${session.user.email}`
+        )
+        throw new SkipNotification()
+      }
       const baseUrl = process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'
       const approveUrl = `${baseUrl}/api/edit-requests/approve?token=${editRequest.approvalToken}&action=approve`
       const rejectUrl = `${baseUrl}/api/edit-requests/approve?token=${editRequest.approvalToken}&action=reject`
@@ -189,8 +226,10 @@ export async function POST(request: NextRequest) {
         body: emailHtml,
       })
     } catch (emailError) {
-      // Log but don't fail the request - the edit request was still created
-      console.error('Failed to send edit request notification email:', emailError)
+      if (!(emailError instanceof SkipNotification)) {
+        // Log but don't fail the request - the edit request was still created
+        console.error('Failed to send edit request notification email:', emailError)
+      }
     }
 
     return NextResponse.json({
