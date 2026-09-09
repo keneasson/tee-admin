@@ -52,9 +52,17 @@ interface MemberProfile {
     number: string
     isPrimary: boolean
     isHousehold: boolean
+    verified?: boolean
+    proposedBy?: string
+    proposedAt?: string
+    supersedesId?: string
   }>
   addresses?: Array<{
     addressId?: string
+    verified?: boolean
+    proposedBy?: string
+    proposedAt?: string
+    supersedesId?: string
     type: string
     label?: string
     street1: string
@@ -476,6 +484,31 @@ export default function MemberProfilePage() {
       setNewPhoneType('mobile')
       setAddingPhone(false)
       fetchProfile()
+    }
+  }
+
+  /**
+   * Confirm a proposed contact change. Gated server-side to owner / admin /
+   * Recording Brother / Rep — the people who would actually know whether an
+   * address is right.
+   */
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
+  const verifyContact = async (type: 'address' | 'phone', id: string) => {
+    setVerifyingId(id)
+    setContactError(null)
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}/contacts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to confirm the change')
+      await fetchProfile()
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : 'Failed to confirm the change')
+    } finally {
+      setVerifyingId(null)
     }
   }
 
@@ -1024,7 +1057,21 @@ export default function MemberProfilePage() {
               </XStack>
               {profile.phones && profile.phones.length > 0 ? (
                 profile.phones.map((phone, index) => (
-                  <XStack key={index} gap="$2" alignItems="center">
+                  <XStack
+                    key={index}
+                    gap="$2"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    {...(phone.verified === false
+                      ? {
+                          padding: '$2',
+                          borderRadius: '$3',
+                          borderWidth: 1,
+                          borderColor: '$yellow6',
+                          backgroundColor: '$yellow2',
+                        }
+                      : null)}
+                  >
                     <Text
                       fontSize="$4"
                       color="$blue10"
@@ -1039,6 +1086,22 @@ export default function MemberProfilePage() {
                       {phone.isPrimary ? ' • Primary' : ''}
                       {phone.isHousehold ? ' • Household' : ''}
                     </Text>
+                    {phone.verified === false ? (
+                      <Text fontSize="$2" fontWeight="700" color="$yellow11">
+                        UPDATE PENDING
+                        {phone.proposedBy ? ` — proposed by ${phone.proposedBy}` : ''}
+                      </Text>
+                    ) : null}
+                    {phone.verified === false && canEdit && phone.phoneId ? (
+                      <Button
+                        size="$2"
+                        theme="green"
+                        disabled={verifyingId === phone.phoneId}
+                        onPress={() => verifyContact('phone', phone.phoneId!)}
+                      >
+                        {verifyingId === phone.phoneId ? 'Confirming…' : 'Verify'}
+                      </Button>
+                    ) : null}
                     {canEdit && phone.phoneId ? (
                       <Button
                         size="$2"
@@ -1151,13 +1214,34 @@ export default function MemberProfilePage() {
                     `${address.city}, ${address.province} ${address.postalCode}`,
                   ].filter(Boolean).join('\n')
 
+                  const isPending = address.verified === false
+
                   return (
-                    <YStack key={index} gap="$1">
-                      <XStack gap="$2" alignItems="center">
+                    <YStack
+                      key={index}
+                      gap="$1"
+                      {...(isPending
+                        ? {
+                            padding: '$2',
+                            borderRadius: '$3',
+                            borderWidth: 1,
+                            borderColor: '$yellow6',
+                            backgroundColor: '$yellow2',
+                          }
+                        : null)}
+                    >
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
                         <Text fontSize="$3" fontWeight="500">
                           {address.label || address.type}
                           {address.isPrimary ? ' • Primary' : ''}
                         </Text>
+                        {/* EVERYONE who can see the address sees this — the whole
+                            point is that a member knows to call before driving. */}
+                        {isPending ? (
+                          <Text fontSize="$2" fontWeight="700" color="$yellow11">
+                            UPDATE PENDING
+                          </Text>
+                        ) : null}
                         {canEdit && address.addressId ? (
                           <Button
                             size="$2"
@@ -1177,7 +1261,27 @@ export default function MemberProfilePage() {
                             iconOnly
                           />
                         ) : null}
+                        {/* Confirming is gated server-side to owner / admin /
+                            Recording Brother / Rep — `canEdit` mirrors that set. */}
+                        {isPending && canEdit && address.addressId ? (
+                          <Button
+                            size="$2"
+                            theme="green"
+                            disabled={verifyingId === address.addressId}
+                            onPress={() => verifyContact('address', address.addressId!)}
+                          >
+                            {verifyingId === address.addressId ? 'Confirming…' : 'Verify'}
+                          </Button>
+                        ) : null}
                       </XStack>
+                      {isPending ? (
+                        <Text fontSize="$2" color="$color11">
+                          Proposed{address.proposedBy ? ` by ${address.proposedBy}` : ''}
+                          {address.supersedesId
+                            ? ' — the address above is the last confirmed one.'
+                            : ' — not yet confirmed.'}
+                        </Text>
+                      ) : null}
                       <Text
                         fontSize="$3"
                         color="$blue10"
