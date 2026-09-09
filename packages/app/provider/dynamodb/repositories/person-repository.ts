@@ -978,6 +978,39 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   /**
    * List all persons (paginated)
    */
+  /**
+   * Every phone number in the directory, as `personId -> numbers`.
+   *
+   * `PersonPhoneRecord` has no index on the number, so finding somebody by
+   * phone means a scan. This does it ONCE so a caller can build a lookup, which
+   * is what the member list does behind its 5-minute cache — rather than a scan
+   * per keystroke.
+   *
+   * Digits only in the values: people type "905-797-3415" and the stored value
+   * may be "9057973415", and a search that fails on punctuation is not a search.
+   */
+  async getAllPhonesByPerson(): Promise<Map<string, string[]>> {
+    const byPerson = new Map<string, string[]>()
+    let lastKey: Record<string, any> | undefined
+    do {
+      const result = await this.scan({
+        filterExpression: 'begins_with(pkey, :prefix) AND begins_with(skey, :skey)',
+        expressionAttributeValues: { ':prefix': 'PERSON#', ':skey': 'PHONE#' },
+        lastEvaluatedKey: lastKey,
+      })
+      for (const item of result.items as unknown as Array<{ pkey: string; number?: string }>) {
+        const personId = item.pkey?.replace('PERSON#', '')
+        const digits = (item.number || '').replace(/\D/g, '')
+        if (!personId || !digits) continue
+        const list = byPerson.get(personId) || []
+        list.push(digits)
+        byPerson.set(personId, list)
+      }
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
+    return byPerson
+  }
+
   async listAll(options?: {
     limit?: number
     lastEvaluatedKey?: Record<string, any>
