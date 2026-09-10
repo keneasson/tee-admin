@@ -33,6 +33,53 @@ async function resolveTarget(paramValue: string) {
  * Verify the caller has admin-level permission to edit the target person.
  * Returns { allowed: true, viewerRole } on success, or a NextResponse error.
  */
+/**
+ * Copy the household address and the home phone from one person to another.
+ *
+ * A couple shares a home, so entering the address and the landline twice is
+ * duplicate work that also creates two copies to drift apart. Only the HOME
+ * number travels — a mobile belongs to a person, not a household.
+ *
+ * Best-effort: failing to copy an address must never lose the person, which is
+ * the outcome that actually hurts.
+ */
+async function copyHouseholdContacts(newPersonId: string, sourcePersonId: string) {
+  try {
+    const [addresses, phones] = await Promise.all([
+      personRepository.getAddresses(sourcePersonId),
+      personRepository.getPhones(sourcePersonId),
+    ])
+
+    const primaryAddress = addresses.find((a) => a.isPrimary) || addresses[0]
+    if (primaryAddress) {
+      await personRepository.addAddress(newPersonId, {
+        type: primaryAddress.type,
+        street1: primaryAddress.street1,
+        street2: primaryAddress.street2,
+        city: primaryAddress.city,
+        province: primaryAddress.province,
+        postalCode: primaryAddress.postalCode,
+        country: primaryAddress.country,
+        isPrimary: true,
+        isHousehold: true,
+      })
+    }
+
+    const householdPhone =
+      phones.find((ph) => ph.isHousehold) || phones.find((ph) => ph.type === 'home')
+    if (householdPhone) {
+      await personRepository.addPhone(newPersonId, {
+        type: householdPhone.type,
+        number: householdPhone.number,
+        isPrimary: true,
+        isHousehold: true,
+      })
+    }
+  } catch (err) {
+    console.error('Failed to copy household contacts:', err)
+  }
+}
+
 async function checkPermission(session: any, targetPerson: any) {
   const viewerEmail = session.user.email
   const viewerRole = (session.user as any).role as string || ROLES.GUEST
@@ -231,20 +278,76 @@ export async function POST(
       }
 
       case 'relationship': {
-        const { targetEmail, relationshipType } = body as { targetEmail: string; relationshipType: RelationshipType }
-        if (!targetEmail || !targetEmail.includes('@')) {
-          return NextResponse.json({ error: 'Valid target email is required' }, { status: 400 })
+        const { targetEmail, relationshipType, firstName, lastName, sameAddress } = body as {
+          targetEmail?: string
+          relationshipType: RelationshipType
+          firstName?: string
+          lastName?: string
+          sameAddress?: boolean
         }
+
         const validRelTypes: RelationshipType[] = ['spouse', 'parent', 'child', 'sibling', 'grandparent', 'grandchild', 'extended_family', 'household_member']
         if (!validRelTypes.includes(relationshipType)) {
           return NextResponse.json({ error: 'Invalid relationship type' }, { status: 400 })
         }
+
+        // Linking an EXISTING person.
+        if (targetEmail) {
+          if (!targetEmail.includes('@')) {
+            return NextResponse.json({ error: 'Valid target email is required' }, { status: 400 })
+          }
+          await relationshipRepository.createRelationship(
+            targetPerson.primaryEmail,
+            targetEmail.toLowerCase().trim(),
+            relationshipType
+          )
+          return NextResponse.json({ success: true })
+        }
+
+        // Creating somebody NEW and linking them.
+        //
+        // This has to live here rather than on /api/user/relationships, which is
+        // the signed-in user's OWN family and hardcodes `session.user.email` as
+        // the source. Posting there from a profile page linked the new person to
+        // whoever was signed in instead of to the person being viewed — which is
+        // how Brian Rose ended up as the spouse of the admin who added him.
+        if (!firstName?.trim()) {
+          return NextResponse.json(
+            { error: 'Provide either targetEmail (an existing person) or firstName (a new one)' },
+            { status: 400 }
+          )
+        }
+
+        // Relationships are keyed by email, so somebody with no address of their
+        // own — or who shares one — needs a distinct key address. Same mechanism
+        // already used for family members without email.
+        const keyEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
+        const createdPerson = await personRepository.create({
+          email: keyEmail,
+          firstName: firstName.trim(),
+          lastName: lastName?.trim() || '',
+          ecclesia: targetPerson.ecclesia || 'Toronto East',
+          memberStatus: targetPerson.memberStatus,
+        })
+
+        if (sameAddress) {
+          await copyHouseholdContacts(createdPerson.personId, targetPerson.personId)
+        }
+
         await relationshipRepository.createRelationship(
           targetPerson.primaryEmail,
-          targetEmail.toLowerCase().trim(),
+          keyEmail,
           relationshipType
         )
-        return NextResponse.json({ success: true })
+
+        // Without this the new person is invisible to search for 5 minutes, so
+        // the next person to look adds them again (#238).
+        invalidatePeopleCache()
+
+        return NextResponse.json({
+          success: true,
+          created: { personId: createdPerson.personId, name: `${firstName} ${lastName || ''}`.trim() },
+        })
       }
 
       default:
