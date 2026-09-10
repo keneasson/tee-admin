@@ -160,6 +160,31 @@ export async function GET(
     const viewerEcclesia = viewerPerson?.ecclesia
     const targetEcclesia = targetPerson.ecclesia
 
+    /**
+     * Whether this viewer may edit this profile — computed HERE, before anything
+     * reads it.
+     *
+     * It used to be assigned further down (in the owner/admin and recorder/rep
+     * blocks) but READ higher up, where the contacts are mapped. At mapping time
+     * it was therefore always `undefined`, so `emailId`, `phoneId` and
+     * `addressId` were silently omitted from every response — and every control
+     * that needs a record id to act on (set-as-login-email, Verify a pending
+     * change) could never render, for anyone.
+     *
+     * The permission itself is unchanged; only the ordering is. The assignments
+     * below now use this value rather than recomputing it, so the two can no
+     * longer disagree.
+     */
+    const isRecorderOrRep =
+      viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
+    const isSameEcclesiaAsViewer = Boolean(
+      viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+    )
+    const viewerCanEdit =
+      viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN
+        ? !isOwnProfile
+        : isRecorderOrRep && !isOwnProfile && isSameEcclesiaAsViewer
+
     // Get privacy-aware permissions
     const permissions = await privacyRepository.getVisibleFields(
       viewerEmail,
@@ -221,7 +246,7 @@ export async function GET(
       profile.emails = emailRecords.map(e => ({
         email: e.email,
         emailType: e.emailType,
-        ...(profile.canEdit ? { emailId: e.emailId } : {}),
+        ...(viewerCanEdit ? { emailId: e.emailId } : {}),
       }))
     }
 
@@ -236,7 +261,7 @@ export async function GET(
         proposedBy: p.proposedBy,
         proposedAt: p.proposedAt,
         supersedesId: p.supersedesId,
-        ...(profile.canEdit ? { phoneId: p.phoneId } : {}),
+        ...(viewerCanEdit ? { phoneId: p.phoneId } : {}),
       }))
     }
 
@@ -262,7 +287,7 @@ export async function GET(
         proposedBy: a.proposedBy,
         proposedAt: a.proposedAt,
         supersedesId: a.supersedesId,
-        ...(profile.canEdit ? { addressId: a.addressId } : {}),
+        ...(viewerCanEdit ? { addressId: a.addressId } : {}),
       }))
     }
 
@@ -296,7 +321,7 @@ export async function GET(
     if (viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN) {
       profile.firstName = targetPerson.firstName
       profile.lastName = targetPerson.lastName
-      profile.canEdit = !isOwnProfile
+      profile.canEdit = viewerCanEdit
       if (!isOwnProfile) {
         profile.personId = targetPerson.personId
       }
@@ -318,7 +343,7 @@ export async function GET(
       if (isSameEcclesia) {
         profile.firstName = targetPerson.firstName
         profile.lastName = targetPerson.lastName
-        profile.canEdit = true
+        profile.canEdit = viewerCanEdit
         profile.personId = targetPerson.personId
         profile.role = targetPerson.role || ROLES.GUEST
         profile.canSetRole = true
