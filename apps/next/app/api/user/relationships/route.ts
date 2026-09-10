@@ -3,6 +3,7 @@ import { auth } from '../../../../utils/auth'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
+import { invalidatePeopleCache } from '../../people/cache'
 
 const validRelationshipTypes: RelationshipType[] = [
   'spouse',
@@ -204,6 +205,11 @@ export async function POST(request: NextRequest) {
           })
 
           await copyHouseholdContacts(created.personId, sameAddressAs)
+          // The member list is cached for 5 minutes. Without this, the person
+          // just created is invisible to search — so the next person to look
+          // adds them AGAIN, which is the exact duplicate this whole
+          // search-first flow exists to prevent.
+          invalidatePeopleCache()
 
           if (keyEmail !== email) {
             try {
@@ -237,6 +243,7 @@ export async function POST(request: NextRequest) {
           memberStatus: getMemberStatusFromRelationship(relationshipType),
         })
         await copyHouseholdContacts(createdNoEmail.personId, sameAddressAs)
+        invalidatePeopleCache()
         familyMemberEmail = placeholderEmail
       }
     } else {
