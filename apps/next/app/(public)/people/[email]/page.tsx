@@ -534,17 +534,107 @@ export default function MemberProfilePage() {
     }
   }
 
-  const handleAddFamily = async () => {
+  /**
+   * Progressive family add: SEARCH FIRST, create only if nobody matches.
+   *
+   * The old flow asked for an email address and nothing else, which meant you
+   * could not add somebody you knew by name, could not tell whether they were
+   * already in the directory, and — because an email can belong to a whole
+   * household — linking by address could attach the wrong person entirely.
+   */
+  const [familyQuery, setFamilyQuery] = useState('')
+  const [familyResults, setFamilyResults] = useState<
+    Array<{ id: string; name: string; email: string; ecclesia?: string }>
+  >([])
+  const [familySearching, setFamilySearching] = useState(false)
+  const [familyCreating, setFamilyCreating] = useState(false)
+  const [newFamilyFirstName, setNewFamilyFirstName] = useState('')
+  const [newFamilyLastName, setNewFamilyLastName] = useState('')
+  const [newFamilySameAddress, setNewFamilySameAddress] = useState(true)
+
+  // Debounced search over name / email / phone.
+  useEffect(() => {
+    const q = familyQuery.trim()
+    if (q.length < 2) {
+      setFamilyResults([])
+      return
+    }
+    let cancelled = false
+    setFamilySearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/people?search=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        if (cancelled) return
+        const members = [...(data.members || []), ...(data.guests || [])]
+        // Never offer to link somebody to themselves.
+        setFamilyResults(members.filter((m: { email: string }) => m.email !== profile?.email).slice(0, 8))
+      } catch {
+        if (!cancelled) setFamilyResults([])
+      } finally {
+        if (!cancelled) setFamilySearching(false)
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [familyQuery, profile?.email])
+
+  const resetFamilyForm = () => {
+    setFamilyQuery('')
+    setFamilyResults([])
+    setFamilyCreating(false)
+    setNewFamilyFirstName('')
+    setNewFamilyLastName('')
+    setNewFamilySameAddress(true)
+    setNewRelationType('spouse')
+    setAddingFamily(false)
+  }
+
+  /** Link an existing directory member. */
+  const linkExistingFamily = async (member: { email: string }) => {
     const ok = await addContact({
       type: 'relationship',
-      targetEmail: newFamilyEmail.trim(),
+      targetEmail: member.email,
       relationshipType: newRelationType,
     })
     if (ok) {
-      setNewFamilyEmail('')
-      setNewRelationType('spouse')
-      setAddingFamily(false)
+      resetFamilyForm()
       fetchProfile()
+    }
+  }
+
+  /**
+   * Create somebody who is not in the directory yet. Only a first name is
+   * required — everything else is optional, because insisting on an email is
+   * exactly what stopped people being added at all.
+   */
+  const createAndLinkFamily = async () => {
+    setContactSaving(true)
+    setContactError(null)
+    try {
+      const res = await fetch('/api/user/relationships', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: newFamilyFirstName.trim(),
+          lastName: newFamilyLastName.trim() || undefined,
+          relationshipType: newRelationType,
+          // Same address implies the shared household phone too — that is the
+          // normal case for a couple, and it is why the number and address were
+          // being duplicated by hand.
+          sameAddressAs: newFamilySameAddress ? profile?.email : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add family member')
+      resetFamilyForm()
+      fetchProfile()
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : 'Failed to add family member')
+    } finally {
+      setContactSaving(false)
     }
   }
 
@@ -1447,22 +1537,113 @@ export default function MemberProfilePage() {
                         </Select.Viewport>
                       </Select.Content>
                     </Select>
-                    <Input
-                      placeholder="Family member's email"
-                      value={newFamilyEmail}
-                      onChangeText={setNewFamilyEmail}
-                      autoFocus
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
+                    {/* SEARCH FIRST — by name, email or phone — and only offer
+                        to create somebody once the directory has been checked. */}
+                    {familyCreating ? null : (
+                      <>
+                        <Input
+                          placeholder="Search by name, email or phone"
+                          value={familyQuery}
+                          onChangeText={setFamilyQuery}
+                          autoFocus
+                          autoCapitalize="none"
+                        />
+                        {familySearching ? (
+                          <Text fontSize="$2" theme="alt2">Searching…</Text>
+                        ) : null}
+
+                        {familyResults.length > 0 ? (
+                          <YStack gap="$1">
+                            {familyResults.map((m) => (
+                              <Button
+                                key={m.id}
+                                size="$3"
+                                justifyContent="flex-start"
+                                disabled={contactSaving}
+                                onPress={() => linkExistingFamily(m)}
+                              >
+                                {m.name}
+                                {m.ecclesia ? ` · ${m.ecclesia}` : ''}
+                              </Button>
+                            ))}
+                          </YStack>
+                        ) : null}
+
+                        {/* Only once a search has actually been made. */}
+                        {familyQuery.trim().length >= 2 && !familySearching ? (
+                          <Button
+                            size="$3"
+                            icon={Plus}
+                            justifyContent="flex-start"
+                            onPress={() => {
+                              const parts = familyQuery.trim().split(/\s+/)
+                              setNewFamilyFirstName(parts[0] || '')
+                              setNewFamilyLastName(parts.slice(1).join(' '))
+                              setFamilyCreating(true)
+                            }}
+                          >
+                            {familyResults.length > 0
+                              ? `None of these — add "${familyQuery.trim()}" as a new person`
+                              : `Add "${familyQuery.trim()}" as a new person`}
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
+
+                    {/* CREATE — first name is the only requirement. */}
+                    {familyCreating ? (
+                      <YStack gap="$2">
+                        <XStack gap="$2">
+                          <YStack flex={1} gap="$1">
+                            <Text fontSize="$2" theme="alt2">First name</Text>
+                            <Input
+                              value={newFamilyFirstName}
+                              onChangeText={setNewFamilyFirstName}
+                              autoFocus
+                            />
+                          </YStack>
+                          <YStack flex={1} gap="$1">
+                            <Text fontSize="$2" theme="alt2">Last name (optional)</Text>
+                            <Input value={newFamilyLastName} onChangeText={setNewFamilyLastName} />
+                          </YStack>
+                        </XStack>
+
+                        <Button
+                          size="$3"
+                          justifyContent="flex-start"
+                          icon={newFamilySameAddress ? Check : undefined}
+                          theme={newFamilySameAddress ? 'green' : undefined}
+                          onPress={() => setNewFamilySameAddress((v) => !v)}
+                        >
+                          Same address as {profile.name?.split(' ')[0] || 'this person'}
+                        </Button>
+                        <Text fontSize="$2" theme="alt2">
+                          Copies the address and the household phone, so a couple is
+                          not entered twice.
+                        </Text>
+                      </YStack>
+                    ) : null}
+
                     {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
                     <XStack gap="$2" justifyContent="flex-end">
-                      <Button size="$3" icon={X} onPress={() => { setAddingFamily(false); setContactError(null) }} disabled={contactSaving}>
+                      <Button
+                        size="$3"
+                        icon={X}
+                        onPress={() => { resetFamilyForm(); setContactError(null) }}
+                        disabled={contactSaving}
+                      >
                         Cancel
                       </Button>
-                      <Button size="$3" theme="blue" onPress={handleAddFamily} disabled={contactSaving || !newFamilyEmail.includes('@')}>
-                        {contactSaving ? 'Adding...' : 'Add'}
-                      </Button>
+                      {familyCreating ? (
+                        <Button
+                          size="$3"
+                          theme="blue"
+                          onPress={createAndLinkFamily}
+                          disabled={contactSaving || !newFamilyFirstName.trim()}
+                        >
+                          {contactSaving ? 'Adding…' : 'Add person'}
+                        </Button>
+                      ) : null}
                     </XStack>
                   </YStack>
                 </Card>

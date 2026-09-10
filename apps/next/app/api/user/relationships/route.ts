@@ -3,6 +3,7 @@ import { auth } from '../../../../utils/auth'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
+import { invalidatePeopleCache } from '../../people/cache'
 
 const validRelationshipTypes: RelationshipType[] = [
   'spouse',
@@ -76,6 +77,61 @@ export async function GET() {
  * - { targetEmail, relationshipType } - Link to existing person by email
  * - { firstName, lastName, email?, relationshipType } - Create new person if needed
  */
+/**
+ * Copy the household address and phone from an existing person onto a newly
+ * created one.
+ *
+ * A couple shares a home, so entering the address and the landline twice is
+ * duplicate work that also creates two copies to keep in sync — which is how
+ * they drift apart. "Same address" implies the shared home phone: that is what
+ * a household phone IS, and the record already carries `isHousehold`.
+ *
+ * Copied values are marked household, and best-effort: failing to copy an
+ * address must never lose the person, which is the outcome that actually hurt.
+ */
+async function copyHouseholdContacts(newPersonId: string, sourceEmail?: string) {
+  if (!sourceEmail) return
+  try {
+    const source = await personRepository.getByEmail(sourceEmail)
+    if (!source) return
+
+    const [addresses, phones] = await Promise.all([
+      personRepository.getAddresses(source.personId),
+      personRepository.getPhones(source.personId),
+    ])
+
+    const primaryAddress = addresses.find((a) => a.isPrimary) || addresses[0]
+    if (primaryAddress) {
+      await personRepository.addAddress(newPersonId, {
+        type: primaryAddress.type,
+        street1: primaryAddress.street1,
+        street2: primaryAddress.street2,
+        city: primaryAddress.city,
+        province: primaryAddress.province,
+        postalCode: primaryAddress.postalCode,
+        country: primaryAddress.country,
+        isPrimary: true,
+        isHousehold: true,
+      })
+    }
+
+    // Only the HOME number travels with the address. A mobile belongs to a
+    // person, not a household, and copying it would be wrong.
+    const householdPhone =
+      phones.find((ph) => ph.isHousehold) || phones.find((ph) => ph.type === 'home')
+    if (householdPhone) {
+      await personRepository.addPhone(newPersonId, {
+        type: householdPhone.type,
+        number: householdPhone.number,
+        isPrimary: true,
+        isHousehold: true,
+      })
+    }
+  } catch (err) {
+    console.error('Failed to copy household contacts:', err)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -88,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { firstName, lastName, email, targetEmail, relationshipType } = body
+    const { firstName, lastName, email, targetEmail, relationshipType, sameAddressAs } = body
 
     // Validate relationship type
     if (!relationshipType || !validRelationshipTypes.includes(relationshipType)) {
@@ -148,6 +204,13 @@ export async function POST(request: NextRequest) {
             memberStatus: getMemberStatusFromRelationship(relationshipType),
           })
 
+          await copyHouseholdContacts(created.personId, sameAddressAs)
+          // The member list is cached for 5 minutes. Without this, the person
+          // just created is invisible to search — so the next person to look
+          // adds them AGAIN, which is the exact duplicate this whole
+          // search-first flow exists to prevent.
+          invalidatePeopleCache()
+
           if (keyEmail !== email) {
             try {
               await personRepository.addEmail(created.personId, {
@@ -172,13 +235,15 @@ export async function POST(request: NextRequest) {
         const userPerson = await personRepository.getByEmail(session.user.email)
         const placeholderEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
 
-        await personRepository.create({
+        const createdNoEmail = await personRepository.create({
           email: placeholderEmail,
           firstName,
           lastName: lastName || '',
           ecclesia: userPerson?.ecclesia || 'Toronto East',
           memberStatus: getMemberStatusFromRelationship(relationshipType),
         })
+        await copyHouseholdContacts(createdNoEmail.personId, sameAddressAs)
+        invalidatePeopleCache()
         familyMemberEmail = placeholderEmail
       }
     } else {

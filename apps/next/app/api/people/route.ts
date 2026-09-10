@@ -13,6 +13,12 @@ interface MemberListItem {
   name: string
   lastName: string // For sorting
   ecclesia?: string
+  /**
+   * Digits-only phone numbers, so the directory can be searched by phone as
+   * well as by name or email. Not displayed — this is search material, and the
+   * numbers themselves stay behind the per-person privacy gate.
+   */
+  phones?: string[]
 }
 
 /**
@@ -90,6 +96,17 @@ export async function GET(request: NextRequest) {
         lastKey = result.lastEvaluatedKey
       } while (lastKey)
 
+      // One scan for every phone number, behind the same 5-minute cache as the
+      // member list. Phones have no index on the number, so the alternative is a
+      // scan per keystroke.
+      let phonesByPerson = new Map<string, string[]>()
+      try {
+        phonesByPerson = await personRepository.getAllPhonesByPerson()
+      } catch (phoneError) {
+        // Search by name and email still works; only phone matching is lost.
+        console.error('Failed to load phones for search:', phoneError)
+      }
+
       // Build member list - each person appears exactly once
       // Guests go into a separate list; suspicious users are hidden entirely
       allMembers = []
@@ -115,6 +132,7 @@ export async function GET(request: NextRequest) {
           name,
           lastName: lastName.toLowerCase(),
           ecclesia: person.ecclesia || undefined,
+          phones: phonesByPerson.get(person.personId),
         }
 
         // Guests go to a separate list
@@ -246,7 +264,17 @@ function applyFilters(
       const nameMatch = member.name?.toLowerCase().includes(searchQuery)
       const ecclesiaMatch = member.ecclesia?.toLowerCase().includes(searchQuery)
       const emailMatch = member.email?.toLowerCase().includes(searchQuery)
-      if (!nameMatch && !ecclesiaMatch && !emailMatch) return false
+
+      // Phone: compare digits to digits. People type "905-797-3415" and the
+      // stored value may be "9057973415"; matching the raw strings would fail on
+      // punctuation alone. Only attempted when the query actually looks like a
+      // number, so "4" does not match half the directory.
+      const queryDigits = searchQuery.replace(/\D/g, '')
+      const phoneMatch =
+        queryDigits.length >= 3 &&
+        member.phones?.some((digits) => digits.includes(queryDigits))
+
+      if (!nameMatch && !ecclesiaMatch && !emailMatch && !phoneMatch) return false
     }
 
     return true
