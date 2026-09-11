@@ -9,6 +9,12 @@ import type { ContactRequestType } from '@my/app/provider/dynamodb/types'
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
 import { invalidatePeopleCache } from '../cache'
 import {
+  verificationProgress,
+  progressLabel,
+  canVote,
+  type ConfirmationProgress,
+} from '@my/app/utils/contact-verification'
+import {
   isPlaceholderEmail,
   withoutPlaceholderEmails,
 } from '@my/app/utils/placeholder-email'
@@ -53,12 +59,14 @@ interface MemberProfile {
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
   }>
   addresses?: Array<{
     verified?: boolean
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
     addressId?: string
     type: string
     label?: string
@@ -261,25 +269,88 @@ export async function GET(
       }))
     }
 
+    /**
+     * Confirmation progress for a PROPOSED value.
+     *
+     * Only fetched for unverified records — usually none, occasionally one — so
+     * the common profile view costs nothing extra. It ships to everyone who can
+     * see the contact, because the whole design is that a pending change is
+     * VISIBLE rather than hidden: a reader deciding where to send something
+     * needs to know the new address exists and how close it is to confirmed.
+     */
+    const progressFor = async (
+      contactType: 'address' | 'phone',
+      contactId: string | undefined,
+      verified: boolean | undefined
+    ): Promise<ConfirmationProgress | undefined> => {
+      // `undefined` is a legacy row that predates verification, not a pending
+      // change. Only an explicit `false` is something the community can confirm.
+      if (verified !== false || !contactId) return undefined
+      try {
+        const votes = await personRepository.getContactVotes(
+          targetPerson.personId,
+          contactType,
+          contactId
+        )
+        const tally = votes.map((v) => ({
+          voterPersonId: v.voterPersonId,
+          weight: v.weight,
+          votedAt: v.votedAt,
+        }))
+        const p = verificationProgress(tally)
+        const eligibility = viewerPerson
+          ? canVote(
+              {
+                personId: viewerPerson.personId,
+                role: viewerRole,
+                ecclesia: viewerEcclesia,
+                isRecordingBrother: viewerIsRecordingBrother,
+              },
+              targetPerson.personId,
+              targetPerson.ecclesia,
+              tally
+            )
+          : { allowed: false, reason: 'Sign in as a member of this ecclesia to confirm.' }
+        return {
+          weight: p.weight,
+          threshold: p.threshold,
+          remaining: p.remaining,
+          label: progressLabel(p),
+          hasVoted: viewerPerson ? p.voterIds.includes(viewerPerson.personId) : false,
+          canConfirm: eligibility.allowed,
+          ...(eligibility.reason ? { blockedReason: eligibility.reason } : {}),
+        }
+      } catch (err) {
+        // The badge degrades to "unverified" without progress; losing a count
+        // must never take the profile down with it.
+        console.error('Failed to load confirmation progress:', err)
+        return undefined
+      }
+    }
+
     // Phones (privacy gated)
     if (permissions.canViewPhone && personPhones.length > 0) {
-      profile.phones = personPhones.map(p => ({
-        type: p.type,
-        number: p.number,
-        isPrimary: p.isPrimary,
-        isHousehold: p.isHousehold,
-        verified: p.verified,
-        proposedBy: p.proposedBy,
-        proposedAt: p.proposedAt,
-        supersedesId: p.supersedesId,
-        ...(viewerCanEdit ? { phoneId: p.phoneId } : {}),
-      }))
+      profile.phones = await Promise.all(
+        personPhones.map(async p => ({
+          type: p.type,
+          number: p.number,
+          isPrimary: p.isPrimary,
+          isHousehold: p.isHousehold,
+          verified: p.verified,
+          proposedBy: p.proposedBy,
+          proposedAt: p.proposedAt,
+          supersedesId: p.supersedesId,
+          phoneId: p.phoneId,
+          confirmation: await progressFor('phone', p.phoneId, p.verified),
+        }))
+      )
     }
 
     // Addresses (privacy gated)
     if (permissions.canViewAddress) {
       const addressRecords = await personRepository.getAddresses(targetPerson.personId)
-      profile.addresses = addressRecords.map(a => ({
+      profile.addresses = await Promise.all(
+        addressRecords.map(async a => ({
         type: a.type,
         label: a.label,
         street1: a.street1,
@@ -298,8 +369,10 @@ export async function GET(
         proposedBy: a.proposedBy,
         proposedAt: a.proposedAt,
         supersedesId: a.supersedesId,
-        ...(viewerCanEdit ? { addressId: a.addressId } : {}),
-      }))
+        addressId: a.addressId,
+        confirmation: await progressFor('address', a.addressId, a.verified),
+        }))
+      )
     }
 
     // Family members (privacy gated)

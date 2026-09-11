@@ -9,8 +9,10 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { ContactRequestButton } from '@my/ui/src/profile/contact-request-button'
 import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
+import { PendingChangeNotice } from '@my/ui/src/profile/pending-change-notice'
 import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
+import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
 import { ManagedRegionsCard } from '@my/ui/src/admin/managed-regions-card'
 import { getRegionOptions } from '@my/app/config/regions'
 import { useFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag'
@@ -56,6 +58,7 @@ interface MemberProfile {
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
   }>
   addresses?: Array<{
     addressId?: string
@@ -63,6 +66,7 @@ interface MemberProfile {
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
     type: string
     label?: string
     street1: string
@@ -509,6 +513,42 @@ export default function MemberProfilePage() {
       setContactError(err instanceof Error ? err.message : 'Failed to confirm the change')
     } finally {
       setVerifyingId(null)
+    }
+  }
+
+  /**
+   * "I can confirm this is correct" — an ordinary member vouching for a change
+   * on somebody else's record.
+   *
+   * Separate from `verifyContact` on purpose. That one is an act of authority
+   * and settles the matter; this one is one voice in a count, and two of them
+   * (or one from a Recording Brother or Rep) reach the same place without the
+   * member whose record it is ever having to click anything.
+   */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const confirmContact = async (contactType: 'address' | 'phone', contactId: string) => {
+    setConfirmingId(contactId)
+    setContactError(null)
+    try {
+      const res = await fetch(
+        `/api/people/${encodeURIComponent(memberId)}/contacts/confirm`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactType, contactId }),
+        }
+      )
+      const data = await res.json()
+      // 409 carries a reason written for display ("You have already confirmed
+      // this"), so it is shown as-is rather than flattened to a generic failure.
+      if (!res.ok) throw new Error(data.error || 'Failed to record your confirmation')
+      await fetchProfile()
+    } catch (err) {
+      setContactError(
+        err instanceof Error ? err.message : 'Failed to record your confirmation'
+      )
+    } finally {
+      setConfirmingId(null)
     }
   }
 
@@ -1151,11 +1191,9 @@ export default function MemberProfilePage() {
               </XStack>
               {profile.phones && profile.phones.length > 0 ? (
                 profile.phones.map((phone, index) => (
-                  <XStack
+                  <YStack
                     key={index}
                     gap="$2"
-                    alignItems="center"
-                    flexWrap="wrap"
                     {...(phone.verified === false
                       ? {
                           padding: '$2',
@@ -1166,6 +1204,7 @@ export default function MemberProfilePage() {
                         }
                       : null)}
                   >
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
                     <Text
                       fontSize="$4"
                       color="$blue10"
@@ -1180,22 +1219,6 @@ export default function MemberProfilePage() {
                       {phone.isPrimary ? ' • Primary' : ''}
                       {phone.isHousehold ? ' • Household' : ''}
                     </Text>
-                    {phone.verified === false ? (
-                      <Text fontSize="$2" fontWeight="700" color="$yellow11">
-                        UPDATE PENDING
-                        {phone.proposedBy ? ` — proposed by ${phone.proposedBy}` : ''}
-                      </Text>
-                    ) : null}
-                    {phone.verified === false && canEdit && phone.phoneId ? (
-                      <Button
-                        size="$2"
-                        theme="green"
-                        disabled={verifyingId === phone.phoneId}
-                        onPress={() => verifyContact('phone', phone.phoneId!)}
-                      >
-                        {verifyingId === phone.phoneId ? 'Confirming…' : 'Verify'}
-                      </Button>
-                    ) : null}
                     {canEdit && phone.phoneId ? (
                       <Button
                         size="$2"
@@ -1215,7 +1238,22 @@ export default function MemberProfilePage() {
                         iconOnly
                       />
                     ) : null}
-                  </XStack>
+                    </XStack>
+                    {/* Never hidden: whoever can see the number can see that a
+                        different one has been reported. */}
+                    {phone.verified === false && phone.phoneId ? (
+                      <PendingChangeNotice
+                        contactType="phone"
+                        proposedBy={phone.proposedBy}
+                        supersedes={Boolean(phone.supersedesId)}
+                        confirmation={phone.confirmation}
+                        canVerify={canEdit}
+                        busy={verifyingId === phone.phoneId || confirmingId === phone.phoneId}
+                        onVerify={() => verifyContact('phone', phone.phoneId!)}
+                        onConfirm={() => confirmContact('phone', phone.phoneId!)}
+                      />
+                    ) : null}
+                  </YStack>
                 ))
               ) : (
                 <Text fontSize="$3" theme="alt2">No phone numbers available.</Text>
@@ -1331,11 +1369,6 @@ export default function MemberProfilePage() {
                         </Text>
                         {/* EVERYONE who can see the address sees this — the whole
                             point is that a member knows to call before driving. */}
-                        {isPending ? (
-                          <Text fontSize="$2" fontWeight="700" color="$yellow11">
-                            UPDATE PENDING
-                          </Text>
-                        ) : null}
                         {canEdit && address.addressId ? (
                           <Button
                             size="$2"
@@ -1355,26 +1388,21 @@ export default function MemberProfilePage() {
                             iconOnly
                           />
                         ) : null}
-                        {/* Confirming is gated server-side to owner / admin /
-                            Recording Brother / Rep — `canEdit` mirrors that set. */}
-                        {isPending && canEdit && address.addressId ? (
-                          <Button
-                            size="$2"
-                            theme="green"
-                            disabled={verifyingId === address.addressId}
-                            onPress={() => verifyContact('address', address.addressId!)}
-                          >
-                            {verifyingId === address.addressId ? 'Confirming…' : 'Verify'}
-                          </Button>
-                        ) : null}
                       </XStack>
-                      {isPending ? (
-                        <Text fontSize="$2" color="$color11">
-                          Proposed{address.proposedBy ? ` by ${address.proposedBy}` : ''}
-                          {address.supersedesId
-                            ? ' — the address above is the last confirmed one.'
-                            : ' — not yet confirmed.'}
-                        </Text>
+                      {isPending && address.addressId ? (
+                        <PendingChangeNotice
+                          contactType="address"
+                          proposedBy={address.proposedBy}
+                          supersedes={Boolean(address.supersedesId)}
+                          confirmation={address.confirmation}
+                          canVerify={canEdit}
+                          busy={
+                            verifyingId === address.addressId ||
+                            confirmingId === address.addressId
+                          }
+                          onVerify={() => verifyContact('address', address.addressId!)}
+                          onConfirm={() => confirmContact('address', address.addressId!)}
+                        />
                       ) : null}
                       <Text
                         fontSize="$3"

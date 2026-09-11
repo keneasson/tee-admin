@@ -617,6 +617,28 @@ export interface PersonPhoneRecord extends BaseRecord {
   supersedesId?: string
 }
 
+/**
+ * One person's confirmation that a proposed contact change is correct.
+ *
+ * Stored under the SUBJECT so every vote on a person's pending change is one
+ * query — the progress badge is read on every profile view, so it must not cost
+ * a scan. The voter is part of the key, which is also what makes voting twice
+ * impossible rather than merely discouraged.
+ */
+export interface ContactVoteRecord extends BaseRecord {
+  pkey: string           // PERSON#{subjectPersonId}
+  skey: string           // CONTACT_VOTE#{contactType}#{contactId}#{voterPersonId}
+  contactType: 'address' | 'phone' | 'email'
+  contactId: string
+  voterPersonId: string
+  voterEmail: string
+  voterEcclesia?: string
+  voterRole?: string
+  /** Weight AT THE TIME OF VOTING — see `contact-verification.ts`. */
+  weight: number
+  votedAt: string
+}
+
 // Privacy tiers for viewing data
 export type PrivacyTier = 'self' | 'connected' | 'same_ecclesia' | 'authenticated' | 'private'
 
