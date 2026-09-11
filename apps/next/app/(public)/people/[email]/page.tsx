@@ -614,17 +614,21 @@ export default function MemberProfilePage() {
     setContactSaving(true)
     setContactError(null)
     try {
-      const res = await fetch('/api/user/relationships', {
+      // MUST be the person-scoped endpoint. `/api/user/relationships` is the
+      // signed-in user's OWN family and hardcodes `session.user.email` as the
+      // source — posting there from a profile page linked the new person to
+      // whoever was signed in rather than to the person being viewed.
+      const res = await fetch(contactsUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          type: 'relationship',
           firstName: newFamilyFirstName.trim(),
           lastName: newFamilyLastName.trim() || undefined,
           relationshipType: newRelationType,
-          // Same address implies the shared household phone too — that is the
-          // normal case for a couple, and it is why the number and address were
-          // being duplicated by hand.
-          sameAddressAs: newFamilySameAddress ? profile?.email : undefined,
+          // Same address implies the shared household phone too — the normal
+          // case for a couple, and why both were being entered twice by hand.
+          sameAddress: newFamilySameAddress,
         }),
       })
       const data = await res.json()

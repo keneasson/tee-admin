@@ -8,6 +8,10 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { ContactRequestType } from '@my/app/provider/dynamodb/types'
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
 import { invalidatePeopleCache } from '../cache'
+import {
+  isPlaceholderEmail,
+  withoutPlaceholderEmails,
+} from '@my/app/utils/placeholder-email'
 
 interface MemberProfile {
   email: string
@@ -211,6 +215,10 @@ export async function GET(
     // Build profile — name and ecclesia are directory-level public info,
     // not gated by privacy (they're already visible in listings and the URL)
     const profile: MemberProfile = {
+      // The routing key — the page and its API calls are addressed by it, so it
+      // stays. It is never RENDERED as a contact address: placeholders are
+      // stripped from `profile.emails` below, which is what the Email section
+      // displays.
       email: targetPerson.primaryEmail,
       name: displayName,
       ecclesia: targetPerson.ecclesia,
@@ -243,7 +251,10 @@ export async function GET(
     // Emails (privacy gated)
     if (permissions.canViewEmail) {
       const emailRecords = await personRepository.getEmails(targetPerson.personId)
-      profile.emails = emailRecords.map(e => ({
+      // A generated `…@family.local` key is plumbing, not a mailbox. Showing it
+      // makes a record look broken and invites someone to email an address that
+      // can never receive anything.
+      profile.emails = withoutPlaceholderEmails(emailRecords).map(e => ({
         email: e.email,
         emailType: e.emailType,
         ...(viewerCanEdit ? { emailId: e.emailId } : {}),
