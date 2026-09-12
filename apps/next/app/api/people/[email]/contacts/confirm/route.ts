@@ -7,6 +7,7 @@ import {
   verificationProgress,
   progressLabel,
 } from '@my/app/utils/contact-verification'
+import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
 
 /**
  * POST /api/people/[email]/contacts/confirm
@@ -35,7 +36,9 @@ export async function POST(
     }
 
     const { email } = await params
-    const subject = await personRepository.getByEmail(decodeURIComponent(email))
+    // Same resolver as the page and every other action on it: the param may be
+    // a personId, a primary email, or a secondary one.
+    const subject = await resolvePersonParam(email)
     if (!subject) {
       return NextResponse.json({ error: 'Person not found' }, { status: 404 })
     }

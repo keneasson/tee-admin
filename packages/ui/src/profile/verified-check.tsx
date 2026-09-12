@@ -26,9 +26,13 @@ export function VerifiedCheck({ verified, label, size = 14 }: VerifiedCheckProps
   if (verified === false) return null
   return (
     <XStack gap="$1" alignItems="center" testID="verified-check">
-      <CheckCircle2 size={size} color="$green10" />
+      {/* `$success`, not `$green10`. The TEE themes override `light`/`dark`
+          with semantic tokens (success/warning/error); `green10` only exists
+          inside Tamagui's `green` SUB-theme, so outside a `theme="green"`
+          wrapper it does not resolve and the check rendered uncoloured. */}
+      <CheckCircle2 size={size} color="$success" />
       {label ? (
-        <Text fontSize="$2" color="$green10">
+        <Text fontSize="$2" color="$success">
           {label}
         </Text>
       ) : null}

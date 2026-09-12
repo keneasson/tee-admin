@@ -1225,8 +1225,12 @@ export default function MemberProfilePage() {
                           padding: '$2',
                           borderRadius: '$3',
                           borderWidth: 1,
-                          borderColor: '$yellow6',
-                          backgroundColor: '$yellow2',
+                          // `$warning` / `$backgroundHover`, not `$yellow6` /
+                          // `$yellow2`: the TEE themes override light/dark with
+                          // semantic tokens, so the yellow scale never resolved
+                          // and the panel had no highlight at all.
+                          borderColor: '$warning',
+                          backgroundColor: '$backgroundHover',
                         }
                       : null)}
                   >

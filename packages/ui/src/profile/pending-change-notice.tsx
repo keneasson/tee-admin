@@ -53,8 +53,8 @@ export function PendingChangeNotice({
   return (
     <YStack gap="$1" testID="pending-change-notice">
       <XStack gap="$2" alignItems="center" flexWrap="wrap">
-        <AlertTriangle size={14} color="$yellow11" />
-        <Text fontSize="$2" fontWeight="700" color="$yellow11">
+        <AlertTriangle size={14} color="$warning" />
+        <Text fontSize="$2" fontWeight="700" color="$warning">
           NOT VERIFIED
         </Text>
         {confirmation ? (
@@ -77,8 +77,8 @@ export function PendingChangeNotice({
 
         {confirmation?.hasVoted ? (
           <XStack gap="$1" alignItems="center">
-            <Check size={12} color="$green10" />
-            <Text fontSize="$2" color="$green10">
+            <Check size={12} color="$success" />
+            <Text fontSize="$2" color="$success">
               You confirmed this
             </Text>
           </XStack>
@@ -86,7 +86,7 @@ export function PendingChangeNotice({
       </XStack>
 
       {error ? (
-        <Text fontSize="$2" color="$red10">
+        <Text fontSize="$2" color="$error">
           {error}
         </Text>
       ) : null}

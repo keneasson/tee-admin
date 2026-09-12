@@ -18,6 +18,7 @@ import {
   isPlaceholderEmail,
   withoutPlaceholderEmails,
 } from '@my/app/utils/placeholder-email'
+import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
 
 interface MemberProfile {
   email: string
@@ -139,21 +140,10 @@ export async function GET(
     const viewerRole = (session.user as any).role as string || ROLES.GUEST
     const viewerIsRecordingBrother = !!(session.user as any).isRecordingBrother
 
-    // Detect if param is a UUID (personId) or an email
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedParam)
-
-    let targetPerson
-    if (isUUID) {
-      targetPerson = await personRepository.getById(decodedParam)
-    } else {
-      // Legacy email-based lookup (backward compat)
-      const decodedEmail = decodedParam.toLowerCase()
-      targetPerson = await personRepository.getByEmail(decodedEmail)
-      if (!targetPerson) {
-        const persons = await personRepository.getAllPersonsByEmail(decodedEmail)
-        targetPerson = persons[0] || null
-      }
-    }
+    // personId, primary email, or secondary email — resolved by the SAME
+    // function every action on this page uses, so the page and its buttons can
+    // never disagree about who the page is about.
+    const targetPerson = await resolvePersonParam(decodedParam)
 
     if (!targetPerson) {
       return NextResponse.json(
