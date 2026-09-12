@@ -1,7 +1,7 @@
 import React from 'react'
 import { YStack, XStack, Text } from 'tamagui'
 import { Button } from '../Button'
-import { AlertTriangle, Check } from '@tamagui/lucide-icons'
+import { AlertTriangle, Check, Pencil } from '@tamagui/lucide-icons'
 import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
 
 /**
@@ -30,6 +30,14 @@ export interface PendingChangeNoticeProps {
   canVerify?: boolean
   onVerify?: () => void
   onConfirm?: () => void
+  /**
+   * Correct this proposal in place. Offered only while it is unconfirmed —
+   * once confirmed, a change is a new proposal others get to see.
+   *
+   * Without this there was no way to fix a contact record at all: add and
+   * delete only, so a mistyped or pasted-with-punctuation value was stuck.
+   */
+  onEdit?: () => void
   /** An action is in flight — both buttons disable together. */
   busy?: boolean
   /**
@@ -47,6 +55,7 @@ export function PendingChangeNotice({
   canVerify,
   onVerify,
   onConfirm,
+  onEdit,
   busy,
   error,
 }: PendingChangeNoticeProps) {
@@ -61,6 +70,10 @@ export function PendingChangeNotice({
           <Text fontSize="$2" color="$color11">
             {confirmation.label}
           </Text>
+        ) : null}
+
+        {onEdit ? (
+          <Button size="$2" chromeless circular icon={Pencil} disabled={busy} onPress={onEdit} />
         ) : null}
 
         {canVerify && onVerify ? (

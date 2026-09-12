@@ -11,6 +11,52 @@ import type { AddressType, PhoneType, RelationshipType } from '@my/app/provider/
 // "Who is this page about?" is resolved by ONE function, in packages/app.
 // This file used to carry its own copy, which PATCH then failed to call.
 import { resolvePersonParam as resolveTarget } from '@my/app/utils/resolve-person-param'
+import {
+  cleanContactField,
+  cleanPostalCode,
+  cleanProvince,
+} from '@my/app/utils/clean-contact-field'
+
+/**
+ * The address fields an edit may change, cleaned.
+ *
+ * An allow-list, not a spread of the request body: a caller must not be able to
+ * flip `verified`, rewrite `proposedBy`, or re-point `supersedesId` through the
+ * edit endpoint. Those are the record's provenance, and the whole point of
+ * proposals is that provenance cannot be quietly rewritten.
+ */
+function cleanAddressChanges(changes?: Record<string, unknown>) {
+  const c = changes ?? {}
+  const out: Record<string, string | undefined> = {
+    street1: cleanContactField(c.street1),
+    street2: cleanContactField(c.street2),
+    city: cleanContactField(c.city),
+    province: cleanProvince(c.province),
+    postalCode: cleanPostalCode(c.postalCode),
+    country: cleanContactField(c.country),
+    type: cleanContactField(c.type),
+    label: cleanContactField(c.label),
+  }
+  // Only send what the caller actually supplied, so an omitted field is left
+  // alone rather than being blanked.
+  for (const k of Object.keys(out)) {
+    if (!(k in c)) delete out[k]
+  }
+  return out as never
+}
+
+/** Same contract for a phone. */
+function cleanPhoneChanges(changes?: Record<string, unknown>) {
+  const c = changes ?? {}
+  const out: Record<string, string | undefined> = {
+    number: cleanContactField(c.number),
+    type: cleanContactField(c.type),
+  }
+  for (const k of Object.keys(out)) {
+    if (!(k in c)) delete out[k]
+  }
+  return out as never
+}
 
 /**
  * Verify the caller has admin-level permission to edit the target person.
@@ -237,14 +283,17 @@ export async function POST(
         const supersedes = (body as { supersedesId?: string }).supersedesId
           || existingAddresses.find((a) => a.isPrimary && a.verified !== false)?.addressId
 
+        // `.trim()` is not enough for a pasted line: `460 Rymal Road West,
+        // Suite 351,` keeps its trailing comma, which then had no way of being
+        // corrected. Clean the edges on the way IN, not just on edit.
         const record = await personRepository.proposeAddress(targetPerson.personId, {
           type: addressType,
-          street1: street1.trim(),
-          street2: street2?.trim(),
-          city: city.trim(),
-          province: province.trim(),
-          postalCode: postalCode.trim(),
-          country: country?.trim() || 'Canada',
+          street1: cleanContactField(street1)!,
+          street2: cleanContactField(street2),
+          city: cleanContactField(city)!,
+          province: cleanProvince(province)!,
+          postalCode: cleanPostalCode(postalCode)!,
+          country: cleanContactField(country) || 'Canada',
         }, session.user.email, supersedes)
         return NextResponse.json({
           success: true,
@@ -455,9 +504,76 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { type, id } = body as { type?: string; id?: string }
+    const { type, id, action, changes } = body as {
+      type?: string
+      id?: string
+      action?: 'verify' | 'edit'
+      changes?: Record<string, unknown>
+    }
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
+
+    /**
+     * CORRECT a proposal in place.
+     *
+     * There was no way to change a contact record at all — only add and delete
+     * — so a typo in an address (a pasted line that kept its trailing comma, a
+     * suite number crammed into street 1 because there was no field for it) was
+     * unfixable. Deleting and re-adding is not the same thing: it loses who
+     * proposed it, what it supersedes, and any confirmations already given.
+     *
+     * Only an UNCONFIRMED proposal may be edited this way. Once a value is
+     * verified it is what the ecclesia agreed, and changing it is a new
+     * proposal that people get to confirm — otherwise an editor could rewrite
+     * a confirmed address with nobody the wiser, which is the whole thing this
+     * feature exists to prevent.
+     */
+    if (action === 'edit') {
+      if (type !== 'address' && type !== 'phone') {
+        return NextResponse.json({ error: "type must be 'address' or 'phone'" }, { status: 400 })
+      }
+      const current =
+        type === 'address'
+          ? (await personRepository.getAddresses(targetPerson.personId)).find(
+              (a) => a.addressId === id
+            )
+          : (await personRepository.getPhones(targetPerson.personId)).find((p) => p.phoneId === id)
+
+      if (!current) {
+        return NextResponse.json(
+          {
+            error:
+              'That record no longer exists — it may already have been confirmed or removed. Reload the page to see the current details.',
+            stale: true,
+          },
+          { status: 409 }
+        )
+      }
+      if (current.verified !== false) {
+        return NextResponse.json(
+          {
+            error:
+              'This value is already confirmed. Add the new one instead — it will be shown alongside this one until someone confirms it.',
+          },
+          { status: 409 }
+        )
+      }
+
+      const updated =
+        type === 'address'
+          ? await personRepository.updateAddress(
+              targetPerson.personId,
+              id,
+              cleanAddressChanges(changes)
+            )
+          : await personRepository.updatePhone(
+              targetPerson.personId,
+              id,
+              cleanPhoneChanges(changes)
+            )
+
+      return NextResponse.json({ success: true, edited: true, record: updated })
     }
 
     switch (type) {
