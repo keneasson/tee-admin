@@ -11,6 +11,7 @@ import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
 import { PendingChangeNotice } from '@my/ui/src/profile/pending-change-notice'
 import { VerifiedCheck } from '@my/ui/src/profile/verified-check'
+import { displayableEmail } from '@my/app/utils/placeholder-email'
 import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
 import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
@@ -526,6 +527,10 @@ export default function MemberProfilePage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
+        // The row is gone — already confirmed or deleted while this page sat
+        // open. Refresh so the stale row disappears instead of leaving a
+        // message next to something that no longer exists.
+        if (data.stale) await fetchProfile()
         throw new Error(data.error || `Could not verify this change (${res.status})`)
       }
       await fetchProfile()
@@ -1148,7 +1153,7 @@ export default function MemberProfilePage() {
                     ) : null}
                   </XStack>
                 ))
-              ) : (
+              ) : displayableEmail(profile.email) ? (
                 <Text
                   fontSize="$4"
                   color="$blue10"
@@ -1157,6 +1162,18 @@ export default function MemberProfilePage() {
                   onPress={() => handleEmailClick(profile.email)}
                 >
                   {profile.email}
+                </Text>
+              ) : (
+                /* `profile.email` is the ROUTING KEY, and for somebody with no
+                   mailbox of their own it is generated plumbing like
+                   `pending-…@family.local`. Stripping placeholders from
+                   `profile.emails` used to leave this fallback rendering the
+                   very address that was just hidden — the list went empty, so
+                   the placeholder appeared here instead. Nothing is ever
+                   delivered to `family.local`; showing it makes the record look
+                   broken and invites someone to write to it. */
+                <Text fontSize="$3" theme="alt2">
+                  No email address on file.
                 </Text>
               )}
               {/* Add email form */}

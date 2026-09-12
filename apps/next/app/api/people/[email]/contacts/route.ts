@@ -491,6 +491,23 @@ export async function PATCH(
     }
   } catch (error) {
     console.error('Error verifying contact change:', error)
+
+    // "not found" is not a server fault — the record is GONE. Somebody else
+    // confirmed it, or deleted it, while this page sat open. Reporting that as
+    // "Failed to verify change" tells the reader their click broke something
+    // and invites them to try again on a row that no longer exists. Say what
+    // actually happened and tell them what to do about it.
+    if (error instanceof Error && /not found/i.test(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            'This change is no longer pending — it may already have been confirmed. Reload the page to see the current details.',
+          stale: true,
+        },
+        { status: 409 }
+      )
+    }
+
     return NextResponse.json({ error: 'Failed to verify change' }, { status: 500 })
   }
 }
