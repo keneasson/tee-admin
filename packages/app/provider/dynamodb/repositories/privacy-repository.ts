@@ -5,6 +5,24 @@ import type {
   ConnectionRecord,
 } from '../types'
 import { connectionRepository } from './connection-repository'
+import { ROLES } from '../../auth/auth-roles'
+
+/**
+ * Whether a viewer is inside the community enough to read the directory.
+ *
+ * Deliberately an allow-list of roles rather than "not a guest", so a role
+ * added later cannot silently inherit directory access. An absent role counts
+ * as a guest: unknown standing is not member standing.
+ */
+function viewerHasMemberStanding(viewerRole?: string): boolean {
+  return (
+    viewerRole === ROLES.MEMBER ||
+    viewerRole === ROLES.REP ||
+    viewerRole === ROLES.RECORDER ||
+    viewerRole === ROLES.ADMIN ||
+    viewerRole === ROLES.OWNER
+  )
+}
 
 /**
  * Repository for user privacy settings
@@ -33,22 +51,41 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
       return existing
     }
 
-    // Return default privacy settings (most restrictive)
     return this.getDefaultPrivacySettings(email)
   }
 
   /**
-   * Get default privacy settings (private by default)
+   * Default privacy: **your own ecclesia can see you.**
+   *
+   * Every field used to default to `private`, which quietly broke the thing the
+   * directory is for. Only 28 of ~700 people had ever opened the settings, so
+   * for everybody else a member looked up a brother and saw nothing at all — no
+   * phone, no address, not even a name. It also made community confirmation of
+   * a contact change impossible: you cannot vouch for an address you are not
+   * allowed to see.
+   *
+   * `ecclesia_and_connections` is what people choose when they are actually
+   * asked — of the 28 who set it, 25 chose exactly this for every field, and
+   * none chose something more private than the old default across the board. So
+   * the default was the outlier, not anybody's intention.
+   *
+   * What this does and does not open up:
+   *   - signed-in MEMBERS of the same ecclesia, and people you have explicitly
+   *     connected with: yes
+   *   - another ecclesia, a guest account, anonymous visitors: no
+   *
+   * An explicit setting always wins over this default, so anyone who wants to
+   * be less visible still says so in privacy settings.
    */
   private getDefaultPrivacySettings(email: string): PrivacySettingsRecord {
     return {
       pkey: `USER#${email}`,
       skey: 'PRIVACY_SETTINGS',
-      showName: 'private',
-      showPhone: 'private',
-      showAddress: 'private',
-      showEmail: 'private',
-      showFamily: 'private',
+      showName: 'ecclesia_and_connections',
+      showPhone: 'ecclesia_and_connections',
+      showAddress: 'ecclesia_and_connections',
+      showEmail: 'ecclesia_and_connections',
+      showFamily: 'ecclesia_and_connections',
       allowContactRequests: true,
       allowConnectionRequests: true,
       preferredContactMethod: 'either',
@@ -134,8 +171,20 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
         return true
 
       case 'ecclesia_and_connections':
-        // Same ecclesia OR connection exists
-        if (viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia) {
+        // Same ecclesia OR connection exists.
+        //
+        // "Same ecclesia" means a MEMBER of it. A guest account — someone
+        // registered but not part of the community, a record created by a
+        // family-add, a login flagged as suspicious — carries an ecclesia on
+        // its profile but has no standing to read the directory. Now that this
+        // is the DEFAULT rather than an opt-in, that distinction is what stops
+        // the change handing every contact detail to any account that signs up.
+        if (
+          viewerEcclesia &&
+          targetEcclesia &&
+          viewerEcclesia === targetEcclesia &&
+          viewerHasMemberStanding(viewerRole)
+        ) {
           return true
         }
         // Check if there's a connection from target to viewer
