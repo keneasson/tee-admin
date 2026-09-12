@@ -316,6 +316,48 @@ export abstract class BaseRepository<T extends Record<string, any>> {
   }
 
   // Scan operation (use sparingly)
+  /**
+   * Scan EVERY page, following `LastEvaluatedKey`.
+   *
+   * `scan()` returns ONE page. DynamoDB reads up to 1MB of RAW items and only
+   * then applies the FilterExpression, so on a table of any size a filtered
+   * scan routinely returns zero matches while the record sits on page two.
+   *
+   * That is not theoretical: an approval token that was valid and five days
+   * from expiry reported "Invalid or expired token" because a single page read
+   * 4,048 items and matched none of them. Any lookup-by-non-key MUST use this.
+   *
+   * A hard page cap stops a runaway loop; exceeding it is logged rather than
+   * silently truncated, because silent truncation is the bug being fixed.
+   */
+  async scanAll(
+    options: {
+      filterExpression?: string
+      expressionAttributeValues?: Record<string, any>
+      expressionAttributeNames?: Record<string, string>
+      maxPages?: number
+    } = {}
+  ): Promise<T[]> {
+    const maxPages = options.maxPages ?? 50
+    const items: T[] = []
+    let lastEvaluatedKey: Record<string, any> | undefined
+    let pages = 0
+
+    do {
+      const page = await this.scan({ ...options, lastEvaluatedKey })
+      items.push(...page.items)
+      lastEvaluatedKey = page.lastEvaluatedKey
+      pages++
+    } while (lastEvaluatedKey && pages < maxPages)
+
+    if (lastEvaluatedKey) {
+      console.warn(
+        `scanAll stopped at the ${maxPages}-page cap with more data remaining — results are incomplete.`
+      )
+    }
+    return items
+  }
+
   async scan(options: {
     limit?: number
     lastEvaluatedKey?: Record<string, any>

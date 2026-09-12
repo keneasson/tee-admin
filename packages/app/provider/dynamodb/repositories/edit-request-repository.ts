@@ -121,11 +121,16 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
   }
 
   /**
-   * Get an edit request by approval token (for email-based approval)
-   * This requires scanning, but is only used during approval so acceptable
+   * Get an edit request by approval token (for email-based approval).
+   *
+   * MUST scan every page. `scan()` returns ONE page, and DynamoDB reads up to
+   * 1MB of RAW items before applying the filter — so on this table a single
+   * page read 4,048 items and matched none, making a token that was valid and
+   * five days from expiry report "Invalid or expired token" to the member
+   * trying to approve their own address change.
    */
   async getRequestByToken(token: string): Promise<EditRequestRecord | null> {
-    const result = await this.scan({
+    const items = await this.scanAll({
       filterExpression: 'approvalToken = :token AND begins_with(#skey, :skPrefix)',
       expressionAttributeValues: {
         ':token': token,
@@ -134,11 +139,11 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
       expressionAttributeNames: { '#skey': 'skey' },
     })
 
-    if (result.items.length === 0) {
+    if (items.length === 0) {
       return null
     }
 
-    const request = result.items[0] as EditRequestRecord
+    const request = items[0] as EditRequestRecord
 
     // Check if token is expired
     if (request.tokenExpiry && new Date(request.tokenExpiry) < new Date()) {
@@ -220,15 +225,16 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
    * Use sparingly as this is less efficient
    */
   async getSentRequests(email: string): Promise<EditRequestRecord[]> {
-    const result = await this.scan({
+    // Paginated: a single page silently returned a PARTIAL list, so a user's
+    // own suggestions could simply not appear.
+    return (await this.scanAll({
       filterExpression: 'requesterEmail = :email AND begins_with(#skey, :skPrefix)',
       expressionAttributeValues: {
         ':email': email,
         ':skPrefix': 'EDIT_REQUEST#'
       },
       expressionAttributeNames: { '#skey': 'skey' },
-    })
-    return result.items as EditRequestRecord[]
+    })) as EditRequestRecord[]
   }
 
   /**
@@ -236,7 +242,9 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
    */
   async cleanupExpiredRequests(): Promise<number> {
     const now = new Date().toISOString()
-    const result = await this.scan({
+    // Paginated: a single page cleaned only whatever happened to fall in the
+    // first 1MB, leaving the rest expired-but-pending forever.
+    const expired = await this.scanAll({
       filterExpression: 'begins_with(#skey, :skPrefix) AND #status = :pending AND tokenExpiry < :now',
       expressionAttributeValues: {
         ':skPrefix': 'EDIT_REQUEST#',
@@ -250,7 +258,7 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
     })
 
     let cleaned = 0
-    for (const request of result.items as EditRequestRecord[]) {
+    for (const request of expired as EditRequestRecord[]) {
       await this.updateRequestStatus(request.targetEmail, request.requestId, 'expired')
       cleaned++
     }
