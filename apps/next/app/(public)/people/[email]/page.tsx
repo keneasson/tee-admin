@@ -9,8 +9,12 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { ContactRequestButton } from '@my/ui/src/profile/contact-request-button'
 import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
+import { PendingChangeNotice } from '@my/ui/src/profile/pending-change-notice'
+import { VerifiedCheck } from '@my/ui/src/profile/verified-check'
+import { displayableEmail } from '@my/app/utils/placeholder-email'
 import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
+import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
 import { ManagedRegionsCard } from '@my/ui/src/admin/managed-regions-card'
 import { getRegionOptions } from '@my/app/config/regions'
 import { useFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag'
@@ -45,6 +49,7 @@ interface MemberProfile {
     email: string
     emailType: string
     emailId?: string
+    verified?: boolean
   }>
   phones?: Array<{
     phoneId?: string
@@ -56,6 +61,7 @@ interface MemberProfile {
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
   }>
   addresses?: Array<{
     addressId?: string
@@ -63,6 +69,7 @@ interface MemberProfile {
     proposedBy?: string
     proposedAt?: string
     supersedesId?: string
+    confirmation?: ConfirmationProgress
     type: string
     label?: string
     street1: string
@@ -172,6 +179,7 @@ export default function MemberProfilePage() {
   const [addingAddress, setAddingAddress] = useState(false)
   const [newAddressType, setNewAddressType] = useState('home')
   const [newStreet1, setNewStreet1] = useState('')
+  const [newStreet2, setNewStreet2] = useState('')
   const [newCity, setNewCity] = useState('')
   const [newProvince, setNewProvince] = useState('')
   const [newPostalCode, setNewPostalCode] = useState('')
@@ -181,6 +189,15 @@ export default function MemberProfilePage() {
   const [newRelationType, setNewRelationType] = useState('spouse')
   const [contactSaving, setContactSaving] = useState(false)
   const [contactError, setContactError] = useState<string | null>(null)
+  /**
+   * The failure of a row-level action, tagged with the row it belongs to.
+   *
+   * `contactError` is only ever RENDERED inside the "add contact" forms, so a
+   * failed Verify set it and showed nothing at all — the spinner stopped and the
+   * row looked untouched, which is indistinguishable from success. Row actions
+   * report here instead, and the row renders it.
+   */
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const memberId = decodeURIComponent((params?.email as string) || '')
@@ -193,7 +210,11 @@ export default function MemberProfilePage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`)
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`, {
+        // Refetched immediately after a write, so a cached copy would show the
+        // pre-write state and make a successful verify look like a no-op.
+        cache: 'no-store',
+      })
       if (res.ok) {
         const data = await res.json()
         setProfile(data.profile)
@@ -495,20 +516,133 @@ export default function MemberProfilePage() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null)
   const verifyContact = async (type: 'address' | 'phone', id: string) => {
     setVerifyingId(id)
-    setContactError(null)
+    setActionError(null)
     try {
       const res = await fetch(`/api/people/${encodeURIComponent(memberId)}/contacts`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        // A verify must read the row it is about to promote, never a cached
+        // copy of it, and the refresh afterwards must show what was written.
+        cache: 'no-store',
         body: JSON.stringify({ type, id }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to confirm the change')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // The row is gone — already confirmed or deleted while this page sat
+        // open. Refresh so the stale row disappears instead of leaving a
+        // message next to something that no longer exists.
+        if (data.stale) await fetchProfile()
+        throw new Error(data.error || `Could not verify this change (${res.status})`)
+      }
       await fetchProfile()
     } catch (err) {
-      setContactError(err instanceof Error ? err.message : 'Failed to confirm the change')
+      // Reported on the row itself — see `actionError`.
+      setActionError({
+        id,
+        message: err instanceof Error ? err.message : 'Could not verify this change',
+      })
     } finally {
       setVerifyingId(null)
+    }
+  }
+
+  /**
+   * "I can confirm this is correct" — an ordinary member vouching for a change
+   * on somebody else's record.
+   *
+   * Separate from `verifyContact` on purpose. That one is an act of authority
+   * and settles the matter; this one is one voice in a count, and two of them
+   * (or one from a Recording Brother or Rep) reach the same place without the
+   * member whose record it is ever having to click anything.
+   */
+  /**
+   * CORRECT an unconfirmed proposal in place.
+   *
+   * There was no way to change a contact record at all — add and delete only —
+   * so a mistyped or pasted-with-punctuation address was unfixable. Deleting
+   * and re-adding is not equivalent: it loses what the proposal supersedes and
+   * any confirmations already given.
+   *
+   * Offered only on an UNCONFIRMED value. A confirmed one is what the ecclesia
+   * agreed to, so changing it is a new proposal others get to confirm —
+   * silently rewriting it is exactly what this feature exists to prevent.
+   */
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [editFields, setEditFields] = useState<Record<string, string>>({})
+  const [editSaving, setEditSaving] = useState(false)
+
+  const beginEditAddress = (a: NonNullable<MemberProfile['addresses']>[number]) => {
+    setActionError(null)
+    setEditingContactId(a.addressId!)
+    setEditFields({
+      type: a.type || 'home',
+      street1: a.street1 || '',
+      street2: a.street2 || '',
+      city: a.city || '',
+      province: a.province || '',
+      postalCode: a.postalCode || '',
+      country: a.country || 'Canada',
+    })
+  }
+
+  const beginEditPhone = (p: NonNullable<MemberProfile['phones']>[number]) => {
+    setActionError(null)
+    setEditingContactId(p.phoneId!)
+    setEditFields({ type: p.type || 'home', number: p.number || '' })
+  }
+
+  const saveContactEdit = async (contactType: 'address' | 'phone', id: string) => {
+    setEditSaving(true)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}/contacts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ action: 'edit', type: contactType, id, changes: editFields }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (data.stale) await fetchProfile()
+        throw new Error(data.error || `Could not save this change (${res.status})`)
+      }
+      setEditingContactId(null)
+      await fetchProfile()
+    } catch (err) {
+      setActionError({
+        id,
+        message: err instanceof Error ? err.message : 'Could not save this change',
+      })
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const confirmContact = async (contactType: 'address' | 'phone', contactId: string) => {
+    setConfirmingId(contactId)
+    setActionError(null)
+    try {
+      const res = await fetch(
+        `/api/people/${encodeURIComponent(memberId)}/contacts/confirm`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactType, contactId }),
+        }
+      )
+      const data = await res.json().catch(() => ({}))
+      // 409 carries a reason written for display ("You have already confirmed
+      // this"), so it is shown as-is rather than flattened to a generic failure.
+      if (!res.ok) throw new Error(data.error || 'Failed to record your confirmation')
+      await fetchProfile()
+    } catch (err) {
+      setActionError({
+        id: contactId,
+        message: err instanceof Error ? err.message : 'Failed to record your confirmation',
+      })
+    } finally {
+      setConfirmingId(null)
     }
   }
 
@@ -516,14 +650,16 @@ export default function MemberProfilePage() {
     const ok = await addContact({
       type: 'address',
       addressType: newAddressType,
-      street1: newStreet1.trim(),
-      city: newCity.trim(),
-      province: newProvince.trim(),
-      postalCode: newPostalCode.trim(),
-      country: newCountry.trim(),
+      street1: newStreet1,
+      street2: newStreet2,
+      city: newCity,
+      province: newProvince,
+      postalCode: newPostalCode,
+      country: newCountry,
     })
     if (ok) {
       setNewStreet1('')
+      setNewStreet2('')
       setNewCity('')
       setNewProvince('')
       setNewPostalCode('')
@@ -1061,6 +1197,7 @@ export default function MemberProfilePage() {
                     >
                       {emailEntry.email}
                     </Text>
+                    <VerifiedCheck verified={emailEntry.verified} />
                     {canEdit && emailEntry.emailId ? (
                       <Button
                         size="$2"
@@ -1082,7 +1219,7 @@ export default function MemberProfilePage() {
                     ) : null}
                   </XStack>
                 ))
-              ) : (
+              ) : displayableEmail(profile.email) ? (
                 <Text
                   fontSize="$4"
                   color="$blue10"
@@ -1091,6 +1228,18 @@ export default function MemberProfilePage() {
                   onPress={() => handleEmailClick(profile.email)}
                 >
                   {profile.email}
+                </Text>
+              ) : (
+                /* `profile.email` is the ROUTING KEY, and for somebody with no
+                   mailbox of their own it is generated plumbing like
+                   `pending-…@family.local`. Stripping placeholders from
+                   `profile.emails` used to leave this fallback rendering the
+                   very address that was just hidden — the list went empty, so
+                   the placeholder appeared here instead. Nothing is ever
+                   delivered to `family.local`; showing it makes the record look
+                   broken and invites someone to write to it. */
+                <Text fontSize="$3" theme="alt2">
+                  No email address on file.
                 </Text>
               )}
               {/* Add email form */}
@@ -1151,21 +1300,24 @@ export default function MemberProfilePage() {
               </XStack>
               {profile.phones && profile.phones.length > 0 ? (
                 profile.phones.map((phone, index) => (
-                  <XStack
+                  <YStack
                     key={index}
                     gap="$2"
-                    alignItems="center"
-                    flexWrap="wrap"
                     {...(phone.verified === false
                       ? {
                           padding: '$2',
                           borderRadius: '$3',
                           borderWidth: 1,
-                          borderColor: '$yellow6',
-                          backgroundColor: '$yellow2',
+                          // `$warning` / `$backgroundHover`, not `$yellow6` /
+                          // `$yellow2`: the TEE themes override light/dark with
+                          // semantic tokens, so the yellow scale never resolved
+                          // and the panel had no highlight at all.
+                          borderColor: '$warning',
+                          backgroundColor: '$backgroundHover',
                         }
                       : null)}
                   >
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
                     <Text
                       fontSize="$4"
                       color="$blue10"
@@ -1180,22 +1332,8 @@ export default function MemberProfilePage() {
                       {phone.isPrimary ? ' • Primary' : ''}
                       {phone.isHousehold ? ' • Household' : ''}
                     </Text>
-                    {phone.verified === false ? (
-                      <Text fontSize="$2" fontWeight="700" color="$yellow11">
-                        UPDATE PENDING
-                        {phone.proposedBy ? ` — proposed by ${phone.proposedBy}` : ''}
-                      </Text>
-                    ) : null}
-                    {phone.verified === false && canEdit && phone.phoneId ? (
-                      <Button
-                        size="$2"
-                        theme="green"
-                        disabled={verifyingId === phone.phoneId}
-                        onPress={() => verifyContact('phone', phone.phoneId!)}
-                      >
-                        {verifyingId === phone.phoneId ? 'Confirming…' : 'Verify'}
-                      </Button>
-                    ) : null}
+                    {/* One mark for confirmed data, everywhere. */}
+                    <VerifiedCheck verified={phone.verified} />
                     {canEdit && phone.phoneId ? (
                       <Button
                         size="$2"
@@ -1215,7 +1353,53 @@ export default function MemberProfilePage() {
                         iconOnly
                       />
                     ) : null}
-                  </XStack>
+                    </XStack>
+                    {/* Never hidden: whoever can see the number can see that a
+                        different one has been reported. */}
+                    {phone.verified === false && phone.phoneId ? (
+                      <PendingChangeNotice
+                        confirmation={phone.confirmation}
+                        canVerify={canEdit}
+                        busy={verifyingId === phone.phoneId || confirmingId === phone.phoneId}
+                        error={actionError?.id === phone.phoneId ? actionError.message : null}
+                        onVerify={() => verifyContact('phone', phone.phoneId!)}
+                        onConfirm={() => confirmContact('phone', phone.phoneId!)}
+                        onEdit={canEdit ? () => beginEditPhone(phone) : undefined}
+                      />
+                    ) : null}
+                    {editingContactId && editingContactId === phone.phoneId ? (
+                      <Card padding="$3" backgroundColor="$backgroundHover">
+                        <YStack gap="$2">
+                          <Input
+                            placeholder="Phone number"
+                            value={editFields.number ?? ''}
+                            onChangeText={(t) => setEditFields((f) => ({ ...f, number: t }))}
+                            autoFocus
+                            keyboardType="phone-pad"
+                          />
+                          <XStack gap="$2" justifyContent="flex-end">
+                            <Button
+                              size="$3"
+                              icon={X}
+                              disabled={editSaving}
+                              onPress={() => setEditingContactId(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="$3"
+                              theme="blue"
+                              icon={Save}
+                              disabled={editSaving || !(editFields.number ?? '').trim()}
+                              onPress={() => saveContactEdit('phone', phone.phoneId!)}
+                            >
+                              {editSaving ? 'Saving…' : 'Save'}
+                            </Button>
+                          </XStack>
+                        </YStack>
+                      </Card>
+                    ) : null}
+                  </YStack>
                 ))
               ) : (
                 <Text fontSize="$3" theme="alt2">No phone numbers available.</Text>
@@ -1319,8 +1503,10 @@ export default function MemberProfilePage() {
                             padding: '$2',
                             borderRadius: '$3',
                             borderWidth: 1,
-                            borderColor: '$yellow6',
-                            backgroundColor: '$yellow2',
+                            // As above: the yellow scale does not resolve in the
+                            // TEE themes, so this panel had no highlight either.
+                            borderColor: '$warning',
+                            backgroundColor: '$backgroundHover',
                           }
                         : null)}
                     >
@@ -1329,13 +1515,9 @@ export default function MemberProfilePage() {
                           {address.label || address.type}
                           {address.isPrimary ? ' • Primary' : ''}
                         </Text>
+                        <VerifiedCheck verified={address.verified} />
                         {/* EVERYONE who can see the address sees this — the whole
                             point is that a member knows to call before driving. */}
-                        {isPending ? (
-                          <Text fontSize="$2" fontWeight="700" color="$yellow11">
-                            UPDATE PENDING
-                          </Text>
-                        ) : null}
                         {canEdit && address.addressId ? (
                           <Button
                             size="$2"
@@ -1355,26 +1537,84 @@ export default function MemberProfilePage() {
                             iconOnly
                           />
                         ) : null}
-                        {/* Confirming is gated server-side to owner / admin /
-                            Recording Brother / Rep — `canEdit` mirrors that set. */}
-                        {isPending && canEdit && address.addressId ? (
-                          <Button
-                            size="$2"
-                            theme="green"
-                            disabled={verifyingId === address.addressId}
-                            onPress={() => verifyContact('address', address.addressId!)}
-                          >
-                            {verifyingId === address.addressId ? 'Confirming…' : 'Verify'}
-                          </Button>
-                        ) : null}
                       </XStack>
-                      {isPending ? (
-                        <Text fontSize="$2" color="$color11">
-                          Proposed{address.proposedBy ? ` by ${address.proposedBy}` : ''}
-                          {address.supersedesId
-                            ? ' — the address above is the last confirmed one.'
-                            : ' — not yet confirmed.'}
-                        </Text>
+                      {isPending && address.addressId ? (
+                        <PendingChangeNotice
+                          confirmation={address.confirmation}
+                          canVerify={canEdit}
+                          busy={
+                            verifyingId === address.addressId ||
+                            confirmingId === address.addressId
+                          }
+                          error={
+                            actionError?.id === address.addressId ? actionError.message : null
+                          }
+                          onVerify={() => verifyContact('address', address.addressId!)}
+                          onConfirm={() => confirmContact('address', address.addressId!)}
+                          onEdit={canEdit ? () => beginEditAddress(address) : undefined}
+                        />
+                      ) : null}
+                      {/* Correct the proposal in place — a typo or a pasted
+                          comma was previously unfixable without deleting the
+                          record and losing what it supersedes. */}
+                      {editingContactId && editingContactId === address.addressId ? (
+                        <Card padding="$3" backgroundColor="$backgroundHover">
+                          <YStack gap="$2">
+                            <Input
+                              placeholder="Street address"
+                              value={editFields.street1 ?? ''}
+                              onChangeText={(t) => setEditFields((f) => ({ ...f, street1: t }))}
+                              autoFocus
+                            />
+                            <Input
+                              placeholder="Apartment, suite, unit (optional)"
+                              value={editFields.street2 ?? ''}
+                              onChangeText={(t) => setEditFields((f) => ({ ...f, street2: t }))}
+                            />
+                            <XStack gap="$2" flexWrap="wrap">
+                              <Input
+                                flex={1}
+                                minWidth={120}
+                                placeholder="City"
+                                value={editFields.city ?? ''}
+                                onChangeText={(t) => setEditFields((f) => ({ ...f, city: t }))}
+                              />
+                              <Input
+                                width={80}
+                                placeholder="Province"
+                                value={editFields.province ?? ''}
+                                onChangeText={(t) => setEditFields((f) => ({ ...f, province: t }))}
+                              />
+                              <Input
+                                width={100}
+                                placeholder="Postal code"
+                                value={editFields.postalCode ?? ''}
+                                onChangeText={(t) =>
+                                  setEditFields((f) => ({ ...f, postalCode: t }))
+                                }
+                              />
+                            </XStack>
+                            <XStack gap="$2" justifyContent="flex-end">
+                              <Button
+                                size="$3"
+                                icon={X}
+                                disabled={editSaving}
+                                onPress={() => setEditingContactId(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="$3"
+                                theme="blue"
+                                icon={Save}
+                                disabled={editSaving || !(editFields.street1 ?? '').trim()}
+                                onPress={() => saveContactEdit('address', address.addressId!)}
+                              >
+                                {editSaving ? 'Saving…' : 'Save'}
+                              </Button>
+                            </XStack>
+                          </YStack>
+                        </Card>
                       ) : null}
                       <Text
                         fontSize="$3"
@@ -1422,6 +1662,14 @@ export default function MemberProfilePage() {
                       value={newStreet1}
                       onChangeText={setNewStreet1}
                       autoFocus
+                    />
+                    {/* Without this field a suite had to be crammed into the
+                        street line, punctuation and all. The record and the API
+                        both always had `street2`; only the form was missing it. */}
+                    <Input
+                      placeholder="Apartment, suite, unit (optional)"
+                      value={newStreet2}
+                      onChangeText={setNewStreet2}
                     />
                     <XStack gap="$2" flexWrap="wrap">
                       <Input flex={1} minWidth={120} placeholder="City" value={newCity} onChangeText={setNewCity} />

@@ -3,6 +3,7 @@ import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient, tableNames } from '../config'
 import type {
+  ContactVoteRecord,
   PersonRecord,
   PersonEmailRecord,
   PersonAddressRecord,
@@ -664,14 +665,75 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     return record
   }
 
-  async updateAddress(personId: string, addressId: string, updates: Partial<Omit<PersonAddressRecord, 'pkey' | 'skey' | 'addressId'>>): Promise<PersonAddressRecord> {
+  async updateAddress(
+    personId: string,
+    addressId: string,
+    updates: Partial<Omit<PersonAddressRecord, 'pkey' | 'skey' | 'addressId'>>,
+    removeAttributes?: string[]
+  ): Promise<PersonAddressRecord> {
     const pk = `PERSON#${personId}`
     const sk = `ADDRESS#${addressId}`
-    return this.update(pk, sk, updates) as unknown as Promise<PersonAddressRecord>
+    return this.update(pk, sk, updates, { removeAttributes }) as unknown as Promise<PersonAddressRecord>
   }
 
   async deleteAddress(personId: string, addressId: string): Promise<void> {
     await this.delete(`PERSON#${personId}`, `ADDRESS#${addressId}`)
+  }
+
+  // ===== CONFIRMATION VOTES ===================================================
+
+  /** Every confirmation recorded against one proposed contact value. */
+  async getContactVotes(
+    subjectPersonId: string,
+    contactType: string,
+    contactId: string
+  ): Promise<ContactVoteRecord[]> {
+    const result = await this.query(
+      'pkey = :pk AND begins_with(skey, :sk)',
+      {
+        ':pk': `PERSON#${subjectPersonId}`,
+        ':sk': `CONTACT_VOTE#${contactType}#${contactId}#`,
+      }
+    )
+    return result.items as unknown as ContactVoteRecord[]
+  }
+
+  /**
+   * Record one confirmation. The voter is part of the sort key, so a second
+   * vote from the same person overwrites the first rather than counting twice —
+   * double-voting is impossible by construction, not by checking.
+   */
+  async addContactVote(
+    subjectPersonId: string,
+    vote: Omit<ContactVoteRecord, 'pkey' | 'skey' | 'lastUpdated' | 'version'>
+  ): Promise<ContactVoteRecord> {
+    const record = {
+      pkey: `PERSON#${subjectPersonId}`,
+      skey: `CONTACT_VOTE#${vote.contactType}#${vote.contactId}#${vote.voterPersonId}`,
+      ...vote,
+      lastUpdated: new Date().toISOString(),
+      version: 0,
+    } as unknown as ContactVoteRecord
+    await this.put(record as unknown as PersonRecord)
+    return record
+  }
+
+  /**
+   * Discard the votes for one contact value.
+   *
+   * Called once a change is verified and the superseded record removed: votes
+   * about a value nobody can see any more are noise, and leaving them would let
+   * a recycled id inherit somebody else's confirmations.
+   */
+  async clearContactVotes(
+    subjectPersonId: string,
+    contactType: string,
+    contactId: string
+  ): Promise<void> {
+    const votes = await this.getContactVotes(subjectPersonId, contactType, contactId)
+    for (const v of votes) {
+      await this.delete(v.pkey, v.skey)
+    }
   }
 
   // ===== PROPOSE / VERIFY =====================================================
@@ -720,13 +782,19 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     const proposal = addresses.find((a) => a.addressId === addressId)
     if (!proposal) throw new Error(`Address ${addressId} not found`)
 
-    const confirmed = await this.updateAddress(personId, addressId, {
-      verified: true,
-      verifiedBy,
-      verifiedAt: new Date().toISOString(),
-      isPrimary: true,
-      supersedesId: undefined,
-    })
+    const confirmed = await this.updateAddress(
+      personId,
+      addressId,
+      {
+        verified: true,
+        verifiedBy,
+        verifiedAt: new Date().toISOString(),
+        isPrimary: true,
+      },
+      // Explicit: `supersedesId: undefined` in `updates` is dropped, so the
+      // confirmed address went on pointing at the row it had just deleted.
+      ['supersedesId']
+    )
 
     if (proposal.supersedesId) {
       // Best-effort: the confirmation is what matters, and a leftover old
@@ -766,13 +834,17 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     const proposal = phones.find((ph) => ph.phoneId === phoneId)
     if (!proposal) throw new Error(`Phone ${phoneId} not found`)
 
-    const confirmed = (await this.update(`PERSON#${personId}`, `PHONE#${phoneId}`, {
-      verified: true,
-      verifiedBy,
-      verifiedAt: new Date().toISOString(),
-      isPrimary: true,
-      supersedesId: undefined,
-    } as unknown as Partial<PersonRecord>)) as unknown as PersonPhoneRecord
+    const confirmed = (await this.update(
+      `PERSON#${personId}`,
+      `PHONE#${phoneId}`,
+      {
+        verified: true,
+        verifiedBy,
+        verifiedAt: new Date().toISOString(),
+        isPrimary: true,
+      } as unknown as Partial<PersonRecord>,
+      { removeAttributes: ['supersedesId'] }
+    )) as unknown as PersonPhoneRecord
 
     if (proposal.supersedesId) {
       try {

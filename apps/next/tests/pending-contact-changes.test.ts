@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   proposePhone: vi.fn(),
   verifyAddress: vi.fn(),
   verifyPhone: vi.fn(),
+  clearContactVotes: vi.fn(),
 }))
 
 vi.mock('../utils/auth', () => ({ auth: h.auth }))
@@ -34,6 +35,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
     proposePhone: h.proposePhone,
     verifyAddress: h.verifyAddress,
     verifyPhone: h.verifyPhone,
+    clearContactVotes: h.clearContactVotes,
   },
 }))
 
@@ -121,6 +123,9 @@ describe('confirming a proposal — in-app, by the people who would know', () =>
     const res = await PATCH(patch({ type: 'address', id: 'addr-new' }), ctx())
     expect(res.status).toBe(200)
     expect(h.verifyAddress).toHaveBeenCalledWith('person-georgina', 'addr-new', 'rb@x.z')
+    // The value is settled, so the community confirmations about it are spent.
+    // Leaving them would show a stale "needs 1 more" on a confirmed address.
+    expect(h.clearContactVotes).toHaveBeenCalledWith('person-georgina', 'address', 'addr-new')
   })
 
   it('an ordinary member cannot confirm', async () => {

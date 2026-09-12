@@ -24,15 +24,31 @@ const lines = SOURCE.split('\n')
 const lineOf = (needle: string) => lines.findIndex((l) => l.includes(needle)) + 1
 
 describe('canEdit is computed before it is read', () => {
-  it('is defined before the contact records are mapped', () => {
+  it('is defined before anything gated on it is mapped', () => {
     const computed = lineOf('const viewerCanEdit =')
     expect(computed).toBeGreaterThan(0)
 
-    for (const consumer of ['{ emailId:', '{ phoneId:', '{ addressId:']) {
+    // Only `emailId` is still editor-only — see the test below for why the
+    // phone and address ids are not.
+    for (const consumer of ['{ emailId:', 'profile.canEdit =']) {
       const readAt = lineOf(consumer)
       expect(readAt).toBeGreaterThan(0)
       expect(computed).toBeLessThan(readAt)
     }
+  })
+
+  it('phone and address ids go to everyone, because members confirm changes', () => {
+    // These were once gated on `viewerCanEdit` too. They cannot be: an ordinary
+    // member needs the record id to vouch for a proposed change ("I can
+    // confirm"), and without the id the button has nothing to act on — the
+    // community-confirmation rule would have no way to happen at all.
+    //
+    // `emailId` stays editor-only: changing a login email is an identity
+    // transfer, not something the community votes on.
+    expect(SOURCE).not.toContain('viewerCanEdit ? { phoneId')
+    expect(SOURCE).not.toContain('viewerCanEdit ? { addressId')
+    expect(SOURCE).toContain('phoneId: p.phoneId')
+    expect(SOURCE).toContain('addressId: a.addressId')
   })
 
   it('the contact gates use the computed value, not the late assignment', () => {

@@ -75,11 +75,15 @@ describe('PrivacyRepository', () => {
 
       expect((result as any).pkey ?? (result as any).PK).toBe('USER#new@example.com')
       expect((result as any).skey ?? (result as any).SK).toBe('PRIVACY_SETTINGS')
-      expect(result.showName).toBe('authenticated')
-      expect(result.showPhone).toBe('private')
-      expect(result.showAddress).toBe('private')
+      // Default is "my own ecclesia can see me" on every field. This assertion
+      // described a mixed set the code never actually produced — it had been
+      // red for a while. See tests/privacy-defaults.test.ts for why the default
+      // changed and what it deliberately does not open up.
+      expect(result.showName).toBe('ecclesia_and_connections')
+      expect(result.showPhone).toBe('ecclesia_and_connections')
+      expect(result.showAddress).toBe('ecclesia_and_connections')
       expect(result.showEmail).toBe('ecclesia_and_connections')
-      expect(result.showFamily).toBe('connections_only')
+      expect(result.showFamily).toBe('ecclesia_and_connections')
       expect(result.allowContactRequests).toBe(true)
     })
   })
@@ -178,7 +182,12 @@ describe('PrivacyRepository', () => {
         'target@example.com',
         'showEmail',
         'Toronto East',
-        'Toronto East'
+        'Toronto East',
+        // "Same ecclesia" means a MEMBER of it. A guest account carries an
+        // ecclesia but has no standing to read the directory — now that
+        // ecclesia-visible is the DEFAULT rather than an opt-in, that is what
+        // stops the change exposing everyone to any account that signs up.
+        'member'
       )
 
       expect(result).toBe(true)
