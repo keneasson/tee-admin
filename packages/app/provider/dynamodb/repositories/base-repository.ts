@@ -80,6 +80,15 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       conditionExpression?: string
       additionalExpressionAttributeNames?: Record<string, string>
       additionalExpressionAttributeValues?: Record<string, any>
+      /**
+       * Attributes to REMOVE outright.
+       *
+       * Needed because `updates` drops `undefined` values, so passing
+       * `{ field: undefined }` to clear something is a silent no-op — a
+       * verified address kept pointing at the superseded row it had just
+       * deleted. Clearing an attribute has to be said explicitly.
+       */
+      removeAttributes?: string[]
     }
   ): Promise<T> {
     try {
@@ -140,11 +149,25 @@ export abstract class BaseRepository<T extends Record<string, any>> {
         Object.assign(expressionAttributeValues, options.additionalExpressionAttributeValues)
       }
 
+      // REMOVE clauses — never for something this call is also SETting, and
+      // never for a key attribute.
+      const removeExpressions: string[] = []
+      const alreadySet = new Set(Object.keys(filteredUpdates))
+      ;(options?.removeAttributes ?? []).forEach((attr, i) => {
+        if (alreadySet.has(attr)) return
+        if (attr === 'pkey' || attr === 'skey' || attr === 'PK' || attr === 'SK') return
+        const nameKey = `#rm${i}`
+        expressionAttributeNames[nameKey] = attr
+        removeExpressions.push(nameKey)
+      })
+
       const keys = this.getKeyAttributes()
       const command = new UpdateCommand({
         TableName: this.tableName,
         Key: { [keys.pk]: pk, [keys.sk]: sk },
-        UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+        UpdateExpression:
+          `SET ${updateExpressions.join(', ')}` +
+          (removeExpressions.length > 0 ? ` REMOVE ${removeExpressions.join(', ')}` : ''),
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,
         ReturnValues: 'ALL_NEW',

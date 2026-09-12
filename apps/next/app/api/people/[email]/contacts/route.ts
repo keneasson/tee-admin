@@ -8,26 +8,9 @@ import { invalidatePeopleCache } from '../../cache'
 import { sendEmailChangeNotification, sendAdminAddedEmailVerification } from '../../../../../utils/email/send-email-change-notification'
 import type { AddressType, PhoneType, RelationshipType } from '@my/app/provider/dynamodb/types'
 
-/**
- * Resolve the target person from the URL param (UUID or email).
- * Mirrors the pattern used in the parent route.ts PATCH handler.
- */
-async function resolveTarget(paramValue: string) {
-  const decoded = decodeURIComponent(paramValue).trim()
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)
-
-  if (isUUID) {
-    return personRepository.getById(decoded)
-  }
-
-  const email = decoded.toLowerCase()
-  let person = await personRepository.getByEmail(email)
-  if (!person) {
-    const persons = await personRepository.getAllPersonsByEmail(email)
-    person = persons[0] || null
-  }
-  return person
-}
+// "Who is this page about?" is resolved by ONE function, in packages/app.
+// This file used to carry its own copy, which PATCH then failed to call.
+import { resolvePersonParam as resolveTarget } from '@my/app/utils/resolve-person-param'
 
 /**
  * Verify the caller has admin-level permission to edit the target person.
@@ -457,7 +440,11 @@ export async function PATCH(
     }
 
     const { email } = await params
-    const targetPerson = await personRepository.getByEmail(decodeURIComponent(email))
+    // This is the Verify button's request. It called `getByEmail` directly
+    // while POST and DELETE used the resolver, so on a profile opened by
+    // personId — how the directory links to people — Verify answered
+    // "Person not found" for everyone, Super Admin included.
+    const targetPerson = await resolveTarget(email)
     if (!targetPerson) {
       return NextResponse.json({ error: 'Person not found' }, { status: 404 })
     }
@@ -480,6 +467,11 @@ export async function PATCH(
           id,
           session.user.email
         )
+        // The value is settled by someone with authority, so the community
+        // confirmations about it are spent. Leaving them would keep a stale
+        // progress count on a confirmed value and let a recycled id inherit
+        // somebody else's votes.
+        await personRepository.clearContactVotes(targetPerson.personId, 'address', id)
         return NextResponse.json({ success: true, verified: true, record })
       }
       case 'phone': {
@@ -488,6 +480,7 @@ export async function PATCH(
           id,
           session.user.email
         )
+        await personRepository.clearContactVotes(targetPerson.personId, 'phone', id)
         return NextResponse.json({ success: true, verified: true, record })
       }
       default:
