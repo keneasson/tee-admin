@@ -480,6 +480,11 @@ export async function PATCH(
           id,
           session.user.email
         )
+        // The value is settled by someone with authority, so the community
+        // confirmations about it are spent. Leaving them would keep a stale
+        // progress count on a confirmed value and let a recycled id inherit
+        // somebody else's votes.
+        await personRepository.clearContactVotes(targetPerson.personId, 'address', id)
         return NextResponse.json({ success: true, verified: true, record })
       }
       case 'phone': {
@@ -488,6 +493,7 @@ export async function PATCH(
           id,
           session.user.email
         )
+        await personRepository.clearContactVotes(targetPerson.personId, 'phone', id)
         return NextResponse.json({ success: true, verified: true, record })
       }
       default:

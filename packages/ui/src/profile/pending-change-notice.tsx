@@ -1,37 +1,29 @@
 import React from 'react'
 import { YStack, XStack, Text } from 'tamagui'
 import { Button } from '../Button'
-import { AlertTriangle, Check, Users } from '@tamagui/lucide-icons'
+import { AlertTriangle, Check } from '@tamagui/lucide-icons'
 import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
 
 /**
- * The banner shown beside a contact value that somebody has proposed changing.
+ * The marker on a contact value somebody has proposed but nobody has confirmed.
  *
- * TRANSPARENCY, NOT HIDING. The last confirmed value keeps its place and stays
- * the primary; this sits alongside the proposal and says plainly that it has
- * not been confirmed, who proposed it, and how close it is to being confirmed.
- * Somebody who hears that Brian has moved to a home in Hamilton can then see
- * both the Peterborough address on file and the unconfirmed Hamilton one, and
- * decide for themselves where to send the gift. Hiding the pending change is
- * what would cost this system its credibility.
+ * TRANSPARENCY, NOT HIDING — the confirmed value keeps its place and its green
+ * check, and this sits on the proposal. Someone who hears Brian has moved to a
+ * home in Hamilton sees the confirmed Campbellcroft address and the unconfirmed
+ * Hamilton one, and decides for themselves where to send the gift.
  *
- * Two different acts appear here, and they are deliberately not the same button:
+ * DELIBERATELY TERSE. An earlier version explained itself in two sentences and
+ * named the proposer by email address, which told the reader nothing —
+ * `kie@whoknows.com` is not a person you recognise — and buried the one thing
+ * that matters: this value is not confirmed, and here is how close it is. The
+ * green check on the other value carries the rest of the meaning.
  *
- *   - **Verify** — for somebody who already has authority over the record
- *     (owner, admin, Recording Brother, Rep). One click settles it.
- *   - **I can confirm this is correct** — an ordinary member vouching. Two of
- *     those settle it, so the member whose record it is never has to click
- *     anything. That matters when they are ninety-two.
- *
- * Presentational and cross-platform: every action and every permission arrives
- * as a prop.
+ * Two actions, not the same button:
+ *   - **Verify** — somebody with authority over the record. One click settles it.
+ *   - **I can confirm** — a member vouching. Two of those settle it, so the
+ *     member whose record it is never has to click anything.
  */
 export interface PendingChangeNoticeProps {
-  /** What is being proposed — used in the sentence members read. */
-  contactType: 'address' | 'phone' | 'email'
-  proposedBy?: string
-  /** True when a previous value is still on file above this one. */
-  supersedes?: boolean
   /** Community confirmation state from the API. Absent = count unavailable. */
   confirmation?: ConfirmationProgress
   /** Viewer has direct authority to verify (owner/admin/RB/Rep). */
@@ -40,63 +32,46 @@ export interface PendingChangeNoticeProps {
   onConfirm?: () => void
   /** An action is in flight — both buttons disable together. */
   busy?: boolean
-}
-
-const NOUN: Record<PendingChangeNoticeProps['contactType'], string> = {
-  address: 'address',
-  phone: 'phone number',
-  email: 'email address',
+  /**
+   * Why the last attempt failed, shown right here.
+   *
+   * Errors used to be stored in state that only rendered inside the "add
+   * contact" forms, so a failed Verify showed the spinner, then nothing at all
+   * — indistinguishable from success. A failure has to say so where it happened.
+   */
+  error?: string | null
 }
 
 export function PendingChangeNotice({
-  contactType,
-  proposedBy,
-  supersedes,
   confirmation,
   canVerify,
   onVerify,
   onConfirm,
   busy,
+  error,
 }: PendingChangeNoticeProps) {
-  const noun = NOUN[contactType]
-
   return (
-    <YStack gap="$2" testID="pending-change-notice">
+    <YStack gap="$1" testID="pending-change-notice">
       <XStack gap="$2" alignItems="center" flexWrap="wrap">
         <AlertTriangle size={14} color="$yellow11" />
         <Text fontSize="$2" fontWeight="700" color="$yellow11">
-          NOT YET CONFIRMED
+          NOT VERIFIED
         </Text>
         {confirmation ? (
-          <XStack gap="$1" alignItems="center">
-            <Users size={12} color="$color11" />
-            <Text fontSize="$2" color="$color11">
-              {confirmation.label}
-            </Text>
-          </XStack>
+          <Text fontSize="$2" color="$color11">
+            {confirmation.label}
+          </Text>
         ) : null}
-      </XStack>
 
-      <Text fontSize="$2" color="$color11">
-        {`A new ${noun} has been provided, but not verified`}
-        {proposedBy ? ` — proposed by ${proposedBy}` : ''}
-        {supersedes
-          ? '. The value above is the last confirmed one.'
-          : '.'}
-      </Text>
-
-      <XStack gap="$2" alignItems="center" flexWrap="wrap">
         {canVerify && onVerify ? (
           <Button size="$2" theme="green" disabled={busy} onPress={onVerify}>
-            {busy ? 'Confirming…' : 'Verify'}
+            {busy ? 'Verifying…' : 'Verify'}
           </Button>
         ) : null}
 
-        {/* An ordinary member's vouch. Hidden once they have used it, so the
-            page reflects what they already did rather than inviting it twice. */}
         {!canVerify && confirmation?.canConfirm && onConfirm ? (
           <Button size="$2" theme="blue" icon={Check} disabled={busy} onPress={onConfirm}>
-            {busy ? 'Recording…' : 'I can confirm this is correct'}
+            {busy ? 'Recording…' : 'I can confirm'}
           </Button>
         ) : null}
 
@@ -108,15 +83,13 @@ export function PendingChangeNotice({
             </Text>
           </XStack>
         ) : null}
-
-        {/* Why they cannot vouch, in their own terms — "this is your own record"
-            reads very differently from a silently missing button. */}
-        {!canVerify && confirmation && !confirmation.canConfirm && !confirmation.hasVoted ? (
-          <Text fontSize="$2" theme="alt2">
-            {confirmation.blockedReason}
-          </Text>
-        ) : null}
       </XStack>
+
+      {error ? (
+        <Text fontSize="$2" color="$red10">
+          {error}
+        </Text>
+      ) : null}
     </YStack>
   )
 }

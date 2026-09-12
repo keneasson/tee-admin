@@ -48,6 +48,7 @@ interface MemberProfile {
     email: string
     emailType: string
     emailId?: string
+    verified?: boolean
   }>
   phones?: Array<{
     phoneId?: string
@@ -265,6 +266,7 @@ export async function GET(
       profile.emails = withoutPlaceholderEmails(emailRecords).map(e => ({
         email: e.email,
         emailType: e.emailType,
+        verified: e.verified,
         ...(viewerCanEdit ? { emailId: e.emailId } : {}),
       }))
     }

@@ -10,6 +10,7 @@ import { ContactRequestButton } from '@my/ui/src/profile/contact-request-button'
 import { ConnectButton } from '@my/ui/src/profile/connect-button'
 import { SuggestEditButton } from '@my/ui/src/profile/suggest-edit-button'
 import { PendingChangeNotice } from '@my/ui/src/profile/pending-change-notice'
+import { VerifiedCheck } from '@my/ui/src/profile/verified-check'
 import { ArrowLeft, Phone, Mail, MapPin, Users, Lock, Edit3, Shield, Check, ChevronDown, ChevronUp, X, Save, Search, Plus, Trash2 } from '@tamagui/lucide-icons'
 import type { ContactRequestType, ContactRequestReason, EditRequestField } from '@my/app/provider/dynamodb/types'
 import type { ConfirmationProgress } from '@my/app/utils/contact-verification'
@@ -47,6 +48,7 @@ interface MemberProfile {
     email: string
     emailType: string
     emailId?: string
+    verified?: boolean
   }>
   phones?: Array<{
     phoneId?: string
@@ -185,6 +187,15 @@ export default function MemberProfilePage() {
   const [newRelationType, setNewRelationType] = useState('spouse')
   const [contactSaving, setContactSaving] = useState(false)
   const [contactError, setContactError] = useState<string | null>(null)
+  /**
+   * The failure of a row-level action, tagged with the row it belongs to.
+   *
+   * `contactError` is only ever RENDERED inside the "add contact" forms, so a
+   * failed Verify set it and showed nothing at all — the spinner stopped and the
+   * row looked untouched, which is indistinguishable from success. Row actions
+   * report here instead, and the row renders it.
+   */
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const memberId = decodeURIComponent((params?.email as string) || '')
@@ -197,7 +208,11 @@ export default function MemberProfilePage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`)
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`, {
+        // Refetched immediately after a write, so a cached copy would show the
+        // pre-write state and make a successful verify look like a no-op.
+        cache: 'no-store',
+      })
       if (res.ok) {
         const data = await res.json()
         setProfile(data.profile)
@@ -499,18 +514,27 @@ export default function MemberProfilePage() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null)
   const verifyContact = async (type: 'address' | 'phone', id: string) => {
     setVerifyingId(id)
-    setContactError(null)
+    setActionError(null)
     try {
       const res = await fetch(`/api/people/${encodeURIComponent(memberId)}/contacts`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        // A verify must read the row it is about to promote, never a cached
+        // copy of it, and the refresh afterwards must show what was written.
+        cache: 'no-store',
         body: JSON.stringify({ type, id }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to confirm the change')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || `Could not verify this change (${res.status})`)
+      }
       await fetchProfile()
     } catch (err) {
-      setContactError(err instanceof Error ? err.message : 'Failed to confirm the change')
+      // Reported on the row itself — see `actionError`.
+      setActionError({
+        id,
+        message: err instanceof Error ? err.message : 'Could not verify this change',
+      })
     } finally {
       setVerifyingId(null)
     }
@@ -528,7 +552,7 @@ export default function MemberProfilePage() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const confirmContact = async (contactType: 'address' | 'phone', contactId: string) => {
     setConfirmingId(contactId)
-    setContactError(null)
+    setActionError(null)
     try {
       const res = await fetch(
         `/api/people/${encodeURIComponent(memberId)}/contacts/confirm`,
@@ -538,15 +562,16 @@ export default function MemberProfilePage() {
           body: JSON.stringify({ contactType, contactId }),
         }
       )
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       // 409 carries a reason written for display ("You have already confirmed
       // this"), so it is shown as-is rather than flattened to a generic failure.
       if (!res.ok) throw new Error(data.error || 'Failed to record your confirmation')
       await fetchProfile()
     } catch (err) {
-      setContactError(
-        err instanceof Error ? err.message : 'Failed to record your confirmation'
-      )
+      setActionError({
+        id: contactId,
+        message: err instanceof Error ? err.message : 'Failed to record your confirmation',
+      })
     } finally {
       setConfirmingId(null)
     }
@@ -1101,6 +1126,7 @@ export default function MemberProfilePage() {
                     >
                       {emailEntry.email}
                     </Text>
+                    <VerifiedCheck verified={emailEntry.verified} />
                     {canEdit && emailEntry.emailId ? (
                       <Button
                         size="$2"
@@ -1219,6 +1245,8 @@ export default function MemberProfilePage() {
                       {phone.isPrimary ? ' • Primary' : ''}
                       {phone.isHousehold ? ' • Household' : ''}
                     </Text>
+                    {/* One mark for confirmed data, everywhere. */}
+                    <VerifiedCheck verified={phone.verified} />
                     {canEdit && phone.phoneId ? (
                       <Button
                         size="$2"
@@ -1243,12 +1271,10 @@ export default function MemberProfilePage() {
                         different one has been reported. */}
                     {phone.verified === false && phone.phoneId ? (
                       <PendingChangeNotice
-                        contactType="phone"
-                        proposedBy={phone.proposedBy}
-                        supersedes={Boolean(phone.supersedesId)}
                         confirmation={phone.confirmation}
                         canVerify={canEdit}
                         busy={verifyingId === phone.phoneId || confirmingId === phone.phoneId}
+                        error={actionError?.id === phone.phoneId ? actionError.message : null}
                         onVerify={() => verifyContact('phone', phone.phoneId!)}
                         onConfirm={() => confirmContact('phone', phone.phoneId!)}
                       />
@@ -1367,6 +1393,7 @@ export default function MemberProfilePage() {
                           {address.label || address.type}
                           {address.isPrimary ? ' • Primary' : ''}
                         </Text>
+                        <VerifiedCheck verified={address.verified} />
                         {/* EVERYONE who can see the address sees this — the whole
                             point is that a member knows to call before driving. */}
                         {canEdit && address.addressId ? (
@@ -1391,14 +1418,14 @@ export default function MemberProfilePage() {
                       </XStack>
                       {isPending && address.addressId ? (
                         <PendingChangeNotice
-                          contactType="address"
-                          proposedBy={address.proposedBy}
-                          supersedes={Boolean(address.supersedesId)}
                           confirmation={address.confirmation}
                           canVerify={canEdit}
                           busy={
                             verifyingId === address.addressId ||
                             confirmingId === address.addressId
+                          }
+                          error={
+                            actionError?.id === address.addressId ? actionError.message : null
                           }
                           onVerify={() => verifyContact('address', address.addressId!)}
                           onConfirm={() => confirmContact('address', address.addressId!)}
