@@ -123,6 +123,8 @@ export interface ExhorterHeadsUpReport {
   date: string
   test: boolean
   status: ExhorterHeadsUpStatus
+  /** Present only for `renderOnly` — the email exactly as it would be sent. */
+  rendered?: { subject: string; html: string; text: string }
   exhortName?: string
   personId?: string
   visiting?: boolean
@@ -141,16 +143,24 @@ export interface ResolveAndSendExhorterHeadsUpParams {
   test?: boolean
   /** Resolve + report only, no send, no idempotency write. */
   dryRun?: boolean
+  /**
+   * Resolve AND render, then stop — no send, no idempotency claim.
+   *
+   * Feeds the review page, which must show the email exactly as it would be
+   * received. Rendering fresh rather than replaying a stored snapshot means
+   * what a person approves is what actually goes out.
+   */
+  renderOnly?: boolean
   /** The admin who triggered — the TEST-mode recipient. */
   requesterEmail: string
   /**
    * The exhorter the caller believes this send is for.
    *
-   * Set when acting on an approval that was given earlier — a release link from
-   * a preview email. The schedule can change between the preview and the click,
-   * and re-resolving would then quietly email a DIFFERENT brother than the one
-   * whose email was read and approved. If it no longer matches, refuse and say
-   * so; a person must approve the email that actually goes out.
+   * Set when acting on an approval given earlier — somebody pressed send on the
+   * review page. The schedule can change between the review email going out and
+   * that press, and re-resolving would then quietly write to a DIFFERENT
+   * brother than the one whose email was read and approved. If it no longer
+   * matches, refuse and say so: a person must approve the email that goes out.
    */
   expectPersonId?: string
 }
@@ -175,6 +185,7 @@ export async function resolveAndSendExhorterHeadsUp(
   const { requesterEmail } = params
   const test = params.test ?? true // SAFE DEFAULT
   const dryRun = params.dryRun ?? false
+  const renderOnly = params.renderOnly ?? false
   const targetISO = normalizeToISODate(params.date)
 
   const tenant = resolveTenantFromEnv()
@@ -305,7 +316,9 @@ export async function resolveAndSendExhorterHeadsUp(
 
   // 8. Idempotency (LIVE ONLY). Atomic claim BEFORE send prevents double-send on
   //    a re-run / schedule edit. Test mode writes nothing so tests can repeat.
-  if (!test) {
+  //    Render-only skips it too: the claim belongs to the real send, and taking
+  //    it while merely showing somebody the email would block that send.
+  if (!test && !renderOnly) {
     const claimed = await exhorterHeadsUpRepository.claim({
       date: targetISO,
       personId,
@@ -367,6 +380,12 @@ export async function resolveAndSendExhorterHeadsUp(
 
     const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${shortName} on ${dateDisplay}`
     const from = `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
+
+    // Render-only: hand back exactly what would be sent, and send nothing. The
+    // review page shows THIS, so what a person approves is what goes out.
+    if (renderOnly) {
+      return { ...report, status: 'dry-run', rendered: { subject, html, text } }
+    }
 
     await sendEmail({
       to: recipient,
@@ -435,6 +454,35 @@ function addOneHour(display: string): string {
   const mins = m[2] ?? '00'
   const next = hour === 12 ? 1 : hour + 1
   return `${next}:${mins}`
+}
+
+/**
+ * The email for a Sunday, rendered but not sent — what the review page shows.
+ *
+ * Rendered fresh on every view rather than replayed from a snapshot, so what a
+ * person reads and approves is what will actually be sent. `personId` lets the
+ * caller notice that the schedule now names someone else.
+ */
+export async function renderHeadsUpPreview(params: { date: string }): Promise<{
+  personId?: string
+  subject: string
+  html: string
+  text: string
+  status: ExhorterHeadsUpStatus
+}> {
+  const report = await resolveAndSendExhorterHeadsUp({
+    date: params.date,
+    renderOnly: true,
+    test: false, // so the subject has no [TEST] prefix — this is the real thing
+    requesterEmail: 'review-page',
+  })
+  return {
+    personId: report.personId,
+    subject: report.rendered?.subject ?? '',
+    html: report.rendered?.html ?? '',
+    text: report.rendered?.text ?? '',
+    status: report.status,
+  }
 }
 
 /** Sundays of notice the exhorter gets, counting the appointment itself. */

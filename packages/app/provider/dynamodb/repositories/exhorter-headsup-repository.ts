@@ -43,8 +43,10 @@ export interface PendingHeadsUp {
   token: string
   recipientEmail: string
   recipientName?: string
+  /** Who was asked to review it — used as the actor on the resulting send. */
+  previewedBy?: string
   expiresAt: string
-  /** Set once released — a second click must not send again. */
+  /** Set once released — a second press must not send again. */
   releasedAt?: string
 }
 
@@ -139,6 +141,7 @@ class ExhorterHeadsUpRepository {
       token: String(item.token),
       recipientEmail: String(item.recipientEmail),
       recipientName: item.recipientName ? String(item.recipientName) : undefined,
+      previewedBy: item.previewedBy ? String(item.previewedBy) : undefined,
       expiresAt: String(item.expiresAt),
       releasedAt: item.releasedAt ? String(item.releasedAt) : undefined,
     }
