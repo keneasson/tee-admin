@@ -172,6 +172,14 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
   const greeting = trimmedName ? `Dear Brother ${trimmedName},` : 'Dear Brother,'
   const lunchLine = lunchSentence(lunchType)
   const hasDigital = attendOptions.length > 0
+  /**
+   * The block earns its place only when it tells the reader something.
+   *
+   * For a visitor that is the hall's address; for anybody it is the online
+   * options. A home member with no digital option would get a "Ways to attend"
+   * heading over nothing at all, so the section goes entirely.
+   */
+  const showWaysToAttend = (visiting && Boolean(address)) || hasDigital
 
   return (
     <Html lang="en">
@@ -224,15 +232,34 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
             {'Memorial service is '}
             <strong>{timeDisplay}</strong>
           </Text>
+          {/* Worth saying to somebody travelling in: there is half an hour of
+              coffee between the classes and the service, so arriving early is
+              welcome rather than awkward. Only when Sunday School runs — that
+              is when the refreshments happen. */}
+          {visiting && sundaySchool ? (
+            <Text style={{ ...defaultText, margin: '8px 0 0 0' }}>
+              {`You're very welcome to come early and join us for coffee and snacks after the classes, before the Memorial Service.`}
+            </Text>
+          ) : null}
         </Container>
 
+        {/* Ways to attend, only where it says something the reader needs.
+            A brother of the host ecclesia knows where his own hall is, so the
+            address and the "In person" heading are for visitors. The digital
+            options go to everybody — a member may still need to join remotely
+            — and the whole block disappears when there is nothing to say. */}
+        {showWaysToAttend ? (
         <Container style={container} className="container">
           <Heading style={defaultText}>Ways to attend</Heading>
-          <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
-            <strong>In person:</strong>
-          </Text>
-          {address ? (
-            <Text style={{ ...defaultText, margin: '0 0 12px 0' }}>{`We're located at: ${address}`}</Text>
+          {visiting ? (
+            <>
+              <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
+                <strong>In person:</strong>
+              </Text>
+              {address ? (
+                <Text style={{ ...defaultText, margin: '0 0 12px 0' }}>{`We're located at: ${address}`}</Text>
+              ) : null}
+            </>
           ) : null}
           {hasDigital ? (
             <>
@@ -243,6 +270,7 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
             </>
           ) : null}
         </Container>
+        ) : null}
 
         {/* Lunch BEFORE the theme/readings line, matching the email this was
             written from. Only when a lunch is actually on the schedule. */}

@@ -43,7 +43,8 @@ async function renderHtml(props: ExhorterHeadsUpProps): Promise<string> {
 
 describe('ExhorterHeadsUp template render', () => {
   it('renders formal greeting, short host name, date, time, address, zoom', async () => {
-    const html = await renderHtml(baseProps)
+    // A VISITING brother gets the full picture, address included.
+    const html = await renderHtml({ ...baseProps, visiting: true })
     expect(html).toContain('Dear Brother Brad Stephens,')
     expect(html).toContain('Toronto East')
     expect(html).not.toContain('Christadelphians on') // short name in the body sentence
@@ -124,11 +125,56 @@ describe('ExhorterHeadsUp template render', () => {
   })
 
   it('omits the digital block when there are no attend options', async () => {
-    const html = await renderHtml({ ...baseProps, attendOptions: [] })
+    const html = await renderHtml({ ...baseProps, visiting: true, attendOptions: [] })
     expect(html).not.toContain('Toronto East Zoom')
     expect(html).not.toContain("If you can't be with us in person")
-    // in-person address still shown
+    // in-person address still shown — the visitor still has to find the hall
     expect(html).toContain('975 Cosburn Ave.')
+  })
+
+  describe('"Ways to attend" only says what the reader needs', () => {
+    it('does not tell a home member where his own hall is', async () => {
+      const html = await renderHtml(baseProps)
+      expect(html).not.toContain('975 Cosburn Ave.')
+      expect(html).not.toContain('In person')
+      // Online options still go to everybody — a member may need to join remotely.
+      expect(html).toContain('Toronto East Zoom')
+    })
+
+    it('drops the whole block when there is nothing to put in it', async () => {
+      // Home member, no digital option: a heading over an empty section.
+      const html = await renderHtml({ ...baseProps, attendOptions: [] })
+      expect(html).not.toContain('Ways to attend')
+    })
+
+    it('keeps the block for a visitor even with no online option', async () => {
+      const html = await renderHtml({ ...baseProps, visiting: true, attendOptions: [] })
+      expect(html).toContain('Ways to attend')
+    })
+  })
+
+  describe('coffee before the exhortation', () => {
+    const withSS = { sundaySchool: { startDisplay: '9:30am', endDisplay: '10:30' } }
+
+    it('tells a visitor they can come early for coffee', async () => {
+      // Somebody travelling in appreciates knowing there is half an hour of
+      // refreshments before the service, so arriving early is welcome.
+      const html = await renderHtml({ ...baseProps, ...withSS, visiting: true })
+      expect(html).toContain('welcome to come early and join us for coffee and snacks')
+    })
+
+    it('says nothing about coffee when there is no Sunday School', async () => {
+      // No classes means no refreshments — the invitation would be wrong.
+      const html = await renderHtml({ ...baseProps, visiting: true })
+      expect(html).not.toContain('come early')
+    })
+
+    it('does not offer it to a home member, who knows', async () => {
+      const html = await renderHtml({ ...baseProps, ...withSS })
+      expect(html).not.toContain('come early')
+      // The Sunday School times themselves are still there for the order of day.
+      expect(html).toContain('Our Sunday school')
+    })
   })
 
   it('includes the follow-up "what to expect" (theme/readings/hymns) line', async () => {
