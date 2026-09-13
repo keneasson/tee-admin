@@ -623,3 +623,95 @@ describe('an approval is for the brother who was approved', () => {
     expect(h.sendEmail).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * "I'm looking at email A, saying yes this is correct, then sending email B
+ * which is untested."
+ *
+ * The review page renders the email and the send renders it AGAIN — two calls,
+ * minutes or days apart. `expectPersonId` catches a different brother, but not
+ * a changed service time, a lunch added, a Sunday School row appearing, or an
+ * edited note. Any of those and the reader approved something else.
+ *
+ * A fingerprint of the render INPUTS closes it. Not of the HTML: that embeds a
+ * freshly minted preferences token on every render, so identical emails never
+ * produce identical bytes and an output digest would block everything.
+ */
+describe('what was approved is what is sent', () => {
+  const previewDigest = async () => {
+    const r = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      renderOnly: true,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    return r.rendered?.contentDigest ?? ''
+  }
+
+  it('produces a digest for the reviewer to carry back', async () => {
+    const d = await previewDigest()
+    expect(d).toMatch(/^[0-9a-f]{32}$/)
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('is stable across renders of an unchanged email', async () => {
+    expect(await previewDigest()).toBe(await previewDigest())
+  })
+
+  it('sends when the email still says what it said', async () => {
+    const digest = await previewDigest()
+    vi.clearAllMocks()
+    h.claim.mockResolvedValue(true)
+    h.renderExhorterHeadsUp.mockResolvedValue({ html: '<html></html>', text: 'text' })
+
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('sent')
+    expect(h.sendEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses when the SERVICE TIME changed after it was read', async () => {
+    const digest = await previewDigest()
+    // The same brother, the same Sunday — an hour later.
+    h.getScheduleData.mockResolvedValue(
+      memorialRow({ DateTime: '2026-02-01T17:00:00.000Z' })
+    )
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('skipped:content-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report.note).toMatch(/changed since you read it/i)
+  })
+
+  it('refuses when a LUNCH was added after it was read', async () => {
+    const digest = await previewDigest()
+    h.getScheduleData.mockResolvedValue(memorialRow({ Lunch: 'Potluck lunch' }))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('skipped:content-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('still sends for callers that pass no digest, so the manual trigger works', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
+  })
+})

@@ -41,6 +41,8 @@ interface ReviewData {
   changed: boolean
   subject: string
   html: string
+  /** Fingerprint of what is on screen; sent back so the send can prove it matches. */
+  contentDigest: string
   suppression?: Suppression
 }
 
@@ -108,7 +110,7 @@ export default function ExhorterHeadsUpReviewPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, contentDigest: data?.contentDigest }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || 'Could not send this heads-up.')

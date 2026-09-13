@@ -124,6 +124,8 @@ export async function GET(request: NextRequest) {
       changed: preview.personId !== pending.personId,
       subject: preview.subject,
       html: preview.html,
+      // Echoed back on send: the guarantee that what was read is what is sent.
+      contentDigest: preview.contentDigest,
       suppression,
     })
   } catch (error) {
@@ -163,6 +165,11 @@ export async function POST(request: NextRequest) {
       test: false,
       requesterEmail: pending.previewedBy ?? 'review-page',
       expectPersonId: pending.personId,
+      // The fingerprint of the email that was actually on screen. Without it
+      // the page renders one email and the send renders another, and "I
+      // checked it" would not mean anything.
+      expectContentDigest:
+        typeof body?.contentDigest === 'string' ? body.contentDigest : undefined,
     })
 
     if (report.status !== 'sent') {

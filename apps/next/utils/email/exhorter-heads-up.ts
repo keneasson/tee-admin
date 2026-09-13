@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { resolveScheduleName, isPlaceholderName } from '@my/app/utils/name-resolver'
@@ -118,6 +119,8 @@ export type ExhorterHeadsUpStatus =
   | 'skipped:past-date'
   /** The schedule changed after a preview was approved — see `expectPersonId`. */
   | 'skipped:exhorter-changed'
+  /** The email now says something different from the one that was approved. */
+  | 'skipped:content-changed'
   | 'no-schedule-row'
 
 export interface ExhorterHeadsUpReport {
@@ -125,7 +128,7 @@ export interface ExhorterHeadsUpReport {
   test: boolean
   status: ExhorterHeadsUpStatus
   /** Present only for `renderOnly` — the email exactly as it would be sent. */
-  rendered?: { subject: string; html: string; text: string }
+  rendered?: { subject: string; html: string; text: string; contentDigest: string }
   exhortName?: string
   personId?: string
   visiting?: boolean
@@ -164,6 +167,14 @@ export interface ResolveAndSendExhorterHeadsUpParams {
    * matches, refuse and say so: a person must approve the email that goes out.
    */
   expectPersonId?: string
+  /**
+   * Fingerprint of the email the reviewer actually read.
+   *
+   * The review page renders the email and the send renders it again, so
+   * without this a person approves render A and render B goes out. On a
+   * mismatch nothing is sent and they are asked to read the new version.
+   */
+  expectContentDigest?: string
 }
 
 const scheduleService = new ScheduleService()
@@ -361,7 +372,10 @@ export async function resolveAndSendExhorterHeadsUp(
   const sundaySchool = await resolveSundaySchoolForDate(targetISO, ecclesia)
 
   try {
-    const { html, text } = await renderExhorterHeadsUp({
+    // Every input that decides what the email SAYS, in one object — so the
+    // thing shown on the review page and the thing sent are provably the same
+    // email, not two renders that happen to agree.
+    const content = {
       exhorterName,
       hostEcclesiaName: shortName,
       address: hallAddress,
@@ -375,17 +389,42 @@ export async function resolveAndSendExhorterHeadsUp(
       sundaySchool,
       note: row.Note ? String(row.Note).trim() || undefined : undefined,
       signatoryName,
+    }
+
+    const { html, text } = await renderExhorterHeadsUp({
+      ...content,
       emailPreferencesUrl,
       tenant,
     })
 
     const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${shortName} on ${dateDisplay}`
     const from = `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
+    const contentDigest = digestContent({ ...content, subject, recipient })
 
     // Render-only: hand back exactly what would be sent, and send nothing. The
     // review page shows THIS, so what a person approves is what goes out.
     if (renderOnly) {
-      return { ...report, status: 'dry-run', rendered: { subject, html, text } }
+      return { ...report, status: 'dry-run', rendered: { subject, html, text, contentDigest } }
+    }
+
+    /**
+     * The approved email and this email must be the SAME email.
+     *
+     * The page renders it and the send renders it again — two calls, minutes or
+     * days apart — so without this you would be approving render A and
+     * despatching render B. `expectPersonId` catches a different brother, but
+     * not a changed service time, a lunch added, a Sunday School row appearing,
+     * or a note edited. Any of those and the reader approved something else.
+     *
+     * Refuse rather than send: the reviewer sees the new version and approves
+     * that, which is the only thing "I checked it" can honestly mean.
+     */
+    if (params.expectContentDigest && params.expectContentDigest !== contentDigest) {
+      return {
+        ...report,
+        status: 'skipped:content-changed',
+        note: 'The details for this Sunday have changed since you read it. Nothing was sent — open it again and check the new version.',
+      }
     }
 
     // A configuration set is what makes SES publish delivery/bounce/open events
@@ -486,6 +525,21 @@ function addOneHour(display: string): string {
 export const EMAIL_TRACKING_CONFIG_SET = 'tee-email-tracking'
 
 /**
+ * A fingerprint of what the email SAYS.
+ *
+ * Deliberately over the render INPUTS, not the rendered HTML. The HTML embeds a
+ * freshly minted email-preferences token on every render, so two renders of an
+ * identical email never produce identical bytes — a digest of the output would
+ * mismatch every single time and the guard would block everything.
+ *
+ * Keys are sorted so the digest depends on the values, not on property order.
+ */
+export function digestContent(content: Record<string, unknown>): string {
+  const canonical = JSON.stringify(content, Object.keys(content).sort())
+  return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
+}
+
+/**
  * Campaign id for one Sunday's heads-up.
  *
  * Per-recipient analytics are keyed by campaign, so a 1:1 send needs one too —
@@ -515,6 +569,7 @@ export async function renderHeadsUpPreview(params: { date: string }): Promise<{
   subject: string
   html: string
   text: string
+  contentDigest: string
   status: ExhorterHeadsUpStatus
 }> {
   const report = await resolveAndSendExhorterHeadsUp({
@@ -528,6 +583,9 @@ export async function renderHeadsUpPreview(params: { date: string }): Promise<{
     subject: report.rendered?.subject ?? '',
     html: report.rendered?.html ?? '',
     text: report.rendered?.text ?? '',
+    // Handed to the page and echoed back on send, so the email that goes out
+    // is provably the one that was read.
+    contentDigest: report.rendered?.contentDigest ?? '',
     status: report.status,
   }
 }
