@@ -44,7 +44,11 @@ vi.mock('@my/app/utils/service-overrides/merge', async (importOriginal) => {
 })
 vi.mock('../utils/dynamodb/locations', () => ({ getEcclesiaByName: h.getEcclesiaByName }))
 
-import { resolveAndSendExhorterHeadsUp } from '../utils/email/exhorter-heads-up'
+import {
+  resolveAndSendExhorterHeadsUp,
+  computeNextTargetSunday,
+  SUNDAYS_OF_NOTICE,
+} from '../utils/email/exhorter-heads-up'
 
 const TARGET_DATE = '2026-02-01' // a Sunday
 const REQUESTER = 'admin@tee-admin.com'
@@ -536,5 +540,178 @@ describe('resolveAndSendExhorterHeadsUp — dryRun', () => {
     expect(report.personId).toBe('p-brad')
     expect(h.sendEmail).not.toHaveBeenCalled()
     expect(h.claim).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * HOW MUCH NOTICE THE EXHORTER GETS.
+ *
+ * The rule is "the Saturday two weeks before — three Sundays, counting the
+ * appointment". The original code said "the SECOND upcoming Sunday", which is
+ * only two Sundays of notice: a week later than intended. The first heads-up
+ * had to go out by hand because it was already late, and the automation would
+ * have been late the same way. Nothing tested it, so nothing caught it.
+ */
+describe('how far ahead the heads-up looks', () => {
+  const target = (iso: string) => computeNextTargetSunday(new Date(`${iso}T12:00:00Z`))
+
+  it('from the Saturday it is meant to run, lands 15 days out', () => {
+    // Sat 5 Sep 2026 → Sun 20 Sep 2026. Sundays remaining: 6th, 13th, 20th.
+    expect(target('2026-09-05')).toBe('2026-09-20')
+  })
+
+  it('gives three Sundays of notice, counting the appointment', () => {
+    const from = new Date('2026-09-05T12:00:00Z')
+    const t = new Date(`${target('2026-09-05')}T12:00:00Z`)
+    const days = Math.round((t.getTime() - from.getTime()) / 86400000)
+    expect(days).toBe(15)
+
+    // Count the Sundays in (send, target]: must equal the notice we promise.
+    let sundays = 0
+    for (const d = new Date(from); d < t; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (new Date(d.getTime() + 86400000).getUTCDay() === 0) sundays++
+    }
+    expect(sundays).toBe(SUNDAYS_OF_NOTICE)
+  })
+
+  it('never returns today, even when run ON a Sunday', () => {
+    // Sun 6 Sep 2026 → three Sundays on: 13th, 20th, 27th.
+    expect(target('2026-09-06')).toBe('2026-09-27')
+  })
+
+  it('always lands on a Sunday, whatever day it runs', () => {
+    for (const day of [
+      '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+      '2026-09-05', '2026-09-06', '2026-09-07',
+    ]) {
+      const t = new Date(`${target(day)}T12:00:00Z`)
+      expect(t.getUTCDay()).toBe(0)
+      expect(t.getTime()).toBeGreaterThan(new Date(`${day}T12:00:00Z`).getTime())
+    }
+  })
+})
+
+/**
+ * A preview that a person approved was for a SPECIFIC brother. The schedule can
+ * be edited between the preview going out and the link being clicked, and
+ * re-resolving at that point would quietly email someone whose email nobody
+ * read. Approval has to mean approval of the email that actually goes out.
+ */
+describe('an approval is for the brother who was approved', () => {
+  it('refuses to send when the schedule now names someone else', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'somebody-else',
+    })
+    expect(report.status).toBe('skipped:exhorter-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(h.claim).not.toHaveBeenCalled()
+    expect(report.note).toMatch(/different exhorter/i)
+  })
+
+  it('sends when the expected brother is still the one scheduled', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+    })
+    expect(report.status).toBe('sent')
+    expect(report.sentTo).toBe('brad@example.com')
+    expect(h.sendEmail).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * "I'm looking at email A, saying yes this is correct, then sending email B
+ * which is untested."
+ *
+ * The review page renders the email and the send renders it AGAIN — two calls,
+ * minutes or days apart. `expectPersonId` catches a different brother, but not
+ * a changed service time, a lunch added, a Sunday School row appearing, or an
+ * edited note. Any of those and the reader approved something else.
+ *
+ * A fingerprint of the render INPUTS closes it. Not of the HTML: that embeds a
+ * freshly minted preferences token on every render, so identical emails never
+ * produce identical bytes and an output digest would block everything.
+ */
+describe('what was approved is what is sent', () => {
+  const previewDigest = async () => {
+    const r = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      renderOnly: true,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    return r.rendered?.contentDigest ?? ''
+  }
+
+  it('produces a digest for the reviewer to carry back', async () => {
+    const d = await previewDigest()
+    expect(d).toMatch(/^[0-9a-f]{32}$/)
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('is stable across renders of an unchanged email', async () => {
+    expect(await previewDigest()).toBe(await previewDigest())
+  })
+
+  it('sends when the email still says what it said', async () => {
+    const digest = await previewDigest()
+    vi.clearAllMocks()
+    h.claim.mockResolvedValue(true)
+    h.renderExhorterHeadsUp.mockResolvedValue({ html: '<html></html>', text: 'text' })
+
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('sent')
+    expect(h.sendEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses when the SERVICE TIME changed after it was read', async () => {
+    const digest = await previewDigest()
+    // The same brother, the same Sunday — an hour later.
+    h.getScheduleData.mockResolvedValue(
+      memorialRow({ DateTime: '2026-02-01T17:00:00.000Z' })
+    )
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('skipped:content-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(report.note).toMatch(/changed since you read it/i)
+  })
+
+  it('refuses when a LUNCH was added after it was read', async () => {
+    const digest = await previewDigest()
+    h.getScheduleData.mockResolvedValue(memorialRow({ Lunch: 'Potluck lunch' }))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectContentDigest: digest,
+    })
+    expect(report.status).toBe('skipped:content-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('still sends for callers that pass no digest, so the manual trigger works', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('sent')
   })
 })

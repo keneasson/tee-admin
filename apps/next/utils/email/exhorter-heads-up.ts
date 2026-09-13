@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { resolveScheduleName, isPlaceholderName } from '@my/app/utils/name-resolver'
@@ -20,9 +21,11 @@ import type {
   ExhorterHeadsUpLunch,
 } from 'email-builder/emails/ExhorterHeadsUp'
 import { getEcclesiaByName, type EcclesiaData } from '../dynamodb/locations'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { sendEmail } from './sesClient'
 import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
+import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { generateEmailPreferencesUrl } from './ecclesia-token'
 
 /**
@@ -114,12 +117,18 @@ export type ExhorterHeadsUpStatus =
   | 'skipped:already-sent'
   | 'skipped:needs-review'
   | 'skipped:past-date'
+  /** The schedule changed after a preview was approved — see `expectPersonId`. */
+  | 'skipped:exhorter-changed'
+  /** The email now says something different from the one that was approved. */
+  | 'skipped:content-changed'
   | 'no-schedule-row'
 
 export interface ExhorterHeadsUpReport {
   date: string
   test: boolean
   status: ExhorterHeadsUpStatus
+  /** Present only for `renderOnly` — the email exactly as it would be sent. */
+  rendered?: { subject: string; html: string; text: string; contentDigest: string }
   exhortName?: string
   personId?: string
   visiting?: boolean
@@ -138,8 +147,34 @@ export interface ResolveAndSendExhorterHeadsUpParams {
   test?: boolean
   /** Resolve + report only, no send, no idempotency write. */
   dryRun?: boolean
+  /**
+   * Resolve AND render, then stop — no send, no idempotency claim.
+   *
+   * Feeds the review page, which must show the email exactly as it would be
+   * received. Rendering fresh rather than replaying a stored snapshot means
+   * what a person approves is what actually goes out.
+   */
+  renderOnly?: boolean
   /** The admin who triggered — the TEST-mode recipient. */
   requesterEmail: string
+  /**
+   * The exhorter the caller believes this send is for.
+   *
+   * Set when acting on an approval given earlier — somebody pressed send on the
+   * review page. The schedule can change between the review email going out and
+   * that press, and re-resolving would then quietly write to a DIFFERENT
+   * brother than the one whose email was read and approved. If it no longer
+   * matches, refuse and say so: a person must approve the email that goes out.
+   */
+  expectPersonId?: string
+  /**
+   * Fingerprint of the email the reviewer actually read.
+   *
+   * The review page renders the email and the send renders it again, so
+   * without this a person approves render A and render B goes out. On a
+   * mismatch nothing is sent and they are asked to read the new version.
+   */
+  expectContentDigest?: string
 }
 
 const scheduleService = new ScheduleService()
@@ -162,6 +197,7 @@ export async function resolveAndSendExhorterHeadsUp(
   const { requesterEmail } = params
   const test = params.test ?? true // SAFE DEFAULT
   const dryRun = params.dryRun ?? false
+  const renderOnly = params.renderOnly ?? false
   const targetISO = normalizeToISODate(params.date)
 
   const tenant = resolveTenantFromEnv()
@@ -220,6 +256,18 @@ export async function resolveAndSendExhorterHeadsUp(
   }
 
   const personId = person.personId
+
+  // An approval given earlier was for a specific brother. If the schedule has
+  // been edited since, this is no longer the email that was approved.
+  if (params.expectPersonId && params.expectPersonId !== personId) {
+    return {
+      ...base,
+      status: 'skipped:exhorter-changed',
+      personId,
+      note: `The schedule now shows a different exhorter for ${targetISO}. Nothing was sent — review and approve again.`,
+    }
+  }
+
   const visiting =
     person.memberStatus === 'visitor' || !HOME_ECCLESIA.isHomeEcclesia(person.ecclesia)
 
@@ -280,7 +328,9 @@ export async function resolveAndSendExhorterHeadsUp(
 
   // 8. Idempotency (LIVE ONLY). Atomic claim BEFORE send prevents double-send on
   //    a re-run / schedule edit. Test mode writes nothing so tests can repeat.
-  if (!test) {
+  //    Render-only skips it too: the claim belongs to the real send, and taking
+  //    it while merely showing somebody the email would block that send.
+  if (!test && !renderOnly) {
     const claimed = await exhorterHeadsUpRepository.claim({
       date: targetISO,
       personId,
@@ -307,23 +357,81 @@ export async function resolveAndSendExhorterHeadsUp(
     person.displayName ||
     person.firstName
 
+  /**
+   * Sunday School that week — DERIVED, never assumed.
+   *
+   * The classes do not run every Sunday (summer break, special occasions), and
+   * the schedule has a row only for the weeks they do. So the presence of a row
+   * for the target date IS the signal; its absence means no class, and the line
+   * is omitted rather than promising a visiting speaker a class that is not on.
+   *
+   * Times come from the ecclesia's seasonal service-time definitions, so a
+   * summer/winter change follows automatically instead of being frozen into an
+   * email template.
+   */
+  const sundaySchool = await resolveSundaySchoolForDate(targetISO, ecclesia)
+
   try {
-    const { html, text } = await renderExhorterHeadsUp({
+    // Every input that decides what the email SAYS, in one object — so the
+    // thing shown on the review page and the thing sent are provably the same
+    // email, not two renders that happen to agree.
+    const content = {
       exhorterName,
       hostEcclesiaName: shortName,
       address: hallAddress,
       dateDisplay,
       timeDisplay,
       attendOptions,
+      // Already known from the directory — a brother of the host ecclesia is
+      // not "joining us at Toronto East", he is simply exhorting.
+      visiting,
       lunchType,
+      sundaySchool,
+      note: row.Note ? String(row.Note).trim() || undefined : undefined,
       signatoryName,
+    }
+
+    const { html, text } = await renderExhorterHeadsUp({
+      ...content,
       emailPreferencesUrl,
       tenant,
     })
 
     const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${shortName} on ${dateDisplay}`
     const from = `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
+    const contentDigest = digestContent({ ...content, subject, recipient })
 
+    // Render-only: hand back exactly what would be sent, and send nothing. The
+    // review page shows THIS, so what a person approves is what goes out.
+    if (renderOnly) {
+      return { ...report, status: 'dry-run', rendered: { subject, html, text, contentDigest } }
+    }
+
+    /**
+     * The approved email and this email must be the SAME email.
+     *
+     * The page renders it and the send renders it again — two calls, minutes or
+     * days apart — so without this you would be approving render A and
+     * despatching render B. `expectPersonId` catches a different brother, but
+     * not a changed service time, a lunch added, a Sunday School row appearing,
+     * or a note edited. Any of those and the reader approved something else.
+     *
+     * Refuse rather than send: the reviewer sees the new version and approves
+     * that, which is the only thing "I checked it" can honestly mean.
+     */
+    if (params.expectContentDigest && params.expectContentDigest !== contentDigest) {
+      return {
+        ...report,
+        status: 'skipped:content-changed',
+        note: 'The details for this Sunday have changed since you read it. Nothing was sent — open it again and check the new version.',
+      }
+    }
+
+    // A configuration set is what makes SES publish delivery/bounce/open events
+    // for this send. Without it the heads-up was invisible: it could bounce and
+    // nobody would know a visiting speaker had never been told. The campaign tag
+    // is how `/api/ses/bounce-webhook` attributes those events back here.
+    const campaignId = exhorterHeadsUpCampaignId(targetISO)
     await sendEmail({
       to: recipient,
       subject,
@@ -332,7 +440,27 @@ export async function resolveAndSendExhorterHeadsUp(
       tenant,
       from,
       replyTo,
+      configurationSetName: EMAIL_TRACKING_CONFIG_SET,
+      emailTags: [
+        { Name: 'Reason', Value: 'exhorter-heads-up' },
+        // The tag MUST be named `Campaign` — that is the one the SES webhook
+        // reads (`mail.tags?.Campaign?.[0]`). Any other name and the events
+        // arrive attributed to nothing, so the tracking would look wired up
+        // while recording no deliveries, opens or bounces at all.
+        { Name: 'Campaign', Value: campaignId },
+      ],
     })
+
+    // One recipient row so the webhook has something to record events against,
+    // and the review page can say whether it arrived. Never fatal: the email is
+    // sent, and losing the tracking row must not report a failure.
+    try {
+      await sendRecipientRepository.snapshotRoster(campaignId, [
+        { email: recipient, status: 'sent', ecclesia: person.ecclesia },
+      ])
+    } catch (err) {
+      console.error('[exhorter-headsup] could not record the recipient row:', err)
+    }
   } catch (err) {
     // Send failed AFTER a live claim — release it so a manual retry can re-send.
     if (!test) {
@@ -345,14 +473,143 @@ export async function resolveAndSendExhorterHeadsUp(
 }
 
 /**
- * Compute the next target Sunday (~2 weeks out) for the manual admin trigger when
- * no explicit date is given. Returns an ISO YYYY-MM-DD (UTC). The heads-up is sent
- * ~2 Saturdays before, so the default target is the SECOND upcoming Sunday.
+ * Sunday School details for a given Sunday, or undefined when there is none.
+ *
+ * The `sundaySchool` schedule carries a row only for the weeks the classes
+ * actually run, so the presence of a row for that date IS the signal — exactly
+ * how the newsletter decides whether to show a Sunday School block. Absence
+ * means no class, and the caller omits the line.
+ *
+ * Start and end come from the ecclesia's seasonal service-time definitions
+ * (`resolveServiceTime`), not from constants, so a summer/winter time change
+ * follows the configuration instead of being frozen into an email.
+ */
+export async function resolveSundaySchoolForDate(
+  targetISO: string,
+  ecclesia: EcclesiaData | null
+): Promise<{ startDisplay: string; endDisplay: string } | undefined> {
+  try {
+    const schedule = await scheduleService.getScheduleData('sundaySchool')
+    const rows = (schedule?.content ?? []) as Array<Record<string, any>>
+    const runsThisWeek = rows.some(
+      (r) => normalizeToISODate(r.DateTime || r.Date || r.date) === targetISO
+    )
+    if (!runsThisWeek) return undefined
+
+    const resolved = resolveServiceTime(
+      (ecclesia as unknown as { scheduleConfig?: Record<string, any> })?.scheduleConfig,
+      'sundaySchool',
+      new Date(`${targetISO}T12:00:00Z`)
+    )
+    const startDisplay = resolved.displayTime || resolved.defaultTime
+    if (!startDisplay) return undefined
+    return { startDisplay, endDisplay: addOneHour(startDisplay) }
+  } catch (err) {
+    // A missing Sunday School line is a small loss; a failed heads-up is not.
+    console.error('[exhorter-headsup] could not resolve Sunday School:', err)
+    return undefined
+  }
+}
+
+/** "9:30am" → "10:30". The class runs an hour; the end is not configured. */
+function addOneHour(display: string): string {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(display.trim())
+  if (!m) return display
+  const hour = Number(m[1])
+  const mins = m[2] ?? '00'
+  const next = hour === 12 ? 1 : hour + 1
+  return `${next}:${mins}`
+}
+
+/** SES configuration set that makes delivery/bounce/open events flow. */
+export const EMAIL_TRACKING_CONFIG_SET = 'tee-email-tracking'
+
+/**
+ * A fingerprint of what the email SAYS.
+ *
+ * Deliberately over the render INPUTS, not the rendered HTML. The HTML embeds a
+ * freshly minted email-preferences token on every render, so two renders of an
+ * identical email never produce identical bytes — a digest of the output would
+ * mismatch every single time and the guard would block everything.
+ *
+ * Keys are sorted so the digest depends on the values, not on property order.
+ */
+export function digestContent(content: Record<string, unknown>): string {
+  const canonical = JSON.stringify(content, Object.keys(content).sort())
+  return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
+}
+
+/**
+ * Campaign id for one Sunday's heads-up.
+ *
+ * Per-recipient analytics are keyed by campaign, so a 1:1 send needs one too —
+ * otherwise the webhook has nowhere to record a bounce. One "campaign" per
+ * target Sunday, which is also the natural thing to look up when asking "did
+ * the heads-up for the 20th arrive?".
+ *
+ * **Only letters, digits, dashes and underscores.** This value travels as an
+ * SES message tag, and SES rejects a tag value containing anything else — a
+ * `#` here would have failed the SendEmail call outright, so the email would
+ * not have gone at all. It is also embedded in the row key as
+ * `SEND#{campaignId}`, where a second `#` would muddle the key.
+ */
+export function exhorterHeadsUpCampaignId(targetISO: string): string {
+  return `exhorter-headsup-${targetISO}`
+}
+
+/**
+ * The email for a Sunday, rendered but not sent — what the review page shows.
+ *
+ * Rendered fresh on every view rather than replayed from a snapshot, so what a
+ * person reads and approves is what will actually be sent. `personId` lets the
+ * caller notice that the schedule now names someone else.
+ */
+export async function renderHeadsUpPreview(params: { date: string }): Promise<{
+  personId?: string
+  subject: string
+  html: string
+  text: string
+  contentDigest: string
+  status: ExhorterHeadsUpStatus
+}> {
+  const report = await resolveAndSendExhorterHeadsUp({
+    date: params.date,
+    renderOnly: true,
+    test: false, // so the subject has no [TEST] prefix — this is the real thing
+    requesterEmail: 'review-page',
+  })
+  return {
+    personId: report.personId,
+    subject: report.rendered?.subject ?? '',
+    html: report.rendered?.html ?? '',
+    text: report.rendered?.text ?? '',
+    // Handed to the page and echoed back on send, so the email that goes out
+    // is provably the one that was read.
+    contentDigest: report.rendered?.contentDigest ?? '',
+    status: report.status,
+  }
+}
+
+/** Sundays of notice the exhorter gets, counting the appointment itself. */
+export const SUNDAYS_OF_NOTICE = 3
+
+/**
+ * Compute the target Sunday for a heads-up sent today.
+ *
+ * The notice is **the Saturday two weeks before — three Sundays, counting the
+ * appointment**. From Saturday 5 Sep the remaining Sundays are 6, 13 and 20
+ * Sep, so the exhortation being announced is the 20th: send date + 15 days.
+ *
+ * This was `+7` ("the SECOND upcoming Sunday"), which is +8 days from a
+ * Saturday and only TWO Sundays of notice — a week later than intended. The
+ * first real heads-up had to be sent by hand because it was already late, and
+ * the automation would have been late in exactly the same way.
  */
 export function computeNextTargetSunday(from: Date = new Date()): string {
   const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()))
-  // Advance to the next Sunday (excluding today), then +7 → second upcoming Sunday.
+  // Advance to the next Sunday (never today), then add the remaining weeks of
+  // notice: from a Saturday that is 1 + 14 = 15 days.
   const daysToSunday = (7 - d.getUTCDay()) % 7 || 7
-  d.setUTCDate(d.getUTCDate() + daysToSunday + 7)
+  d.setUTCDate(d.getUTCDate() + daysToSunday + 7 * (SUNDAYS_OF_NOTICE - 1))
   return normalizeToISODate(d)
 }

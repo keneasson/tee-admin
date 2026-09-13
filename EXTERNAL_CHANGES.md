@@ -129,3 +129,58 @@ invisible, because every directory read filters on the geographic prefix.
 Validation is fixed in-repo regardless (province/city are required at both the
 route and the write), so a failed lookup can no longer produce an invisible
 record. Google Places was always listed as deferred — design Slice 10, #224.
+
+---
+
+## EventBridge schedule for the exhorter heads-up (#124, slice B) — 2026-09-12
+
+**What is in the repo:** `GET|POST /api/cron/exhorter-heads-up`, Bearer-authenticated
+with `EMAIL_SENDER_SECRET` like the other cron endpoints. It resolves who is
+exhorting three Sundays out, renders the email, and **redirects that exact email
+to the Recording Brother** for QA in a real inbox — same subject, same body,
+with one appended footer block carrying a link. **It never emails the exhorter**
+— that happens only when a person presses the button on the page that link
+opens. Going live means changing the `To:` and dropping the footer block.
+
+**Action required (outside the repo):** create an EventBridge Scheduler schedule
+in `ca-central-1` (account 911911532459):
+
+- **Cadence:** every Saturday. `cron(0 10 ? * SAT *)` with timezone
+  `America/Toronto` — 10:00 local, which is when the Recording Brother will
+  actually read it.
+- **Target:** HTTPS `POST https://tee-admin.com/api/cron/exhorter-heads-up`
+  with header `Authorization: Bearer <EMAIL_SENDER_SECRET>`.
+- **Retry:** at most 1 retry. The job is safe to re-run — a second run mints a
+  new review link rather than sending anything — but there is no value in more.
+
+**Why the send date matters:** the job computes the target Sunday itself
+(`computeNextTargetSunday`, +15 days / three Sundays). Do NOT pass a `date`
+parameter on the schedule; the notice period must live in ONE place. The
+`?date=` parameter exists only for re-running a specific Sunday by hand.
+
+**Until the schedule exists** nothing runs automatically, and the heads-up must
+be triggered from `POST /api/admin/exhorter-heads-up` as it is today. Nothing
+breaks in the meantime — the absence is silent, which is exactly why it is
+written down here.
+
+**Deferred deliberately:** there is no auto-send path at all, so there is no
+flag to forget to turn off. Removing the review step after a few weeks of solid
+tests is a code change, reviewed like any other.
+
+### Follow-on: tracking for the 1:1 heads-up depends on the existing config set
+
+The heads-up now sends with `ConfigurationSetName: 'tee-email-tracking'` and a
+`Campaign` message tag, which is how `/api/ses/bounce-webhook` attributes
+Delivery / Open / Bounce / Complaint back to the recipient row. The webhook
+already handles all four.
+
+**Worth confirming once in the AWS console:** that the `tee-email-tracking`
+configuration set's event destination publishes **Delivery** and **Open**, not
+only Bounce and Complaint. If it publishes only failures, the review page will
+correctly report a bounce but will never be able to say "delivered" — it will
+sit on "not confirmed yet" forever, which looks like a bug and is not one.
+
+Open tracking also requires "Open and click tracking" to be enabled on that
+configuration set.
+
+No code change either way; this is a console setting the feature reads through.

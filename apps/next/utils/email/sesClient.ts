@@ -74,6 +74,22 @@ export interface SendEmailProps {
    * header is set (current behaviour).
    */
   replyTo?: string
+  /**
+   * SES configuration set, e.g. `tee-email-tracking`.
+   *
+   * WITHOUT one, SES publishes no events for the send: no delivery, bounce,
+   * complaint or open ever reaches `/api/ses/bounce-webhook`. Every 1:1 send on
+   * this path was therefore invisible — a heads-up could bounce and nobody
+   * would know a visiting speaker had not been told. Pass it for anything whose
+   * arrival matters.
+   *
+   * Note this is NOT `ListManagementOptions`: a configuration set only enables
+   * event publishing. Topic opt-out is deliberately not consulted here, because
+   * a personal note about somebody's own appointment is not a broadcast.
+   */
+  configurationSetName?: string
+  /** SES message tags, for attributing events back to a campaign. */
+  emailTags?: Array<{ Name: string; Value: string }>
 }
 
 export async function sendEmail({
@@ -84,6 +100,8 @@ export async function sendEmail({
   tenant,
   from,
   replyTo,
+  configurationSetName,
+  emailTags,
 }: SendEmailProps): Promise<void> {
   if (!emailsEnabled()) {
     console.log(
@@ -101,6 +119,8 @@ export async function sendEmail({
       ToAddresses: [to],
     },
     ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
+    ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),
+    ...(emailTags?.length ? { EmailTags: emailTags } : {}),
     Content: {
       Simple: {
         Subject: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { editRequestRepository } from '@my/app/provider/dynamodb/repositories/edit-request-repository'
 import { applyApprovedEdit } from '../../../../utils/apply-approved-edit'
+import { escapeHtml } from '../../../../utils/html'
 
 /**
  * GET /api/edit-requests/approve?token=xxx&action=approve|reject
@@ -47,14 +48,6 @@ function page(opts: {
     status: opts.status,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 export async function GET(request: NextRequest) {
