@@ -18,6 +18,21 @@ import { Send, AlertTriangle, CheckCircle2 } from '@tamagui/lucide-icons'
  * the sending could fire before anyone read a word of it.
  */
 
+interface Suppression {
+  suppressed: boolean
+  reason?: string
+  since?: string
+  unknown?: boolean
+}
+
+interface Delivery {
+  status?: string
+  deliveredAt?: string
+  opens?: number
+  bouncedAt?: string
+  bounceType?: string
+}
+
 interface ReviewData {
   date: string
   recipientName?: string
@@ -26,6 +41,7 @@ interface ReviewData {
   changed: boolean
   subject: string
   html: string
+  suppression?: Suppression
 }
 
 export default function ExhorterHeadsUpReviewPage() {
@@ -39,6 +55,12 @@ export default function ExhorterHeadsUpReviewPage() {
   const [sending, setSending] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [alreadySent, setAlreadySent] = useState<{
+    recipientName?: string
+    recipientEmail?: string
+    sentAt?: string
+    delivery?: Delivery
+  } | null>(null)
 
   const load = useCallback(async () => {
     if (!token) {
@@ -52,7 +74,20 @@ export default function ExhorterHeadsUpReviewPage() {
         { cache: 'no-store' }
       )
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error || 'Could not load this heads-up.')
+      if (!res.ok) {
+        // Already sent is not an error to apologise for — it is the answer to
+        // "did this go out?", and now also "did it arrive?".
+        if (body.alreadySent) {
+          setAlreadySent({
+            recipientName: body.recipientName,
+            recipientEmail: body.recipientEmail,
+            sentAt: body.sentAt,
+            delivery: body.delivery,
+          })
+          return
+        }
+        throw new Error(body.error || 'Could not load this heads-up.')
+      }
       setData(body as ReviewData)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Could not load this heads-up.')
@@ -119,6 +154,39 @@ export default function ExhorterHeadsUpReviewPage() {
             </Card>
           ) : null}
 
+          {/* Re-opening the link after sending answers the question that
+              matters by then: did it actually arrive? */}
+          {alreadySent ? (
+            <Card padding="$3" backgroundColor="$backgroundHover">
+              <YStack gap="$2">
+                <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                  <CheckCircle2 size={18} color="$success" />
+                  <Text fontSize="$4">
+                    {`Already sent to ${alreadySent.recipientName || alreadySent.recipientEmail}.`}
+                  </Text>
+                </XStack>
+                {alreadySent.delivery?.bouncedAt ? (
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <AlertTriangle size={16} color="$error" />
+                    <Text fontSize="$3" color="$error">
+                      {`It BOUNCED${alreadySent.delivery.bounceType ? ` (${alreadySent.delivery.bounceType})` : ''} — they have not been told. Reach them another way.`}
+                    </Text>
+                  </XStack>
+                ) : alreadySent.delivery?.deliveredAt ? (
+                  <Text fontSize="$3" theme="alt2">
+                    {`Delivered${
+                      alreadySent.delivery.opens ? `, and opened ${alreadySent.delivery.opens}×` : ' — not opened yet'
+                    }.`}
+                  </Text>
+                ) : (
+                  <Text fontSize="$3" theme="alt2">
+                    Delivery not confirmed yet — events can take a few minutes.
+                  </Text>
+                )}
+              </YStack>
+            </Card>
+          ) : null}
+
           {data && !sentTo ? (
             <YStack gap="$3">
               <Text fontSize="$4">
@@ -142,6 +210,33 @@ export default function ExhorterHeadsUpReviewPage() {
                     </Text>
                   </XStack>
                 </Card>
+              ) : null}
+
+              {/* An address on the SES account suppression list is dropped
+                  silently — no bounce, no error, the brother simply never hears.
+                  Said BEFORE the send, because this is when it can be acted on.
+                  Topic opt-out is a different thing and does NOT block this: a
+                  personal note about your own exhortation is not a broadcast. */}
+              {data.suppression?.suppressed ? (
+                <Card padding="$3" backgroundColor="$backgroundHover">
+                  <YStack gap="$1">
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                      <AlertTriangle size={16} color="$error" />
+                      <Text fontSize="$3" fontWeight="700" color="$error">
+                        This address is on the suppression list — sending will go nowhere.
+                      </Text>
+                    </XStack>
+                    <Text fontSize="$3">
+                      {`AWS is refusing mail to ${data.recipientEmail}${
+                        data.suppression.reason ? ` after a ${data.suppression.reason.toLowerCase()}` : ''
+                      }. They will not receive this, and there will be no bounce to tell you. Remove them from the suppression list, or contact them another way.`}
+                    </Text>
+                  </YStack>
+                </Card>
+              ) : data.suppression?.unknown ? (
+                <Text fontSize="$2" theme="alt2">
+                  Could not check the suppression list — send anyway, but confirm they received it.
+                </Text>
               ) : null}
 
               <Text fontSize="$2" theme="alt2">

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
+import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import {
   resolveAndSendExhorterHeadsUp,
   renderHeadsUpPreview,
+  exhorterHeadsUpCampaignId,
 } from '@/utils/email/exhorter-heads-up'
+import { checkSuppressed } from '@/utils/email/suppression-check'
 
 /**
  * Review a parked exhorter heads-up, and send it.
@@ -44,12 +47,39 @@ async function loadPending(token: string) {
     }
   }
   if (pending.releasedAt) {
+    // Already sent — so the useful thing is no longer the email, it is whether
+    // it arrived. Re-opening the link answers that.
+    let delivery: unknown
+    try {
+      const rows = await sendRecipientRepository.getCampaignRecipients(
+        exhorterHeadsUpCampaignId(pending.date)
+      )
+      const row = rows.find(
+        (r) => r.email?.toLowerCase() === pending.recipientEmail.toLowerCase()
+      )
+      delivery = row
+        ? {
+            status: row.status,
+            deliveredAt: row.deliveredAt,
+            opens: row.opens,
+            bouncedAt: row.bouncedAt,
+            bounceType: row.bounceType,
+          }
+        : undefined
+    } catch (err) {
+      console.error('[exhorter-headsup] could not read delivery status:', err)
+    }
+
     return {
       error: NextResponse.json(
         {
           error: `Already sent to ${pending.recipientName ?? pending.recipientEmail}.`,
           alreadySent: true,
           sentAt: pending.releasedAt,
+          recipientName: pending.recipientName,
+          recipientEmail: pending.recipientEmail,
+          date: pending.date,
+          delivery,
         },
         { status: 409 }
       ),
@@ -74,7 +104,15 @@ export async function GET(request: NextRequest) {
 
     // Rendered FRESH, not replayed from a snapshot: what is approved has to be
     // what actually goes out, and the schedule may have been edited since.
-    const preview = await renderHeadsUpPreview({ date: pending.date })
+    //
+    // The suppression check runs alongside, because THIS is the moment it is
+    // actionable. An address on the account suppression list is dropped by SES
+    // silently — the speaker would simply never be told, and nobody would find
+    // out until he failed to arrive. Telling somebody afterwards is too late.
+    const [preview, suppression] = await Promise.all([
+      renderHeadsUpPreview({ date: pending.date }),
+      checkSuppressed(pending.recipientEmail),
+    ])
 
     return NextResponse.json({
       success: true,
@@ -86,6 +124,7 @@ export async function GET(request: NextRequest) {
       changed: preview.personId !== pending.personId,
       subject: preview.subject,
       html: preview.html,
+      suppression,
     })
   } catch (error) {
     console.error('[exhorter-headsup] review load failed:', error)

@@ -164,3 +164,21 @@ written down here.
 **Deferred deliberately:** there is no auto-send path at all, so there is no
 flag to forget to turn off. Removing the review step after a few weeks of solid
 tests is a code change, reviewed like any other.
+
+### Follow-on: tracking for the 1:1 heads-up depends on the existing config set
+
+The heads-up now sends with `ConfigurationSetName: 'tee-email-tracking'` and a
+`Campaign` message tag, which is how `/api/ses/bounce-webhook` attributes
+Delivery / Open / Bounce / Complaint back to the recipient row. The webhook
+already handles all four.
+
+**Worth confirming once in the AWS console:** that the `tee-email-tracking`
+configuration set's event destination publishes **Delivery** and **Open**, not
+only Bounce and Complaint. If it publishes only failures, the review page will
+correctly report a bounce but will never be able to say "delivered" — it will
+sit on "not confirmed yet" forever, which looks like a bug and is not one.
+
+Open tracking also requires "Open and click tracking" to be enabled on that
+configuration set.
+
+No code change either way; this is a console setting the feature reads through.

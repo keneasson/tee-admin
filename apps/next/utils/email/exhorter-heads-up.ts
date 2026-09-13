@@ -24,6 +24,7 @@ import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { sendEmail } from './sesClient'
 import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
+import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { generateEmailPreferencesUrl } from './ecclesia-token'
 
 /**
@@ -387,6 +388,11 @@ export async function resolveAndSendExhorterHeadsUp(
       return { ...report, status: 'dry-run', rendered: { subject, html, text } }
     }
 
+    // A configuration set is what makes SES publish delivery/bounce/open events
+    // for this send. Without it the heads-up was invisible: it could bounce and
+    // nobody would know a visiting speaker had never been told. The campaign tag
+    // is how `/api/ses/bounce-webhook` attributes those events back here.
+    const campaignId = exhorterHeadsUpCampaignId(targetISO)
     await sendEmail({
       to: recipient,
       subject,
@@ -395,7 +401,27 @@ export async function resolveAndSendExhorterHeadsUp(
       tenant,
       from,
       replyTo,
+      configurationSetName: EMAIL_TRACKING_CONFIG_SET,
+      emailTags: [
+        { Name: 'Reason', Value: 'exhorter-heads-up' },
+        // The tag MUST be named `Campaign` — that is the one the SES webhook
+        // reads (`mail.tags?.Campaign?.[0]`). Any other name and the events
+        // arrive attributed to nothing, so the tracking would look wired up
+        // while recording no deliveries, opens or bounces at all.
+        { Name: 'Campaign', Value: campaignId },
+      ],
     })
+
+    // One recipient row so the webhook has something to record events against,
+    // and the review page can say whether it arrived. Never fatal: the email is
+    // sent, and losing the tracking row must not report a failure.
+    try {
+      await sendRecipientRepository.snapshotRoster(campaignId, [
+        { email: recipient, status: 'sent', ecclesia: person.ecclesia },
+      ])
+    } catch (err) {
+      console.error('[exhorter-headsup] could not record the recipient row:', err)
+    }
   } catch (err) {
     // Send failed AFTER a live claim — release it so a manual retry can re-send.
     if (!test) {
@@ -454,6 +480,27 @@ function addOneHour(display: string): string {
   const mins = m[2] ?? '00'
   const next = hour === 12 ? 1 : hour + 1
   return `${next}:${mins}`
+}
+
+/** SES configuration set that makes delivery/bounce/open events flow. */
+export const EMAIL_TRACKING_CONFIG_SET = 'tee-email-tracking'
+
+/**
+ * Campaign id for one Sunday's heads-up.
+ *
+ * Per-recipient analytics are keyed by campaign, so a 1:1 send needs one too —
+ * otherwise the webhook has nowhere to record a bounce. One "campaign" per
+ * target Sunday, which is also the natural thing to look up when asking "did
+ * the heads-up for the 20th arrive?".
+ *
+ * **Only letters, digits, dashes and underscores.** This value travels as an
+ * SES message tag, and SES rejects a tag value containing anything else — a
+ * `#` here would have failed the SendEmail call outright, so the email would
+ * not have gone at all. It is also embedded in the row key as
+ * `SEND#{campaignId}`, where a second `#` would muddle the key.
+ */
+export function exhorterHeadsUpCampaignId(targetISO: string): string {
+  return `exhorter-headsup-${targetISO}`
 }
 
 /**
