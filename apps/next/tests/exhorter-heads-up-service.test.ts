@@ -590,3 +590,36 @@ describe('how far ahead the heads-up looks', () => {
     }
   })
 })
+
+/**
+ * A preview that a person approved was for a SPECIFIC brother. The schedule can
+ * be edited between the preview going out and the link being clicked, and
+ * re-resolving at that point would quietly email someone whose email nobody
+ * read. Approval has to mean approval of the email that actually goes out.
+ */
+describe('an approval is for the brother who was approved', () => {
+  it('refuses to send when the schedule now names someone else', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'somebody-else',
+    })
+    expect(report.status).toBe('skipped:exhorter-changed')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(h.claim).not.toHaveBeenCalled()
+    expect(report.note).toMatch(/different exhorter/i)
+  })
+
+  it('sends when the expected brother is still the one scheduled', async () => {
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+      expectPersonId: 'p-brad',
+    })
+    expect(report.status).toBe('sent')
+    expect(report.sentTo).toBe('brad@example.com')
+    expect(h.sendEmail).toHaveBeenCalledTimes(1)
+  })
+})

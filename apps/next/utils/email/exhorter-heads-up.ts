@@ -115,6 +115,8 @@ export type ExhorterHeadsUpStatus =
   | 'skipped:already-sent'
   | 'skipped:needs-review'
   | 'skipped:past-date'
+  /** The schedule changed after a preview was approved — see `expectPersonId`. */
+  | 'skipped:exhorter-changed'
   | 'no-schedule-row'
 
 export interface ExhorterHeadsUpReport {
@@ -141,6 +143,16 @@ export interface ResolveAndSendExhorterHeadsUpParams {
   dryRun?: boolean
   /** The admin who triggered — the TEST-mode recipient. */
   requesterEmail: string
+  /**
+   * The exhorter the caller believes this send is for.
+   *
+   * Set when acting on an approval that was given earlier — a release link from
+   * a preview email. The schedule can change between the preview and the click,
+   * and re-resolving would then quietly email a DIFFERENT brother than the one
+   * whose email was read and approved. If it no longer matches, refuse and say
+   * so; a person must approve the email that actually goes out.
+   */
+  expectPersonId?: string
 }
 
 const scheduleService = new ScheduleService()
@@ -221,6 +233,18 @@ export async function resolveAndSendExhorterHeadsUp(
   }
 
   const personId = person.personId
+
+  // An approval given earlier was for a specific brother. If the schedule has
+  // been edited since, this is no longer the email that was approved.
+  if (params.expectPersonId && params.expectPersonId !== personId) {
+    return {
+      ...base,
+      status: 'skipped:exhorter-changed',
+      personId,
+      note: `The schedule now shows a different exhorter for ${targetISO}. Nothing was sent — review and approve again.`,
+    }
+  }
+
   const visiting =
     person.memberStatus === 'visitor' || !HOME_ECCLESIA.isHomeEcclesia(person.ecclesia)
 
