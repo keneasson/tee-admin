@@ -58,6 +58,8 @@ export interface PrepareHeadsUpForReviewResult {
   reviewerEmail?: string
   /** True when the email was redirected for QA. */
   parked: boolean
+  /** How many earlier unsent copies this one retired — >0 means a re-test. */
+  supersededCopies?: number
 }
 
 /**
@@ -159,6 +161,14 @@ export async function prepareHeadsUpForReview(
     report.exhortName ||
     'the exhorter'
 
+  // Retire any earlier unsent copy first. When a mistake is found and the
+  // Program corrected, the link in the WRONG email must stop working rather
+  // than remain a live way to send the mistake.
+  const superseded = await exhorterHeadsUpRepository.supersedePending(
+    report.date,
+    report.personId
+  )
+
   const token = mintToken()
   await exhorterHeadsUpRepository.parkPending({
     date: report.date,
@@ -191,5 +201,5 @@ export async function prepareHeadsUpForReview(
     emailTags: [{ Name: 'Reason', Value: 'exhorter-heads-up-review' }],
   })
 
-  return { report, reviewerEmail, parked: true }
+  return { report, reviewerEmail, parked: true, supersededCopies: superseded }
 }

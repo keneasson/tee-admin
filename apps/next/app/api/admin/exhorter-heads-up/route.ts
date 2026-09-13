@@ -5,6 +5,7 @@ import {
   resolveAndSendExhorterHeadsUp,
   computeNextTargetSunday,
 } from '@/utils/email/exhorter-heads-up'
+import { prepareHeadsUpForReview } from '@/utils/email/exhorter-heads-up-review'
 
 /**
  * Exhorter heads-up — manual admin trigger (#124, slice A).
@@ -43,10 +44,40 @@ export async function POST(request: NextRequest) {
     const date: string = typeof body?.date === 'string' && body.date.trim()
       ? body.date.trim()
       : computeNextTargetSunday()
-    // SAFE DEFAULT: test is true unless explicitly set to boolean false.
-    const test: boolean = body?.test === false ? false : true
     const dryRun: boolean = body?.dryRun === true
 
+    /**
+     * RESEND THE QA COPY — the default, and how you re-test after fixing the
+     * Program.
+     *
+     * Correct the schedule, wait for the sheet to sync, then call this: it
+     * re-resolves, re-renders and redirects the corrected email to you, exactly
+     * as the Saturday job does. Same subject, same body, new footer link.
+     *
+     * It supersedes any earlier unsent copy for that Sunday, so the link in the
+     * WRONG email you are looking at stops working rather than sitting there as
+     * a way to send the mistake. (Even if it were pressed, the content
+     * fingerprint would refuse — but "this link has been superseded" is a
+     * better answer than a mismatch.)
+     */
+    if (!dryRun && body?.mode !== 'legacy-test') {
+      const result = await prepareHeadsUpForReview({
+        date,
+        reviewerEmail: body?.to === 'me' ? gate.email! : undefined,
+      })
+      return NextResponse.json({
+        ok: true,
+        redirectedTo: result.reviewerEmail,
+        parked: result.parked,
+        supersededCopies: result.supersededCopies,
+        report: { ...result.report, rendered: undefined },
+      })
+    }
+
+    // The original slice-A behaviour, kept for a resolve-only report and for
+    // the `[TEST]`-prefixed variant. NOT the QA path: that subject and that
+    // recipient make it a different email from the one the brother receives.
+    const test: boolean = body?.test === false ? false : true
     const report = await resolveAndSendExhorterHeadsUp({
       date,
       test,

@@ -132,6 +132,50 @@ class ExhorterHeadsUpRepository {
     )
   }
 
+  /**
+   * Retire any unsent parked copy for this Sunday.
+   *
+   * Called before parking a fresh one, which is what happens when a mistake is
+   * found in the email and the Program is corrected. The link in the WRONG
+   * email must stop working — otherwise it sits in the inbox as a live way to
+   * send the mistake. The content fingerprint would refuse it anyway, but
+   * "this link has been superseded" is a better answer than a mismatch.
+   *
+   * Already-sent records are left exactly as they are: they are the audit trail
+   * of what went out, and re-opening one is how somebody checks whether it
+   * arrived.
+   */
+  async supersedePending(date: string, personId: string): Promise<number> {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        KeyConditionExpression: 'pkey = :pk AND begins_with(skey, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': idempotencyPk(date, personId),
+          ':sk': 'PENDING#',
+        },
+      })
+    )
+    const stale = (res.Items ?? []).filter((i) => !i.releasedAt)
+    for (const item of stale) {
+      try {
+        await docClient.send(
+          new UpdateCommand({
+            TableName: this.tableName,
+            Key: { pkey: String(item.pkey), skey: String(item.skey) },
+            // Clearing the GSI key is what makes the old link unfindable —
+            // `findPendingByToken` queries gsi4, so the lookup simply misses.
+            UpdateExpression: 'SET supersededAt = :now REMOVE gsi4pk, gsi4sk',
+            ExpressionAttributeValues: { ':now': new Date().toISOString() },
+          })
+        )
+      } catch (error) {
+        console.error('[exhorter-headsup] could not supersede a stale copy:', error)
+      }
+    }
+    return stale.length
+  }
+
   /** Find a parked heads-up by the token in a release link. */
   async findPendingByToken(token: string): Promise<PendingHeadsUp | null> {
     const res = await docClient.send(

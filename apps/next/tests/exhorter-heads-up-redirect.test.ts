@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   resolveAndSend: vi.fn(),
   sendEmail: vi.fn(),
   parkPending: vi.fn(),
+  supersedePending: vi.fn(),
   getById: vi.fn(),
   getEcclesiaByName: vi.fn(),
 }))
@@ -28,7 +29,10 @@ vi.mock('@/utils/email/exhorter-heads-up', async (importOriginal) => {
 })
 vi.mock('../utils/email/sesClient', () => ({ sendEmail: h.sendEmail }))
 vi.mock('@my/app/provider/dynamodb/repositories/exhorter-headsup-repository', () => ({
-  exhorterHeadsUpRepository: { parkPending: h.parkPending },
+  exhorterHeadsUpRepository: {
+    parkPending: h.parkPending,
+    supersedePending: h.supersedePending,
+  },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: { getById: h.getById },
@@ -63,6 +67,7 @@ beforeEach(() => {
   })
   h.getEcclesiaByName.mockResolvedValue({ recordingBrotherEmail: 'rb@tee-admin.com' })
   h.parkPending.mockResolvedValue(undefined)
+  h.supersedePending.mockResolvedValue(0)
   h.sendEmail.mockResolvedValue(undefined)
 })
 
@@ -158,5 +163,37 @@ describe('when there is nothing to send', () => {
     expect(result.parked).toBe(false)
     expect(h.sendEmail).not.toHaveBeenCalled()
     expect(result.report.note).toMatch(/no reviewer address/i)
+  })
+})
+
+/**
+ * RE-TESTING AFTER A FIX.
+ *
+ * The point of QA is that you find something wrong. So: correct the Program,
+ * resend, and read it again. The link in the WRONG email must stop working —
+ * otherwise it sits in the inbox as a live way to send the mistake.
+ */
+describe('resending after correcting the Program', () => {
+  it('retires the earlier unsent copy before parking the new one', async () => {
+    h.supersedePending.mockResolvedValue(1)
+    const result = await prepareHeadsUpForReview({ date: '2026-09-20' })
+
+    expect(h.supersedePending).toHaveBeenCalledWith('2026-09-20', 'p-brad')
+    expect(result.supersededCopies).toBe(1)
+
+    // Order matters: retire the old link, THEN mint the new one.
+    expect(h.supersedePending.mock.invocationCallOrder[0]).toBeLessThan(
+      h.parkPending.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('mints a NEW token rather than reusing the old link', async () => {
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    const first = h.parkPending.mock.calls[0][0].token
+    vi.clearAllMocks()
+    h.supersedePending.mockResolvedValue(1)
+    h.parkPending.mockResolvedValue(undefined)
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    expect(h.parkPending.mock.calls[0][0].token).not.toBe(first)
   })
 })
