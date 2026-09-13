@@ -8,14 +8,20 @@ import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Send, AlertTriangle, CheckCircle2 } from '@tamagui/lucide-icons'
 
 /**
- * Review an exhorter heads-up, then send it.
+ * Confirm and send an exhorter heads-up that was redirected for QA.
  *
- * The email we send the Recording Brother on a Saturday contains ONLY a link to
- * this page. Loading it sends nothing. The exhorter is written to when somebody
- * presses the button below — a POST from a deliberate press.
+ * **This page is not the review.** The review happened in an inbox: the actual
+ * email was redirected to the Recording Brother, who read it in a real mail
+ * client. This is only the button at the end of that — a confirmation of who it
+ * goes to, and the press that sends it.
  *
- * That shape matters: mail clients prefetch and scan links, so a link that did
- * the sending could fire before anyone read a word of it.
+ * It deliberately does NOT re-render the email. Showing it here would invite
+ * checking it here, and an iframe is a simulation, not a mail client. The
+ * content fingerprint recorded when the QA copy was sent is what guarantees the
+ * email despatched is the one that was read.
+ *
+ * The press is a POST, because mail clients prefetch links and the footer link
+ * must never send anything on its own.
  */
 
 interface Suppression {
@@ -33,16 +39,13 @@ interface Delivery {
   bounceType?: string
 }
 
-interface ReviewData {
+interface ConfirmData {
   date: string
   recipientName?: string
   recipientEmail: string
-  expiresAt: string
-  changed: boolean
   subject: string
-  html: string
-  /** Fingerprint of what is on screen; sent back so the send can prove it matches. */
-  contentDigest: string
+  /** The schedule now names a different brother — do not send. */
+  changed: boolean
   suppression?: Suppression
 }
 
@@ -51,7 +54,7 @@ export default function ExhorterHeadsUpReviewPage() {
   const params = useSearchParams()
   const token = params?.get('token') ?? ''
 
-  const [data, setData] = useState<ReviewData | null>(null)
+  const [data, setData] = useState<ConfirmData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -77,8 +80,8 @@ export default function ExhorterHeadsUpReviewPage() {
       )
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        // Already sent is not an error to apologise for — it is the answer to
-        // "did this go out?", and now also "did it arrive?".
+        // Already sent is not a failure — it is the answer to "did this go
+        // out?", and now also "did it arrive?".
         if (body.alreadySent) {
           setAlreadySent({
             recipientName: body.recipientName,
@@ -90,7 +93,7 @@ export default function ExhorterHeadsUpReviewPage() {
         }
         throw new Error(body.error || 'Could not load this heads-up.')
       }
-      setData(body as ReviewData)
+      setData(body as ConfirmData)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Could not load this heads-up.')
     } finally {
@@ -110,7 +113,7 @@ export default function ExhorterHeadsUpReviewPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ token, contentDigest: data?.contentDigest }),
+        body: JSON.stringify({ token }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || 'Could not send this heads-up.')
@@ -132,11 +135,13 @@ export default function ExhorterHeadsUpReviewPage() {
     )
   }
 
+  const name = data?.recipientName || data?.recipientEmail || 'the exhorter'
+
   return (
     <Wrapper>
       <Section>
-        <YStack gap="$4" maxWidth={820} width="100%" alignSelf="center">
-          <Heading>Exhortation heads-up</Heading>
+        <YStack gap="$4" maxWidth={640} width="100%" alignSelf="center">
+          <Heading>Send the exhortation heads-up</Heading>
 
           {loadError ? (
             <Card padding="$3" backgroundColor="$backgroundHover">
@@ -156,8 +161,6 @@ export default function ExhorterHeadsUpReviewPage() {
             </Card>
           ) : null}
 
-          {/* Re-opening the link after sending answers the question that
-              matters by then: did it actually arrive? */}
           {alreadySent ? (
             <Card padding="$3" backgroundColor="$backgroundHover">
               <YStack gap="$2">
@@ -177,7 +180,9 @@ export default function ExhorterHeadsUpReviewPage() {
                 ) : alreadySent.delivery?.deliveredAt ? (
                   <Text fontSize="$3" theme="alt2">
                     {`Delivered${
-                      alreadySent.delivery.opens ? `, and opened ${alreadySent.delivery.opens}×` : ' — not opened yet'
+                      alreadySent.delivery.opens
+                        ? `, and opened ${alreadySent.delivery.opens}×`
+                        : ' — not opened yet'
                     }.`}
                   </Text>
                 ) : (
@@ -192,33 +197,34 @@ export default function ExhorterHeadsUpReviewPage() {
           {data && !sentTo ? (
             <YStack gap="$3">
               <Text fontSize="$4">
-                {'This will be sent to '}
-                <Text fontWeight="700">{data.recipientName || data.recipientEmail}</Text>
-                {` (${data.recipientEmail}) for the exhortation on `}
+                {'Send the email you just read to '}
+                <Text fontWeight="700">{name}</Text>
+                {` (${data.recipientEmail}), for the exhortation on `}
                 <Text fontWeight="700">{data.date}</Text>
                 {'.'}
               </Text>
+              <Text fontSize="$2" theme="alt2">
+                {`Subject: ${data.subject}`}
+              </Text>
 
-              {/* The schedule can be edited after the review email goes out.
+              {/* The schedule can be edited after the QA copy goes out.
                   Approving an email for one brother must never send it to
-                  another, so the send is blocked rather than silently retargeted. */}
+                  another, so this blocks rather than silently retargeting. */}
               {data.changed ? (
                 <Card padding="$3" backgroundColor="$backgroundHover">
                   <XStack gap="$2" alignItems="center" flexWrap="wrap">
                     <AlertTriangle size={16} color="$warning" />
                     <Text fontSize="$3">
                       The schedule now shows a different exhorter for this Sunday. Nothing will be
-                      sent — check the schedule and trigger a fresh heads-up.
+                      sent — check the schedule and run a fresh heads-up.
                     </Text>
                   </XStack>
                 </Card>
               ) : null}
 
-              {/* An address on the SES account suppression list is dropped
-                  silently — no bounce, no error, the brother simply never hears.
-                  Said BEFORE the send, because this is when it can be acted on.
-                  Topic opt-out is a different thing and does NOT block this: a
-                  personal note about your own exhortation is not a broadcast. */}
+              {/* An address on the SES suppression list is dropped silently —
+                  no bounce, no error, the brother simply never hears. Said
+                  before the press, because that is when it can be acted on. */}
               {data.suppression?.suppressed ? (
                 <Card padding="$3" backgroundColor="$backgroundHover">
                   <YStack gap="$1">
@@ -230,8 +236,10 @@ export default function ExhorterHeadsUpReviewPage() {
                     </XStack>
                     <Text fontSize="$3">
                       {`AWS is refusing mail to ${data.recipientEmail}${
-                        data.suppression.reason ? ` after a ${data.suppression.reason.toLowerCase()}` : ''
-                      }. They will not receive this, and there will be no bounce to tell you. Remove them from the suppression list, or contact them another way.`}
+                        data.suppression.reason
+                          ? ` after a ${data.suppression.reason.toLowerCase()}`
+                          : ''
+                      }. They will not receive this, and there will be no bounce to tell you.`}
                     </Text>
                   </YStack>
                 </Card>
@@ -241,41 +249,17 @@ export default function ExhorterHeadsUpReviewPage() {
                 </Text>
               ) : null}
 
-              <Text fontSize="$2" theme="alt2">
-                {`Subject: ${data.subject}`}
-              </Text>
-
-              {/* Exactly what they will receive, rendered fresh. */}
-              <Card padding="$0" overflow="hidden">
-                <iframe
-                  title="The email as it will be received"
-                  srcDoc={data.html}
-                  style={{ width: '100%', height: 620, border: 'none', background: '#fff' }}
-                />
-              </Card>
-
               {sendError ? (
                 <Text fontSize="$3" color="$error">
                   {sendError}
                 </Text>
               ) : null}
 
-              <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
-                <Button
-                  theme="green"
-                  icon={Send}
-                  disabled={sending || data.changed}
-                  onPress={send}
-                >
-                  {sending
-                    ? 'Sending…'
-                    : `Send to ${data.recipientName || data.recipientEmail}`}
+              <XStack gap="$2" justifyContent="flex-end">
+                <Button theme="green" icon={Send} disabled={sending || data.changed} onPress={send}>
+                  {sending ? 'Sending…' : `Send to ${name}`}
                 </Button>
               </XStack>
-
-              <Text fontSize="$2" theme="alt2">
-                Nothing has been sent yet. It goes only when you press the button.
-              </Text>
             </YStack>
           ) : null}
         </YStack>

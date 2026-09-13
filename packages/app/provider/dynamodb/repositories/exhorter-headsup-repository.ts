@@ -33,8 +33,15 @@ export interface ParkPendingInput {
   token: string // secret in the release link
   recipientEmail: string // where the real email will go
   recipientName?: string
-  previewedBy: string // who was shown the preview
+  previewedBy: string // who the email was redirected to for QA
   expiresAt: string // ISO 8601; past this the link is dead
+  /**
+   * Fingerprint of the email that was redirected for QA.
+   *
+   * The send compares against THIS — the email actually read in an inbox — so
+   * pressing the footer link despatches that same email or nothing.
+   */
+  contentDigest: string
 }
 
 export interface PendingHeadsUp {
@@ -43,8 +50,10 @@ export interface PendingHeadsUp {
   token: string
   recipientEmail: string
   recipientName?: string
-  /** Who was asked to review it — used as the actor on the resulting send. */
+  /** Who the email was redirected to for QA — the actor on the resulting send. */
   previewedBy?: string
+  /** Fingerprint of the email that was read; the send must still match it. */
+  contentDigest?: string
   expiresAt: string
   /** Set once released — a second press must not send again. */
   releasedAt?: string
@@ -112,6 +121,7 @@ class ExhorterHeadsUpRepository {
           recipientEmail: input.recipientEmail,
           recipientName: input.recipientName,
           previewedBy: input.previewedBy,
+          contentDigest: input.contentDigest,
           expiresAt: input.expiresAt,
           createdAt: now,
         },
@@ -142,6 +152,7 @@ class ExhorterHeadsUpRepository {
       recipientEmail: String(item.recipientEmail),
       recipientName: item.recipientName ? String(item.recipientName) : undefined,
       previewedBy: item.previewedBy ? String(item.previewedBy) : undefined,
+      contentDigest: item.contentDigest ? String(item.contentDigest) : undefined,
       expiresAt: String(item.expiresAt),
       releasedAt: item.releasedAt ? String(item.releasedAt) : undefined,
     }

@@ -4,10 +4,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
  * The review route is where a human's approval turns into a real email to a
  * brother, so its guards are the safety-critical part of #124.
  *
- * The rule the shape exists to enforce: **GET causes nothing.** The Saturday
- * email carries only a link to the review page; mail clients prefetch and scan
- * links, so if fetching the link had done the sending it could have fired
- * before anybody read a word. Sending is a POST from a deliberate press.
+ * The rule the shape exists to enforce: **GET causes nothing.** The QA copy
+ * carries a footer link; mail clients prefetch and scan links, so if fetching
+ * it had done the sending it could have fired before anybody read a word.
+ * Sending is a POST from a deliberate press on the page it opens.
+ *
+ * The email itself is not served here — it was read in an inbox, which is the
+ * point of redirecting it. This route only confirms and sends.
  */
 
 const h = vi.hoisted(() => ({
@@ -36,6 +39,7 @@ const PENDING = {
   recipientEmail: 'brad@example.com',
   recipientName: 'Brad Stephens',
   previewedBy: 'rb@tee-admin.com',
+  contentDigest: 'abc123def456abc123def456abc12345',
   expiresAt: new Date(Date.now() + 86400000).toISOString(),
 }
 
@@ -65,13 +69,15 @@ beforeEach(() => {
 })
 
 describe('GET — opening the page sends nothing', () => {
-  it('returns the email to read, and writes nothing at all', async () => {
+  it('confirms who it goes to, and writes nothing at all', async () => {
     const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
     const res = await GET(req('GET'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.recipientEmail).toBe('brad@example.com')
-    expect(body.html).toContain('the email')
+    // The email is NOT served here: it was read in an inbox, which is the
+    // whole point. Re-rendering it would invite checking it in a simulation.
+    expect(body.html).toBeUndefined()
 
     // The whole point. A prefetching mail client must not send anything.
     expect(h.resolveAndSend).not.toHaveBeenCalled()
@@ -114,10 +120,14 @@ describe('POST — pressing the button sends it, once', () => {
     expect(res.status).toBe(200)
     expect((await res.json()).sentTo).toBe('brad@example.com')
 
-    // Live, and pinned to the brother who was approved.
+    // Live, and pinned to BOTH the brother and the email that was QA'd.
     const args = h.resolveAndSend.mock.calls[0][0]
     expect(args.test).toBe(false)
     expect(args.expectPersonId).toBe('p-brad')
+    // Taken from the parked record, NOT from the request body — the browser
+    // never saw the email, so a client-supplied digest would be the caller
+    // vouching for itself.
+    expect(args.expectContentDigest).toBe('abc123def456abc123def456abc12345')
   })
 
   it('claims the approval BEFORE sending, so a double press cannot send twice', async () => {

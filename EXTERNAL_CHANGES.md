@@ -136,9 +136,11 @@ record. Google Places was always listed as deferred — design Slice 10, #224.
 
 **What is in the repo:** `GET|POST /api/cron/exhorter-heads-up`, Bearer-authenticated
 with `EMAIL_SENDER_SECRET` like the other cron endpoints. It resolves who is
-exhorting three Sundays out, renders the email, parks it, and emails the
-Recording Brother a link to the review page. **It never emails the exhorter** —
-that happens only when a person presses the button on that page.
+exhorting three Sundays out, renders the email, and **redirects that exact email
+to the Recording Brother** for QA in a real inbox — same subject, same body,
+with one appended footer block carrying a link. **It never emails the exhorter**
+— that happens only when a person presses the button on the page that link
+opens. Going live means changing the `To:` and dropping the footer block.
 
 **Action required (outside the repo):** create an EventBridge Scheduler schedule
 in `ca-central-1` (account 911911532459):

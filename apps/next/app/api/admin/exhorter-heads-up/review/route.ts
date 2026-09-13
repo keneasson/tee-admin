@@ -114,6 +114,9 @@ export async function GET(request: NextRequest) {
       checkSuppressed(pending.recipientEmail),
     ])
 
+    // The email is deliberately NOT returned. It was already read where it
+    // matters — in an inbox, in a real mail client. Re-rendering it here would
+    // invite checking it here, and an iframe is a simulation, not a test.
     return NextResponse.json({
       success: true,
       date: pending.date,
@@ -123,9 +126,6 @@ export async function GET(request: NextRequest) {
       /** Set when the schedule now names a different brother — do not send. */
       changed: preview.personId !== pending.personId,
       subject: preview.subject,
-      html: preview.html,
-      // Echoed back on send: the guarantee that what was read is what is sent.
-      contentDigest: preview.contentDigest,
       suppression,
     })
   } catch (error) {
@@ -165,11 +165,12 @@ export async function POST(request: NextRequest) {
       test: false,
       requesterEmail: pending.previewedBy ?? 'review-page',
       expectPersonId: pending.personId,
-      // The fingerprint of the email that was actually on screen. Without it
-      // the page renders one email and the send renders another, and "I
-      // checked it" would not mean anything.
-      expectContentDigest:
-        typeof body?.contentDigest === 'string' ? body.contentDigest : undefined,
+      // The fingerprint of the email that was REDIRECTED AND READ, taken from
+      // the parked record rather than from the browser — the browser never saw
+      // the email, and a client-supplied digest would be the caller vouching
+      // for itself. Pressing the link despatches the email that was QA'd, or
+      // nothing.
+      expectContentDigest: pending.contentDigest,
     })
 
     if (report.status !== 'sent') {
