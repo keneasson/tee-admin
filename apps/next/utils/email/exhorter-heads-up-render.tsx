@@ -26,6 +26,8 @@ export interface RenderExhorterHeadsUpInput {
   dateDisplay: string
   timeDisplay: string
   attendOptions: ExhorterHeadsUpAttendOption[]
+  /** True when the exhorter is from another ecclesia — changes the greeting. */
+  visiting?: boolean
   /** Fellowship lunch style, or undefined for no lunch line. */
   lunchType?: ExhorterHeadsUpLunch
   /** Sunday School times that week, or undefined when there is no class. */
@@ -56,6 +58,7 @@ export async function renderExhorterHeadsUp(
       dateDisplay={input.dateDisplay}
       timeDisplay={input.timeDisplay}
       attendOptions={input.attendOptions}
+      visiting={input.visiting}
       lunchType={input.lunchType}
       sundaySchool={input.sundaySchool}
       note={input.note}

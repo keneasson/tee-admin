@@ -55,13 +55,23 @@ describe('ExhorterHeadsUp template render', () => {
     expect(html).toContain('586 952 386')
   })
 
-  it('uses the wanted greeting, verbatim', async () => {
-    const html = await renderHtml(baseProps)
+  it('welcomes a VISITING brother to the host ecclesia', async () => {
+    const html = await renderHtml({ ...baseProps, visiting: true })
     expect(html).toContain('We are looking forward to having you join us and hearing you Exhort at')
+    expect(html).toContain('Toronto East')
     // The earlier draft opened "Just confirming our arrangements…"; "just"
     // in particular was to go.
     expect(html).not.toContain('Just confirming')
     expect(html).not.toContain('your exhortation at')
+  })
+
+  it('does not tell one of its OWN members he is joining us at his own meeting', async () => {
+    // Brad is Toronto East. "having you join us … at Toronto East" reads wrong
+    // for a brother of the host ecclesia; he is simply exhorting.
+    const html = await renderHtml(baseProps)
+    expect(html).toContain('We are looking forward to hearing you Exhort on')
+    expect(html).not.toContain('having you join us')
+    expect(html).not.toContain('hearing you Exhort at')
   })
 
   it('signs off "Love in Jesus name" over the Recording Brother\'s name alone', async () => {

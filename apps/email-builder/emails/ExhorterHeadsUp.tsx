@@ -74,6 +74,15 @@ export interface ExhorterHeadsUpProps {
    * omitted entirely when empty (no digital option for this meeting).
    */
   attendOptions: ExhorterHeadsUpAttendOption[]
+  /**
+   * True when the exhorter is coming from ANOTHER ecclesia.
+   *
+   * The greeting differs, because the same sentence reads wrong both ways. A
+   * visiting brother is being welcomed somewhere — "having you join us… at
+   * Toronto East" is the point. Telling a brother of the host ecclesia that he
+   * will be joining us at his own meeting is odd; he is simply exhorting.
+   */
+  visiting?: boolean
   /** Fellowship lunch style for this occasion, or undefined for no lunch line. */
   lunchType?: ExhorterHeadsUpLunch
   /**
@@ -150,6 +159,7 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
   dateDisplay,
   timeDisplay,
   attendOptions,
+  visiting,
   lunchType,
   sundaySchool,
   note,
@@ -168,7 +178,11 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>{`We are looking forward to hearing you Exhort at ${hostEcclesiaName} on ${dateDisplay}.`}</Preview>
+      <Preview>
+        {visiting
+          ? `We are looking forward to hearing you Exhort at ${hostEcclesiaName} on ${dateDisplay}.`
+          : `We are looking forward to hearing you Exhort on ${dateDisplay}.`}
+      </Preview>
       <Body style={main}>
         <Section style={header}>
           <Heading>{hostEcclesiaName}</Heading>
@@ -179,11 +193,21 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Text style={defaultText}>{greeting}</Text>
           <Text style={defaultText}>
-            {'We are looking forward to having you join us and hearing you Exhort at '}
-            <strong>{hostEcclesiaName}</strong>
-            {' on '}
-            <strong>{dateDisplay}</strong>
-            {'!'}
+            {visiting ? (
+              <>
+                {'We are looking forward to having you join us and hearing you Exhort at '}
+                <strong>{hostEcclesiaName}</strong>
+                {' on '}
+                <strong>{dateDisplay}</strong>
+                {'!'}
+              </>
+            ) : (
+              <>
+                {'We are looking forward to hearing you Exhort on '}
+                <strong>{dateDisplay}</strong>
+                {'!'}
+              </>
+            )}
           </Text>
           {/* Occasion-specific sentence, authored per-Sunday. Empty today. */}
           {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}

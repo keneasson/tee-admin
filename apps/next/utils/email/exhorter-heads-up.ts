@@ -354,6 +354,9 @@ export async function resolveAndSendExhorterHeadsUp(
       dateDisplay,
       timeDisplay,
       attendOptions,
+      // Already known from the directory — a brother of the host ecclesia is
+      // not "joining us at Toronto East", he is simply exhorting.
+      visiting,
       lunchType,
       sundaySchool,
       note: row.Note ? String(row.Note).trim() || undefined : undefined,
