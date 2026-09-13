@@ -129,7 +129,7 @@ export default function ExhorterHeadsUpReviewPage() {
     return (
       <Wrapper>
         <Section>
-          <Spinner />
+          <Spinner size="large" width={32} height={32} />
         </Section>
       </Wrapper>
     )

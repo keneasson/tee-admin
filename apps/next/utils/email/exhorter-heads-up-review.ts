@@ -3,6 +3,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
 import { resolveTenantFromEnv } from '@my/app/config/tenants'
 import { getEcclesiaByName } from '../dynamodb/locations'
+import { escapeHtml } from '../html'
 import { sendEmail } from './sesClient'
 import {
   resolveAndSendExhorterHeadsUp,
@@ -43,15 +44,6 @@ function baseUrl(): string {
 
 function mintToken(): string {
   return randomBytes(32).toString('base64url')
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 export interface PrepareHeadsUpForReviewParams {
