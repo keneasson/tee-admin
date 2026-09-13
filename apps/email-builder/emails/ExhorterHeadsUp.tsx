@@ -76,6 +76,24 @@ export interface ExhorterHeadsUpProps {
   attendOptions: ExhorterHeadsUpAttendOption[]
   /** Fellowship lunch style for this occasion, or undefined for no lunch line. */
   lunchType?: ExhorterHeadsUpLunch
+  /**
+   * Sunday School times for that week, or undefined when there is no Sunday
+   * School — derived from the `sundaySchool` schedule, never assumed. The
+   * classes do not run every week (summer break, special occasions), and
+   * telling a visiting speaker to arrive for a class that is not on would be
+   * worse than saying nothing.
+   */
+  sundaySchool?: { startDisplay: string; endDisplay: string }
+  /**
+   * A freeform sentence for this occasion — "That Sunday is also our opening
+   * for Sunday School", "we're combining with Toronto West", and so on.
+   *
+   * The first version of this email hardcoded one ecclesia's particular
+   * arrangements into the template, which made it wrong for every other
+   * occasion. There is nowhere to author this yet; the Schedule Editor will
+   * fill it. Until then it stays empty and renders nothing.
+   */
+  note?: string
   /** Recording Brother's full name for the signature (host ecclesia). */
   signatoryName?: string
   /** Real (resolved) Email Preferences URL for this recipient. */
@@ -133,6 +151,8 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
   timeDisplay,
   attendOptions,
   lunchType,
+  sundaySchool,
+  note,
   signatoryName,
   emailPreferencesUrl,
   echadHubUrl = ECHAD_HUB_URL,
@@ -148,7 +168,7 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
       <Head>
         <style>{globalCss}</style>
       </Head>
-      <Preview>{`We're looking forward to your exhortation at ${hostEcclesiaName} on ${dateDisplay}.`}</Preview>
+      <Preview>{`We are looking forward to hearing you Exhort at ${hostEcclesiaName} on ${dateDisplay}.`}</Preview>
       <Body style={main}>
         <Section style={header}>
           <Heading>{hostEcclesiaName}</Heading>
@@ -159,11 +179,26 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Text style={defaultText}>{greeting}</Text>
           <Text style={defaultText}>
-            {`We're looking forward to your exhortation at ${hostEcclesiaName} on `}
+            {'We are looking forward to having you join us and hearing you Exhort at '}
+            <strong>{hostEcclesiaName}</strong>
+            {' on '}
             <strong>{dateDisplay}</strong>
-            {' at '}
+            {'!'}
+          </Text>
+          {/* Occasion-specific sentence, authored per-Sunday. Empty today. */}
+          {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
+        </Container>
+
+        {/* The order of the day. Sunday School only when it actually runs. */}
+        <Container style={container} className="container">
+          {sundaySchool ? (
+            <Text style={{ ...defaultText, margin: '0 0 4px 0' }}>
+              {`Our Sunday school (kids and teens classes) is from ${sundaySchool.startDisplay} to ${sundaySchool.endDisplay} followed by coffee and snacks.`}
+            </Text>
+          ) : null}
+          <Text style={{ ...defaultText, margin: '0' }}>
+            {'Memorial service is '}
             <strong>{timeDisplay}</strong>
-            {'.'}
           </Text>
         </Container>
 
@@ -185,14 +220,8 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
           ) : null}
         </Container>
 
-        <Container style={container} className="container">
-          <Heading style={defaultText}>What&apos;s next</Heading>
-          <Text style={defaultText}>
-            The week of your exhortation, we&apos;ll send a follow-up email to request your theme,
-            readings, and hymn preferences so we can prepare the service with you.
-          </Text>
-        </Container>
-
+        {/* Lunch BEFORE the theme/readings line, matching the email this was
+            written from. Only when a lunch is actually on the schedule. */}
         {lunchLine ? (
           <Container style={container} className="container">
             <Text style={defaultText}>{lunchLine}</Text>
@@ -201,20 +230,23 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
 
         <Container style={container} className="container">
           <Text style={defaultText}>
+            You&apos;ll receive an email shortly asking for a theme, and any readings or hymns you
+            would like to have to support your exhortation.
+          </Text>
+        </Container>
+
+        <Container style={container} className="container">
+          <Text style={defaultText}>Looking forward to seeing you again.</Text>
+          <Text style={defaultText}>
             If for any reason you&apos;re unable to be with us, please reply to this email to let us
             know as soon as you can.
           </Text>
-          <Text style={{ ...defaultText, margin: '16px 0 0 0' }}>With love in the LORD,</Text>
+          {/* The sign-off is verbatim: "Love in Jesus name", then the Recording
+              Brother's name on its own. No title line — it is a note from a
+              brother, not a memo from an office. */}
+          <Text style={{ ...defaultText, margin: '16px 0 0 0' }}>Love in Jesus name</Text>
           <Text style={{ ...defaultText, margin: '0' }}>
-            {signatoryName?.trim() ? (
-              <>
-                {`Brother ${signatoryName.trim()}`}
-                <br />
-                Ecclesial Recorder
-              </>
-            ) : (
-              'The Ecclesial Recorder'
-            )}
+            {signatoryName?.trim() || 'The Ecclesial Recorder'}
           </Text>
         </Container>
 

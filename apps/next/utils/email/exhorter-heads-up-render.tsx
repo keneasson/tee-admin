@@ -28,6 +28,10 @@ export interface RenderExhorterHeadsUpInput {
   attendOptions: ExhorterHeadsUpAttendOption[]
   /** Fellowship lunch style, or undefined for no lunch line. */
   lunchType?: ExhorterHeadsUpLunch
+  /** Sunday School times that week, or undefined when there is no class. */
+  sundaySchool?: { startDisplay: string; endDisplay: string }
+  /** Freeform sentence for this occasion; empty until the Schedule Editor. */
+  note?: string
   /** Recording Brother's full name for the signature. */
   signatoryName?: string
   emailPreferencesUrl: string
@@ -53,6 +57,8 @@ export async function renderExhorterHeadsUp(
       timeDisplay={input.timeDisplay}
       attendOptions={input.attendOptions}
       lunchType={input.lunchType}
+      sundaySchool={input.sundaySchool}
+      note={input.note}
       signatoryName={input.signatoryName}
       emailPreferencesUrl={input.emailPreferencesUrl}
       identity={emailIdentity}

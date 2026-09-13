@@ -20,6 +20,7 @@ import type {
   ExhorterHeadsUpLunch,
 } from 'email-builder/emails/ExhorterHeadsUp'
 import { getEcclesiaByName, type EcclesiaData } from '../dynamodb/locations'
+import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { sendEmail } from './sesClient'
 import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
@@ -307,6 +308,20 @@ export async function resolveAndSendExhorterHeadsUp(
     person.displayName ||
     person.firstName
 
+  /**
+   * Sunday School that week — DERIVED, never assumed.
+   *
+   * The classes do not run every Sunday (summer break, special occasions), and
+   * the schedule has a row only for the weeks they do. So the presence of a row
+   * for the target date IS the signal; its absence means no class, and the line
+   * is omitted rather than promising a visiting speaker a class that is not on.
+   *
+   * Times come from the ecclesia's seasonal service-time definitions, so a
+   * summer/winter change follows automatically instead of being frozen into an
+   * email template.
+   */
+  const sundaySchool = await resolveSundaySchoolForDate(targetISO, ecclesia)
+
   try {
     const { html, text } = await renderExhorterHeadsUp({
       exhorterName,
@@ -316,6 +331,8 @@ export async function resolveAndSendExhorterHeadsUp(
       timeDisplay,
       attendOptions,
       lunchType,
+      sundaySchool,
+      note: row.Note ? String(row.Note).trim() || undefined : undefined,
       signatoryName,
       emailPreferencesUrl,
       tenant,
@@ -345,14 +362,74 @@ export async function resolveAndSendExhorterHeadsUp(
 }
 
 /**
- * Compute the next target Sunday (~2 weeks out) for the manual admin trigger when
- * no explicit date is given. Returns an ISO YYYY-MM-DD (UTC). The heads-up is sent
- * ~2 Saturdays before, so the default target is the SECOND upcoming Sunday.
+ * Sunday School details for a given Sunday, or undefined when there is none.
+ *
+ * The `sundaySchool` schedule carries a row only for the weeks the classes
+ * actually run, so the presence of a row for that date IS the signal — exactly
+ * how the newsletter decides whether to show a Sunday School block. Absence
+ * means no class, and the caller omits the line.
+ *
+ * Start and end come from the ecclesia's seasonal service-time definitions
+ * (`resolveServiceTime`), not from constants, so a summer/winter time change
+ * follows the configuration instead of being frozen into an email.
+ */
+export async function resolveSundaySchoolForDate(
+  targetISO: string,
+  ecclesia: EcclesiaData | null
+): Promise<{ startDisplay: string; endDisplay: string } | undefined> {
+  try {
+    const schedule = await scheduleService.getScheduleData('sundaySchool')
+    const rows = (schedule?.content ?? []) as Array<Record<string, any>>
+    const runsThisWeek = rows.some(
+      (r) => normalizeToISODate(r.DateTime || r.Date || r.date) === targetISO
+    )
+    if (!runsThisWeek) return undefined
+
+    const resolved = resolveServiceTime(
+      (ecclesia as unknown as { scheduleConfig?: Record<string, any> })?.scheduleConfig,
+      'sundaySchool',
+      new Date(`${targetISO}T12:00:00Z`)
+    )
+    const startDisplay = resolved.displayTime || resolved.defaultTime
+    if (!startDisplay) return undefined
+    return { startDisplay, endDisplay: addOneHour(startDisplay) }
+  } catch (err) {
+    // A missing Sunday School line is a small loss; a failed heads-up is not.
+    console.error('[exhorter-headsup] could not resolve Sunday School:', err)
+    return undefined
+  }
+}
+
+/** "9:30am" → "10:30". The class runs an hour; the end is not configured. */
+function addOneHour(display: string): string {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(display.trim())
+  if (!m) return display
+  const hour = Number(m[1])
+  const mins = m[2] ?? '00'
+  const next = hour === 12 ? 1 : hour + 1
+  return `${next}:${mins}`
+}
+
+/** Sundays of notice the exhorter gets, counting the appointment itself. */
+export const SUNDAYS_OF_NOTICE = 3
+
+/**
+ * Compute the target Sunday for a heads-up sent today.
+ *
+ * The notice is **the Saturday two weeks before — three Sundays, counting the
+ * appointment**. From Saturday 5 Sep the remaining Sundays are 6, 13 and 20
+ * Sep, so the exhortation being announced is the 20th: send date + 15 days.
+ *
+ * This was `+7` ("the SECOND upcoming Sunday"), which is +8 days from a
+ * Saturday and only TWO Sundays of notice — a week later than intended. The
+ * first real heads-up had to be sent by hand because it was already late, and
+ * the automation would have been late in exactly the same way.
  */
 export function computeNextTargetSunday(from: Date = new Date()): string {
   const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()))
-  // Advance to the next Sunday (excluding today), then +7 → second upcoming Sunday.
+  // Advance to the next Sunday (never today), then add the remaining weeks of
+  // notice: from a Saturday that is 1 + 14 = 15 days.
   const daysToSunday = (7 - d.getUTCDay()) % 7 || 7
-  d.setUTCDate(d.getUTCDate() + daysToSunday + 7)
+  d.setUTCDate(d.getUTCDate() + daysToSunday + 7 * (SUNDAYS_OF_NOTICE - 1))
   return normalizeToISODate(d)
 }

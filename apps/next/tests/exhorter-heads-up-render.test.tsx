@@ -55,11 +55,62 @@ describe('ExhorterHeadsUp template render', () => {
     expect(html).toContain('586 952 386')
   })
 
-  it('signs off with the Recording Brother and "Ecclesial Recorder"', async () => {
+  it('uses the wanted greeting, verbatim', async () => {
     const html = await renderHtml(baseProps)
-    expect(html).toContain('With love in the LORD')
-    expect(html).toContain('Brother Ken Easson')
-    expect(html).toContain('Ecclesial Recorder')
+    expect(html).toContain('We are looking forward to having you join us and hearing you Exhort at')
+    // The earlier draft opened "Just confirming our arrangements…"; "just"
+    // in particular was to go.
+    expect(html).not.toContain('Just confirming')
+    expect(html).not.toContain('your exhortation at')
+  })
+
+  it('signs off "Love in Jesus name" over the Recording Brother\'s name alone', async () => {
+    const html = await renderHtml(baseProps)
+    expect(html).toContain('Looking forward to seeing you again.')
+    expect(html).toContain('Love in Jesus name')
+    expect(html).toContain('Ken Easson')
+    // It is a note from a brother, not a memo from an office.
+    expect(html).not.toContain('With love in the LORD')
+    expect(html).not.toContain('Ecclesial Recorder')
+  })
+
+  it('mentions Sunday School only when it actually runs that week', async () => {
+    // Classes do not run every week. Telling a visiting speaker to arrive for a
+    // class that is not on is worse than saying nothing, so the line is driven
+    // by the sundaySchool schedule rather than assumed.
+    const without = await renderHtml(baseProps)
+    expect(without).not.toContain('Sunday school')
+
+    const withSS = await renderHtml({
+      ...baseProps,
+      sundaySchool: { startDisplay: '9:30am', endDisplay: '10:30' },
+    })
+    expect(withSS).toContain(
+      'Our Sunday school (kids and teens classes) is from 9:30am to 10:30 followed by coffee and snacks.'
+    )
+  })
+
+  it('renders an occasion note when there is one, and nothing when there is not', async () => {
+    const without = await renderHtml(baseProps)
+    expect(without).not.toContain('opening for Sunday School')
+
+    const withNote = await renderHtml({
+      ...baseProps,
+      note: 'That Sunday is also our opening for Sunday School.',
+    })
+    expect(withNote).toContain('That Sunday is also our opening for Sunday School.')
+
+    // Whitespace is not a note.
+    const blank = await renderHtml({ ...baseProps, note: '   ' })
+    expect(blank).toBe(without)
+  })
+
+  it('invites the exhorter to lunch only when a lunch is scheduled', async () => {
+    const without = await renderHtml(baseProps)
+    expect(without).not.toContain('invited to stay')
+
+    const withLunch = await renderHtml({ ...baseProps, lunchType: 'potluck' })
+    expect(withLunch).toContain('invited to stay for a potluck fellowship lunch')
   })
 
   it('omits the digital block when there are no attend options', async () => {

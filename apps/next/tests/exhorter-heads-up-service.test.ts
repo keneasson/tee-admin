@@ -44,7 +44,11 @@ vi.mock('@my/app/utils/service-overrides/merge', async (importOriginal) => {
 })
 vi.mock('../utils/dynamodb/locations', () => ({ getEcclesiaByName: h.getEcclesiaByName }))
 
-import { resolveAndSendExhorterHeadsUp } from '../utils/email/exhorter-heads-up'
+import {
+  resolveAndSendExhorterHeadsUp,
+  computeNextTargetSunday,
+  SUNDAYS_OF_NOTICE,
+} from '../utils/email/exhorter-heads-up'
 
 const TARGET_DATE = '2026-02-01' // a Sunday
 const REQUESTER = 'admin@tee-admin.com'
@@ -536,5 +540,53 @@ describe('resolveAndSendExhorterHeadsUp — dryRun', () => {
     expect(report.personId).toBe('p-brad')
     expect(h.sendEmail).not.toHaveBeenCalled()
     expect(h.claim).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * HOW MUCH NOTICE THE EXHORTER GETS.
+ *
+ * The rule is "the Saturday two weeks before — three Sundays, counting the
+ * appointment". The original code said "the SECOND upcoming Sunday", which is
+ * only two Sundays of notice: a week later than intended. The first heads-up
+ * had to go out by hand because it was already late, and the automation would
+ * have been late the same way. Nothing tested it, so nothing caught it.
+ */
+describe('how far ahead the heads-up looks', () => {
+  const target = (iso: string) => computeNextTargetSunday(new Date(`${iso}T12:00:00Z`))
+
+  it('from the Saturday it is meant to run, lands 15 days out', () => {
+    // Sat 5 Sep 2026 → Sun 20 Sep 2026. Sundays remaining: 6th, 13th, 20th.
+    expect(target('2026-09-05')).toBe('2026-09-20')
+  })
+
+  it('gives three Sundays of notice, counting the appointment', () => {
+    const from = new Date('2026-09-05T12:00:00Z')
+    const t = new Date(`${target('2026-09-05')}T12:00:00Z`)
+    const days = Math.round((t.getTime() - from.getTime()) / 86400000)
+    expect(days).toBe(15)
+
+    // Count the Sundays in (send, target]: must equal the notice we promise.
+    let sundays = 0
+    for (const d = new Date(from); d < t; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (new Date(d.getTime() + 86400000).getUTCDay() === 0) sundays++
+    }
+    expect(sundays).toBe(SUNDAYS_OF_NOTICE)
+  })
+
+  it('never returns today, even when run ON a Sunday', () => {
+    // Sun 6 Sep 2026 → three Sundays on: 13th, 20th, 27th.
+    expect(target('2026-09-06')).toBe('2026-09-27')
+  })
+
+  it('always lands on a Sunday, whatever day it runs', () => {
+    for (const day of [
+      '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+      '2026-09-05', '2026-09-06', '2026-09-07',
+    ]) {
+      const t = new Date(`${target(day)}T12:00:00Z`)
+      expect(t.getUTCDay()).toBe(0)
+      expect(t.getTime()).toBeGreaterThan(new Date(`${day}T12:00:00Z`).getTime())
+    }
   })
 })
