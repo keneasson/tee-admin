@@ -7,6 +7,9 @@ import {
   exhorterHeadsUpCampaignId,
 } from '@/utils/email/exhorter-heads-up'
 import { checkSuppressed } from '@/utils/email/suppression-check'
+import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { prepareHeadsUpForReview } from '@/utils/email/exhorter-heads-up-review'
 
 /**
  * Review a parked exhorter heads-up, and send it.
@@ -85,6 +88,22 @@ async function loadPending(token: string) {
       ),
     }
   }
+  if (pending.supersededAt) {
+    // Stopped by a person, or replaced by a newer copy. Not an error: the page
+    // turns this into "fix the data, then re-send the verification email".
+    return {
+      error: NextResponse.json(
+        {
+          error: 'This copy was stopped. Fix the Program, then re-send the verification email.',
+          superseded: true,
+          date: pending.date,
+          recipientName: pending.recipientName,
+          recipientEmail: pending.recipientEmail,
+        },
+        { status: 409 }
+      ),
+    }
+  }
   if (new Date(pending.expiresAt).getTime() < Date.now()) {
     return {
       error: NextResponse.json(
@@ -96,9 +115,65 @@ async function loadPending(token: string) {
   return { pending }
 }
 
+/**
+ * What the page needs to confirm a send. NOT the email itself — that was read
+ * in an inbox, which is the point of redirecting it; re-rendering it here would
+ * invite checking it in a simulation.
+ */
+async function buildReviewPayload(pending: {
+  date: string
+  personId: string
+  token: string
+  recipientEmail: string
+  recipientName?: string
+  expiresAt: string
+}) {
+  const [preview, suppression] = await Promise.all([
+    renderHeadsUpPreview({ date: pending.date }),
+    checkSuppressed(pending.recipientEmail),
+  ])
+
+  return NextResponse.json({
+    success: true,
+    date: pending.date,
+    recipientName: pending.recipientName,
+    recipientEmail: pending.recipientEmail,
+    expiresAt: pending.expiresAt,
+    // The page needs this to act when it was opened without one.
+    token: pending.token,
+    /** Set when the schedule now names a different brother — do not send. */
+    changed: preview.personId !== pending.personId,
+    subject: preview.subject,
+    suppression,
+  })
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const gate = await loadPending(tokenFrom(request))
+    const token = tokenFrom(request)
+
+    /**
+     * No token — the page was opened directly rather than from the QA email.
+     *
+     * It has to be somewhere findable, so it answers "what is waiting?" on its
+     * own. Signed-in admin only: without a token there is nothing else
+     * establishing who is asking.
+     */
+    if (!token) {
+      const session = await auth()
+      const role = ((session?.user as any)?.role as string) || ROLES.GUEST
+      if (!session?.user?.email || (role !== ROLES.ADMIN && role !== ROLES.OWNER)) {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+      }
+      const current = await exhorterHeadsUpRepository.findCurrentPending()
+      if (!current) {
+        // Not an error. Most of the time there is genuinely nothing waiting.
+        return NextResponse.json({ success: true, nothingWaiting: true })
+      }
+      return buildReviewPayload(current)
+    }
+
+    const gate = await loadPending(token)
     if (gate.error) return gate.error
     const { pending } = gate
 
@@ -109,25 +184,7 @@ export async function GET(request: NextRequest) {
     // actionable. An address on the account suppression list is dropped by SES
     // silently — the speaker would simply never be told, and nobody would find
     // out until he failed to arrive. Telling somebody afterwards is too late.
-    const [preview, suppression] = await Promise.all([
-      renderHeadsUpPreview({ date: pending.date }),
-      checkSuppressed(pending.recipientEmail),
-    ])
-
-    // The email is deliberately NOT returned. It was already read where it
-    // matters — in an inbox, in a real mail client. Re-rendering it here would
-    // invite checking it here, and an iframe is a simulation, not a test.
-    return NextResponse.json({
-      success: true,
-      date: pending.date,
-      recipientName: pending.recipientName,
-      recipientEmail: pending.recipientEmail,
-      expiresAt: pending.expiresAt,
-      /** Set when the schedule now names a different brother — do not send. */
-      changed: preview.personId !== pending.personId,
-      subject: preview.subject,
-      suppression,
-    })
+    return buildReviewPayload(pending)
   } catch (error) {
     console.error('[exhorter-headsup] review load failed:', error)
     return NextResponse.json({ error: 'Could not load this heads-up.' }, { status: 500 })
@@ -138,6 +195,74 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
     const token = String(body?.token ?? tokenFrom(request)).trim()
+    const action = String(body?.action ?? 'send')
+
+    /**
+     * "Stop! there's a problem" — invalidate this copy immediately.
+     *
+     * Pressed the moment a mistake is spotted, BEFORE going to fix the data:
+     * the wrong email must stop being sendable straight away, not after the
+     * correction is made. Nothing is emailed; it only closes the door.
+     */
+    if (action === 'invalidate') {
+      const found = await exhorterHeadsUpRepository.findPendingByToken(token)
+      if (!found) {
+        return NextResponse.json({ error: 'This link is not valid.' }, { status: 404 })
+      }
+      if (found.releasedAt) {
+        return NextResponse.json(
+          { error: 'Too late — this was already sent.', alreadySent: true },
+          { status: 409 }
+        )
+      }
+      await exhorterHeadsUpRepository.supersedePending(found.date, found.personId)
+      return NextResponse.json({
+        success: true,
+        invalidated: true,
+        date: found.date,
+        recipientName: found.recipientName,
+      })
+    }
+
+    /**
+     * "Re-send verification email" — after the data is fixed.
+     *
+     * Deliberately accepts a stopped token: the link in the bad email is how
+     * somebody gets back here, and refusing it would leave them with nowhere to
+     * press. It re-resolves and re-renders from the CURRENT schedule, so the
+     * fix is picked up, and redirects a fresh copy with a fresh link.
+     */
+    if (action === 'resend') {
+      const found = await exhorterHeadsUpRepository.findPendingByToken(token)
+      if (!found) {
+        return NextResponse.json({ error: 'This link is not valid.' }, { status: 404 })
+      }
+      if (found.releasedAt) {
+        return NextResponse.json(
+          { error: 'This was already sent to the exhorter.', alreadySent: true },
+          { status: 409 }
+        )
+      }
+      const result = await prepareHeadsUpForReview({ date: found.date })
+      if (!result.parked) {
+        return NextResponse.json(
+          {
+            error:
+              result.report.note ??
+              `Nothing could be prepared for ${found.date} (${result.report.status}). Check the schedule.`,
+            status: result.report.status,
+          },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({
+        success: true,
+        resent: true,
+        redirectedTo: result.reviewerEmail,
+        date: found.date,
+      })
+    }
+
     const gate = await loadPending(token)
     if (gate.error) return gate.error
     const { pending } = gate

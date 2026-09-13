@@ -20,6 +20,9 @@ function idempotencyPk(date: string, personId: string): string {
   return `EXHORTER_HEADSUP#${date}#${personId}`
 }
 
+/** Partition for the sparse "awaiting verification" index. */
+const PENDING_INDEX_PK = 'EXHORTER_HEADSUP_PENDING'
+
 export interface ClaimHeadsUpInput {
   date: string // ISO YYYY-MM-DD (target Sunday)
   personId: string
@@ -54,6 +57,8 @@ export interface PendingHeadsUp {
   previewedBy?: string
   /** Fingerprint of the email that was read; the send must still match it. */
   contentDigest?: string
+  /** Stopped, or replaced by a newer copy. The send path refuses these. */
+  supersededAt?: string
   expiresAt: string
   /** Set once released — a second press must not send again. */
   releasedAt?: string
@@ -115,6 +120,12 @@ class ExhorterHeadsUpRepository {
           skey: `PENDING#${input.token}`,
           gsi4pk: `EXHORTER_RELEASE#${input.token}`,
           gsi4sk: input.expiresAt,
+          // A second, sparse index so the admin page can find "the copy
+          // currently awaiting verification" WITHOUT a token. The page has to
+          // be somewhere you can reliably navigate to, not only reachable from
+          // a link in an email.
+          gsi1pk: PENDING_INDEX_PK,
+          gsi1sk: `${input.date}#${input.token}`,
           date: input.date,
           personId: input.personId,
           token: input.token,
@@ -156,16 +167,18 @@ class ExhorterHeadsUpRepository {
         },
       })
     )
-    const stale = (res.Items ?? []).filter((i) => !i.releasedAt)
+    const stale = (res.Items ?? []).filter((i) => !i.releasedAt && !i.supersededAt)
     for (const item of stale) {
       try {
         await docClient.send(
           new UpdateCommand({
             TableName: this.tableName,
             Key: { pkey: String(item.pkey), skey: String(item.skey) },
-            // Clearing the GSI key is what makes the old link unfindable —
-            // `findPendingByToken` queries gsi4, so the lookup simply misses.
-            UpdateExpression: 'SET supersededAt = :now REMOVE gsi4pk, gsi4sk',
+            // The GSI keys are deliberately KEPT, so the old link still
+            // resolves — and can say "this was stopped, here is how to resend"
+            // instead of a bare "not valid". A superseded record is refused by
+            // the send path, which is what actually protects it.
+            UpdateExpression: 'SET supersededAt = :now',
             ExpressionAttributeValues: { ':now': new Date().toISOString() },
           })
         )
@@ -174,6 +187,37 @@ class ExhorterHeadsUpRepository {
       }
     }
     return stale.length
+  }
+
+  /**
+   * The copy currently awaiting verification, if any.
+   *
+   * Powers the admin page when it is opened directly rather than from the link
+   * in the QA email. Skips anything already sent, stopped, or past its link
+   * expiry — those are history, not something waiting on a decision.
+   *
+   * Returns the EARLIEST upcoming Sunday when more than one is outstanding,
+   * because that is the one with a deadline.
+   */
+  async findCurrentPending(): Promise<PendingHeadsUp | null> {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        ExpressionAttributeValues: { ':pk': PENDING_INDEX_PK },
+        ScanIndexForward: true, // gsi1sk starts with the date → earliest first
+      })
+    )
+    const now = Date.now()
+    const usable = (res.Items ?? []).find(
+      (i) =>
+        !i.releasedAt &&
+        !i.supersededAt &&
+        new Date(String(i.expiresAt)).getTime() >= now
+    )
+    if (!usable) return null
+    return this.toPending(usable)
   }
 
   /** Find a parked heads-up by the token in a release link. */
@@ -189,6 +233,10 @@ class ExhorterHeadsUpRepository {
     )
     const item = res.Items?.[0]
     if (!item) return null
+    return this.toPending(item)
+  }
+
+  private toPending(item: Record<string, any>): PendingHeadsUp {
     return {
       date: String(item.date),
       personId: String(item.personId),
@@ -197,6 +245,7 @@ class ExhorterHeadsUpRepository {
       recipientName: item.recipientName ? String(item.recipientName) : undefined,
       previewedBy: item.previewedBy ? String(item.previewedBy) : undefined,
       contentDigest: item.contentDigest ? String(item.contentDigest) : undefined,
+      supersededAt: item.supersededAt ? String(item.supersededAt) : undefined,
       expiresAt: String(item.expiresAt),
       releasedAt: item.releasedAt ? String(item.releasedAt) : undefined,
     }

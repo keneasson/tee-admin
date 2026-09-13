@@ -184,7 +184,9 @@ export async function prepareHeadsUpForReview(
     expiresAt: new Date(Date.now() + REVIEW_LINK_TTL_MS).toISOString(),
   })
 
-  const url = `${baseUrl()}/admin/exhorter-heads-up/review?token=${encodeURIComponent(token)}`
+  // The page lives at a stable, findable URL; the token just identifies WHICH
+  // copy and lets the reviewer act without signing in.
+  const url = `${baseUrl()}/admin/exhorter-heads-up?token=${encodeURIComponent(token)}`
   const link = { name: recipientName, email: recipientEmail, url }
 
   await sendEmail({

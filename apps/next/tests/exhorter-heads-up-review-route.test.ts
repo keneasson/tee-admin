@@ -16,15 +16,28 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 const h = vi.hoisted(() => ({
   findPendingByToken: vi.fn(),
   markReleased: vi.fn(),
+  supersedePending: vi.fn(),
+  findCurrentPending: vi.fn(),
   resolveAndSend: vi.fn(),
   renderPreview: vi.fn(),
+  prepareForReview: vi.fn(),
+  auth: vi.fn(),
 }))
+
+// The route imports `auth` for the no-token path; NextAuth initialises at
+// import time and throws in a test process, so it is stubbed here.
+vi.mock('@/utils/auth', () => ({ auth: h.auth }))
 
 vi.mock('@my/app/provider/dynamodb/repositories/exhorter-headsup-repository', () => ({
   exhorterHeadsUpRepository: {
     findPendingByToken: h.findPendingByToken,
     markReleased: h.markReleased,
+    supersedePending: h.supersedePending,
+    findCurrentPending: h.findCurrentPending,
   },
+}))
+vi.mock('@/utils/email/exhorter-heads-up-review', () => ({
+  prepareHeadsUpForReview: h.prepareForReview,
 }))
 vi.mock('@/utils/email/exhorter-heads-up', () => ({
   resolveAndSendExhorterHeadsUp: h.resolveAndSend,
@@ -53,6 +66,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.findPendingByToken.mockResolvedValue({ ...PENDING })
   h.markReleased.mockResolvedValue(true)
+  h.supersedePending.mockResolvedValue(1)
+  h.auth.mockResolvedValue({ user: { email: 'rb@tee-admin.com', role: 'owner' } })
+  h.findCurrentPending.mockResolvedValue(null)
+  h.prepareForReview.mockResolvedValue({
+    parked: true,
+    reviewerEmail: 'rb@tee-admin.com',
+    report: { date: '2026-09-20', test: false, status: 'dry-run' },
+  })
   h.renderPreview.mockResolvedValue({
     personId: 'p-brad',
     subject: 'Your exhortation at Toronto East on Sunday, September 20, 2026',
@@ -161,5 +182,138 @@ describe('POST — pressing the button sends it, once', () => {
     const body = await res.json()
     expect(body.status).toBe('skipped:exhorter-changed')
     expect(body.error).toMatch(/different exhorter/i)
+  })
+})
+
+const post = (body: Record<string, unknown>) =>
+  new Request('http://x/api/admin/exhorter-heads-up/review', {
+    method: 'POST',
+    body: JSON.stringify({ token: TOKEN, ...body }),
+  }) as never
+
+/**
+ * "Stop! there's a problem."
+ *
+ * Pressed the moment a mistake is spotted in the QA copy — BEFORE going away to
+ * correct the Program. The wrong email has to stop being sendable straight
+ * away, not once the fix is done.
+ */
+describe('stopping a copy that is wrong', () => {
+  it('invalidates it immediately and emails nobody', async () => {
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'invalidate' }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).invalidated).toBe(true)
+
+    expect(h.supersedePending).toHaveBeenCalledWith('2026-09-20', 'p-brad')
+    expect(h.resolveAndSend).not.toHaveBeenCalled()
+    expect(h.prepareForReview).not.toHaveBeenCalled()
+  })
+
+  it('refuses to stop something that already went to the brother', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...PENDING, releasedAt: '2026-09-06T10:00:00Z' })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'invalidate' }))
+    expect(res.status).toBe(409)
+    expect(h.supersedePending).not.toHaveBeenCalled()
+  })
+
+  it('a stopped copy can no longer be sent', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...PENDING, supersededAt: '2026-09-06T10:00:00Z' })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({}))
+    expect(res.status).toBe(409)
+    expect((await res.json()).superseded).toBe(true)
+    expect(h.resolveAndSend).not.toHaveBeenCalled()
+    expect(h.markReleased).not.toHaveBeenCalled()
+  })
+
+  it('opening a stopped copy explains what to do rather than dead-ending', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...PENDING, supersededAt: '2026-09-06T10:00:00Z' })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const body = await (await GET(req('GET'))).json()
+    expect(body.superseded).toBe(true)
+    expect(body.date).toBe('2026-09-20')
+    expect(body.error).toMatch(/re-send the verification email/i)
+  })
+})
+
+describe('re-sending the verification email after the fix', () => {
+  it('renders from the CURRENT schedule and redirects a fresh copy', async () => {
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.resent).toBe(true)
+    expect(body.redirectedTo).toBe('rb@tee-admin.com')
+    expect(h.prepareForReview).toHaveBeenCalledWith({ date: '2026-09-20' })
+    // Still nothing to the exhorter.
+    expect(h.resolveAndSend).not.toHaveBeenCalled()
+  })
+
+  it('works from a STOPPED link — that is how you get back after fixing', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...PENDING, supersededAt: '2026-09-06T10:00:00Z' })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend' }))
+    expect(res.status).toBe(200)
+    expect(h.prepareForReview).toHaveBeenCalled()
+  })
+
+  it('reports when the schedule still cannot produce an email', async () => {
+    h.prepareForReview.mockResolvedValue({
+      parked: false,
+      report: { date: '2026-09-20', test: false, status: 'unresolved' },
+    })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend' }))
+    expect(res.status).toBe(409)
+    expect((await res.json()).status).toBe('unresolved')
+  })
+
+  it('will not re-send once it has gone to the brother', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...PENDING, releasedAt: '2026-09-06T10:00:00Z' })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend' }))
+    expect(res.status).toBe(409)
+    expect(h.prepareForReview).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The page has to be FINDABLE, not only reachable from a link in an email.
+ * Opened directly it answers "what is waiting?" on its own — and most of the
+ * time the honest answer is "nothing".
+ */
+describe('opening the page directly, with no token', () => {
+  const bare = () =>
+    new Request('http://x/api/admin/exhorter-heads-up/review', { method: 'GET' }) as never
+
+  it('shows the copy currently awaiting verification', async () => {
+    h.findCurrentPending.mockResolvedValue({ ...PENDING })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await GET(bare())
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recipientEmail).toBe('brad@example.com')
+    // The page was not given a token, so the server supplies the one to act on.
+    expect(body.token).toBe(TOKEN)
+    expect(h.resolveAndSend).not.toHaveBeenCalled()
+  })
+
+  it('says plainly when nothing is waiting — not an error', async () => {
+    h.findCurrentPending.mockResolvedValue(null)
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await GET(bare())
+    expect(res.status).toBe(200)
+    expect((await res.json()).nothingWaiting).toBe(true)
+  })
+
+  it('requires an admin, since no token vouches for the caller', async () => {
+    h.auth.mockResolvedValue({ user: { email: 'member@x.z', role: 'member' } })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    expect((await GET(bare())).status).toBe(403)
+
+    h.auth.mockResolvedValue(null)
+    expect((await GET(bare())).status).toBe(403)
   })
 })

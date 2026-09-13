@@ -106,7 +106,8 @@ describe('the QA copy is the real email, redirected', () => {
     // Plus one clearly-marked addition, and the link to send it on.
     expect(sent.body).toContain('REVIEW COPY')
     expect(sent.body).toContain('Send this to Brad Stephens')
-    expect(sent.body).toMatch(/\/admin\/exhorter-heads-up\/review\?token=/)
+    // A stable, findable page — the token only says WHICH copy.
+    expect(sent.body).toMatch(/\/admin\/exhorter-heads-up\?token=/)
 
     // Spliced INSIDE </body> — content after it is dropped by some clients.
     expect(sent.body.indexOf('REVIEW COPY')).toBeLessThan(sent.body.lastIndexOf('</body>'))
