@@ -157,6 +157,15 @@ export async function prepareHeadsUpForReview(
     }
   }
 
+  // Already told? Then there is nothing to review, and a QA copy would only
+  // invite a press that the send guard is going to refuse.
+  if (await exhorterHeadsUpRepository.wasSent(report.date, report.personId)) {
+    return {
+      report: { ...report, status: 'skipped:already-sent' },
+      parked: false,
+    }
+  }
+
   const person = await personRepository.getById(report.personId)
   const recipientEmail = person?.primaryEmail ?? ''
   const recipientName =
