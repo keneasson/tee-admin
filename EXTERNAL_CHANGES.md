@@ -142,26 +142,39 @@ with one appended footer block carrying a link. **It never emails the exhorter**
 — that happens only when a person presses the button on the page that link
 opens. Going live means changing the `To:` and dropping the footer block.
 
-**Action required (outside the repo):** create an EventBridge Scheduler schedule
-in `ca-central-1` (account 911911532459):
+**DONE — created 2026-09-13** in `ca-central-1` (account 911911532459). Three
+resources, all NEW; nothing existing was modified:
 
-- **Cadence:** every Saturday. `cron(0 10 ? * SAT *)` with timezone
-  `America/Toronto` — 10:00 local, which is when the Recording Brother will
-  actually read it.
-- **Target:** HTTPS `POST https://tee-admin.com/api/cron/exhorter-heads-up`
-  with header `Authorization: Bearer <EMAIL_SENDER_SECRET>`.
-- **Retry:** at most 1 retry. The job is safe to re-run — a second run mints a
-  new review link rather than sending anything — but there is no value in more.
+- **Rule** `tee-exhorter-heads-up` — `cron(0 14 ? * SAT *)`, ENABLED.
+- **API destination** `tee-exhorter-headsup-dest` — `POST
+  https://www.tee-admin.com/api/cron/exhorter-heads-up`, rate-limited to 1/sec,
+  reusing the existing `tee-email-auth-connection` (which already carries
+  `Authorization: Bearer <EMAIL_SENDER_SECRET>`; the secret was never handled
+  directly).
+- **Role** `tee-scheduler-exhorter-role` — trusts `events.amazonaws.com`,
+  permitted `events:InvokeApiDestination` on THAT destination only.
+- **Retry:** 1 attempt, 1-hour max age. A re-run is safe (it mints a new QA copy
+  and sends nothing to the speaker) but there is no value in hammering.
+
+**The time is UTC, and that is a real limitation.** EventBridge *Scheduler*
+supports `ScheduleExpressionTimezone`, but it does NOT support API destinations
+as targets — that is a Rules feature, and classic Rules are UTC-only. So the
+schedule is fixed at **14:00 UTC = 10:00 EDT in summer, 9:00 EST in winter**.
+For a Saturday-morning QA copy an hour's seasonal drift is immaterial; if it
+ever matters, the fix is a Lambda in front (Scheduler → Lambda → fetch), not a
+second rule per season.
 
 **Why the send date matters:** the job computes the target Sunday itself
 (`computeNextTargetSunday`, +15 days / three Sundays). Do NOT pass a `date`
 parameter on the schedule; the notice period must live in ONE place. The
 `?date=` parameter exists only for re-running a specific Sunday by hand.
 
-**Until the schedule exists** nothing runs automatically, and the heads-up must
-be triggered from `POST /api/admin/exhorter-heads-up` as it is today. Nothing
-breaks in the meantime — the absence is silent, which is exactly why it is
-written down here.
+**First fire:** Sat 2026-09-19 10:00 EDT, targeting the exhortation on Sunday
+2026-10-04.
+
+`POST /api/admin/exhorter-heads-up` (owner/admin) still triggers or re-sends a
+QA copy by hand at any time — that is how you re-test after correcting the
+Program.
 
 **Deferred deliberately:** there is no auto-send path at all, so there is no
 flag to forget to turn off. Removing the review step after a few weeks of solid

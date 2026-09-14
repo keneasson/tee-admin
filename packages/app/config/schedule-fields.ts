@@ -104,7 +104,14 @@ export const SCHEDULE_TYPE_CATALOGUE: Record<ScheduleTypeKey, ScheduleTypeDef> =
     serviceTime: {
       timezone: 'America/Toronto',
       location: '',
-      schedule: [{ defaultTime: '', displayTime: '', expectedDayOfWeek: 0 }],
+      // Classes run 9:30–10:30, followed by coffee before the Memorial Service.
+      // This was BLANK, and a blank time is indistinguishable from "no Sunday
+      // School": the exhorter heads-up asks for the time, gets nothing back and
+      // omits the line entirely — so a visiting speaker was never told the
+      // classes were on, or that there is coffee before he speaks.
+      // An ecclesia that meets at another time overrides this in its own
+      // scheduleConfig; nothing here is forced on anybody.
+      schedule: [{ defaultTime: '09:30', displayTime: '9:30am', expectedDayOfWeek: 0 }],
     },
     fields: [
       { key: 'Refreshments', defaultLabel: 'Refreshments' },

@@ -25,7 +25,7 @@ import {
  *
  * The ONLY difference from the live article is:
  *   1. the `To:` header, and
- *   2. one appended footer block with a link to press when it is right.
+ *   2. one appended footer block with a link through to the decision.
  *
  * Going live is therefore exactly what it sounds like: change the `To:` and
  * drop the footer block. Nothing else about the email changes, which is what
@@ -63,7 +63,7 @@ export interface PrepareHeadsUpForReviewResult {
 }
 
 /**
- * Append the "send it" block to the email being QA'd.
+ * Append the QA block to the email being reviewed.
  *
  * Appended rather than woven in, so it is unmistakably the extra bit and
  * removing it later is a deletion rather than an edit. It sits after the
@@ -78,18 +78,17 @@ function appendSendBlockHtml(html: string, v: { name: string; email: string; url
   </p>
   <p style="margin:0 0 12px 0;font-size:13px">
     Everything above is exactly what ${escapeHtml(v.name)} (${escapeHtml(v.email)}) will
-    receive. If it is right, send it:
+    receive. Continue to send it on — or to stop it, if something needs fixing:
   </p>
   <p style="margin:0">
     <a href="${escapeHtml(v.url)}"
        style="display:inline-block;padding:10px 16px;background:#003da9;color:#fff;
               text-decoration:none;border-radius:6px;font-size:14px">
-      Send this to ${escapeHtml(v.name)}
+      Continue
     </a>
   </p>
   <p style="margin:12px 0 0 0;font-size:12px;color:#4a5568">
-    Opening that link only shows a confirmation page — it does not send anything
-    until you press the button there.
+    This link only opens a page — nothing is sent until you press the button there.
   </p>
 </div>`
   // After </body> is ignored by some clients, so splice it INSIDE.
@@ -104,11 +103,11 @@ function appendSendBlockText(text: string, v: { name: string; email: string; url
     '---------------------------------------------',
     `REVIEW COPY — redirected to you, not sent to ${v.name}.`,
     `Everything above is exactly what ${v.name} (${v.email}) will receive.`,
-    'If it is right, send it:',
+    'Continue to send it on — or to stop it, if something needs fixing:',
     v.url,
     '',
-    'That link only opens a confirmation page — nothing sends until you press',
-    'the button there.',
+    'This link only opens a page — nothing is sent until you press the button',
+    'there.',
   ].join('\n')
 }
 

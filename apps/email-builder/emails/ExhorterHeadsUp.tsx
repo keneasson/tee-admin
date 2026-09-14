@@ -302,6 +302,12 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
           </Text>
         </Container>
 
+        {/* The signature ended flush against the dark footer band. A signed-off
+            letter needs a beat before the small print. */}
+        <Section style={{ height: '24px', lineHeight: '24px', fontSize: '1px' }}>
+          &nbsp;
+        </Section>
+
         {/* Custom, email-scoped footer. Deliberately NOT the shared FooterContent:
             this 1:1 send does no {{emailPreferencesUrl}} token substitution, so we
             render a REAL preferences link here instead. */}
@@ -311,7 +317,7 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
             <Link href={echadHubUrl} style={footerLink}>
               Echad Hub
             </Link>
-            {', and Christadelphian Initiative'}
+            {', a Christadelphian Initiative'}
           </Text>
           <Text style={footerText}>
             <Link href={emailPreferencesUrl} style={footerLink}>
