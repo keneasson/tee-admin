@@ -103,9 +103,9 @@ describe('the QA copy is the real email, redirected', () => {
     expect(sent.body).toContain('Dear Brother Brad Stephens,')
     expect(sent.textBody).toContain(REAL_TEXT)
 
-    // Plus one clearly-marked addition, and the link to send it on.
+    // Plus one clearly-marked addition, and the link through to the decision.
     expect(sent.body).toContain('REVIEW COPY')
-    expect(sent.body).toContain('Send this to Brad Stephens')
+    expect(sent.body).toContain('>\n      Continue\n    <')
     // A stable, findable page — the token only says WHICH copy.
     expect(sent.body).toMatch(/\/admin\/exhorter-heads-up\?token=/)
 
@@ -119,7 +119,22 @@ describe('the QA copy is the real email, redirected', () => {
     expect(sent.body).toContain('not sent to Brad Stephens')
     expect(sent.textBody).toContain('not sent to Brad Stephens')
     // And that the link itself is safe to open.
-    expect(sent.textBody).toMatch(/nothing sends until you press/i)
+    expect(sent.textBody).toMatch(/nothing is sent until you press/i)
+  })
+
+  it('does not promise to SEND from a link that only opens a page', async () => {
+    // The button used to read "Send this to Brad Stephens" directly above a
+    // line saying it sends nothing — the label contradicted the fine print,
+    // and the page it opens offers a Stop as well as a Send.
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    const sent = h.sendEmail.mock.calls[0][0]
+    for (const body of [sent.body, sent.textBody]) {
+      expect(body).not.toContain('Send this to')
+      expect(body).not.toMatch(/If it is right, send it/i)
+    }
+    // It says what actually happens, and that stopping is an option.
+    expect(sent.body).toMatch(/or to stop it, if something needs fixing/i)
+    expect(sent.textBody).toMatch(/or to stop it, if something needs fixing/i)
   })
 
   it('is tracked too, so a QA copy that never arrives is visible', async () => {
