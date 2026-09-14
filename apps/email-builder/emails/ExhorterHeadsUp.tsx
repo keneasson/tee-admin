@@ -115,6 +115,21 @@ export interface ExhorterHeadsUpProps {
 
 const ECHAD_HUB_URL = 'https://echadhub.org'
 
+/**
+ * "https://tee-admin.com" → "TEE-Admin"; "https://echadhub.org" → "Echad Hub".
+ * Falls back to TEE-Admin, which is what every existing send is.
+ */
+function productNameFromHomeUrl(homeUrl?: string): string {
+  const host = (homeUrl ?? '').replace(/^https?:\/\//, '').replace(/^www\./, '').toLowerCase()
+  if (host.startsWith('echadhub')) return 'Echad Hub'
+  return 'TEE-Admin'
+}
+
+/** Google Maps search for a postal address line. */
+function mapsUrlFor(line: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(line)}`
+}
+
 function lunchSentence(lunchType?: ExhorterHeadsUpLunch): string | null {
   switch (lunchType) {
     case 'potluck':
@@ -168,6 +183,12 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
   echadHubUrl = ECHAD_HUB_URL,
   identity,
 }) => {
+  /**
+   * The product name in the footer, from the tenant's own domain: tee-admin.com
+   * → "TEE-Admin", echadhub.org → "Echad Hub". It was the literal string
+   * "TEE-Admin", which is wrong the moment a second tenant sends anything.
+   */
+  const senderProductName = productNameFromHomeUrl(identity?.homeUrl)
   const trimmedName = exhorterName?.trim() ?? ''
   const greeting = trimmedName ? `Dear Brother ${trimmedName},` : 'Dear Brother,'
   const lunchLine = lunchSentence(lunchType)
@@ -313,7 +334,14 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
             render a REAL preferences link here instead. */}
         <Section style={footer}>
           <Text style={footerText}>
-            {'TEE-Admin — powered by '}
+            {/* The sending product links to itself, so a reader can get from
+                the email to the site it came from. `homeUrl` is the tenant's own
+                domain, so echadhub.org mail points at Echad Hub rather than at
+                tee-admin.com. */}
+            <Link href={identity?.homeUrl ?? 'https://tee-admin.com'} style={footerLink}>
+              {senderProductName}
+            </Link>
+            {' — powered by '}
             <Link href={echadHubUrl} style={footerLink}>
               Echad Hub
             </Link>
@@ -329,10 +357,19 @@ const ExhorterHeadsUp: React.FC<ExhorterHeadsUpProps> = ({
               <strong>Our address is:</strong>
               <br />
               {identity.name}
+              {/* Each address line is wrapped in an EXPLICIT link.
+                  Gmail auto-detects addresses and linkifies what it thinks is
+                  the address — which was "975 Cosburn Ave., East York" only,
+                  in its own medium blue, leaving ", ON M4C 2W8, Canada" as
+                  plain text. Half a line underlined in a colour we never
+                  chose. An explicit anchor around the whole line settles both:
+                  Gmail leaves an existing link alone, and the colour is ours. */}
               {(identity.addressLines ?? []).map((lineText, i) => (
                 <React.Fragment key={i}>
                   <br />
-                  {lineText}
+                  <Link href={mapsUrlFor(lineText)} style={footerLink}>
+                    {lineText}
+                  </Link>
                 </React.Fragment>
               ))}
             </Text>
