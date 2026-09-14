@@ -19,9 +19,34 @@ const TEE_DEFAULT: BrandProfile = {
   addressLines: ['975 Cosburn Avenue', 'Toronto, On M4C 2W8', 'Canada'],
 }
 
+/**
+ * The ecclesia's postal address, as lines for the email footer.
+ *
+ * `address` is usually already a COMPLETE one-liner — Toronto East's is
+ * "975 Cosburn Ave., East York, ON M4C 2W8, Canada". Appending the city,
+ * province, postcode and country to that produced a footer that repeated
+ * itself three times over:
+ *
+ *     975 Cosburn Ave., East York, ON M4C 2W8, Canada
+ *     Toronto, ON, M4C 2W8
+ *     CA
+ *
+ * So: if the stored address already carries the postcode or the city, it IS
+ * the address and is used alone. Only when it looks like a bare street line do
+ * the other parts get appended.
+ */
 function addressLinesFromEcclesia(e: EcclesiaData): string[] | undefined {
+  const address = e.address?.trim()
+
+  if (address) {
+    const haystack = address.toLowerCase()
+    const carriesPostcode = !!e.postalCode && haystack.includes(e.postalCode.trim().toLowerCase())
+    const carriesCity = !!e.city && haystack.includes(e.city.trim().toLowerCase())
+    if (carriesPostcode || carriesCity) return [address]
+  }
+
   const cityLine = [e.city, e.province, e.postalCode].filter(Boolean).join(', ')
-  const lines = [e.address, cityLine, e.country].filter(Boolean) as string[]
+  const lines = [address, cityLine, e.country].filter(Boolean) as string[]
   return lines.length ? lines : undefined
 }
 

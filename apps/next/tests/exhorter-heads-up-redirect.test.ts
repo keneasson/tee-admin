@@ -105,7 +105,7 @@ describe('the QA copy is the real email, redirected', () => {
 
     // Plus one clearly-marked addition, and the link through to the decision.
     expect(sent.body).toContain('REVIEW COPY')
-    expect(sent.body).toContain('>\n      Continue\n    <')
+    expect(sent.body).toMatch(/Continue — Brad Stephens/)
     // A stable, findable page — the token only says WHICH copy.
     expect(sent.body).toMatch(/\/admin\/exhorter-heads-up\?token=/)
 
@@ -116,8 +116,8 @@ describe('the QA copy is the real email, redirected', () => {
   it('says plainly that nothing has gone to the brother yet', async () => {
     await prepareHeadsUpForReview({ date: '2026-09-20' })
     const sent = h.sendEmail.mock.calls[0][0]
-    expect(sent.body).toContain('not sent to Brad Stephens')
-    expect(sent.textBody).toContain('not sent to Brad Stephens')
+    expect(sent.body).toContain('not sent to him')
+    expect(sent.textBody).toContain('not sent to him')
     // And that the link itself is safe to open.
     expect(sent.textBody).toMatch(/nothing is sent until you press/i)
   })
@@ -211,5 +211,56 @@ describe('resending after correcting the Program', () => {
     h.parkPending.mockResolvedValue(undefined)
     await prepareHeadsUpForReview({ date: '2026-09-20' })
     expect(h.parkPending.mock.calls[0][0].token).not.toBe(first)
+  })
+})
+
+/**
+ * TWO QA copies can sit in the inbox at once — one per upcoming exhortation.
+ * A bare "Continue" on both gives the reader no way to tell which is which.
+ * The links were never ambiguous to the server; they were ambiguous to the
+ * person about to email a real brother, which is the half that matters.
+ */
+describe('which copy am I looking at?', () => {
+  it('names the recipient and the Sunday on the button itself', async () => {
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    const sent = h.sendEmail.mock.calls[0][0]
+    expect(sent.body).toMatch(/Continue — Brad Stephens, .*Sep 20/)
+    expect(sent.textBody).toMatch(/\(Brad Stephens, .*Sep 20\)/)
+  })
+
+  it('says who and when at the top of the block too', async () => {
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    const sent = h.sendEmail.mock.calls[0][0]
+    expect(sent.body).toMatch(/REVIEW COPY — for Brad Stephens, .*Sep 20/)
+    expect(sent.textBody).toMatch(/REVIEW COPY — for Brad Stephens, .*Sep 20/)
+  })
+
+  it('distinguishes two copies for different Sundays', async () => {
+    await prepareHeadsUpForReview({ date: '2026-09-20' })
+    const first = h.sendEmail.mock.calls[0][0].body
+    vi.clearAllMocks()
+    h.supersedePending.mockResolvedValue(0)
+    h.parkPending.mockResolvedValue(undefined)
+    h.sendEmail.mockResolvedValue(undefined)
+    h.resolveAndSend.mockResolvedValue({
+      date: '2026-09-27',
+      test: false,
+      status: 'dry-run',
+      personId: 'p-tom',
+      exhortName: 'Tom Briggs',
+      rendered: { subject: 's', html: '<html><body>x</body></html>', text: 'x', contentDigest: 'd' },
+    })
+    h.getById.mockResolvedValue({
+      personId: 'p-tom',
+      primaryEmail: 'briggstom64@example.com',
+      displayName: 'Tom Briggs',
+    })
+    await prepareHeadsUpForReview({ date: '2026-09-27' })
+    const second = h.sendEmail.mock.calls[0][0].body
+
+    expect(first).toMatch(/Continue — Brad Stephens/)
+    expect(second).toMatch(/Continue — Tom Briggs/)
+    expect(first).not.toMatch(/Tom Briggs/)
+    expect(second).not.toMatch(/Brad Stephens/)
   })
 })

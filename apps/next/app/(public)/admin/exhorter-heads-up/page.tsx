@@ -196,6 +196,24 @@ export default function ExhorterHeadsUpReviewPage() {
   }
 
   const name = data?.recipientName || data?.recipientEmail || 'the exhorter'
+  /**
+   * "2026-09-27" is a correct answer to the wrong question. When two QA copies
+   * are open at once, the reader is checking WHICH ONE this is — a weekday and
+   * a month are recognisable at a glance in a way an ISO date is not.
+   */
+  const readableDate = (iso?: string) => {
+    if (!iso) return ''
+    const d = new Date(`${iso}T12:00:00Z`)
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('en-CA', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          timeZone: 'UTC',
+        })
+  }
 
   return (
     <Wrapper>
@@ -364,7 +382,7 @@ export default function ExhorterHeadsUpReviewPage() {
                   <Text fontSize="$4">
                     {`Stopped. Nothing has been sent${
                       stopped.recipientName ? ` to ${stopped.recipientName}` : ''
-                    }, and that copy can no longer be sent.`}
+                    }${stopped.date ? ` (${readableDate(stopped.date)})` : ''}, and that copy can no longer be sent.`}
                   </Text>
                 </XStack>
               </Card>

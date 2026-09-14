@@ -268,3 +268,61 @@ describe('Sunday School times come from configuration', () => {
     )
   })
 })
+
+/**
+ * Footer address and branding — all found by reading a real QA copy in Gmail.
+ */
+describe('the footer address', () => {
+  const withAddress = {
+    ...baseProps,
+    identity: {
+      name: 'Toronto East Christadelphians',
+      addressLines: ['975 Cosburn Ave., East York, ON M4C 2W8, Canada'],
+      homeUrl: 'https://tee-admin.com',
+    } as never,
+  }
+
+  it('is ONE line, not the same address repeated three ways', async () => {
+    const html = await renderHtml(withAddress)
+    expect(html).toContain('975 Cosburn Ave., East York, ON M4C 2W8, Canada')
+    // The old footer appended city/province/postcode and country to an address
+    // that already contained them: "Toronto, ON, M4C 2W8" then "CA" beneath.
+    expect(html).not.toContain('Toronto, ON, M4C 2W8')
+    expect(html).not.toMatch(/>\s*CA\s*</)
+  })
+
+  it('is wrapped in OUR link, so Gmail cannot linkify half of it', async () => {
+    // Gmail auto-detects addresses and linkified "975 Cosburn Ave., East York"
+    // only — in its own medium blue — leaving the rest plain. Half a line
+    // underlined in a colour nobody chose. An explicit anchor settles both.
+    const html = await renderHtml(withAddress)
+    const anchor = html.match(
+      /<a[^>]*href="https:\/\/www\.google\.com\/maps[^"]*"[^>]*>([^<]*)<\/a>/
+    )
+    expect(anchor).toBeTruthy()
+    expect(anchor![1]).toContain('975 Cosburn Ave., East York, ON M4C 2W8, Canada')
+    expect(html).toMatch(/href="https:\/\/www\.google\.com\/maps[^"]*"[^>]*style="[^"]*#c7e4ff/)
+  })
+})
+
+describe('the sending product names and links itself', () => {
+  it('links TEE-Admin to its own site', async () => {
+    const html = await renderHtml({
+      ...baseProps,
+      identity: { name: 'x', homeUrl: 'https://tee-admin.com' } as never,
+    })
+    expect(html).toMatch(/<a[^>]*href="https:\/\/tee-admin\.com"[^>]*>\s*TEE-Admin\s*<\/a>/)
+    expect(html).toContain('powered by')
+  })
+
+  it('says Echad Hub when the mail comes FROM Echad Hub', async () => {
+    // The product name was the literal string "TEE-Admin", which is wrong the
+    // moment a second tenant sends anything.
+    const html = await renderHtml({
+      ...baseProps,
+      identity: { name: 'x', homeUrl: 'https://echadhub.org' } as never,
+    })
+    expect(html).toMatch(/<a[^>]*href="https:\/\/echadhub\.org"[^>]*>\s*Echad Hub\s*<\/a>/)
+    expect(html).not.toContain('TEE-Admin')
+  })
+})
