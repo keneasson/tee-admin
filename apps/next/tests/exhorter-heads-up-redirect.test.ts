@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   sendEmail: vi.fn(),
   parkPending: vi.fn(),
   supersedePending: vi.fn(),
+  wasSent: vi.fn(),
   getById: vi.fn(),
   getEcclesiaByName: vi.fn(),
 }))
@@ -32,6 +33,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/exhorter-headsup-repository', ()
   exhorterHeadsUpRepository: {
     parkPending: h.parkPending,
     supersedePending: h.supersedePending,
+    wasSent: h.wasSent,
   },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
@@ -68,6 +70,7 @@ beforeEach(() => {
   h.getEcclesiaByName.mockResolvedValue({ recordingBrotherEmail: 'rb@tee-admin.com' })
   h.parkPending.mockResolvedValue(undefined)
   h.supersedePending.mockResolvedValue(0)
+  h.wasSent.mockResolvedValue(false)
   h.sendEmail.mockResolvedValue(undefined)
 })
 
@@ -262,5 +265,37 @@ describe('which copy am I looking at?', () => {
     expect(second).toMatch(/Continue — Tom Briggs/)
     expect(first).not.toMatch(/Tom Briggs/)
     expect(second).not.toMatch(/Brad Stephens/)
+  })
+})
+
+/**
+ * Once the brother has been told, the Sunday is settled. The Saturday job
+ * still runs — it does not know what a human did days earlier — so without a
+ * check it would redirect a QA copy for a closed matter, and the reader would
+ * press Continue only to be told it had already gone.
+ *
+ * The brother was never at risk: the send claim stops a second email. What was
+ * at risk was the reviewer's time, and their confidence in what the inbox copy
+ * means.
+ */
+describe('a Sunday already sent needs no review', () => {
+  it('sends no QA copy and parks nothing', async () => {
+    h.wasSent.mockResolvedValue(true)
+    const result = await prepareHeadsUpForReview({ date: '2026-09-20' })
+
+    expect(result.parked).toBe(false)
+    expect(result.report.status).toBe('skipped:already-sent')
+    expect(h.sendEmail).not.toHaveBeenCalled()
+    expect(h.parkPending).not.toHaveBeenCalled()
+    // And it must not retire anything either — the record of what went out
+    // stays exactly as it is.
+    expect(h.supersedePending).not.toHaveBeenCalled()
+  })
+
+  it('still sends one when the brother has NOT been told', async () => {
+    h.wasSent.mockResolvedValue(false)
+    const result = await prepareHeadsUpForReview({ date: '2026-09-20' })
+    expect(result.parked).toBe(true)
+    expect(h.sendEmail).toHaveBeenCalledTimes(1)
   })
 })

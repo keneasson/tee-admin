@@ -1,4 +1,4 @@
-import { PutCommand, DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { PutCommand, DeleteCommand, QueryCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
 
 /**
@@ -97,6 +97,26 @@ class ExhorterHeadsUpRepository {
       }
       throw error
     }
+  }
+
+  /**
+   * Has this exhorter already been sent their heads-up for this Sunday?
+   *
+   * The QA path renders without taking the idempotency claim — the claim
+   * belongs to the real send — so nothing stopped it preparing a review copy
+   * for somebody already told. The Saturday job would then redirect a QA copy
+   * for a settled Sunday, and the reader would press Continue only to be told
+   * it had already gone. The brother was never at risk (the claim holds); the
+   * reviewer's time and confidence were.
+   */
+  async wasSent(date: string, personId: string): Promise<boolean> {
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: { pkey: idempotencyPk(date, personId), skey: 'SEND' },
+      })
+    )
+    return Boolean(res.Item)
   }
 
   /**
