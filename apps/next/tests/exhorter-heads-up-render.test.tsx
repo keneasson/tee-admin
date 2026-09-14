@@ -210,3 +210,61 @@ describe('ExhorterHeadsUp template render', () => {
     expect(html).not.toContain('{{')
   })
 })
+
+/**
+ * Footer and spacing details found by reading a real QA copy in Gmail — the
+ * kind of thing an iframe preview would never have surfaced.
+ */
+describe('the footer reads properly', () => {
+  it('says "a Christadelphian Initiative", not "and"', async () => {
+    const html = await renderHtml(baseProps)
+    expect(html).toContain('a Christadelphian Initiative')
+    expect(html).not.toContain('and Christadelphian Initiative')
+  })
+
+  it('gives the signature room before the dark footer band', async () => {
+    // "Love in Jesus name / Ken Easson" ended flush against the footer. A
+    // signed-off letter needs a beat before the small print.
+    const html = await renderHtml(baseProps)
+    const sig = html.lastIndexOf('Ken Easson')
+    const footer = html.indexOf('background:#011759', sig)
+    expect(footer).toBeGreaterThan(-1)
+    expect(html.slice(sig, footer)).toContain('height:24px')
+  })
+
+  it('uses a link colour that is legible on the dark navy footer', async () => {
+    // #b9cfdd read as a muted mid-blue against #011759. This is a contrast
+    // floor, not a taste preference: the check is arithmetic.
+    const html = await renderHtml(baseProps)
+    expect(html).toContain('#c7e4ff')
+
+    const lum = (hex: string) => {
+      const h = hex.replace('#', '')
+      const ch = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      const f = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+      const [r, g, b] = ch.map(f) as [number, number, number]
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    expect(ratio('#c7e4ff', '#011759')).toBeGreaterThan(10)
+  })
+})
+
+describe('Sunday School times come from configuration', () => {
+  it('renders the 9:30 line the schedule now provides', async () => {
+    // The catalogue had a BLANK sundaySchool time, and a blank time is
+    // indistinguishable from "no Sunday School" — so the line was silently
+    // omitted from every email, and a visiting speaker was never told the
+    // classes were on.
+    const html = await renderHtml({
+      ...baseProps,
+      sundaySchool: { startDisplay: '9:30am', endDisplay: '10:30' },
+    })
+    expect(html).toContain(
+      'Our Sunday school (kids and teens classes) is from 9:30am to 10:30 followed by coffee and snacks.'
+    )
+  })
+})
