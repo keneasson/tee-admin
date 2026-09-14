@@ -69,12 +69,15 @@ export interface PrepareHeadsUpForReviewResult {
  * removing it later is a deletion rather than an edit. It sits after the
  * email's own footer, which is where a reviewer will look for it.
  */
-function appendSendBlockHtml(html: string, v: { name: string; email: string; url: string }): string {
+type SendBlock = { name: string; email: string; url: string; dateDisplay: string }
+
+function appendSendBlockHtml(html: string, v: SendBlock): string {
   const block = `
 <div style="margin:0;padding:16px 24px;background:#fdfaf5;border-top:3px solid #003da9;
             font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#00102c">
   <p style="margin:0 0 8px 0;font-size:13px;font-weight:bold">
-    REVIEW COPY — this was redirected to you, not sent to ${escapeHtml(v.name)}.
+    REVIEW COPY — for ${escapeHtml(v.name)}, ${escapeHtml(v.dateDisplay)}.
+    Redirected to you, not sent to him.
   </p>
   <p style="margin:0 0 12px 0;font-size:13px">
     Everything above is exactly what ${escapeHtml(v.name)} (${escapeHtml(v.email)}) will
@@ -84,7 +87,7 @@ function appendSendBlockHtml(html: string, v: { name: string; email: string; url
     <a href="${escapeHtml(v.url)}"
        style="display:inline-block;padding:10px 16px;background:#003da9;color:#fff;
               text-decoration:none;border-radius:6px;font-size:14px">
-      Continue
+      Continue — ${escapeHtml(v.name)}, ${escapeHtml(v.dateDisplay)}
     </a>
   </p>
   <p style="margin:12px 0 0 0;font-size:12px;color:#4a5568">
@@ -96,14 +99,16 @@ function appendSendBlockHtml(html: string, v: { name: string; email: string; url
   return html + block
 }
 
-function appendSendBlockText(text: string, v: { name: string; email: string; url: string }): string {
+function appendSendBlockText(text: string, v: SendBlock): string {
   return [
     text,
     '',
     '---------------------------------------------',
-    `REVIEW COPY — redirected to you, not sent to ${v.name}.`,
+    `REVIEW COPY — for ${v.name}, ${v.dateDisplay}.`,
+    `Redirected to you, not sent to him.`,
     `Everything above is exactly what ${v.name} (${v.email}) will receive.`,
     'Continue to send it on — or to stop it, if something needs fixing:',
+    `  (${v.name}, ${v.dateDisplay})`,
     v.url,
     '',
     'This link only opens a page — nothing is sent until you press the button',
@@ -186,7 +191,21 @@ export async function prepareHeadsUpForReview(
   // The page lives at a stable, findable URL; the token just identifies WHICH
   // copy and lets the reviewer act without signing in.
   const url = `${baseUrl()}/admin/exhorter-heads-up?token=${encodeURIComponent(token)}`
-  const link = { name: recipientName, email: recipientEmail, url }
+  /**
+   * The Sunday, on the button.
+   *
+   * Two QA copies can sit in the inbox at once — one per upcoming exhortation —
+   * and a bare "Continue" on both gives no way to tell which is which without
+   * opening them. Each link carries its own token and is never ambiguous to the
+   * SERVER; it was ambiguous to the reader, which is the half that matters.
+   */
+  const dateDisplay = new Date(`${report.date}T12:00:00Z`).toLocaleDateString('en-CA', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+  const link = { name: recipientName, email: recipientEmail, url, dateDisplay }
 
   await sendEmail({
     to: reviewerEmail,
