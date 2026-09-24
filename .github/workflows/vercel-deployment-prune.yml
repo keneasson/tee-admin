@@ -36,7 +36,10 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
-          PROJECTS: tee-admin,echadhub
+          # Empty = every project on the team. It used to name two, so any
+          # other project accumulated deployments unseen while the job happily
+          # reported "deleted=0".
+          PROJECTS: ''
           KEEP: ${{ github.event.inputs.keep || '5' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: node scripts/prune-vercel-deployments.mjs

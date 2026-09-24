@@ -24,7 +24,14 @@
 
 const TOKEN = process.env.VERCEL_TOKEN
 const TEAM = process.env.VERCEL_TEAM_ID
-const PROJECTS = (process.env.PROJECTS || 'tee-admin,echadhub').split(',').map((s) => s.trim()).filter(Boolean)
+/**
+ * Projects to prune. EMPTY means "every project on the team", which is the
+ * default and the point: the list used to be hardcoded to `tee-admin,echadhub`,
+ * so any other project on the team accumulated deployments completely unseen —
+ * the job reported a tidy `deleted=0` while storage filled up elsewhere. Set
+ * PROJECTS to a comma-separated list only to deliberately narrow it.
+ */
+const PROJECTS = (process.env.PROJECTS || '').split(',').map((s) => s.trim()).filter(Boolean)
 const KEEP = Math.max(0, parseInt(process.env.KEEP || '5', 10) || 0)
 const DRY_RUN = String(process.env.DRY_RUN || '').toLowerCase() === 'true'
 
@@ -57,10 +64,34 @@ const listAllDeployments = async (project) => {
   return all
 }
 
+/** Every project on the team, paginated. */
+const listAllProjects = async () => {
+  const all = []
+  let until
+  for (let i = 0; i < 100; i++) {
+    const q = `/v9/projects?limit=100${until ? `&until=${until}` : ''}`
+    const d = await api(q)
+    const batch = d.projects || []
+    all.push(...batch)
+    until = d.pagination && d.pagination.next
+    if (!until || batch.length === 0) break
+  }
+  return all
+}
+
+const projects = PROJECTS.length ? PROJECTS : (await listAllProjects()).map((p) => p.name)
+console.log(
+  PROJECTS.length
+    ? `Pruning ${projects.length} named project(s): ${projects.join(', ')}`
+    : `Discovered ${projects.length} project(s) on the team: ${projects.join(', ')}`
+)
+
 let grandDeleted = 0
 let grandFailed = 0
+/** Per-project totals, so the log answers "where is the storage actually going". */
+const report = []
 
-for (const project of PROJECTS) {
+for (const project of projects) {
   try {
     const info = await api(`/v9/projects/${encodeURIComponent(project)}`)
     const prodId = info?.targets?.production?.id || null
@@ -96,6 +127,7 @@ for (const project of PROJECTS) {
     }
     grandDeleted += ok
     grandFailed += fail
+    report.push({ project, total: deps.length, deleted: ok, kept: keep.size })
     console.log(`[${project}] ${DRY_RUN ? 'would delete' : 'deleted'} ${ok}/${toDelete.length} (failures ${fail}); kept ${keep.size} (prod=${prodId || 'n/a'})`)
   } catch (e) {
     grandFailed++
@@ -103,7 +135,20 @@ for (const project of PROJECTS) {
   }
 }
 
-console.log(`\nTOTAL ${DRY_RUN ? 'would delete' : 'deleted'}=${grandDeleted} failures=${grandFailed}`)
+// A ranked table, because "deleted=0" alone never explained where the storage
+// was going. The projects carrying the most retained deployments come first.
+report.sort((a, b) => b.total - a.total)
+console.log('\n  project                         retained  deleted  kept')
+for (const r of report) {
+  console.log(
+    `  ${r.project.padEnd(30)} ${String(r.total).padStart(8)} ${String(r.deleted).padStart(8)} ${String(r.kept).padStart(5)}`
+  )
+}
+const stillRetained = report.reduce((n, r) => n + r.total - r.deleted, 0)
+console.log(
+  `\nTOTAL ${DRY_RUN ? 'would delete' : 'deleted'}=${grandDeleted} failures=${grandFailed}` +
+    ` | deployments still retained across ${report.length} project(s): ${stillRetained}`
+)
 // Fail the job only if a project errored out entirely; per-deployment delete
 // failures are logged but non-fatal so a single flaky delete doesn't block cleanup.
 process.exit(grandFailed > 0 && grandDeleted === 0 ? 1 : 0)
