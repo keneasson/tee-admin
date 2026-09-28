@@ -11,16 +11,14 @@
  *    to `authenticated` (so every above-member surface/action implicitly needs
  *    Verify). Clicking a Rep/Admin's forwarded link makes you an *unverified
  *    member* of their ecclesia, never a Rep/Admin.
- *  - PII (full names, precise location, contact, bios) is revealed to any
- *    IDENTIFIED viewer — `recognized` (arrived via a tokenized email link) or
- *    `authenticated`. Decision 2026-09-28 (#252), superseding the 2026-07-10
- *    first-name-only rule for recognized viewers: an email reader must see on
- *    the web exactly what the email already showed them, or "email Jessica to
- *    register" loses Jessica's address. Recognition grants SIGHT, never
- *    authority — the member cap above still gates every change.
- *  - Only an `anonymous` viewer is redacted, and a redaction is never silent:
- *    redactors report what they withheld so the UI can say "sign in to see"
- *    (see {@link Withheld}).
+ *  - An unidentified (`anonymous`) reader gets the safe FLOOR: first name only,
+ *    never an empty slot — followed by "sign in to view contact details".
+ *    Redactors report what they withheld ({@link Withheld}) so the UI can say so.
+ *  - An IDENTIFIED reader — `recognized` (arrived via a tokenized email link)
+ *    or `authenticated` — gets full PII (owner decision 2026-09-28, #252): the
+ *    web must never show an email reader less than the email showed them.
+ *    Recognition grants SIGHT, never authority — the member cap above still
+ *    gates every change. See ADR-0005.
  *
  * Pure + I/O-free so it unit-tests cleanly and runs in any context (API routes,
  * react-email render). Resolving a Viewer from a request lives in
