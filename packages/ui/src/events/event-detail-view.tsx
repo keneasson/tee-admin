@@ -3,6 +3,7 @@
 import { YStack, XStack, Text, H2, H4, Separator, Card, Image } from 'tamagui'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import { Button } from '../Button'
+import { WithheldBanner, WithheldInline, hasWithheld } from '../privacy/withheld-notice'
 import { Download, ExternalLink, Lock, MapPin } from '@tamagui/lucide-icons'
 import {
   Event,
@@ -42,6 +43,11 @@ interface EventDetailViewProps {
   isMemberOrHigher?: boolean
   /** Whether auth is loading */
   isAuthLoading?: boolean
+  /**
+   * Send the reader to sign in and back to this page. Platform-provided. Shown
+   * wherever the server withheld details from an unidentified reader (#252).
+   */
+  onSignIn?: () => void
 }
 
 /**
@@ -53,8 +59,10 @@ export function EventDetailView({
   showAdminInfo = false,
   userRole,
   isMemberOrHigher = false,
-  isAuthLoading = false
+  isAuthLoading = false,
+  onSignIn,
 }: EventDetailViewProps) {
+  const withheld = (event as Partial<Event>).withheld
   // Check access for members-only events (member, admin, or owner)
   const hasAccess = !event.membersOnly || isMemberOrHigher
 
@@ -282,20 +290,28 @@ export function EventDetailView({
             {!userRole ? ' Please sign in to view event details.' : null}
           </Text>
         </YStack>
+        {!userRole && onSignIn ? (
+          <Button variant="action" size="$4" onPress={onSignIn}>
+            Sign in to see this event
+          </Button>
+        ) : null}
       </YStack>
     )
   }
 
   return (
     <YStack gap="$4">
+      {/* Never hide silently (#252): say what was held back + how to see it. */}
+      <WithheldBanner withheld={withheld} onSignIn={onSignIn} />
+
       {/* Clean Header */}
       <YStack gap="$2">
         {/* Hide title for engagement events - blurb serves as the header */}
-        {event.type !== 'engagement' && (
+        {event.type !== 'engagement' ? (
           <H2 fontSize="$8" fontWeight="700" color="$color">
             {event.title || 'Untitled Event'}
           </H2>
-        )}
+        ) : null}
 
         {/* Engagement announcement - photo (if exists) | blurb, then names + date, then footer */}
         {event.type === 'engagement' ? (() => {
@@ -332,9 +348,9 @@ export function EventDetailView({
               </XStack>
 
               {/* Photo | Blurb row */}
-              {(photo?.url || blurb) && (
+              {(photo?.url || blurb) ? (
                 <XStack gap="$4" flexWrap="wrap">
-                  {photo?.url && (
+                  {photo?.url ? (
                     <Image
                       source={{ uri: photo.url }}
                       width={180}
@@ -342,23 +358,23 @@ export function EventDetailView({
                       borderRadius="$3"
                       objectFit="cover"
                     />
-                  )}
-                  {blurb && (
+                  ) : null}
+                  {blurb ? (
                     <YStack flex={1} minWidth={250} justifyContent="center">
                       <Text fontSize="$5" color="$color" lineHeight="$5" whiteSpace="pre-wrap">
                         {blurb}
                       </Text>
                     </YStack>
-                  )}
+                  ) : null}
                 </XStack>
-              )}
+              ) : null}
 
               {/* Names + date line below */}
-              {namesLine && (
+              {namesLine ? (
                 <Text fontSize="$4" color="$gray11" fontStyle="italic">
                   {namesLine}
                 </Text>
-              )}
+              ) : null}
 
               {/* Footer with congratulations and bible verse */}
               <YStack gap="$4" paddingTop="$4" alignItems="center">
@@ -485,6 +501,8 @@ export function EventDetailView({
                           {location.address}
                         </Text>
                       </XStack>
+                    ) : hasWithheld(withheld, 'location-precise') ? (
+                      <WithheldInline what="the street address" onSignIn={onSignIn} />
                     ) : null}
                     {(event as any).hostingEcclesia ? (
                       <Text fontSize="$4" color="$gray11">
@@ -1086,6 +1104,7 @@ export function EventDetailView({
           reg.registrationUrl ||
           reg.contactEmail ||
           reg.contactPhone ||
+          hasWithheld(withheld, 'contact') ||
           reg.fee ||
           reg.paymentInstructions ||
           reg.notes
@@ -1151,6 +1170,15 @@ export function EventDetailView({
                     Phone: <Text color="$blue10" textDecorationLine="underline" onPress={() => window.open(`tel:${reg.contactPhone}`, '_blank')} cursor="pointer">{reg.contactPhone}</Text>
                   </Text>
                 ) : null}
+              </YStack>
+            ) : hasWithheld(withheld, 'contact') ? (
+              // The server held the contact back from an unidentified reader.
+              // Say so right here — the reader was told to email someone (#252).
+              <YStack gap="$1">
+                <Text fontSize="$4" color="$gray11" fontWeight="600">
+                  For more information:
+                </Text>
+                <WithheldInline what="the contact email and phone" onSignIn={onSignIn} />
               </YStack>
             ) : null}
 

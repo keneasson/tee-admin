@@ -11,9 +11,16 @@
  *    to `authenticated` (so every above-member surface/action implicitly needs
  *    Verify). Clicking a Rep/Admin's forwarded link makes you an *unverified
  *    member* of their ecclesia, never a Rep/Admin.
- *  - A full name is revealed ONLY to a *verified* member-or-greater
- *    (authenticated + role >= member). Recognized viewers — even of a member —
- *    see the first name only, so a forwarded email link never leaks full names.
+ *  - PII (full names, precise location, contact, bios) is revealed to any
+ *    IDENTIFIED viewer — `recognized` (arrived via a tokenized email link) or
+ *    `authenticated`. Decision 2026-09-28 (#252), superseding the 2026-07-10
+ *    first-name-only rule for recognized viewers: an email reader must see on
+ *    the web exactly what the email already showed them, or "email Jessica to
+ *    register" loses Jessica's address. Recognition grants SIGHT, never
+ *    authority — the member cap above still gates every change.
+ *  - Only an `anonymous` viewer is redacted, and a redaction is never silent:
+ *    redactors report what they withheld so the UI can say "sign in to see"
+ *    (see {@link Withheld}).
  *
  * Pure + I/O-free so it unit-tests cleanly and runs in any context (API routes,
  * react-email render). Resolving a Viewer from a request lives in
@@ -103,13 +110,27 @@ export type Channel = 'public-web' | 'newsletter-email'
 
 /**
  * THE gate: may this (viewer, channel) see un-redacted PII (full names, precise
- * location, bios)? True for a verified member-or-greater, OR for anything sent
- * through the curated `newsletter-email` channel. Name/location/bio shaping all
- * key off this one predicate.
+ * location, contact, bios)? True for any identified viewer (recognized or
+ * authenticated), OR for anything sent through the curated `newsletter-email`
+ * channel. Name/location/bio/contact shaping all key off this one predicate.
  */
 export function canRevealPii(viewer: Viewer, channel: Channel = 'public-web'): boolean {
   if (channel === 'newsletter-email') return true
-  return viewer.assurance === 'authenticated' && roleAtLeast(viewer.role, 'member')
+  return viewer.assurance !== 'anonymous'
+}
+
+/**
+ * What a redaction removed, by class. A redactor that drops PII MUST report it
+ * here so the UI can render "sign in to see …" in its place — never
+ * `hasPii ? <Text/> : null` (#252). Empty/absent ⇒ nothing was withheld.
+ * `members-content` = a whole block/section above the viewer's reach.
+ */
+export type WithheldKind = Exclude<PiiClass, 'none'> | 'members-content'
+export type Withheld = WithheldKind[]
+
+/** Add `kind` to a withheld list (dedup, stable order). */
+export function noteWithheld(list: Withheld, kind: WithheldKind): void {
+  if (!list.includes(kind)) list.push(kind)
 }
 
 /**

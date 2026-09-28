@@ -22,8 +22,10 @@ type EventProps = {
   isMemberOrHigher?: boolean
   isAuthLoading?: boolean
   backLink?: BackLink
+  /** Platform sign-in URL that returns to this page (#252). */
+  signInHref?: string
 }
-export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
+export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink, signInHref }) => {
   if (!eventId) {
     return <EventListing userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
   }
@@ -35,7 +37,7 @@ export const Events: React.FC<EventProps> = ({ eventId, userRole, isMemberOrHigh
 
   // Handle dynamic events
   if (typeof eventId === 'string') {
-    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} backLink={backLink} />
+    return <DynamicEventDetail eventId={eventId} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} backLink={backLink} signInHref={signInHref} />
   }
 
   return <EventListing isNotFound={true} userRole={userRole} isMemberOrHigher={isMemberOrHigher} isAuthLoading={isAuthLoading} />
@@ -173,9 +175,10 @@ type DynamicEventDetailProps = {
   isMemberOrHigher?: boolean
   isAuthLoading?: boolean
   backLink?: BackLink
+  signInHref?: string
 }
 
-export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink }) => {
+export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId, userRole, isMemberOrHigher = false, isAuthLoading = false, backLink, signInHref }) => {
   const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
@@ -234,6 +237,7 @@ export const DynamicEventDetail: React.FC<DynamicEventDetailProps> = ({ eventId,
           userRole={userRole}
           isMemberOrHigher={isMemberOrHigher}
           isAuthLoading={isAuthLoading}
+          onSignIn={signInHref ? () => router.push(signInHref) : undefined}
         />
         <EventsFooter backLink={backLink} />
       </Section>

@@ -14,8 +14,8 @@ import type {
 const anon = ANONYMOUS_VIEWER // anonymous / public-web
 const member: Viewer = { assurance: 'authenticated', role: 'member', tenant: 'Toronto East', email: 'm@x.z' }
 const admin: Viewer = { assurance: 'authenticated', role: 'admin', tenant: 'Toronto East', email: 'a@x.z' }
-// A recognized (email-token) viewer — capped at member reach on the web, but the
-// newsletter-email channel lifts them to member tier for PII.
+// A recognized (email-token) viewer — sees on the web what the email showed
+// them (#252): full PII + member reach; authority stays capped at member.
 const recognized: Viewer = { assurance: 'recognized', role: 'member', tenant: 'Toronto East', email: 'r@x.z' }
 
 // ── PiiClass: name (PersonBlock) ─────────────────────────────────────────────
@@ -222,16 +222,15 @@ describe('redactPost — reach gating', () => {
     expect(rMember.blocks.map((b) => b.id)).toEqual(['pub', 'mem', 'fly'])
   })
 
-  it('newsletter-email channel lifts a recognized viewer to member reach', () => {
+  it('a recognized (email-link) reader sees on the web what the email showed them (#252)', () => {
     const post: Post = {
       ...base,
       visibility: 'public',
       blocks: [{ id: 'mem', kind: 'text', body: 'members copy', containsPii: true, visibility: 'members' }],
     }
-    // recognized on public web → member text dropped
-    expect(redactPost(post, recognized)!.blocks).toHaveLength(0)
-    // recognized via newsletter-email → member text kept
+    expect(redactPost(post, recognized)!.blocks).toHaveLength(1)
     expect(redactPost(post, recognized, { channel: 'newsletter-email' })!.blocks).toHaveLength(1)
+    expect(redactPost(post, recognized)!.withheld).toBeUndefined()
   })
 
   it('admins-only block hidden from a member but shown to admin', () => {
@@ -274,5 +273,55 @@ describe('canSee', () => {
     expect(canSee('admins', admin)).toBe(true)
     // newsletter-email caps at member tier, not admins
     expect(canSee('admins', anon, 'newsletter-email')).toBe(false)
+  })
+})
+
+// ── Never hide silently (#252): the redactor reports what it withheld ─────────
+describe('redactPost — withheld reporting', () => {
+  const base: Post = {
+    id: 'w',
+    title: 'Reception',
+    occasion: ['general'],
+    visibility: 'public',
+    status: 'ready',
+    blocks: [],
+  } as unknown as Post
+
+  it('anon: reports contact when a registration email was dropped', () => {
+    const reg: RegistrationBlock = {
+      id: 'r',
+      kind: 'registration',
+      contactEmail: 'jessica@example.com',
+    } as RegistrationBlock
+    const r = redactPost({ ...base, blocks: [reg] }, anon)!
+    expect((r.blocks[0] as RegistrationBlock).contactEmail).toBeUndefined()
+    expect(r.withheld).toContain('contact')
+  })
+
+  it('anon: reports members-content when a members block is dropped, not for admin-only', () => {
+    const post: Post = {
+      ...base,
+      blocks: [
+        { id: 'm', kind: 'text', body: 'x', containsPii: true, visibility: 'members' },
+        { id: 'a', kind: 'text', body: 'y', containsPii: false, visibility: 'admins' },
+      ],
+    }
+    expect(redactPost(post, anon)!.withheld).toEqual(['members-content'])
+    // A member can't see the admin block either — signing in wouldn't help, so no prompt.
+    expect(redactPost(post, member)!.withheld).toBeUndefined()
+  })
+
+  it('reports nothing when nothing PII-bearing existed', () => {
+    const reg = { id: 'r', kind: 'registration', registrationUrl: 'https://x.y' } as RegistrationBlock
+    expect(redactPost({ ...base, blocks: [reg] }, anon)!.withheld).toBeUndefined()
+  })
+
+  it('recognized and authenticated readers get full contact and no withheld', () => {
+    const reg = { id: 'r', kind: 'registration', contactEmail: 'j@x.y' } as RegistrationBlock
+    for (const v of [recognized, member]) {
+      const r = redactPost({ ...base, blocks: [reg] }, v)!
+      expect((r.blocks[0] as RegistrationBlock).contactEmail).toBe('j@x.y')
+      expect(r.withheld).toBeUndefined()
+    }
   })
 })

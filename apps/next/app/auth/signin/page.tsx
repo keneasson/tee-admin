@@ -23,6 +23,10 @@ type View = 'main' | 'otp'
 function SignInPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // Return the reader to the page that sent them here ("Sign in to see all
+  // details", #252). Same-origin paths only — never an open redirect.
+  const rawCallback = searchParams?.get('callbackUrl') ?? ''
+  const returnTo = /^\/(?![/\\])/.test(rawCallback) ? rawCallback : '/profile'
   const isHydrated = useHydrated()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,12 +72,11 @@ function SignInPageContent() {
     const checkAuth = async () => {
       const session = await getSession()
       if (session) {
-        const callbackUrl = searchParams?.get('callbackUrl') || '/profile'
-        router.push(callbackUrl)
+        router.push(returnTo)
       }
     }
     checkAuth()
-  }, [isHydrated, router, searchParams])
+  }, [isHydrated, router, returnTo])
 
   // --- OTP handlers (must be before any early returns - rules of hooks) ---
   const handleOtpChange = useCallback((index: number, value: string) => {
@@ -123,7 +126,7 @@ function SignInPageContent() {
       const result = await signIn('credentials', {
         email: trimmedEmail,
         password,
-        callbackUrl: '/profile',
+        callbackUrl: returnTo,
         redirect: false,
       })
 
@@ -132,7 +135,7 @@ function SignInPageContent() {
           ? 'Invalid email or password'
           : 'Sign in failed. Please try again.')
       } else if (result?.ok) {
-        router.push('/profile')
+        router.push(returnTo)
       }
     } catch (err) {
       console.error('Sign in error:', err)
@@ -206,7 +209,7 @@ function SignInPageContent() {
       if (signInResult?.error) {
         setError('Sign in failed. Please try again.')
       } else if (signInResult?.ok) {
-        router.push('/profile')
+        router.push(returnTo)
       }
     } catch (err) {
       console.error('Verify OTP error:', err)
@@ -238,7 +241,7 @@ function SignInPageContent() {
   const handleGoogleSignIn = (e: GestureResponderEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    signIn('google', { callbackUrl: '/profile' })
+    signIn('google', { callbackUrl: returnTo })
   }
 
   // ============ OTP VIEW ============

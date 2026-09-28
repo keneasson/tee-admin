@@ -15,6 +15,7 @@
 
 import type { DocumentAttachment, EventSharingScope, OnlineMeetingInfo } from './events'
 import type { RichNode } from '../features/post-editor/rich-text'
+import type { Withheld } from '../utils/viewer-pii'
 
 // Re-export so the post model is a single import surface for consumers. The
 // canonical PiiClass definition lives in viewer-pii.ts (the redaction primitive);
@@ -297,6 +298,12 @@ export interface Post {
   lifecycle: PostLifecycle
 
   blocks: Block[] // where all content (and all PII) lives
+  /**
+   * Set ONLY by `redactPost` (never stored): what was removed for this viewer —
+   * scrubbed fields and whole blocks above their reach. The view MUST tell the
+   * reader and offer sign-in whenever this is non-empty (#252).
+   */
+  withheld?: Withheld
 
   createdAt: string
   updatedAt: string

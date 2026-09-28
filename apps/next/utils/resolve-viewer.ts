@@ -1,4 +1,6 @@
+import { cookies } from 'next/headers'
 import { getTrust } from './auth-trust'
+import { RECOGNITION_COOKIE } from './recognition-cookie'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import {
   effectiveRole,
@@ -11,7 +13,9 @@ import {
  * Resolve the request's {@link Viewer} — assurance + identity in one place.
  *
  *  - assurance comes from getTrust(): a session → `authenticated`; a valid
- *    ecclesia token (passed by the route) → `recognized`; neither → `anonymous`.
+ *    ecclesia token → `recognized`; neither → `anonymous`. The token is the one
+ *    the route passes, else the email-link recognition cookie (#252) — so every
+ *    route recognizes a reader who arrived from our email without plumbing it.
  *  - identity (role + tenant) is resolved from the PersonRecord the credential
  *    maps to, for BOTH the session and the token paths — so a `recognized`
  *    (email-link) viewer still has a role and a tenant, which is what makes
@@ -25,7 +29,8 @@ import {
 export async function resolveViewer(opts?: {
   ecclesiaToken?: string | null
 }): Promise<Viewer> {
-  const trust = await getTrust({ ecclesiaToken: opts?.ecclesiaToken ?? null })
+  const ecclesiaToken = opts?.ecclesiaToken ?? (await readRecognitionCookie())
+  const trust = await getTrust({ ecclesiaToken })
   if (trust.trust === 'anonymous' || !trust.email) {
     return ANONYMOUS_VIEWER
   }
@@ -38,5 +43,15 @@ export async function resolveViewer(opts?: {
     role: effectiveRole(actualRole, trust.trust), // capped for recognized
     tenant: person?.ecclesia ?? null,
     email: trust.email,
+  }
+}
+
+/** The email-link recognition token, if this request carries one. */
+async function readRecognitionCookie(): Promise<string | null> {
+  try {
+    return (await cookies()).get(RECOGNITION_COOKIE)?.value ?? null
+  } catch {
+    // Outside a request scope (e.g. a build-time render) there are no cookies.
+    return null
   }
 }

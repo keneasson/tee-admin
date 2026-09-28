@@ -89,8 +89,40 @@ describe('redactEventForViewer — reveal tiers pass through unchanged', () => {
   it('recognized recipient via newsletter-email sees everything', () => {
     expect(redactEventForViewer(event, recognized, 'newsletter-email')).toBe(event)
   })
-  it('recognized on public web is redacted (first-name-only)', () => {
+  it('recognized (email-link) reader on public web sees full data (#252)', () => {
     const r = redactEventForViewer(event, recognized, 'public-web')
-    expect(r.candidate).toEqual({ firstName: 'Joshua' })
+    expect(r).toBe(event)
+    expect(r.withheld).toBeUndefined()
+  })
+})
+
+// ── Never hide silently (#252) ───────────────────────────────────────────────
+describe('redactEventForViewer — reports what it withheld', () => {
+  it('the Shelburne case: anon loses the registration email AND is told so', () => {
+    const shelburne = {
+      id: 'shelburne',
+      title: 'Shelburne Reception for Gord and Jessica',
+      type: 'general',
+      registration: { required: true, contactEmail: 'jessica@example.com' },
+    } as unknown as Event
+    const r = redactEventForViewer(shelburne, ANONYMOUS_VIEWER)
+    expect(r.registration?.contactEmail).toBeUndefined()
+    expect(r.withheld).toEqual(['contact'])
+  })
+
+  it('reports every class it removed from a PII-dense event', () => {
+    const r = redactEventForViewer(event, ANONYMOUS_VIEWER)
+    expect(new Set(r.withheld)).toEqual(new Set(['name', 'bio', 'location-precise', 'contact']))
+  })
+
+  it('reports nothing when the event had nothing to withhold', () => {
+    const plain = {
+      id: 'p',
+      title: 'Picnic',
+      type: 'general',
+      location: { name: 'Park', city: 'Toronto' },
+      registration: { required: false, registrationUrl: 'http://reg' },
+    } as unknown as Event
+    expect(redactEventForViewer(plain, ANONYMOUS_VIEWER).withheld).toBeUndefined()
   })
 })

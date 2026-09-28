@@ -13,6 +13,8 @@ export default function EventPage() {
   // When arriving from an email link (UTM tracking), provide a meaningful back link
   const fromEmail = searchParams?.get('utm_medium') === 'email'
   const backLink = fromEmail ? { href: '/newsletter', label: 'View full Newsletter' } : undefined
+  // Where "Sign in to see all details" goes — and comes back to (#252).
+  const signInHref = `/auth/signin?callbackUrl=${encodeURIComponent(`/events/${eventId}`)}`
 
   return (
     <Events
@@ -21,6 +23,7 @@ export default function EventPage() {
       isMemberOrHigher={isMemberOrHigher}
       isAuthLoading={isLoading}
       backLink={backLink}
+      signInHref={signInHref}
     />
   )
 }

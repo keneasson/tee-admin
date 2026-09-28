@@ -1,4 +1,5 @@
 import type { LegacyPostStatus } from './post'
+import type { Withheld } from '../utils/viewer-pii'
 // Event Management System Types
 export type EventType = 'study-weekend' | 'funeral' | 'wedding' | 'baptism' | 'engagement' | 'general' | 'recurring' | 'election-cycle'
 
@@ -239,6 +240,12 @@ export interface BaseEvent {
   featured?: boolean
   membersOnly?: boolean // Restrict event to Toronto East Ecclesia members only
   documents: DocumentAttachment[]
+  /**
+   * Set ONLY on a redacted read (never stored): which PII classes the server
+   * removed for this viewer. The view MUST render a "sign in to see" prompt
+   * wherever a withheld field would have appeared (#252). Absent ⇒ full data.
+   */
+  withheld?: Withheld
 }
 
 // Event type with all possible type-specific fields
