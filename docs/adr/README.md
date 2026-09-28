@@ -21,4 +21,4 @@ References. Keep it to a page. Number sequentially, `NNNN-kebab-title.md`.
 | [0002](0002-privilege-escalation-and-anti-abuse.md) | Privilege escalation & anti-abuse — trust model for creating tenants, adding members, assigning Recording Brother | Accepted |
 | [0003](0003-ui-layering-and-the-design-language-seam.md) | UI layering — route files are mount points; `@my/ui` is the design-language seam | Accepted |
 | [0004](0004-rich-text-storage.md) | Rich-text storage — capture losslessly, render progressively | Accepted |
-| [0005](0005-never-silently-withhold.md) | Never silently withhold — identified readers see PII; everyone else is told how to sign in | Accepted |
+| [0005](0005-never-silently-withhold.md) | Never silently withhold — the smart-component contract (floor + escalation action: sign in now, scoped access requests later) | Accepted |
