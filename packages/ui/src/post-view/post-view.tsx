@@ -39,6 +39,7 @@ import {
 import { getPlatformDisplayName } from '@my/app/types/events'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import { ExtLink } from '../ext-link'
+import { WithheldBanner } from '../privacy/withheld-notice'
 import {
   formatDateFacet,
   formatOccasions,
@@ -69,6 +70,11 @@ import {
  */
 export interface PostViewProps {
   post: Post
+  /**
+   * Platform sign-in (returns to this page). When the redactor withheld
+   * anything (`post.withheld`), PostView says so and offers this (#252).
+   */
+  onSignIn?: () => void
 }
 
 // ---- Per-kind block renderers -----------------------------------------------
@@ -414,7 +420,7 @@ export function BlockView({
 
 // ---- The post shell ---------------------------------------------------------
 
-export function PostView({ post }: PostViewProps) {
+export function PostView({ post, onSignIn }: PostViewProps) {
   const dateFacet = formatDateFacet(post)
   const occasions = formatOccasions(post.occasion)
 
@@ -430,6 +436,9 @@ export function PostView({ post }: PostViewProps) {
 
   return (
     <YStack gap="$4" maxWidth={720} width="100%">
+      {/* Never hide silently (#252): say what was held back + how to see it. */}
+      <WithheldBanner withheld={post.withheld} onSignIn={onSignIn} />
+
       {/* ---- Header ---- */}
       <YStack gap="$2">
         {occasions ? (

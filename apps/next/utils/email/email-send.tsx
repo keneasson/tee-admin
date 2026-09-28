@@ -10,7 +10,7 @@ import {
   generateSigninTokens,
   buildSigninUrl,
 } from './ecclesia-token'
-import { addUtmParameters } from './utm-links'
+import { addRecognitionToken, addUtmParameters } from './utm-links'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
@@ -242,16 +242,28 @@ export const emailSend = async function ({
     // identical to before.
     let baseHtml = emailHtml
     let baseText = emailText
+
+    // Per-recipient recognition tokens (#252): stamped onto every first-party
+    // link so a reader who clicks through is `recognized` and sees on the web
+    // what this email showed them. One batched pass for all recipients
+    // (BatchWriteItem), then a synchronous map lookup per recipient in the send
+    // loop. Best-effort: if minting fails the send still goes out, links just
+    // land anonymous (and the page offers sign-in).
+    let recognitionTokens: Map<string, string> | undefined
+    try {
+      recognitionTokens = await generateSigninTokens(senderEmails)
+    } catch (tokenError) {
+      console.error('emailSend: failed to mint recognition tokens (non-fatal):', tokenError)
+    }
+
     let loginUrls: Map<string, string> | undefined
-    if (await checkFeatureFlagFromDB(FEATURE_FLAGS.UNIVERSAL_EMAIL_LOGIN, null)) {
+    if (recognitionTokens && (await checkFeatureFlagFromDB(FEATURE_FLAGS.UNIVERSAL_EMAIL_LOGIN, null))) {
       const withFooter = withLoginFooter(emailHtml, emailText)
       baseHtml = withFooter.html
       baseText = withFooter.text
-      // One batched pass for all recipients (BatchWriteItem), then a synchronous
-      // map lookup per recipient in the send loop — no per-email await.
-      const tokens = await generateSigninTokens(senderEmails)
+      // Same TOKEN# records as the recognition tokens — no second write pass.
       loginUrls = new Map<string, string>()
-      for (const [email, token] of tokens) {
+      for (const [email, token] of recognitionTokens) {
         loginUrls.set(email, buildSigninUrl(token))
       }
     }
@@ -303,6 +315,7 @@ export const emailSend = async function ({
         replyTo,
         campaignId,
         loginUrls,
+        recognitionTokens,
       })
       allSent = {
         sends: [...allSent.sends, ...sends.sends],
@@ -358,6 +371,8 @@ type SingleSendProps = {
   campaignId: string
   /** Per-recipient one-click login URLs (lowercased email → URL). */
   loginUrls?: Map<string, string>
+  /** Per-recipient recognition tokens for first-party links (lowercased email → token). */
+  recognitionTokens?: Map<string, string>
 }
 
 /**
@@ -397,6 +412,7 @@ async function chunkSend({
   replyTo,
   campaignId,
   loginUrls,
+  recognitionTokens,
 }: SingleSendProps): Promise<string[]> {
   const sent = []
   try {
@@ -462,6 +478,10 @@ async function chunkSend({
       // Add UTM tracking parameters to all tee-admin.com links
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
       personalizedHtml = addUtmParameters(personalizedHtml, reason, today)
+
+      // Recognize this reader on click-through (#252).
+      const recognitionToken = recognitionTokens?.get(recipientEmail.toLowerCase())
+      if (recognitionToken) personalizedHtml = addRecognitionToken(personalizedHtml, recognitionToken)
 
       const emailCmd = new SendEmailCommand({
         FromEmailAddress: from,

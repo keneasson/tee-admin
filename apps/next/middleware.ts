@@ -2,6 +2,11 @@ import { auth } from './utils/auth'
 import { NextResponse } from 'next/server'
 import type { NextAuthRequest } from 'next-auth'
 import { getTenantByHost } from '@my/app/config/tenants'
+import {
+  RECOGNITION_COOKIE,
+  RECOGNITION_PARAM,
+  recognitionCookieOptions,
+} from './utils/recognition-cookie'
 
 const ANALYTICS_KEY = process.env.ANALYTICS_INTERNAL_KEY
 
@@ -19,6 +24,22 @@ export default auth((req: NextAuthRequest) => {
   }
   const passthrough = () => NextResponse.next({ request: { headers: forwardedHeaders } })
 
+  // Email-link recognition (#252): `?rt=` is a per-recipient token our bulk send
+  // appends to every link. Keep it in an httpOnly cookie (resolveViewer verifies
+  // it) and bounce to the same URL without it, so the address bar the reader
+  // copies or shares carries no credential. UTM params survive the redirect, so
+  // analytics records the landing on the second hop.
+  const recognitionToken = req.nextUrl.searchParams.get(RECOGNITION_PARAM)
+  if (recognitionToken && !pathname.startsWith('/api/')) {
+    const clean = req.nextUrl.clone()
+    clean.searchParams.delete(RECOGNITION_PARAM)
+    const res = NextResponse.redirect(clean)
+    // A live session always wins in getTrust(), so storing this never switches
+    // a signed-in reader's identity.
+    res.cookies.set(RECOGNITION_COOKIE, recognitionToken, recognitionCookieOptions)
+    return res
+  }
+
   // Assurance model (#80): a session is `authenticated`; a tokenized email link
   // (?token=) makes the visitor `recognized` — partially verified, allowed to
   // VIEW anything an email points them at (their preferences, "more details",
@@ -30,7 +51,10 @@ export default auth((req: NextAuthRequest) => {
   // re-validates it before exposing any real data, so a bogus token gets past
   // this gate but sees nothing. The middleware is a UX gate, not the auth
   // boundary; getTrust() remains authoritative.
-  const recognized = !!req.auth || !!req.nextUrl.searchParams.get('token')
+  const recognized =
+    !!req.auth ||
+    !!req.nextUrl.searchParams.get('token') ||
+    !!req.cookies.get(RECOGNITION_COOKIE)?.value
 
   // Hub sign-in gate: echadhub.org has no public face yet, so require at least a
   // recognized visitor for content pages (Facebook-style). Auth flows (/auth/*)

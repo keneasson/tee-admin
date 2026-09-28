@@ -32,6 +32,9 @@ export { EnhancedScheduleWithData } from './data-table/enhanced-schedule-with-da
 // Event System
 export * from './events'
 
+// Privacy: never hide silently (#252)
+export * from './privacy/withheld-notice'
+
 // Email System
 export * from './email/contact-card'
 export * from './email/merge-dialog'

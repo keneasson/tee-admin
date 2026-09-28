@@ -27,11 +27,13 @@ import type {
 } from '../types/post'
 import {
   canRevealPii,
+  noteWithheld,
   revealBio,
   shapeLocation,
   shapePersonName,
   type Channel,
   type Viewer,
+  type Withheld,
 } from './viewer-pii'
 import { findMarkers, flattenMarkers, markerFor } from '../features/post-editor/inline-markers'
 
@@ -55,16 +57,13 @@ const VISIBILITY_RANK: Record<Visibility, number> = {
 function viewerReach(viewer: Viewer, channel: Channel): number {
   if (channel === 'newsletter-email') return VISIBILITY_RANK.members
   if (viewer.assurance === 'anonymous') return VISIBILITY_RANK.public
-  if (viewer.assurance === 'authenticated') {
-    if (viewer.role === 'owner' || viewer.role === 'admin') return VISIBILITY_RANK.admins
-    if (viewer.role === 'member' || viewer.role === 'recorder' || viewer.role === 'rep') {
-      return VISIBILITY_RANK.members
-    }
-    // Authenticated but below member (guest) — recognized floor.
-    return VISIBILITY_RANK.recognized
+  if (viewer.assurance === 'authenticated' && (viewer.role === 'owner' || viewer.role === 'admin')) {
+    return VISIBILITY_RANK.admins
   }
-  // recognized (valid email token, never above member) — recognized floor.
-  return VISIBILITY_RANK.recognized
+  // Any identified reader — an email-link (recognized) visitor or a signed-in
+  // member/guest — sees what the member newsletter shows: members reach (#252).
+  // A web reader must never see less than the email that sent them here.
+  return VISIBILITY_RANK.members
 }
 
 /** Reach gate: may this (viewer, channel) see content at `visibility`? */
@@ -76,7 +75,19 @@ export function canSee(
   return viewerReach(viewer, channel) >= VISIBILITY_RANK[visibility]
 }
 
-function redactPerson(block: PersonBlock, viewer: Viewer, channel: Channel): PersonBlock {
+function redactPerson(
+  block: PersonBlock,
+  viewer: Viewer,
+  channel: Channel,
+  withheld: Withheld
+): PersonBlock {
+  if (!canRevealPii(viewer, channel)) {
+    for (const p of block.people) {
+      if (p.lastName) noteWithheld(withheld, 'name')
+      if (p.bio) noteWithheld(withheld, 'bio')
+      if (p.contact) noteWithheld(withheld, 'contact')
+    }
+  }
   return {
     ...block,
     people: block.people.map((p) => {
@@ -115,8 +126,20 @@ function redactPerson(block: PersonBlock, viewer: Viewer, channel: Channel): Per
 function redactLocation(
   block: LocationBlock,
   viewer: Viewer,
-  channel: Channel
+  channel: Channel,
+  withheld: Withheld
 ): LocationBlock | null {
+  if (
+    !canRevealPii(viewer, channel) &&
+    (block.privateResidence ||
+      block.address ||
+      block.postalCode ||
+      block.lat !== undefined ||
+      block.directions ||
+      block.mapsUrl)
+  ) {
+    noteWithheld(withheld, 'location-precise')
+  }
   const shaped = shapeLocation(
     {
       venueName: block.venueName,
@@ -156,9 +179,11 @@ function redactLocation(
 function redactRegistration(
   block: RegistrationBlock,
   viewer: Viewer,
-  channel: Channel
+  channel: Channel,
+  withheld: Withheld
 ): RegistrationBlock {
   if (canRevealPii(viewer, channel)) return block
+  if (block.contactEmail || block.contactPhone) noteWithheld(withheld, 'contact')
   // contact-class — drop email/phone; keep the public registration url + logistics.
   const { contactEmail: _e, contactPhone: _p, ...rest } = block
   return rest
@@ -174,15 +199,16 @@ function redactRegistration(
 export function redactBlock(
   block: Block,
   viewer: Viewer,
-  channel: Channel = 'public-web'
+  channel: Channel = 'public-web',
+  withheld: Withheld = []
 ): Block | null {
   switch (block.kind) {
     case 'person':
-      return redactPerson(block, viewer, channel)
+      return redactPerson(block, viewer, channel, withheld)
     case 'location':
-      return redactLocation(block, viewer, channel)
+      return redactLocation(block, viewer, channel, withheld)
     case 'registration':
-      return redactRegistration(block, viewer, channel)
+      return redactRegistration(block, viewer, channel, withheld)
     case 'text':
     case 'time':
     case 'flyer':
@@ -205,9 +231,16 @@ export function redactPost(
   if (!canSee(post.visibility, viewer, channel)) return null
 
   const blocks: Block[] = []
+  const withheld: Withheld = []
   for (const block of post.blocks) {
-    if (!canSee(block.visibility ?? post.visibility, viewer, channel)) continue
-    const redacted = redactBlock(block, viewer, channel)
+    const reach = block.visibility ?? post.visibility
+    if (!canSee(reach, viewer, channel)) {
+      // Only prompt for what signing in would actually reveal — admin-only
+      // blocks are hidden from members too, so they are not "withheld" from you.
+      if (VISIBILITY_RANK[reach] <= VISIBILITY_RANK.members) noteWithheld(withheld, 'members-content')
+      continue
+    }
+    const redacted = redactBlock(block, viewer, channel, withheld)
     if (redacted) blocks.push(redacted)
   }
 
@@ -219,7 +252,9 @@ export function redactPost(
   // where a withheld name used to be. Renderers already collapse an unresolvable
   // marker; this makes the DATA correct rather than relying on every reader to
   // be careful.
-  return { ...post, blocks: dropDanglingMarkers(blocks) }
+  const out: Post = { ...post, blocks: dropDanglingMarkers(blocks) }
+  if (withheld.length > 0) out.withheld = withheld
+  return out
 }
 
 /**

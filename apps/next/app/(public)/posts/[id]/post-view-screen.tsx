@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname, useRouter } from 'next/navigation'
 import { YStack, PostView } from '@my/ui'
 import type { Post } from '@my/app/types/post'
 
@@ -10,9 +11,13 @@ import type { Post } from '@my/app/types/post'
  * in a client boundary).
  */
 export function PostViewScreen({ post }: { post: Post }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const onSignIn = () =>
+    router.push(`/auth/signin?callbackUrl=${encodeURIComponent(pathname || `/posts/${post.id}`)}`)
   return (
     <YStack flex={1} padding="$4" alignItems="center">
-      <PostView post={post} />
+      <PostView post={post} onSignIn={onSignIn} />
     </YStack>
   )
 }

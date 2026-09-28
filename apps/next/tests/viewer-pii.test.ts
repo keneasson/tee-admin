@@ -58,11 +58,16 @@ describe('canRevealFullName — verified member-or-greater only', () => {
   it('hides for anonymous', () => {
     expect(canRevealFullName(ANONYMOUS_VIEWER)).toBe(false)
   })
-  it('hides for a recognized (unverified) member — forward-safety', () => {
-    expect(canRevealFullName(viewer('recognized', 'member'))).toBe(false)
+  // #252 (2026-09-28): an identified reader sees what the email showed them.
+  it('reveals for a recognized (email-link) reader', () => {
+    expect(canRevealFullName(viewer('recognized', 'member'))).toBe(true)
+    expect(canRevealFullName(viewer('recognized', 'guest'))).toBe(true)
   })
-  it('hides for an authenticated guest (signed in, not a member)', () => {
-    expect(canRevealFullName(viewer('authenticated', 'guest'))).toBe(false)
+  it('reveals for an authenticated guest (signed in, identified)', () => {
+    expect(canRevealFullName(viewer('authenticated', 'guest'))).toBe(true)
+  })
+  it('hides for an anonymous reader', () => {
+    expect(canRevealFullName(ANONYMOUS_VIEWER)).toBe(false)
   })
   it('reveals for an authenticated member', () => {
     expect(canRevealFullName(viewer('authenticated', 'member'))).toBe(true)
@@ -78,13 +83,14 @@ describe('renderName / shapePersonName — server-side redaction', () => {
     expect(renderName(peter, ANONYMOUS_VIEWER)).toBe('Peter')
     expect(shapePersonName(peter, ANONYMOUS_VIEWER)).toEqual({ firstName: 'Peter' })
   })
-  it('first name only for a recognized member', () => {
-    const v = viewer('recognized', 'member')
-    expect(renderName(peter, v)).toBe('Peter')
-    expect(shapePersonName(peter, v)).toEqual({ firstName: 'Peter' })
+  it('first name only for an anonymous reader', () => {
+    expect(renderName(peter, ANONYMOUS_VIEWER)).toBe('Peter')
+    expect(shapePersonName(peter, ANONYMOUS_VIEWER)).toEqual({ firstName: 'Peter' })
+  })
+  it('full name for a recognized (email-link) reader (#252)', () => {
+    expect(renderName(peter, viewer('recognized', 'member'))).toBe('Peter Skariah')
   })
   it('NEVER carries lastName in a redacted shape (no ship-then-hide)', () => {
-    expect(shapePersonName(peter, viewer('recognized', 'member'))).not.toHaveProperty('lastName')
     expect(shapePersonName(peter, ANONYMOUS_VIEWER)).not.toHaveProperty('lastName')
   })
   it('full name for an authenticated member', () => {
@@ -101,7 +107,7 @@ describe('renderName / shapePersonName — server-side redaction', () => {
 describe('canRevealPii — channel-aware (design §8.2)', () => {
   it('public-web follows the viewer tier', () => {
     expect(canRevealPii(ANONYMOUS_VIEWER, 'public-web')).toBe(false)
-    expect(canRevealPii(viewer('recognized', 'member'), 'public-web')).toBe(false)
+    expect(canRevealPii(viewer('recognized', 'member'), 'public-web')).toBe(true)
     expect(canRevealPii(viewer('authenticated', 'member'), 'public-web')).toBe(true)
   })
   it('newsletter-email always reveals — curated member audience', () => {
@@ -109,7 +115,7 @@ describe('canRevealPii — channel-aware (design §8.2)', () => {
     expect(canRevealPii(viewer('recognized', 'member'), 'newsletter-email')).toBe(true)
   })
   it('defaults to public-web when channel omitted', () => {
-    expect(canRevealPii(viewer('recognized', 'member'))).toBe(false)
+    expect(canRevealPii(ANONYMOUS_VIEWER)).toBe(false)
   })
 })
 
@@ -119,10 +125,11 @@ describe('name/bio via the newsletter-email channel show full', () => {
     expect(renderName(peter, v, 'newsletter-email')).toBe('Peter Skariah')
     expect(shapePersonName(peter, v, 'newsletter-email')).toEqual({ firstName: 'Peter', lastName: 'Skariah' })
   })
-  it('bio shown in newsletter, hidden on public web', () => {
+  it('bio shown in newsletter, hidden on public web for anon only', () => {
     const v = viewer('recognized', 'member')
     expect(revealBio('An obituary', v, 'newsletter-email')).toBe('An obituary')
-    expect(revealBio('An obituary', v, 'public-web')).toBeUndefined()
+    expect(revealBio('An obituary', v, 'public-web')).toBe('An obituary')
+    expect(revealBio('An obituary', ANONYMOUS_VIEWER, 'public-web')).toBeUndefined()
     expect(revealBio('An obituary', viewer('authenticated', 'member'), 'public-web')).toBe('An obituary')
   })
 })
