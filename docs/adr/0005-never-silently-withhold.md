@@ -1,4 +1,4 @@
-# ADR-0005: Never silently withhold — identified readers see it, everyone else is told how
+# ADR-0005: Never silently withhold — the smart-component contract
 
 - **Status:** Accepted
 - **Date:** 2026-09-28
@@ -51,6 +51,36 @@ people who have the access to review it.
    plus one `WithheldBanner` at the top with a **Sign in** button that returns
    to the same page. `auth && <Text/>` alone is forbidden for PII.
 
+## The smart-component contract (standard for every smart component)
+This is **why** we have smart components: each one knows its own sensitivity,
+so it can always show the right amount and say how to get the rest. Every smart
+component (contact, person, location, registration, and any future "sensitive
+area") MUST:
+
+1. **Declare its tiers per field.** It says which part is the *floor* (always
+   safe, e.g. first name, venue + city) and which parts need escalation (e.g.
+   email/phone, surname, street address).
+2. **Store a shape that has a floor.** The editor refuses to publish a
+   sensitive value with no floor. A registration email needs a contact first
+   name (#254).
+3. **Redact on the server, per field, and flag it.** The redactor keeps the
+   floor, drops the rest, and marks the field as withheld (`contactWithheld`,
+   `withheld`). A redacted value never reaches the client.
+4. **Render exactly two ways:** full, or floor + an **escalation action**.
+   Never an empty slot, never `auth && <Text/>`.
+5. **Choose the escalation action by WHY the reader lacks access.**
+   "Authenticated" is not one tier: access is also scoped to an ecclesia or a
+   region.
+   - *Assurance gap* (we don't know who you are) → **Sign in**, returning to
+     the same page. Built.
+   - *Scope gap* (we know who you are, but this belongs to another ecclesia or
+     region) → **Request access from its owner**, e.g. "Request from Toronto
+     East" or "Request from a North American Rep". The request is routed to
+     that scope's RB/Rep under ADR-0002's approval rules. **Future** — it
+     arrives with the first sensitive area that needs it.
+   - *No path* (nothing the reader can do would reveal it, e.g. admin-only) →
+     no prompt; it isn't "withheld from you".
+
 ## Consequences
 - A forwarded newsletter lets whoever it's forwarded to see the PII the email
   itself already contained, for up to 30 days (token validity). We accept this
@@ -60,6 +90,9 @@ people who have the access to review it.
   new surface that drops fields without reporting them violates this ADR.
 - Reviewing a page as owner is not a privacy review. Check the anonymous view
   (private window) or rely on the banner.
+- The withheld flag must grow from a boolean into a *reason* (assurance
+  vs. scope + which scope) when scoped escalation arrives, so the view can
+  pick the right action. Until then every withheld field means "sign in".
 - **Strict enforcement belongs in the new editor's smart fields.** A contact is
   a person (first name + gated email/phone), so the field always has two
   renderings: full, or "Please email Jessica — Sign in to view contact
@@ -70,7 +103,7 @@ people who have the access to review it.
   the client; a post the viewer can't reach returns 404 instead of "sign in".
 
 ## References
-- Issue #252 (incident + fix), Epic #84 (assurance ladder), ADR-0002
+- Issue #252 (incident + fix), #254 (first smart field), #256 (scoped access requests, future), Epic #84 (assurance ladder), ADR-0002 (escalation & approval), #27 (regional roles)
 - `packages/app/utils/viewer-pii.ts` (`canRevealPii`, `Withheld`)
 - `packages/app/utils/redact-event.ts`, `packages/app/utils/redact-post.ts`
 - `packages/ui/src/privacy/withheld-notice.tsx`

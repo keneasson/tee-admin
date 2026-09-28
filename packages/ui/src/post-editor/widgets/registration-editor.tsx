@@ -9,7 +9,14 @@
  *   • Up front: a "Registration required?" toggle, a registration link (a bare
  *     domain is normalized on blur, like the Link widget) and a deadline date.
  *   • Add details: fee (toggle → amount + payment instructions), contact
- *     (email / phone), free-text notes, and newsletter deadline reminders.
+ *     (a NAMED person + email / phone), free-text notes, and newsletter
+ *     deadline reminders.
+ *
+ * Contact is a smart field (#254, ADR-0005): the first name is the safe
+ * fallback an unidentified reader sees ("Contact Jessica — Sign in to view
+ * contact details"), so it is required whenever an email or phone is given.
+ * The details panel forces itself open while that rule fails, so the field
+ * blocking Publish is never hidden.
  *
  * Web-only (native date input); the pure fee/deadline conversions live in
  * {@link registration-resolve.ts} and the URL normalizer in {@link link-resolve.ts}
@@ -34,6 +41,7 @@ import {
   formatFee,
   isoToDeadlineDate,
   parseFee,
+  registrationContactError,
 } from '@my/app/features/post-editor/resolvers/registration-resolve'
 
 export interface RegistrationEditorProps {
@@ -63,6 +71,22 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
   // Local fee text so a mid-typing "25." isn't clobbered by the parsed number.
   const [feeText, setFeeText] = useState(() => formatFee(block.fee))
   const tz = DEFAULT_TIMEZONE
+
+  const contactError = registrationContactError(block)
+  const detailsOpen = showDetails || !!contactError
+  const contactPerson = block.contactPerson
+
+  const setContactName = (field: 'firstName' | 'lastName', value: string) => {
+    const next = { firstName: contactPerson?.firstName ?? '', lastName: contactPerson?.lastName, [field]: value }
+    const firstName = next.firstName.trim() ? next.firstName : ''
+    const lastName = next.lastName?.trim() ? next.lastName : undefined
+    onChange({
+      ...block,
+      // Clearing both names removes the contact; a last name alone keeps an
+      // empty first name so the publish rule can point at it.
+      contactPerson: firstName || lastName ? { firstName, ...(lastName ? { lastName } : {}) } : undefined,
+    })
+  }
 
   const required = block.required ?? false
   const hasFee = block.hasFee ?? false
@@ -140,14 +164,14 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
       <Button
         size="$2"
         chromeless
-        icon={showDetails ? ChevronDown : ChevronRight}
+        icon={detailsOpen ? ChevronDown : ChevronRight}
         justifyContent="flex-start"
         onPress={() => setShowDetails((s) => !s)}
       >
         Add details (fee, contact, notes, reminders)
       </Button>
 
-      {showDetails ? (
+      {detailsOpen ? (
         <YStack gap="$3" paddingLeft="$2">
           {/* Fee */}
           <YStack gap="$2">
@@ -191,7 +215,36 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
             ) : null}
           </YStack>
 
-          {/* Contact */}
+          {/* Contact — a named person (smart field, #254) */}
+          <YStack gap="$1">
+            <Text fontSize="$2" fontWeight="600" color="$color11">
+              Contact person
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Input
+                flex={1}
+                minWidth={140}
+                value={contactPerson?.firstName ?? ''}
+                onChangeText={(t) => setContactName('firstName', t)}
+                placeholder="First name (e.g. Jessica)"
+                borderColor={contactError ? '$red8' : undefined}
+                aria-label="Contact first name"
+              />
+              <Input
+                flex={1}
+                minWidth={140}
+                value={contactPerson?.lastName ?? ''}
+                onChangeText={(t) => setContactName('lastName', t)}
+                placeholder="Last name"
+                aria-label="Contact last name"
+              />
+            </XStack>
+            {contactError ? (
+              <Text fontSize="$2" color="$red10">
+                {contactError}
+              </Text>
+            ) : null}
+          </YStack>
           <YStack gap="$1">
             <Text fontSize="$2" fontWeight="600" color="$color11">
               Contact email
@@ -199,7 +252,7 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
             <Input
               value={block.contactEmail ?? ''}
               onChangeText={(t) => onChange({ ...block, contactEmail: t || undefined })}
-              placeholder="Who to ask — shown to members"
+              placeholder="name@example.com"
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
@@ -212,10 +265,15 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
             <Input
               value={block.contactPhone ?? ''}
               onChangeText={(t) => onChange({ ...block, contactPhone: t || undefined })}
-              placeholder="Optional — shown to members"
+              placeholder="Optional"
               autoCapitalize="none"
             />
           </YStack>
+          <Text fontSize="$2" color="$color10">
+            Readers we can identify (signed in, or arriving from our email) see the full name,
+            email and phone. Everyone else sees &ldquo;Contact {contactPerson?.firstName?.trim() || '…'}&rdquo;
+            and a sign-in link.
+          </Text>
 
           {/* Notes */}
           <YStack gap="$1">

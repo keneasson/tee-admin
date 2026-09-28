@@ -100,8 +100,12 @@ function redactPerson(
       if (named.lastName) out.lastName = named.lastName
       const bio = revealBio(p.bio, viewer, channel)
       if (bio) out.bio = bio
-      // contact-class — dropped below reveal tier.
-      if (p.contact && canRevealPii(viewer, channel)) out.contact = p.contact
+      // contact-class — dropped below reveal tier, and SAID so (#254): the view
+      // shows "Sign in to view contact details" instead of an empty slot.
+      if (p.contact) {
+        if (canRevealPii(viewer, channel)) out.contact = p.contact
+        else out.contactWithheld = true
+      }
       // LINKAGE to the Contact List record. Carried only at the tier that may
       // see contact-class detail: the Contact List is itself member-gated, so a
       // link shown to anon would both 403 and reveal that the person is in the
@@ -183,10 +187,20 @@ function redactRegistration(
   withheld: Withheld
 ): RegistrationBlock {
   if (canRevealPii(viewer, channel)) return block
-  if (block.contactEmail || block.contactPhone) noteWithheld(withheld, 'contact')
   // contact-class — drop email/phone; keep the public registration url + logistics.
-  const { contactEmail: _e, contactPhone: _p, ...rest } = block
-  return rest
+  const { contactEmail: _e, contactPhone: _p, contactPerson, ...rest } = block
+  const out: RegistrationBlock = rest
+  // name-class — the contact's FIRST NAME is the floor and always survives
+  // ("Contact Jessica"); surname + directory linkage do not.
+  if (contactPerson?.firstName) {
+    out.contactPerson = { firstName: contactPerson.firstName }
+    if (contactPerson.lastName) noteWithheld(withheld, 'name')
+  }
+  if (block.contactEmail || block.contactPhone) {
+    noteWithheld(withheld, 'contact')
+    out.contactWithheld = true
+  }
+  return out
 }
 
 /**
