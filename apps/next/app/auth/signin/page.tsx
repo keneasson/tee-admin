@@ -160,7 +160,7 @@ function SignInPageContent() {
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail }),
+        body: JSON.stringify({ email: trimmedEmail, redirectPath: returnTo }),
       })
 
       if (response.ok) {
@@ -227,7 +227,7 @@ function SignInPageContent() {
       await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: otpEmail }),
+        body: JSON.stringify({ email: otpEmail, redirectPath: returnTo }),
       })
       setResendCooldown(60)
       setOtpDigits(['', '', '', '', '', ''])
