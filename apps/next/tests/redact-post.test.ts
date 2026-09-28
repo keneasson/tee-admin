@@ -325,3 +325,42 @@ describe('redactPost — withheld reporting', () => {
     }
   })
 })
+
+// ── Smart contact field (#254): the first-name floor is never empty ──────────
+describe('registration contact — first-name floor + sign-in', () => {
+  const reg = {
+    id: 'r',
+    kind: 'registration',
+    contactPerson: { firstName: 'Jessica', lastName: 'Easson', personId: 'p-j' },
+    contactEmail: 'jessica@example.com',
+  } as RegistrationBlock
+
+  it('anon keeps "Jessica" and is told the contact is withheld', () => {
+    const r = redactBlock(reg, anon) as RegistrationBlock
+    expect(r.contactPerson).toEqual({ firstName: 'Jessica' })
+    expect(r.contactEmail).toBeUndefined()
+    expect(r.contactWithheld).toBe(true)
+  })
+
+  it('identified readers get the full name and email, nothing withheld', () => {
+    for (const v of [recognized, member]) {
+      const r = redactBlock(reg, v) as RegistrationBlock
+      expect(r.contactPerson).toEqual(reg.contactPerson)
+      expect(r.contactEmail).toBe('jessica@example.com')
+      expect(r.contactWithheld).toBeUndefined()
+    }
+  })
+
+  it('a person block marks withheld contact instead of dropping it silently', () => {
+    const person = {
+      id: 'pb',
+      kind: 'person',
+      role: 'contact',
+      people: [{ id: 'x', firstName: 'Jessica', lastName: 'Easson', contact: '416-555-1212' }],
+    } as PersonBlock
+    const r = redactBlock(person, anon) as PersonBlock
+    expect(r.people[0]).toMatchObject({ firstName: 'Jessica', contactWithheld: true })
+    expect(r.people[0].contact).toBeUndefined()
+    expect((redactBlock(person, member) as PersonBlock).people[0].contactWithheld).toBeUndefined()
+  })
+})

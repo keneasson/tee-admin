@@ -39,7 +39,8 @@ import {
 import { getPlatformDisplayName } from '@my/app/types/events'
 import { MarkdownLiteText } from '../markdown-lite-text'
 import { ExtLink } from '../ext-link'
-import { WithheldBanner } from '../privacy/withheld-notice'
+import { WithheldBanner, WithheldInline } from '../privacy/withheld-notice'
+import { contactDisplayName } from '@my/app/features/post-editor/resolvers/registration-resolve'
 import {
   formatDateFacet,
   formatOccasions,
@@ -114,7 +115,7 @@ function TextBlockView({ block, blocks }: { block: TextBlock; blocks?: Block[] }
   return <MarkdownLiteText text={body} fontSize="$4" color="$color12" />
 }
 
-function PersonBlockView({ block }: { block: PersonBlock }) {
+function PersonBlockView({ block, onSignIn }: { block: PersonBlock; onSignIn?: () => void }) {
   if (block.people.length === 0) return null
   return (
     <YStack gap="$2">
@@ -143,10 +144,13 @@ function PersonBlockView({ block }: { block: PersonBlock }) {
                   {meta}
                 </Text>
               ) : null}
+              {/* Never an empty slot (#254): full contact, or say it's withheld. */}
               {person.contact ? (
                 <Text fontSize="$3" color="$color11">
                   {person.contact}
                 </Text>
+              ) : person.contactWithheld ? (
+                <WithheldInline what="contact details" onSignIn={onSignIn} />
               ) : null}
               {person.bio ? (
                 <Paragraph fontSize="$3" color="$color11" whiteSpace="pre-wrap">
@@ -317,13 +321,20 @@ function FlyerBlockView({ block }: { block: FlyerBlock }) {
   )
 }
 
-function RegistrationBlockView({ block }: { block: RegistrationBlock }) {
+function RegistrationBlockView({
+  block,
+  onSignIn,
+}: {
+  block: RegistrationBlock
+  onSignIn?: () => void
+}) {
+  const contactName = contactDisplayName(block.contactPerson)
+  const hasContact = !!(contactName || block.contactEmail || block.contactPhone || block.contactWithheld)
   const hasAnything =
     block.required ||
     block.deadline ||
     block.registrationUrl ||
-    block.contactEmail ||
-    block.contactPhone ||
+    hasContact ||
     block.hasFee ||
     block.notes
   if (!hasAnything) return null
@@ -351,13 +362,28 @@ function RegistrationBlockView({ block }: { block: RegistrationBlock }) {
           {block.paymentInstructions}
         </Text>
       ) : null}
-      {block.contactEmail ? (
-        <ExtLink href={`mailto:${block.contactEmail}`}>{block.contactEmail}</ExtLink>
-      ) : null}
-      {block.contactPhone ? (
-        <Text fontSize="$3" color="$color11">
-          {block.contactPhone}
-        </Text>
+      {/* Smart contact field (#254, ADR-0005) — exactly two renderings:
+          full: "Contact Jessica Easson" + email/phone
+          floor: "Contact Jessica" + "Sign in to view contact details" */}
+      {hasContact ? (
+        <YStack gap="$1">
+          {contactName ? (
+            <Text fontSize="$3" fontWeight="600" color="$color12">
+              Contact {contactName}
+            </Text>
+          ) : null}
+          {block.contactEmail ? (
+            <ExtLink href={`mailto:${block.contactEmail}`}>{block.contactEmail}</ExtLink>
+          ) : null}
+          {block.contactPhone ? (
+            <Text fontSize="$3" color="$color11">
+              {block.contactPhone}
+            </Text>
+          ) : null}
+          {block.contactWithheld ? (
+            <WithheldInline what="contact details" onSignIn={onSignIn} />
+          ) : null}
+        </YStack>
       ) : null}
       {block.notes ? (
         <Text fontSize="$3" color="$color11">
@@ -387,11 +413,14 @@ export function BlockView({
   block,
   inline = false,
   blocks,
+  onSignIn,
 }: {
   block: Block
   inline?: boolean
   /** Sibling blocks, so prose can resolve its inline markers. */
   blocks?: Block[]
+  /** Platform sign-in, for a withheld contact's "Sign in to view" (#254). */
+  onSignIn?: () => void
 }) {
   // Inside prose a block collapses to its one-line reading so the sentence still
   // reads as a sentence; the full stacked panel is for standalone blocks.
@@ -402,7 +431,7 @@ export function BlockView({
     case 'text':
       return <TextBlockView block={block} blocks={blocks} />
     case 'person':
-      return <PersonBlockView block={block} />
+      return <PersonBlockView block={block} onSignIn={onSignIn} />
     case 'location':
       return <LocationBlockView block={block} />
     case 'time':
@@ -410,7 +439,7 @@ export function BlockView({
     case 'flyer':
       return <FlyerBlockView block={block} />
     case 'registration':
-      return <RegistrationBlockView block={block} />
+      return <RegistrationBlockView block={block} onSignIn={onSignIn} />
     case 'link':
       return <LinkBlockView block={block} />
     default:
@@ -471,7 +500,7 @@ export function PostView({ post, onSignIn }: PostViewProps) {
         <YStack gap="$4">
           {standaloneBlocks.map((block) => (
             <Card key={block.id} bordered padding="$4">
-              <BlockView block={block} blocks={post.blocks} />
+              <BlockView block={block} blocks={post.blocks} onSignIn={onSignIn} />
             </Card>
           ))}
         </YStack>

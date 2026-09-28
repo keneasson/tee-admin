@@ -1,4 +1,5 @@
 import type { Block, Post } from '@my/app/types/post'
+import { registrationContactError } from '@my/app/features/post-editor/resolvers/registration-resolve'
 
 /**
  * Pure state transitions for the {@link PostEditor}.
@@ -102,6 +103,12 @@ export function createEmptyPost(tenant: string, authorId: string): Post {
 export function validateForPublish(post: Post): string[] {
   const errors: string[] = []
   if (!post.title.trim()) errors.push('A title is required')
+  // Smart-field contact rule (#254): a contact always has a safe fallback.
+  for (const block of post.blocks) {
+    if (block.kind !== 'registration') continue
+    const err = registrationContactError(block)
+    if (err && !errors.includes(err)) errors.push(err)
+  }
   // NO "add at least one block" rule. Nobody sets out to publish an empty post,
   // and the empty document says so far better than a validation message can —
   // the editor should not nag about the obvious (it is a document, not a form).

@@ -69,6 +69,49 @@ export function RegistrationBlockEditor({ block, onChange }: BlockEditorProps<Re
         </YStack>
       </XStack>
 
+      {/* Contact is a named person (#254): the first name is the fallback an
+          unidentified reader sees, so Publish requires it with an email/phone. */}
+      <XStack gap="$4" flexWrap="wrap">
+        <YStack minWidth={200} flex={1} gap="$2">
+          <Label htmlFor={`${block.id}-contact-first`} fontSize="$3" fontWeight="600">
+            Contact first name
+          </Label>
+          <Input
+            id={`${block.id}-contact-first`}
+            value={block.contactPerson?.firstName ?? ''}
+            onChangeText={(firstName) =>
+              onChange({
+                ...block,
+                contactPerson:
+                  firstName || block.contactPerson?.lastName
+                    ? { ...block.contactPerson, firstName }
+                    : undefined,
+              })
+            }
+            placeholder="Jessica"
+          />
+        </YStack>
+        <YStack minWidth={200} flex={1} gap="$2">
+          <Label htmlFor={`${block.id}-contact-last`} fontSize="$3" fontWeight="600">
+            Contact last name
+          </Label>
+          <Input
+            id={`${block.id}-contact-last`}
+            value={block.contactPerson?.lastName ?? ''}
+            onChangeText={(lastName) =>
+              onChange({
+                ...block,
+                contactPerson:
+                  lastName || block.contactPerson?.firstName
+                    ? { firstName: block.contactPerson?.firstName ?? '', lastName: lastName || undefined }
+                    : undefined,
+              })
+            }
+            placeholder="Easson"
+          />
+        </YStack>
+      </XStack>
+
       <XStack gap="$4" flexWrap="wrap">
         <YStack minWidth={200} flex={1} gap="$2">
           <Label htmlFor={`${block.id}-email`} fontSize="$3" fontWeight="600">

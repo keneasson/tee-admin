@@ -139,6 +139,12 @@ export interface BlockPerson {
   bio?: string // pii:'bio' — obituary / testimony / about — hidden below member
   contact?: string // pii:'contact' — phone / personal email — hidden below member
   /**
+   * pii:'none' — set ONLY by the redactor (never stored): this person HAD
+   * contact detail that was withheld from this reader. The view renders
+   * "Sign in to view contact details" in its place — never an empty slot (#254).
+   */
+  contactWithheld?: boolean
+  /**
    * pii:'none' — LINKAGE to the Contact List record this person is, when they
    * were picked from the directory (`/api/people` → `/people/{personId}`).
    *
@@ -232,13 +238,28 @@ export interface FlyerBlock extends BlockBase {
   rotation?: number // degrees clockwise, one of 0 | 90 | 180 | 270 (default 0)
 }
 
+/**
+ * Who to contact about a registration — a PERSON, not a bare address, so there
+ * is always a safe fallback to show (#254, ADR-0005): an unidentified reader
+ * sees "Contact Jessica — Sign in to view contact details", never nothing.
+ */
+export interface RegistrationContact {
+  firstName: string // pii:'name' — ALWAYS shown (the floor)
+  lastName?: string // pii:'name' — dropped below reveal tier
+  personId?: string // pii:'none' linkage — carried only at reveal tier (like BlockPerson)
+}
+
 export interface RegistrationBlock extends BlockBase {
   kind: 'registration'
   required?: boolean
   deadline?: string // ISO-8601
   registrationUrl?: string // pii:'none'
+  /** The named contact. REQUIRED to publish when contactEmail/contactPhone is set. */
+  contactPerson?: RegistrationContact
   contactEmail?: string // pii:'contact'
   contactPhone?: string // pii:'contact'
+  /** pii:'none' — set ONLY by the redactor: email/phone were withheld from this reader. */
+  contactWithheld?: boolean
   hasFee?: boolean
   fee?: number
   paymentInstructions?: string

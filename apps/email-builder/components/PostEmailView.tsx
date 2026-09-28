@@ -229,6 +229,7 @@ function RegistrationBlockView({ block }: { block: RegistrationBlock }) {
     block.required ||
     block.deadline ||
     block.registrationUrl ||
+    block.contactPerson?.firstName ||
     block.contactEmail ||
     block.contactPhone ||
     block.hasFee ||
@@ -246,6 +247,11 @@ function RegistrationBlockView({ block }: { block: RegistrationBlock }) {
         </Text>
       ) : null}
       {block.paymentInstructions ? <Text style={subLine}>{block.paymentInstructions}</Text> : null}
+      {block.contactPerson?.firstName ? (
+        <Text style={primaryLine}>
+          Contact {[block.contactPerson.firstName, block.contactPerson.lastName].filter(Boolean).join(' ')}
+        </Text>
+      ) : null}
       {block.contactEmail ? (
         <Text style={subLine}>
           <Link href={`mailto:${block.contactEmail}`} style={inlineLink}>

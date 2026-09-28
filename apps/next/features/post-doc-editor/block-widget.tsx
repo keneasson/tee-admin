@@ -343,6 +343,7 @@ export function isBlockEmpty(block: Block): boolean {
         block.required ||
         block.deadline ||
         block.registrationUrl ||
+        block.contactPerson?.firstName ||
         block.contactEmail ||
         block.contactPhone ||
         block.hasFee ||
