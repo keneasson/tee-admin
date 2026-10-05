@@ -423,6 +423,15 @@ export async function DELETE(
     switch (type) {
       case 'email': {
         if (!id) return NextResponse.json({ error: 'Email id is required' }, { status: 400 })
+        // Deleting the login row would leave PROFILE.primaryEmail pointing at an
+        // address with no row — a broken record. Correct it instead (#190).
+        const row = await personRepository.getEmailById(targetPerson.personId, id)
+        if (row?.emailType === 'primary') {
+          return NextResponse.json(
+            { error: "That's the sign-in email. Use the pencil to correct it instead." },
+            { status: 400 }
+          )
+        }
         await personRepository.removeEmail(targetPerson.personId, id)
         invalidatePeopleCache()
         return NextResponse.json({ success: true })

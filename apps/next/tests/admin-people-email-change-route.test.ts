@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   p_getEmails: vi.fn(),
   p_getAllPersonsByEmail: vi.fn(),
   p_changePrimaryEmail: vi.fn(),
+  p_correctSecondaryEmail: vi.fn(),
 }))
 
 vi.mock('../utils/auth-trust', () => ({ requireAssurance: h.requireAssurance }))
@@ -38,6 +39,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
     getEmails: h.p_getEmails,
     getAllPersonsByEmail: h.p_getAllPersonsByEmail,
     changePrimaryEmail: h.p_changePrimaryEmail,
+    correctSecondaryEmail: h.p_correctSecondaryEmail,
   },
 }))
 
@@ -131,7 +133,7 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
     const body = await res.json()
     expect(body).toMatchObject({ success: true, newEmail: 'brand-new@x.example', movedTopics: ['newsletter'] })
 
-    expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, 'brand-new@x.example')
+    expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, 'brand-new@x.example', { replace: false })
     expect(h.migrateSubscriptions).toHaveBeenCalledWith(TARGET_PRIMARY, 'brand-new@x.example', {
       personId: PID,
     })
@@ -152,7 +154,7 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
 
     const res = await POST(makeReq({ promoteEmailId: 'sec-1' }), { params })
     expect(res.status).toBe(200)
-    expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, 'secondary@x.example')
+    expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, 'secondary@x.example', { replace: false })
   })
 
   it('promote mode: rejects an unverified secondary', async () => {
@@ -168,5 +170,59 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
     const res = await POST(makeReq({ promoteEmailId: 'sec-1' }), { params })
     expect(res.status).toBe(400)
     expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
+  })
+})
+
+// #190: the member page's pencil — correct an address in one step.
+describe('correction mode { correctEmailId, newEmail }', () => {
+  const TYPO = 'jaredandrews1921@gmail.com'
+  const RIGHT = 'jaredandrews1971@gmail.com'
+  beforeEach(() => {
+    h.p_getById.mockResolvedValue({ personId: PID, primaryEmail: TYPO, ecclesia: 'Cambridge Ecclesia' })
+    h.p_changePrimaryEmail.mockResolvedValue({ newEmailId: 'n', oldEmail: TYPO })
+    h.migrateSubscriptions.mockResolvedValue({ movedTopics: [] })
+  })
+
+  it('sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
+    h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
+    const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: ' JaredAndrews1971@gmail.com ' }), { params })
+    expect(res.status).toBe(200)
+    expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, RIGHT, { replace: true })
+    expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()
+    expect(h.migrateSubscriptions).toHaveBeenCalledWith(TYPO, RIGHT, { personId: PID })
+    expect(h.invalidatePeopleCache).toHaveBeenCalled()
+  })
+
+  it('secondary row: fixed in place, sign-in untouched', async () => {
+    h.p_getEmails.mockResolvedValue([
+      { emailId: 'e1', email: TYPO, emailType: 'primary', verified: true },
+      { emailId: 'e2', email: 'old@x.example', emailType: 'secondary', verified: false },
+    ])
+    const res = await POST(makeReq({ correctEmailId: 'e2', newEmail: 'fixed@x.example' }), { params })
+    expect(res.status).toBe(200)
+    expect(h.p_correctSecondaryEmail).toHaveBeenCalledWith(PID, 'e2', 'fixed@x.example')
+    expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
+    expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()
+  })
+
+  it('409 when the corrected address belongs to someone else — nothing written', async () => {
+    h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
+    h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: 'someone-else' }])
+    const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
+    expect(res.status).toBe(409)
+    expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
+  })
+
+  it('400 for an invalid address or an unknown row', async () => {
+    h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
+    expect((await POST(makeReq({ correctEmailId: 'e1', newEmail: 'nope' }), { params })).status).toBe(400)
+    expect((await POST(makeReq({ correctEmailId: 'zz', newEmail: RIGHT }), { params })).status).toBe(400)
+    expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
+  })
+
+  it('still 403 for someone without edit rights over that ecclesia', async () => {
+    h.checkEcclesiaEditPermission.mockResolvedValue(false)
+    const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
+    expect(res.status).toBe(403)
   })
 })

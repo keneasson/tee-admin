@@ -200,6 +200,13 @@ export default function MemberProfilePage() {
   const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Correct an email in place (#190): pencil → fix → Save. One click for an
+  // admin/RB fixing a typo — no verification round-trip, no add-then-promote.
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null)
+  const [editEmailValue, setEditEmailValue] = useState('')
+  const [emailBusy, setEmailBusy] = useState(false)
+  const [emailMessage, setEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const memberId = decodeURIComponent((params?.email as string) || '')
   const sessionEmail = session?.user?.email?.toLowerCase() || ''
   const isOwnProfile = sessionEmail !== '' && sessionEmail === profile?.email?.toLowerCase()
@@ -486,6 +493,51 @@ export default function MemberProfilePage() {
       // ignore
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  /**
+   * Admin-attested email change for the member being viewed (#190):
+   *   - { correctEmailId, newEmail } — fix an address; on the sign-in row the
+   *     login moves and the wrong address is removed (never emailed).
+   *   - { promoteEmailId } — make a verified secondary the sign-in email.
+   */
+  const changeMemberEmail = async (payload: { correctEmailId?: string; newEmail?: string; promoteEmailId?: string }) => {
+    if (!profile?.personId) return
+    setEmailBusy(true)
+    setEmailMessage(null)
+    try {
+      const res = await fetch(`/api/admin/people/${encodeURIComponent(profile.personId)}/email-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.success) {
+        const moved: string[] = Array.isArray(data.movedTopics) ? data.movedTopics : []
+        const movedText = moved.length > 0 ? ` Their subscriptions moved with it (${moved.join(', ')}).` : ''
+        setEmailMessage({ type: 'success', text: `Saved: ${data.newEmail}.${movedText}` })
+        setEditingEmailId(null)
+        setEditEmailValue('')
+        // The page is keyed by the member's email; if the sign-in address moved,
+        // follow it so the URL keeps resolving.
+        if (payload.correctEmailId || payload.promoteEmailId) {
+          const wasLogin = profile.emails?.find(
+            (e) => e.emailId === (payload.correctEmailId || payload.promoteEmailId)
+          )?.emailType === 'primary' || Boolean(payload.promoteEmailId)
+          if (wasLogin && data.newEmail && data.newEmail !== memberId) {
+            router.replace(`/people/${encodeURIComponent(data.newEmail)}`)
+            return
+          }
+        }
+        fetchProfile()
+      } else {
+        setEmailMessage({ type: 'error', text: data.error || 'Could not save that email address.' })
+      }
+    } catch {
+      setEmailMessage({ type: 'error', text: 'Could not save that email address.' })
+    } finally {
+      setEmailBusy(false)
     }
   }
 
@@ -1186,8 +1238,57 @@ export default function MemberProfilePage() {
                 ) : null}
               </XStack>
               {profile.emails && profile.emails.length > 0 ? (
-                profile.emails.map((emailEntry, index) => (
-                  <XStack key={index} gap="$2" alignItems="center">
+                profile.emails.map((emailEntry, index) => {
+                  const isLogin = emailEntry.emailType === 'primary'
+                  if (canEdit && emailEntry.emailId && editingEmailId === emailEntry.emailId) {
+                    const trimmed = editEmailValue.trim()
+                    return (
+                      <Card key={index} padding="$3" backgroundColor="$backgroundHover">
+                        <YStack gap="$2">
+                          <Input
+                            value={editEmailValue}
+                            onChangeText={setEditEmailValue}
+                            autoFocus
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            aria-label={`Correct ${emailEntry.email}`}
+                            onSubmitEditing={() => {
+                              if (trimmed.includes('@')) {
+                                changeMemberEmail({ correctEmailId: emailEntry.emailId, newEmail: trimmed })
+                              }
+                            }}
+                          />
+                          <Text fontSize="$2" theme="alt2">
+                            {isLogin
+                              ? 'This is their sign-in email. Saving moves sign-in to the corrected address and removes the old one (it is not emailed).'
+                              : 'Saving replaces this address.'}
+                          </Text>
+                          <XStack gap="$2" justifyContent="flex-end">
+                            <Button
+                              size="$3"
+                              icon={X}
+                              variant="outlined"
+                              disabled={emailBusy}
+                              onPress={() => { setEditingEmailId(null); setEmailMessage(null) }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="$3"
+                              icon={Save}
+                              variant="action"
+                              disabled={emailBusy || !trimmed.includes('@')}
+                              onPress={() => changeMemberEmail({ correctEmailId: emailEntry.emailId, newEmail: trimmed })}
+                            >
+                              {emailBusy ? 'Saving…' : 'Save'}
+                            </Button>
+                          </XStack>
+                        </YStack>
+                      </Card>
+                    )
+                  }
+                  return (
+                  <XStack key={index} gap="$2" alignItems="center" flexWrap="wrap">
                     <Text
                       fontSize="$4"
                       color="$blue10"
@@ -1198,15 +1299,47 @@ export default function MemberProfilePage() {
                       {emailEntry.email}
                     </Text>
                     <VerifiedCheck verified={emailEntry.verified} />
+                    {isLogin && canEdit ? (
+                      <Text fontSize="$2" theme="alt2">Sign-in</Text>
+                    ) : null}
                     {canEdit && emailEntry.emailId ? (
                       <Button
                         size="$2"
-                        icon={Trash2}
+                        icon={Edit3}
                         chromeless
                         circular
-                        disabled={deletingId === `type=email&id=${emailEntry.emailId}`}
-                        onPress={() => deleteContact(`type=email&id=${emailEntry.emailId}`)}
+                        aria-label={`Correct ${emailEntry.email}`}
+                        disabled={emailBusy}
+                        onPress={() => {
+                          setEditingEmailId(emailEntry.emailId!)
+                          setEditEmailValue(emailEntry.email)
+                          setEmailMessage(null)
+                        }}
                       />
+                    ) : null}
+                    {canEdit && emailEntry.emailId && !isLogin && emailEntry.verified ? (
+                      <Button
+                        size="$2"
+                        variant="outlined"
+                        disabled={emailBusy}
+                        onPress={() => changeMemberEmail({ promoteEmailId: emailEntry.emailId })}
+                      >
+                        Make sign-in email
+                      </Button>
+                    ) : null}
+                    {canEdit && emailEntry.emailId ? (
+                      // No trash on the sign-in row: deleting it would orphan the
+                      // login. It is corrected with the pencil instead.
+                      isLogin ? null : (
+                        <Button
+                          size="$2"
+                          icon={Trash2}
+                          chromeless
+                          circular
+                          disabled={deletingId === `type=email&id=${emailEntry.emailId}`}
+                          onPress={() => deleteContact(`type=email&id=${emailEntry.emailId}`)}
+                        />
+                      )
                     ) : !isOwnProfile ? (
                       <SuggestEditButton
                         targetEmail={profile.email}
@@ -1218,7 +1351,8 @@ export default function MemberProfilePage() {
                       />
                     ) : null}
                   </XStack>
-                ))
+                  )
+                })
               ) : displayableEmail(profile.email) ? (
                 <Text
                   fontSize="$4"
@@ -1242,6 +1376,11 @@ export default function MemberProfilePage() {
                   No email address on file.
                 </Text>
               )}
+              {emailMessage ? (
+                <Text fontSize="$3" color={emailMessage.type === 'success' ? '$green10' : '$red10'}>
+                  {emailMessage.text}
+                </Text>
+              ) : null}
               {/* Add email form */}
               {addingEmail ? (
                 <Card padding="$3" backgroundColor="$backgroundHover">
