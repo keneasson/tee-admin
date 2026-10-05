@@ -607,6 +607,30 @@ describe('PersonRepository', () => {
       expect(typeof commit.emailVerified).toBe('string')
     })
 
+    // #190: correcting a typo — the wrong address is REMOVED, after the commit.
+    it('replace: true removes the old row only AFTER the PROFILE commit, and inherits sesSubscribed', async () => {
+      mockSend
+        .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
+        .mockResolvedValueOnce({
+          Items: [{ emailId: 'old-id', email: 'old@example.com', emailType: 'primary', sesSubscribed: false }],
+        }) // getEmails
+        .mockResolvedValueOnce({}) // addEmail → put (new row)
+        .mockResolvedValueOnce({ Attributes: {} }) // COMMIT: update PROFILE (no demote step)
+        .mockResolvedValueOnce({}) // removeEmail(old) → delete
+
+      const result = await repository.changePrimaryEmail('p1', 'new@example.com', { replace: true })
+      expect(result.oldEmail).toBe('old@example.com')
+
+      const calls = mockSend.mock.calls.map((c) => c[0])
+      expect(calls).toHaveLength(5)
+      expect(calls[2].type).toBe('PutCommand')
+      // A move is not an opt-in: he was not subscribed, so the new row isn't either.
+      expect(calls[2].params.Item).toMatchObject({ email: 'new@example.com', sesSubscribed: false })
+      expect(calls[3].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
+      expect(calls[4].type).toBe('DeleteCommand')
+      expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#old-id' })
+    })
+
     it('creates a brand-new verified primary EMAIL# row when the new address is not already on the account', async () => {
       mockSend
         .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE

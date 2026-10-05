@@ -25,12 +25,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  *      flow, not "assist" (400).
  *   4. actor must have edit permission over the TARGET's ecclesia (403).
  *
- * Body (two modes, mirroring the self-serve confirm/promote semantics):
+ * Body (three modes):
+ *   { correctEmailId, newEmail }         — CORRECT an address (typo fix). The
+ *                                          member page's pencil. Login row → its
+ *                                          login moves and the wrong address is
+ *                                          REMOVED, not kept or notified (it
+ *                                          bounces). Other rows → fixed in place.
  *   { newEmail }                         — change to a brand-new address.
  *   { promoteEmailId } | { email }       — promote an existing VERIFIED secondary.
  *
- * After the transfer (both modes): move SES + PersonRecord topic subscriptions,
- * notify the OLD address, invalidate the people cache.
+ * After a login transfer: move SES + PersonRecord topic subscriptions, notify
+ * the OLD address (not for a correction), invalidate the people cache.
  */
 export async function POST(
   request: NextRequest,
@@ -84,14 +89,50 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
 
     // Resolve the target address for each mode BEFORE any write.
-    let newEmail: string
+    let newEmail = ''
+    let isCorrection = false
+
+    const correctEmailId =
+      typeof body?.correctEmailId === 'string' ? body.correctEmailId.trim() : ''
+    if (correctEmailId) {
+      const corrected = typeof body?.newEmail === 'string' ? body.newEmail.trim().toLowerCase() : ''
+      if (!corrected || !EMAIL_RE.test(corrected)) {
+        return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
+      }
+      const row = (await personRepository.getEmails(targetPerson.personId)).find(
+        (r) => r.emailId === correctEmailId
+      )
+      if (!row) {
+        return NextResponse.json({ error: "That address isn't on this person's account." }, { status: 400 })
+      }
+      if (row.email.toLowerCase() === corrected) {
+        return NextResponse.json({ success: true, newEmail: corrected, movedTopics: [] })
+      }
+      const owners = await personRepository.getAllPersonsByEmail(corrected)
+      if (owners.some((p) => p.personId !== targetPerson.personId)) {
+        return NextResponse.json(
+          { error: 'That email address is already in use by another person.' },
+          { status: 409 }
+        )
+      }
+      if (row.emailType !== 'primary') {
+        // A non-login address: fix it in place. Login is untouched.
+        await personRepository.correctSecondaryEmail(targetPerson.personId, row.emailId, corrected)
+        invalidatePeopleCache()
+        return NextResponse.json({ success: true, newEmail: corrected, movedTopics: [] })
+      }
+      newEmail = corrected
+      isCorrection = true
+    }
 
     const promoteEmailId =
       typeof body?.promoteEmailId === 'string' ? body.promoteEmailId.trim() : ''
     const promoteEmail =
       typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
 
-    if (promoteEmailId || promoteEmail) {
+    if (isCorrection) {
+      // resolved above
+    } else if (promoteEmailId || promoteEmail) {
       // Promote mode: the address must already be a VERIFIED row on the target.
       const rows = await personRepository.getEmails(targetPerson.personId)
       const row = promoteEmailId
@@ -146,7 +187,8 @@ export async function POST(
     // (the login handle) LAST, so a mid-failure leaves login on the OLD address.
     const { oldEmail } = await personRepository.changePrimaryEmail(
       targetPerson.personId,
-      newEmail
+      newEmail,
+      { replace: isCorrection }
     )
 
     // Post-transfer side effects — best-effort so they can't fail the change that
@@ -164,7 +206,10 @@ export async function POST(
 
       // Notify the OLD address so the member catches an unwanted change (best-effort
       // internally) — the RB did it, but the member still gets the paper trail.
-      await notifyLoginEmailChanged({ oldEmail, newEmail, headers: request.headers })
+      // Not for a correction: the old address was wrong and would only bounce.
+      if (!isCorrection) {
+        await notifyLoginEmailChanged({ oldEmail, newEmail, headers: request.headers })
+      }
     }
 
     invalidatePeopleCache()

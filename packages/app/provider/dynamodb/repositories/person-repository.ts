@@ -480,11 +480,19 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * PROFILE flip (the commit point that actually moves login) happens LAST, after
    * the new row exists and the old is demoted. A mid-way failure leaves login on
    * the old address (safe) and is idempotent on retry.
+   *
+   * `replace: true` is a CORRECTION (the old address was wrong, e.g. a typo):
+   * the old row is removed instead of kept as a recoverable secondary — a typo
+   * has nothing to recover and every send to it bounces. Removal happens AFTER
+   * the PROFILE commit, so a mid-way failure still leaves a working login.
+   *
+   * The new row inherits the old primary's `sesSubscribed` — this method moves
+   * an address, it does not opt anyone in or out.
    */
   async changePrimaryEmail(
     personId: string,
     newEmailRaw: string,
-    opts?: { graceMs?: number }
+    opts?: { graceMs?: number; replace?: boolean }
   ): Promise<{ newEmailId: string; oldEmail: string | null }> {
     const newEmail = (newEmailRaw || '').trim().toLowerCase()
     if (!newEmail) throw new Error('changePrimaryEmail: newEmail is required')
@@ -497,6 +505,9 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     const nowIso = new Date().toISOString()
     const graceMs = opts?.graceMs ?? PersonRepository.EMAIL_DEMOTE_GRACE_MS
     const archiveAfter = new Date(Date.now() + graceMs).toISOString()
+
+    const oldPrimaryRow = emails.find((e) => e.emailType === 'primary')
+    const sesSubscribed = oldPrimaryRow?.sesSubscribed ?? false
 
     // 1) Ensure the NEW email exists as a verified, primary-labelled EMAIL# row.
     let newRow = emails.find((e) => e.email.toLowerCase() === newEmail)
@@ -512,15 +523,16 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
         emailType: 'primary',
         order: 0,
         verified: true,
-        sesSubscribed: true,
+        sesSubscribed,
         sesStatus: 'active',
       })
     }
 
-    // 2) Demote any OTHER row currently labelled primary → recoverable secondary.
+    // 2) Demote any OTHER row currently labelled primary → recoverable secondary
+    //    (skipped for a correction: those rows are removed after the commit).
     for (const row of emails) {
       if (row.emailId === newRow.emailId) continue
-      if (row.emailType === 'primary') {
+      if (row.emailType === 'primary' && !opts?.replace) {
         await this.update(
           `PERSON#${personId}`,
           `EMAIL#${row.emailId}`,
@@ -536,7 +548,35 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       emailVerified: nowIso,
     })
 
+    // 4) Correction only: drop the wrong address now that login has moved.
+    if (opts?.replace) {
+      for (const row of emails) {
+        if (row.emailId === newRow.emailId) continue
+        if (row.emailType === 'primary' || (oldEmail && row.email.toLowerCase() === oldEmail)) {
+          await this.removeEmail(personId, row.emailId)
+        }
+      }
+    }
+
     return { newEmailId: newRow.emailId, oldEmail }
+  }
+
+  /**
+   * Correct a NON-login address in place (e.g. a typo in a secondary). Rewrites
+   * the row's address and its lookup index; the corrected address is unverified
+   * until proven. Refuses the login row — that moves via changePrimaryEmail.
+   */
+  async correctSecondaryEmail(personId: string, emailId: string, newEmailRaw: string): Promise<void> {
+    const newEmail = (newEmailRaw || '').trim().toLowerCase()
+    if (!newEmail) throw new Error('correctSecondaryEmail: newEmail is required')
+    const row = await this.getEmailById(personId, emailId)
+    if (!row) throw new Error(`Email ${emailId} not found on ${personId}`)
+    if (row.emailType === 'primary') throw new Error('correctSecondaryEmail: use changePrimaryEmail for the login row')
+    await this.update(`PERSON#${personId}`, `EMAIL#${emailId}`, {
+      email: newEmail,
+      gsi1pk: `EMAIL#${newEmail}`,
+      verified: false,
+    } as unknown as Partial<PersonRecord>)
   }
 
   // ===== PHONE OPERATIONS =====
