@@ -141,7 +141,7 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
     expect(h.invalidatePeopleCache).toHaveBeenCalled()
   })
 
-  it('promote mode: promotes an existing verified secondary', async () => {
+  it('CONTACT-EDIT-09: promote mode: promotes an existing verified secondary', async () => {
     h.p_getById.mockResolvedValue({
       personId: PID,
       primaryEmail: TARGET_PRIMARY,
@@ -183,7 +183,7 @@ describe('correction mode { correctEmailId, newEmail }', () => {
     h.migrateSubscriptions.mockResolvedValue({ movedTopics: [] })
   })
 
-  it('sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
+  it('CONTACT-EDIT-04 / CONTACT-EDIT-05: sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
     h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: ' JaredAndrews1971@gmail.com ' }), { params })
     expect(res.status).toBe(200)
@@ -205,7 +205,7 @@ describe('correction mode { correctEmailId, newEmail }', () => {
     expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()
   })
 
-  it('409 when the corrected address belongs to someone else — nothing written', async () => {
+  it('CONTACT-EDIT-07: 409 when the corrected address belongs to someone else — nothing written', async () => {
     h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
     h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: 'someone-else' }])
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
@@ -220,7 +220,7 @@ describe('correction mode { correctEmailId, newEmail }', () => {
     expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
   })
 
-  it('still 403 for someone without edit rights over that ecclesia', async () => {
+  it('CONTACT-EDIT-02: still 403 for someone without edit rights over that ecclesia', async () => {
     h.checkEcclesiaEditPermission.mockResolvedValue(false)
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
     expect(res.status).toBe(403)

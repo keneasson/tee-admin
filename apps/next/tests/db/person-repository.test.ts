@@ -608,7 +608,7 @@ describe('PersonRepository', () => {
     })
 
     // #190: correcting a typo — the wrong address is REMOVED, after the commit.
-    it('replace: true removes the old row only AFTER the PROFILE commit, and inherits sesSubscribed', async () => {
+    it('CONTACT-EDIT-05 / CONTACT-EDIT-08: replace: true removes the old row only AFTER the PROFILE commit, and inherits sesSubscribed', async () => {
       mockSend
         .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
         .mockResolvedValueOnce({
