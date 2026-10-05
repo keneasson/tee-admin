@@ -107,16 +107,27 @@ For anyone signed in who can **see** a detail but can't **edit** it.
 | CONFIRM-05 | Progress is shown ("Needs 1 more confirmation"). | ✅ `contact-verification.test` |
 | CONFIRM-06 | **Email is not community-confirmed.** It's a sign-in identity; it's corrected by an editor (`EDIT-04`). By design (#245). | ✅ decision |
 
-## 6. Contact details inside posts and events
-Governed by [ADR-0005](../adr/0005-never-silently-withhold.md) (smart-component
-contract). In short: an identified reader (signed in, or arriving from our
-email) sees the full contact; anyone else sees the first name plus "Sign in to
-view contact details". A registration contact can't be published without a
-first name. Tests: `redact-post.test`, `registration-contact-rule.test`.
+## 6. Smart contacts in posts and newsletters — `CONTACT-SMART`
+A smart contact ("To register: email {Smart Contact: Ken Easson}") follows the
+[smart-component contract (ADR-0005)](../adr/0005-never-silently-withhold.md):
+full value, or first name + the way to get the rest. It also obeys the
+**contact person's own privacy rung** for email and phone *(owner)*.
+
+| ID | Scenario | Status |
+|---|---|---|
+| SMART-01 | An identified reader (signed in, or arriving from our email) sees the full contact; an anonymous reader sees the first name + "Sign in to view contact details". | ✅ `redact-post.test` |
+| SMART-02 | A registration contact can't be published without a first name (the floor). | ✅ `registration-contact-rule.test` |
+| SMART-03 | The contact is a **directory person**, so their privacy rungs can be applied; the email/phone shown follows that person's rung for each reader. | ❌ #263: email is typed into the post; the person's privacy is never consulted |
+| SMART-04 | **Warning in the editor** when the post's audience (own ecclesia / region / global) reaches people the contact's email or phone rung doesn't: *"Only members of your ecclesia can see your registration email. You'll be bombarded with requests for it, or get limited registrations."* *(owner)* | ❌ #263 |
+| SMART-05 | Beside the warning, a one-click **Grant permissions** fix with a tooltip explaining why; applies to **phone** as well as email. *(owner)* | ❌ #263 |
+| SMART-06 | What "Grant" changes: a grant scoped to **this post's readers**, or the person's **privacy setting**. | 🔷 #263 (recommended: this post's readers) |
+| SMART-07 | When the author isn't the contact, the fix asks the contact to share (they decide); the post shows the floor until they agree. | 🔷 #263 |
+| SMART-08 | The emailed newsletter obeys the same rule as the web (one render for the whole list), so it never shows what the web would hide. | 🔷 #263 (recommended: yes) |
 
 ## Open gaps (summary)
 | Issue | Scenarios |
 |---|---|
 | #259 Privacy rungs + "ask me" | SEE-05, SEE-09–12, ASK-01–06 |
 | #261 Email suggestions dead end | SUGGEST-04, SUGGEST-05 |
+| #263 Smart contact vs privacy (warning + grant) | SMART-03–08 |
 | (tests to add) | EDIT-06, EDIT-10, ASK-07 |
