@@ -403,15 +403,26 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
   }
 
   /**
-   * Find active OTP tokens for an email address
-   * Uses GSI4 scan with filter - not ideal but OTP tokens are short-lived
+   * Find the active OTP for an email address — the NEWEST live one.
+   *
+   * MUST page through the whole table (`scanAll`). A single `scan()` page reads
+   * ~1 MB of raw items before filtering, so on a 7,500-item table the code sat
+   * on page two and a valid, unexpired OTP with 0 attempts was rejected as "No
+   * verification code found" (2026-10-13). Same bug class `scanAll` was written
+   * for; this lookup was missed.
+   *
+   * NEWEST, not first: an address with no PersonRecord gets a fresh random
+   * personId per send-otp, so createOtp's "delete my old codes" can't find the
+   * earlier ones and several can be live at once. The reader is typing the code
+   * from the latest email.
+   *
+   * Follow-up: an indexed lookup so sign-in isn't a table scan.
    */
   async findActiveOtpByEmail(email: string): Promise<TokenRecord | null> {
     const now = new Date().toISOString()
     const normalizedEmail = email.toLowerCase()
 
-    // Scan for active OTP tokens with this email
-    const result = await this.scan({
+    const items = await this.scanAll({
       filterExpression: 'begins_with(skey, :skPrefix) AND email = :email AND attribute_not_exists(usedAt) AND expiresAt > :now',
       expressionAttributeValues: {
         ':skPrefix': 'TOKEN#otp#',
@@ -420,7 +431,8 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
       },
     })
 
-    return result.items[0] || null
+    if (items.length === 0) return null
+    return items.reduce((newest, t) => (t.createdAt > newest.createdAt ? t : newest))
   }
 
   /**
