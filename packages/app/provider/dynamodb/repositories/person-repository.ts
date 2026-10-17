@@ -130,12 +130,15 @@ export function chooseSignInHolder(
       .map((r) => r.pkey.replace('PERSON#', ''))
   )
   const eligible = candidates.filter((c) => !excluded.has(c.personId))
+  // A named person outranks a nameless orphan (pre-#130 duplicates share an
+  // address with the real record) — never sign someone in as a blank profile.
+  const named = (c: PersonRecord) => (c.firstName?.trim() ? 0 : 1)
   const pool = (eligible.length > 0 ? eligible : candidates)
     .slice()
-    .sort((a, b) => a.personId.localeCompare(b.personId))
+    .sort((a, b) => named(a) - named(b) || a.personId.localeCompare(b.personId))
   if (pool.length > 1) {
     console.warn(
-      `[getByEmail] a shared address resolves to ${pool.length} people with no sign-in holder marked; using the lowest personId`
+      `[getByEmail] a shared address resolves to ${pool.length} people with no sign-in holder marked; using the named person with the lowest personId`
     )
   }
   return pool[0]

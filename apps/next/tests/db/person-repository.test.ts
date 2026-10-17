@@ -189,6 +189,13 @@ describe('PersonRepository', () => {
       expect(chooseSignInHolder('x@e.com', [p('c'), p('m')], [])?.personId).toBe('c')
     })
 
+    it('prefers a named person over a nameless orphan, whatever the ids', () => {
+      const named = { ...p('z'), firstName: 'Martin' }
+      const orphan = { ...p('a'), firstName: '' }
+      expect(chooseSignInHolder('x@e.com', [orphan, named], [])?.personId).toBe('z')
+      expect(chooseSignInHolder('x@e.com', [named, orphan], [])?.personId).toBe('z')
+    })
+
     it('ignores a loginExcluded flag that belongs to a DIFFERENT address', () => {
       const rows = [{ pkey: 'PERSON#c', email: 'other@e.com', loginExcluded: true }]
       expect(chooseSignInHolder('x@e.com', [p('m'), p('c')], rows)?.personId).toBe('c')
