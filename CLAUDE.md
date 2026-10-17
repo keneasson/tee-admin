@@ -23,9 +23,16 @@ and `git branch -a`; for each in-flight branch **push any local-only commits fir
 merge / close. Reconcile branches ↔ issues ↔ board. Never stash/checkout/reset over
 uncommitted changes you did not make.
 
-**Where things live:** durable *decisions* (what a term means, how a model works) →
-`docs/adr/` (see `docs/adr/README.md`); *tasks & status* → GitHub issues; deep
-*designs* → `docs/*.md`. When the user references "progress" or a large concept,
+**Where things live:** *expected behaviour* (what a feature must do, who can do
+what) → `docs/behavior/` (see ADR-0006); durable *decisions* (what a term means,
+how a model works) → `docs/adr/` (see `docs/adr/README.md`); *tasks & status* →
+GitHub issues; deep *designs* → `docs/*.md`.
+
+**Before changing an area, read its behaviour spec** (`docs/behavior/`). A change
+that alters behaviour updates the spec in the same PR and names the scenario IDs
+it touched; tests cite the IDs they prove (`it('CONTACT-EDIT-05: …')`). Check
+with `node scripts/behavior-coverage.mjs`. When a fix unblocks a waiting PR,
+finish that PR the same day. When the user references "progress" or a large concept,
 **read the issues + ADRs first — do not answer from memory.**
 
 ## Model Selection Guidelines (Opus vs Sonnet)

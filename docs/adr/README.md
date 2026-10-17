@@ -22,3 +22,4 @@ References. Keep it to a page. Number sequentially, `NNNN-kebab-title.md`.
 | [0003](0003-ui-layering-and-the-design-language-seam.md) | UI layering — route files are mount points; `@my/ui` is the design-language seam | Accepted |
 | [0004](0004-rich-text-storage.md) | Rich-text storage — capture losslessly, render progressively | Accepted |
 | [0005](0005-never-silently-withhold.md) | Never silently withhold — the smart-component contract (floor + escalation action: sign in now, scoped access requests later) | Accepted |
+| [0006](0006-behavior-specs.md) | Behaviour specs — one written source of truth for what the system must do (`docs/behavior/`) | Accepted |
