@@ -93,6 +93,18 @@ export async function GET(request: NextRequest) {
         const emails = await personRepository.getEmails(person.personId)
         const primaryEmailRecord = emails.find(e => e.emailType === 'primary')
 
+        // A shared household address (#267) has ONE SES contact but several
+        // people. Writing it once per person would make the last one win and
+        // could opt the whole household out. Only its sign-in holder syncs it.
+        if (primaryEmailRecord?.loginExcluded) {
+          results.push({
+            email,
+            action: 'skipped',
+            message: 'Shared address — synced from its sign-in holder',
+          })
+          continue
+        }
+
         // Build topic preferences from PersonRecord
         const topicPreferences = Object.keys(EmailListTypes).map(topic => {
           // Determine if user should be opted in to this topic

@@ -10,6 +10,12 @@ import { checkSuppressed } from '@/utils/email/suppression-check'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { prepareHeadsUpForReview } from '@/utils/email/exhorter-heads-up-review'
+import {
+  getBounceResendStatus,
+  reopenBouncedHeadsUp,
+} from '@/utils/email/exhorter-heads-up-bounce'
+import { normalizeToISODate } from '@my/app/utils/service-overrides/merge'
+import type { PendingHeadsUp } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
 
 /**
  * Review a parked exhorter heads-up, and send it.
@@ -50,43 +56,7 @@ async function loadPending(token: string) {
     }
   }
   if (pending.releasedAt) {
-    // Already sent — so the useful thing is no longer the email, it is whether
-    // it arrived. Re-opening the link answers that.
-    let delivery: unknown
-    try {
-      const rows = await sendRecipientRepository.getCampaignRecipients(
-        exhorterHeadsUpCampaignId(pending.date)
-      )
-      const row = rows.find(
-        (r) => r.email?.toLowerCase() === pending.recipientEmail.toLowerCase()
-      )
-      delivery = row
-        ? {
-            status: row.status,
-            deliveredAt: row.deliveredAt,
-            opens: row.opens,
-            bouncedAt: row.bouncedAt,
-            bounceType: row.bounceType,
-          }
-        : undefined
-    } catch (err) {
-      console.error('[exhorter-headsup] could not read delivery status:', err)
-    }
-
-    return {
-      error: NextResponse.json(
-        {
-          error: `Already sent to ${pending.recipientName ?? pending.recipientEmail}.`,
-          alreadySent: true,
-          sentAt: pending.releasedAt,
-          recipientName: pending.recipientName,
-          recipientEmail: pending.recipientEmail,
-          date: pending.date,
-          delivery,
-        },
-        { status: 409 }
-      ),
-    }
+    return { error: await alreadySentResponse(pending) }
   }
   if (pending.supersededAt) {
     // Stopped by a person, or replaced by a newer copy. Not an error: the page
@@ -113,6 +83,62 @@ async function loadPending(token: string) {
     }
   }
   return { pending }
+}
+
+/**
+ * Already sent — so the useful thing is no longer the email, it is whether it
+ * arrived. Re-opening the link answers that, and when it BOUNCED, says whether
+ * a corrected copy can be prepared for his current address (#267).
+ */
+async function alreadySentResponse(pending: PendingHeadsUp) {
+  let delivery: unknown
+  try {
+    const rows = await sendRecipientRepository.getCampaignRecipients(
+      exhorterHeadsUpCampaignId(pending.date)
+    )
+    const row = rows.find((r) => r.email?.toLowerCase() === pending.recipientEmail.toLowerCase())
+    delivery = row
+      ? {
+          status: row.status,
+          deliveredAt: row.deliveredAt,
+          opens: row.opens,
+          bouncedAt: row.bouncedAt,
+          bounceType: row.bounceType,
+        }
+      : undefined
+  } catch (err) {
+    console.error('[exhorter-headsup] could not read delivery status:', err)
+  }
+
+  let bounceResend: unknown
+  try {
+    const status = await getBounceResendStatus(pending)
+    if (status.bounced) {
+      bounceResend = {
+        eligible: status.eligible,
+        currentEmail: status.currentEmail,
+        reason: status.reason,
+      }
+    }
+  } catch (err) {
+    console.error('[exhorter-headsup] could not work out bounce re-send status:', err)
+  }
+
+  return NextResponse.json(
+    {
+      error: `Already sent to ${pending.recipientName ?? pending.recipientEmail}.`,
+      alreadySent: true,
+      sentAt: pending.releasedAt,
+      recipientName: pending.recipientName,
+      recipientEmail: pending.recipientEmail,
+      date: pending.date,
+      // The page needs it to act on a bounce when it was opened without one.
+      token: pending.token,
+      delivery,
+      bounceResend,
+    },
+    { status: 409 }
+  )
 }
 
 /**
@@ -167,6 +193,17 @@ export async function GET(request: NextRequest) {
       }
       const current = await exhorterHeadsUpRepository.findCurrentPending()
       if (!current) {
+        // Nothing waiting — but an upcoming heads-up that BOUNCED is waiting on
+        // a person just as much, and the old QA email may be long gone.
+        const released = await exhorterHeadsUpRepository.findReleasedFrom(
+          normalizeToISODate(new Date())
+        )
+        for (const r of released) {
+          const status = await getBounceResendStatus(r)
+          if (status.bounced && !status.resolved) {
+            return alreadySentResponse(r)
+          }
+        }
         // Not an error. Most of the time there is genuinely nothing waiting.
         return NextResponse.json({ success: true, nothingWaiting: true })
       }
@@ -221,6 +258,28 @@ export async function POST(request: NextRequest) {
         invalidated: true,
         date: found.date,
         recipientName: found.recipientName,
+      })
+    }
+
+    /**
+     * "Prepare a corrected copy" — the send BOUNCED and his address has since
+     * been corrected. Lifts the claim and redirects a fresh QA copy addressed to
+     * his CURRENT address; the reviewer sends it from that copy's link. Nothing
+     * goes to the speaker from here.
+     */
+    if (action === 'resend-after-bounce') {
+      const session = await auth().catch(() => null)
+      const actor = session?.user?.email || 'review-page'
+      const result = await reopenBouncedHeadsUp(token, actor)
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+      }
+      return NextResponse.json({
+        success: true,
+        resent: true,
+        redirectedTo: result.redirectedTo,
+        currentEmail: result.currentEmail,
+        date: result.date,
       })
     }
 

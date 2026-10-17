@@ -105,6 +105,45 @@ export interface PersonProfileView {
  * Repository for Person records - UUID-based identity
  * Uses 'tee-admin' table with lowercase keys (pkey, skey)
  */
+/**
+ * Pick the ONE person an address shared by several people resolves to (#267).
+ *
+ * Deterministic, never "whichever DynamoDB returned first":
+ *   1. people whose EMAIL# row for this address is `loginExcluded` are dropped
+ *      (they receive mail there; it does not sign them in) — unless that would
+ *      drop everyone;
+ *   2. ties break on personId, so the answer is the same on every request.
+ *
+ * Pure, so the rule is testable without DynamoDB.
+ */
+export function chooseSignInHolder(
+  address: string,
+  candidates: PersonRecord[],
+  emailRows: Array<Pick<PersonEmailRecord, 'pkey' | 'email' | 'loginExcluded'>>
+): PersonRecord | null {
+  if (candidates.length === 0) return null
+  if (candidates.length === 1) return candidates[0]
+  const lower = address.toLowerCase()
+  const excluded = new Set(
+    emailRows
+      .filter((r) => r.loginExcluded && r.email?.toLowerCase() === lower)
+      .map((r) => r.pkey.replace('PERSON#', ''))
+  )
+  const eligible = candidates.filter((c) => !excluded.has(c.personId))
+  // A named person outranks a nameless orphan (pre-#130 duplicates share an
+  // address with the real record) — never sign someone in as a blank profile.
+  const named = (c: PersonRecord) => (c.firstName?.trim() ? 0 : 1)
+  const pool = (eligible.length > 0 ? eligible : candidates)
+    .slice()
+    .sort((a, b) => named(a) - named(b) || a.personId.localeCompare(b.personId))
+  if (pool.length > 1) {
+    console.warn(
+      `[getByEmail] a shared address resolves to ${pool.length} people with no sign-in holder marked; using the named person with the lowest personId`
+    )
+  }
+  return pool[0]
+}
+
 export class PersonRepository extends BaseRepository<PersonRecord> {
   constructor() {
     super('admin', false) // false = lowercase keys (pkey, skey)
@@ -135,9 +174,15 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * that already belonged to someone. We now try the primary fast-path, then fall
    * back to resolving the address as a secondary.
    *
-   * If an address is shared by more than one person (e.g. a couple), this returns
-   * a single best-effort owner (primary-owner if any, else the first) and logs —
-   * shared-address disambiguation is handled by the caller where it matters.
+   * SHARED ADDRESSES (#267). A household address can be the primary of more
+   * than one person (a couple with one inbox). This lookup is also the sign-in
+   * lookup, so it must NEVER pick between them arbitrarily — DynamoDB returns
+   * items with identical GSI keys in no guaranteed order, and an arbitrary pick
+   * would sign one spouse in as the other. When several people hold the address
+   * the choice is made by `chooseSignInHolder` (deterministic). Until the "who's
+   * signing in?" chooser exists, the person who joined a shared address is
+   * marked `loginExcluded` on their EMAIL# row: sends reach them there, but it
+   * does not sign them in.
    */
   async getByEmail(email: string): Promise<PersonRecord | null> {
     const lower = email.toLowerCase()
@@ -147,14 +192,15 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       { ':gsi1pk': `EMAIL#${lower}`, ':gsi1sk': 'PERSON' },
       { indexName: 'gsi1' }
     )
-    if (primary.items[0]) return primary.items[0]
+    if (primary.items.length === 1) return primary.items[0]
+    if (primary.items.length > 1) {
+      return chooseSignInHolder(lower, primary.items, await this.getEmailsByEmail(lower))
+    }
 
     // Fallback: the address is a SECONDARY (EMAIL# item) — resolve to its profile.
     const owners = await this.getAllPersonsByEmail(lower)
     if (owners.length > 1) {
-      console.warn(
-        `[getByEmail] "${lower}" resolves to ${owners.length} persons (shared address); returning first`
-      )
+      return chooseSignInHolder(lower, owners, await this.getEmailsByEmail(lower))
     }
     return owners[0] || null
   }
@@ -428,6 +474,25 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       match.skey,
       { verified: true } as unknown as Partial<PersonRecord>
     )
+  }
+
+  /**
+   * Record an SES delivery outcome (hard bounce / complaint) on EVERY EMAIL# row
+   * holding this address — across people, because a shared household address
+   * that bounces is dead for all of them. Returns how many rows were updated.
+   * Only `sesStatus` changes: the address stays on the person for history, and
+   * nothing about login or which address is primary moves.
+   */
+  async markEmailSesStatusByAddress(
+    email: string,
+    sesStatus: PersonEmailRecord['sesStatus']
+  ): Promise<number> {
+    const rows = await this.getEmailsByEmail(email)
+    for (const row of rows) {
+      if (row.sesStatus === sesStatus) continue
+      await this.update(row.pkey, row.skey, { sesStatus } as unknown as Partial<PersonRecord>)
+    }
+    return rows.filter((r) => r.sesStatus !== sesStatus).length
   }
 
   /** Default grace before a demoted former-primary email may be archived. */

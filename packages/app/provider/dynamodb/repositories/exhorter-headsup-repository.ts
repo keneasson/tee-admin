@@ -302,6 +302,96 @@ class ExhorterHeadsUpRepository {
   }
 
   /**
+   * Released copies for upcoming Sundays (date >= `fromDate`), earliest first.
+   *
+   * Lets the admin page, opened without a token, find a heads-up that went out
+   * and BOUNCED. Otherwise the only way back to it is the link in an old QA
+   * email.
+   */
+  async findReleasedFrom(fromDate: string): Promise<PendingHeadsUp[]> {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk >= :from',
+        ExpressionAttributeValues: { ':pk': PENDING_INDEX_PK, ':from': fromDate },
+        ScanIndexForward: true,
+      })
+    )
+    return (res.Items ?? []).filter((i) => i.releasedAt).map((i) => this.toPending(i))
+  }
+
+  /**
+   * Re-open a Sunday whose heads-up BOUNCED, so it can be sent again.
+   *
+   * The SEND claim exists to stop a speaker being told twice. A hard bounce means
+   * he was never told at all, so the claim is now guarding nothing. It is moved,
+   * not simply deleted:
+   *   1. an audit row `BOUNCED#{now}` records where it went and how it failed;
+   *   2. the claim is deleted ON CONDITION it still points at the address that
+   *      bounced. If anything else has been sent in the meantime, nothing is
+   *      re-opened.
+   *
+   * Returns false when there is no matching claim to re-open.
+   */
+  async reopenAfterBounce(input: {
+    date: string
+    personId: string
+    bouncedAddress: string
+    bounceType?: string
+    bouncedAt?: string
+    reopenedBy: string
+  }): Promise<boolean> {
+    const pk = idempotencyPk(input.date, input.personId)
+    const now = new Date().toISOString()
+    await docClient.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          pkey: pk,
+          skey: `BOUNCED#${now}`,
+          date: input.date,
+          personId: input.personId,
+          sentTo: input.bouncedAddress,
+          bounceType: input.bounceType,
+          bouncedAt: input.bouncedAt,
+          reopenedBy: input.reopenedBy,
+          createdAt: now,
+        },
+        ConditionExpression: 'attribute_not_exists(skey)',
+      })
+    )
+    try {
+      await docClient.send(
+        new DeleteCommand({
+          TableName: this.tableName,
+          Key: { pkey: pk, skey: 'SEND' },
+          ConditionExpression: 'attribute_exists(pkey) AND sentTo = :addr',
+          ExpressionAttributeValues: { ':addr': input.bouncedAddress },
+        })
+      )
+      return true
+    } catch (error: any) {
+      if (error?.name !== 'ConditionalCheckFailedException') throw error
+      // No claim at all = already re-opened (a retry after a failed prepare):
+      // that is the state we wanted. A claim for a DIFFERENT address means a
+      // corrected copy has gone out since — leave it alone.
+      return (await this.getClaim(input.date, input.personId)) === null
+    }
+  }
+
+  /** The SEND claim for a Sunday, if any: where that send went. */
+  async getClaim(date: string, personId: string): Promise<{ sentTo: string } | null> {
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: { pkey: idempotencyPk(date, personId), skey: 'SEND' },
+      })
+    )
+    return res.Item ? { sentTo: String(res.Item.sentTo ?? '') } : null
+  }
+
+  /**
    * Release a claim — used when a send throws AFTER the claim, so a manual retry
    * can re-send. Best-effort; a failed release is logged, not thrown.
    */
