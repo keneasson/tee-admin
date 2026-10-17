@@ -11,6 +11,19 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — household shared email for issue #267 (run AFTER this deploys)
+- **Date**: 2026-10-17
+- **Branch**: `fix/267-household-email-headsup-resend`
+- **Code change**: `getByEmail` now resolves an address held as primary by several people **deterministically** (`chooseSignInHolder`: drops `loginExcluded` rows, then lowest personId), and `scripts/join-shared-household-email.ts` makes a shared household address a person's primary, marked `loginExcluded`.
+- **Why the order matters**: before this code is live, two PROFILEs on one address make sign-in pick a person **arbitrarily**. The data step must run only after the deploy.
+- **External action** (after the merge to `main` has deployed to prod):
+  1. Backup is already taken: `s3://tee-admin-backups/backups/2026-10-17-amos-household-email-267/`.
+  2. `aws configure export-credentials --format env-no-export > /tmp/aws.env` (account 911911532459), then:
+     `npx tsx --env-file=/tmp/aws.env scripts/join-shared-household-email.ts --person 837ffa40-d7dc-4cb9-a8ae-f1ece844ec15 --address <household address> --retire <dead work address>` (dry run), then re-run with `--apply --after-deploy`. The addresses are in the #267 thread with the owner, not in the repo.
+  3. Confirm the script's last line says sign-in resolves to `4981a5c7-93df-4c02-aa46-a2849b9998dd`.
+  4. Owner: open `/admin/exhorter-heads-up` → **Prepare a corrected copy** → check the QA copy → send from its link.
+- **Status**: PENDING
+
 ### GitHub Actions — secrets for the weekly Vercel deployment-prune job
 - **Date**: 2026-09-04
 - **Branch**: `chore/vercel-deploy-prune`

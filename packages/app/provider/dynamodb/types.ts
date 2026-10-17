@@ -534,6 +534,15 @@ export interface PersonEmailRecord extends BaseRecord {
   // we never hard-delete the address the identity transferred away from).
   archiveAfter?: string  // ISO-8601
 
+  /**
+   * Shared household address (#267): this person RECEIVES mail here (it may be
+   * their primary/send address) but the address does not SIGN THEM IN — when an
+   * address is held by several people, sign-in resolves to the holder whose row
+   * is not excluded (see `chooseSignInHolder`). Stop-gap until the
+   * "who's signing in?" chooser exists.
+   */
+  loginExcluded?: boolean
+
   // SES integration
   sesSubscribed: boolean
   sesStatus: 'active' | 'bounced' | 'complained' | 'unsubscribed'

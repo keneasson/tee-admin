@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   sesSend: vi.fn(),
   p_getEmails: vi.fn(),
   p_update: vi.fn(),
+  p_getAllPersonsByEmail: vi.fn(),
 }))
 
 // Provide the SES command classes + SubscriptionStatus (the global setup mock
@@ -61,6 +62,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: {
     getEmails: h.p_getEmails,
     update: h.p_update,
+    getAllPersonsByEmail: h.p_getAllPersonsByEmail,
   },
 }))
 
@@ -104,6 +106,21 @@ beforeEach(() => {
     { pkey: `PERSON#${PID}`, skey: 'EMAIL#old-id', emailId: 'old-id', email: OLD },
   ])
   h.p_update.mockResolvedValue({})
+  // By default nobody else uses the old address.
+  h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: PID }])
+})
+
+describe('migrateSubscriptions — shared household address (#267)', () => {
+  it('leaves the OLD address subscribed when somebody else still uses it', async () => {
+    h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: PID }, { personId: 'spouse' }])
+    await migrateSubscriptions(OLD, NEW, { personId: PID })
+
+    const updates = h.sesSend.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c?.constructor?.name === 'UpdateContactCommand')
+    // No SES write may touch the old (shared) address.
+    expect(updates.every((u) => u.input.EmailAddress !== OLD)).toBe(true)
+  })
 })
 
 describe('migrateSubscriptions', () => {

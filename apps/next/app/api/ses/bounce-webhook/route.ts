@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unsubscribeContact } from '../../../../utils/email/contact'
 import { sendRecordRepository } from '@my/app/provider/dynamodb/repositories/send-record-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+
+/**
+ * Mirror a hard bounce / complaint onto the PersonRecord EMAIL# rows (#267).
+ * Without it the directory kept showing a dead address as `active`. Never
+ * fatal: SES has already been told, and the webhook must still answer 200.
+ */
+async function markPersonEmails(addresses: string[], status: 'bounced' | 'complained') {
+  await Promise.all(
+    addresses.map(async (address) => {
+      try {
+        await personRepository.markEmailSesStatusByAddress(address, status)
+      } catch (error) {
+        console.error(`[ses-webhook] could not mark ${status} on PersonRecord email:`, error)
+      }
+    })
+  )
+}
 
 // Types for SNS/SES notifications
 interface SNSMessage {
@@ -184,6 +202,15 @@ export async function POST(request: NextRequest) {
           })
         )
 
+        // Only a PERMANENT bounce means the address is dead; a transient one
+        // (mailbox full, greylisting) is retried by SES and says nothing about it.
+        if (bounceType === 'Permanent') {
+          await markPersonEmails(
+            bouncedRecipients.map((r) => r.emailAddress),
+            'bounced'
+          )
+        }
+
         // Update send record bounce count
         if (campaignId) {
           await sendRecordRepository.incrementMetric(campaignId, 'bounces', bouncedRecipients.length)
@@ -222,6 +249,11 @@ export async function POST(request: NextRequest) {
               return { email: recipient.emailAddress, success: false, error }
             }
           })
+        )
+
+        await markPersonEmails(
+          complainedRecipients.map((r) => r.emailAddress),
+          'complained'
         )
 
         // Update send record complaint count

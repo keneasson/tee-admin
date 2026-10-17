@@ -152,14 +152,19 @@ export async function GET(
       )
     }
 
-    const isOwnProfile = viewerEmail.toLowerCase() === targetPerson.primaryEmail.toLowerCase()
-
     // Look up viewer's ecclesia for privacy checks (try primary, then secondary email)
-    let viewerPerson = isOwnProfile ? targetPerson : await personRepository.getByEmail(viewerEmail)
-    if (!viewerPerson && !isOwnProfile) {
+    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null
     }
+
+    // "Own profile" is a PERSON match, not an address match: a household shares
+    // one inbox (#267), and matching on the address made each spouse the owner
+    // of the other's profile — full PII and self-edit included.
+    const isOwnProfile = viewerPerson
+      ? viewerPerson.personId === targetPerson.personId
+      : viewerEmail.toLowerCase() === targetPerson.primaryEmail.toLowerCase()
     const viewerEcclesia = viewerPerson?.ecclesia
     const targetEcclesia = targetPerson.ecclesia
 
