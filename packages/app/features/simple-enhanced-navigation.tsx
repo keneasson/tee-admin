@@ -67,7 +67,6 @@ const systemAdminPages: MainPageType[] = [
   { path: '/admin/youtube', label: 'YouTube' },
   { path: '/admin/schedule-overrides', label: 'Service Overrides' },
   { path: '/admin/data-sync', label: 'Data Sync' },
-  { path: '/admin/directory-email-sync', label: 'Directory Email Sync' },
   { path: '/admin/metrics', label: 'Metrics' },
   { path: '/admin/email-tester', label: 'Email Tester' },
 ]
