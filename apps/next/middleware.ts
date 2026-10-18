@@ -2,6 +2,7 @@ import { auth } from './utils/auth'
 import { NextResponse } from 'next/server'
 import type { NextAuthRequest } from 'next-auth'
 import { getTenantByHost } from '@my/app/config/tenants'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import {
   RECOGNITION_COOKIE,
   RECOGNITION_PARAM,
@@ -9,6 +10,15 @@ import {
 } from './utils/recognition-cookie'
 
 const ANALYTICS_KEY = process.env.ANALYTICS_INTERNAL_KEY
+
+/** App Router routes under /api/email/ — each does its own auth. Anything else there is `pages/api/email/[reason]`. */
+const APP_ROUTER_EMAIL_ROUTES = new Set(['cron-schedules', 'pending-note', 'send-one', 'test-thursday'])
+
+function isLegacyAdminApi(pathname: string): boolean {
+  if (/^\/api\/contact(\/|$)/.test(pathname)) return true
+  const email = /^\/api\/email\/([^/]+)/.exec(pathname)
+  return !!email && !APP_ROUTER_EMAIL_ROUTES.has(email[1])
+}
 
 export default auth((req: NextAuthRequest) => {
   const { pathname } = req.nextUrl
@@ -70,6 +80,20 @@ export default auth((req: NextAuthRequest) => {
     const signInUrl = new URL('/auth/signin', req.url)
     signInUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(signInUrl)
+  }
+
+  // Owner/admin gate for the remaining Pages Router email/contact routes
+  // (`pages/api/email/[reason]`, `pages/api/contact/*`). They can't import
+  // NextAuth themselves (ESM-only under the Pages API loader), so the session
+  // check lives here. Their callers are admin screens sending the cookie.
+  if (isLegacyAdminApi(pathname)) {
+    if (!req.auth?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const role = (req.auth.user as { role?: string }).role
+    if (role !== ROLES.OWNER && role !== ROLES.ADMIN) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
   }
 
   // Check if user is trying to access profile page

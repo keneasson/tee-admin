@@ -1,7 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { createContactListTopic, getContactLists, updateContactListTopic } from '../../../../utils/email/contact-lists'
 import { CreateUpdateListType } from '@my/app/types'
-import { requireAdminPagesApi } from '../../../../utils/require-admin-pages-api'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -12,8 +11,6 @@ import { requireAdminPagesApi } from '../../../../utils/require-admin-pages-api'
  * @param res NextApiResponse
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!(await requireAdminPagesApi(req, res))) return
-
   try {
     /**
      * ***************************************

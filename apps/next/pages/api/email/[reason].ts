@@ -3,7 +3,6 @@ import { emailReasons, emailSend } from 'next-app/utils/email/email-send'
 import { getEmailContent } from 'next-app/utils/email/get-email-content'
 import { pendingEmailNoteRepository } from '@my/app/provider/dynamodb/repositories/pending-email-note-repository'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
-import { requireAdminPagesApi } from '../../../utils/require-admin-pages-api'
 
 export const config = {
   maxDuration: 60, // 60 seconds
@@ -18,8 +17,6 @@ export const config = {
  * @param res NextApiResponse
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!(await requireAdminPagesApi(req, res))) return
-
   if (!req.query.reason) {
     return res.status(404).json({ failed: 'Json Data Not Found' })
   }
