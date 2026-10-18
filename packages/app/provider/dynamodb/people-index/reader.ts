@@ -33,6 +33,8 @@ const TABLE = tableNames.admin
 // ---------------------------------------------------------------------------
 
 let markerCache: { ready: boolean; expires: number } | null = null
+// Once built the index stays built, so "ready" is cached longer; "not ready"
+// is re-checked every minute so readers switch soon after the backfill runs.
 const READY_TTL_MS = 5 * 60 * 1000
 const NOT_READY_TTL_MS = 60 * 1000
 

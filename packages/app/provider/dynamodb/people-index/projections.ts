@@ -19,6 +19,8 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/li
 import { docClient, tableNames } from '../config'
 import {
   type EcclesiaSource,
+  type EmailSource,
+  type PhoneSource,
   type ProjectionDiff,
   type ProjectionItem,
   type ProfileSource,
@@ -92,6 +94,8 @@ export async function applyProjectionDiff(diff: ProjectionDiff): Promise<void> {
 // Ecclesia name → stable id
 // ---------------------------------------------------------------------------
 
+// Short: a rename or a new ecclesia must reach the person cards quickly, and
+// a miss costs one small gsi1 Query. The ecclesia writer also clears it.
 const ID_CACHE_TTL_MS = 60 * 1000
 const idCache = new Map<string, { id: string; expires: number }>()
 
@@ -136,8 +140,8 @@ export async function refreshPersonProjections(
   const pkey = `PERSON#${personId}`
   const partition = await queryPartition(pkey)
   const profile = (partition.find((i) => i.skey === 'PROFILE') as unknown as ProfileSource) || null
-  const emails = partition.filter((i) => i.skey.startsWith('EMAIL#')) as any[]
-  const phones = partition.filter((i) => i.skey.startsWith('PHONE#')) as any[]
+  const emails = partition.filter((i) => i.skey.startsWith('EMAIL#')) as unknown as EmailSource[]
+  const phones = partition.filter((i) => i.skey.startsWith('PHONE#')) as unknown as PhoneSource[]
 
   const existing = partition.filter(isPersonWriterItem)
   // The ECCLESIA-side half of each REP reference this person holds (or held):
