@@ -44,8 +44,8 @@ About 75 non-test files and about 250 call sites. Paths are relative to the repo
 | `packages/app/provider/dynamodb/schedule-service.ts:235-245, 269-295` | R | via callers | delete |
 | `apps/next/app/api/directory/route.ts:60,149` | R | reachable, no UI | delete route |
 | `apps/next/app/api/contacts/[email]/route.ts:49-54, 66-67` | R/W | reachable, no UI | delete |
-| `apps/next/app/api/admin/directory-email-sync/{add-email:49,65; batch-member:56,72; delete:52,67; sync-from-ses:118,147}` | R/W | **Directory Email Sync screen** | delete the screen |
-| `packages/app/features/directory-email-sync/index.tsx:435,545,952` | sends legacy keys | UI | delete |
+| `apps/next/app/api/admin/directory-email-sync/{add-email:49,65; batch-member:56,72; delete:52,67; sync-from-ses:118,147}` | R/W | **Directory Email Sync screen** | **deleted** (#274) |
+| `packages/app/features/directory-email-sync/index.tsx:435,545,952` | sends legacy keys | UI | **deleted** (#274) |
 | `packages/app/provider/get-google-sheet-migrated.tsx:123` | R | dead | delete |
 | `scripts/migrate-to-unified-people.ts:102`, `scripts/migrate-ecclesia-to-canonical.ts:82,144`, `scripts/populate-dynamodb.ts:231` | R/W | scripts | delete |
 

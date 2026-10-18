@@ -112,7 +112,6 @@ describe('Cross-Platform Import Rules', () => {
     // FIXED: home/screen.tsx, welfare.tsx, navItem-logout.tsx, simple-enhanced-navigation.tsx,
     //        with-navigation.tsx, feature-gated-navigation.tsx
     const knownViolations = new Set([
-      'packages/app/features/directory-email-sync/index.tsx',
       'packages/app/features/email-lists/index.tsx',
       'packages/app/features/email-sender/index.tsx',
       'packages/app/features/email-tester/index.tsx',
