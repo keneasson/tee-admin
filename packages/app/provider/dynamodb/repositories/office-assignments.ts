@@ -30,7 +30,6 @@
  * office (vacant if unassigned); no office holder is a nameless person; test
  * accounts are excluded everywhere.
  */
-import type { PersonCard } from '../people-index/keys'
 import {
   OFFICE_ROLES,
   isTestAccountEmail,
@@ -39,6 +38,7 @@ import {
   repOfficeId,
   resolveInterEcclesiaContacts,
   type InterEcclesiaContact,
+  type OfficeHolder,
   type OfficeRecord,
 } from './office-repository'
 
@@ -221,7 +221,7 @@ export function planOfficeAssignments(input: {
 
 /** The inter-ecclesia contacts the planned offices would yield. */
 export function predictInterEcclesiaContacts(plan: OfficePlan, persons: Map<string, PersonSnapshot>): InterEcclesiaContact[] {
-  const cards = new Map<string, Pick<PersonCard, 'personId' | 'primaryEmail'>>(
+  const cards = new Map<string, Pick<OfficeHolder, 'personId' | 'primaryEmail'>>(
     [...persons.values()].map((p) => [p.personId, { personId: p.personId, primaryEmail: p.primaryEmail }])
   )
   return resolveInterEcclesiaContacts(plan.offices, cards)

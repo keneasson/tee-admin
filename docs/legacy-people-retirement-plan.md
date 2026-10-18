@@ -33,6 +33,7 @@ Not part of this work. Each is one line here, not an issue.
 - Multi-tenant newsletters for other ecclesias (#26).
 - Rotted test files (#244) and the dead `apps/next` lint (#216), except where a file this work touches must pass.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
+- Signing in with an office inbox that has no PersonRecord still creates a PersonRecord for that inbox; signing in *as the office holder* belongs with R2's chooser.
 
 ## 0.4 Definition of done
 

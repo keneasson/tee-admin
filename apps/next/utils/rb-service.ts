@@ -1,5 +1,7 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
-import { getEcclesiaByName, updateEcclesiaFields } from './dynamodb/locations'
+import { getEcclesiaByName } from './dynamodb/locations'
+import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { invalidatePeopleCache } from '../app/api/people/cache'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 
@@ -27,7 +29,9 @@ interface SetRecordingBrotherResult {
  * 3. Clear old RB → isRecordingBrother: false, clear rbEmailPreference/rbEcclesiaEmail
  *    (their role stays unchanged — owner stays owner, admin stays admin, etc.)
  * 4. Set new RB → isRecordingBrother: true, set rbEmailPreference, set rbEcclesiaEmail if applicable
- * 5. Update EcclesiaData → set recordingBrotherPersonId, recordingBrotherEmail, recordingBrotherName
+ * 5. Update the ecclesia's Recording Brother OFFICE (R3): holder = the new person
+ *    (closing the previous term), inbox = the ecclesia-specific RB address when
+ *    that preference is chosen. The ecclesia item stores no RB name/email.
  * 6. Invalidate caches (people + ecclesia)
  *
  * Replaces transferRBEmail() as the single entry point for all RB changes.
@@ -85,12 +89,14 @@ export async function setRecordingBrother(params: SetRecordingBrotherParams): Pr
     }
   }
 
-  // 5. Update EcclesiaData
-  await updateEcclesiaFields(ecclesiaName, {
-    recordingBrotherPersonId: newPersonId,
-    recordingBrotherEmail: rbEmail,
-    recordingBrotherName: newPerson.displayName,
+  // 5. The Recording Brother office: inbox + holder (term history kept by the office)
+  const ecclesiaId = await ecclesiaIdFor(ecclesiaName)
+  await officeRepository.saveOffice({
+    ecclesiaId,
+    role: OFFICE_ROLES.RECORDING_BROTHER,
+    email: emailPreference === 'ecclesia' && rbEcclesiaEmail ? rbEmail : null,
   })
+  await officeRepository.assignHolder(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER, newPersonId)
 
   // 6. Invalidate caches
   invalidatePeopleCache()
@@ -118,20 +124,27 @@ export async function clearRecordingBrother(ecclesiaName: string): Promise<void>
     } as any)
   }
 
-  await updateEcclesiaFields(ecclesiaName, {
-    recordingBrotherPersonId: '',
-    recordingBrotherEmail: '',
-    recordingBrotherName: '',
-  })
+  // Vacate the office (closes the term) and drop its inbox; the office itself stays.
+  const ecclesiaId = await ecclesiaIdFor(ecclesiaName)
+  await officeRepository.saveOffice({ ecclesiaId, role: OFFICE_ROLES.RECORDING_BROTHER, email: null })
+  await officeRepository.assignHolder(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER, null)
 
   invalidatePeopleCache()
 }
 
+async function ecclesiaIdFor(ecclesiaName: string): Promise<string> {
+  const ecclesia = await getEcclesiaByName(ecclesiaName)
+  if (!ecclesia) throw new Error(`Ecclesia "${ecclesiaName}" not found`)
+  return ecclesiaIdOf(ecclesia)
+}
+
 /**
- * Find the current Recording Brother for an ecclesia by querying PersonRecords
- * where isRecordingBrother === true and ecclesia matches.
+ * The current Recording Brother: the RB office's holder; for an ecclesia with
+ * no RB office yet, the person flagged isRecordingBrother for it (pre-cutover).
  */
 async function findCurrentRB(ecclesiaName: string): Promise<PersonRecord | null> {
+  const office = await officeRepository.getOffice(await ecclesiaIdFor(ecclesiaName), OFFICE_ROLES.RECORDING_BROTHER)
+  if (office) return office.holderPersonId ? personRepository.getById(office.holderPersonId) : null
   const result = await personRepository.scan({
     filterExpression: 'isRecordingBrother = :isRB AND ecclesia = :ecclesia AND skey = :profile',
     expressionAttributeValues: {

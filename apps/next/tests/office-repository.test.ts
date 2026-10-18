@@ -69,6 +69,9 @@ describe('office model (pure)', () => {
         { kind: 'treasurer', ecclesiaId: 'c' },
       ])
     ).toEqual({ isRecordingBrother: true, isInterEcclesiaRep: true, recordingBrotherOf: ['b'], repOf: ['a'] })
+    // The Recording Brother receives inter-ecclesia email too.
+    expect(deriveOfficeFlags([{ kind: 'rb', ecclesiaId: 'b' }])).toMatchObject({ isRecordingBrother: true, isInterEcclesiaRep: true })
+    expect(deriveOfficeFlags([{ kind: 'treasurer', ecclesiaId: 'b' }])).toMatchObject({ isRecordingBrother: false, isInterEcclesiaRep: false })
   })
 
   it('test accounts are +hacker plus-tags only', () => {
@@ -200,7 +203,7 @@ describe('officeRepository', () => {
     expect((await officeRepository.listOffices(EID)).map((o) => o.role)).toEqual(['rb', 'rep#1', 'rep#2'])
   })
 
-  it('listInterEcclesiaContacts reads the office inbox or the holder card, by Query + BatchGet', async () => {
+  it('listInterEcclesiaContacts reads the office inbox or the holder PROFILE, by Query + BatchGet', async () => {
     const p = await persons.create({ email: 'Holder@x.org', firstName: 'Hal', lastName: 'Der', ecclesia: 'Toronto East Ecclesia' })
     await officeRepository.saveOffice({ ecclesiaId: EID, role: 'rb', email: 'recbro@x.org' })
     await officeRepository.assignHolder(EID, 'rb', p.personId)
@@ -231,7 +234,7 @@ describe('officeRepository', () => {
 
     // Signing in with the RB office's own inbox carries that office's designation.
     await officeRepository.saveOffice({ ecclesiaId: EID, role: 'rb', email: 'recbro@x.org' })
-    expect(await signInOfficeFlags({ personId: 'mailbox' }, 'RecBro@x.org')).toEqual({ isRecordingBrother: true, isInterEcclesiaRep: false })
+    expect(await signInOfficeFlags({ personId: 'mailbox' }, 'RecBro@x.org')).toEqual({ isRecordingBrother: true, isInterEcclesiaRep: true })
 
     // Test accounts never get an office designation.
     expect(await signInOfficeFlags(person, 'p1+hacker@x.org')).toEqual({ isRecordingBrother: false, isInterEcclesiaRep: false })

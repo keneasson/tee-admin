@@ -73,12 +73,10 @@ export function EcclesiaDetail({
   nearbyLoading,
   onEcclesiaClick,
 }: EcclesiaDetailProps) {
-  const handleSaveRb = async (email: string, name: string): Promise<boolean> => {
+  // Nominates the RB office's holder by address ('' vacates the office); the name comes from the person.
+  const handleSaveRb = async (email: string): Promise<boolean> => {
     if (!onUpdate) return false
-    return onUpdate({
-      recordingBrotherEmail: email,
-      recordingBrotherName: name,
-    })
+    return onUpdate({ rbNomineeEmail: email })
   }
 
   return (
@@ -107,8 +105,8 @@ export function EcclesiaDetail({
         {/* Recording Brother Manager (replaces the simple RB card in EcclesiaDetailView) */}
         <RecordingBrotherManager
           ecclesiaName={ecclesia.name}
-          recordingBrotherName={ecclesia.recordingBrotherName}
-          recordingBrotherEmail={ecclesia.recordingBrotherEmail}
+          recordingBrother={ecclesia.recordingBrother}
+          offices={ecclesia.offices}
           nominations={nominations}
           authProps={authProps}
           members={ecclesiaMembers}

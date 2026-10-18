@@ -32,7 +32,7 @@
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
 import { batchGetItems } from '../people-index/reader'
-import { ecclesiaIdPk, foldName, type PersonCard, CARD_SK } from '../people-index/keys'
+import { ecclesiaIdPk, foldName } from '../people-index/keys'
 
 const TABLE = tableNames.admin
 export const OFFICE_SK_PREFIX = 'OFFICE#'
@@ -80,6 +80,27 @@ export interface InterEcclesiaContact {
   officeId: string
   email: string | null
   holderPersonId?: string
+  via: 'office' | 'holder' | 'none'
+}
+
+/**
+ * What an office reader needs about its holder, read from the holder's
+ * PROFILE (the source item, so it works before any projection is built).
+ */
+export interface OfficeHolder {
+  personId: string
+  displayName?: string
+  firstName?: string
+  lastName?: string
+  primaryEmail?: string
+}
+
+/** One office, its resolved contact address and its holder (for pages, reply-to and notifications). */
+export interface OfficeView {
+  office: OfficeRecord
+  holder: OfficeHolder | null
+  /** The office inbox, else the holder's primary address (test accounts never count). */
+  email: string | null
   via: 'office' | 'holder' | 'none'
 }
 
@@ -167,7 +188,8 @@ export function deriveOfficeFlags(heldOffices: Array<Pick<OfficeRecord, 'kind' |
   const rep = heldOffices.filter((o) => o.kind === OFFICE_ROLES.REP).map((o) => o.ecclesiaId)
   return {
     isRecordingBrother: rb.length > 0,
-    isInterEcclesiaRep: rep.length > 0,
+    // "Receives inter-ecclesia email": the Recording Brother and every Rep do.
+    isInterEcclesiaRep: rb.length + rep.length > 0,
     recordingBrotherOf: [...new Set(rb)].sort(),
     repOf: [...new Set(rep)].sort(),
   }
@@ -219,19 +241,46 @@ export function applyHolderChange(office: OfficeRecord, personId: string | null,
  */
 export function resolveInterEcclesiaContacts(
   offices: OfficeRecord[],
-  cards: Map<string, Pick<PersonCard, 'personId' | 'primaryEmail'>>
+  cards: Map<string, Pick<OfficeHolder, 'personId' | 'primaryEmail'>>
 ): InterEcclesiaContact[] {
   return offices
     .filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
     .map((o) => {
-      const base = { ecclesiaId: o.ecclesiaId, officeId: o.role, holderPersonId: o.holderPersonId }
-      if (o.email && !isTestAccountEmail(o.email)) return { ...base, email: o.email, via: 'office' as const }
-      const holderEmail = o.holderPersonId ? cards.get(o.holderPersonId)?.primaryEmail : undefined
-      if (holderEmail && !isTestAccountEmail(holderEmail)) {
-        return { ...base, email: holderEmail.trim().toLowerCase(), via: 'holder' as const }
-      }
-      return { ...base, email: null, via: 'none' as const }
+      const view = resolveOfficeView(o, (o.holderPersonId && cards.get(o.holderPersonId)) || null)
+      return { ecclesiaId: o.ecclesiaId, officeId: o.role, holderPersonId: o.holderPersonId, email: view.email, via: view.via }
     })
+}
+
+/** Pure: an office's contact address — its own inbox wins, else its holder's primary address. */
+export function resolveOfficeView(office: OfficeRecord, holder: OfficeHolder | null): OfficeView {
+  if (office.email && !isTestAccountEmail(office.email)) return { office, holder, email: office.email, via: 'office' }
+  const holderEmail = holder?.primaryEmail?.trim().toLowerCase()
+  if (holderEmail && !isTestAccountEmail(holderEmail)) return { office, holder, email: holderEmail, via: 'holder' }
+  return { office, holder, email: null, via: 'none' }
+}
+
+/** Display order: Recording Brother, then Reps by slot, then any other office by id. */
+export function compareOffices(a: Pick<OfficeRecord, 'kind' | 'slot' | 'role'>, b: Pick<OfficeRecord, 'kind' | 'slot' | 'role'>): number {
+  const rank = (o: Pick<OfficeRecord, 'kind'>) =>
+    o.kind === OFFICE_ROLES.RECORDING_BROTHER ? 0 : o.kind === OFFICE_ROLES.REP ? 1 : 2
+  return rank(a) - rank(b) || (a.slot || 0) - (b.slot || 0) || a.role.localeCompare(b.role)
+}
+
+const profileKey = (personId: string) => ({ pkey: `PERSON#${personId}`, skey: 'PROFILE' })
+
+/** Holders' PROFILEs in one BatchGet per 100. Test accounts are dropped (they never hold an office). */
+async function loadHolders(offices: OfficeRecord[]): Promise<Map<string, OfficeHolder>> {
+  const ids = [...new Set(offices.map((o) => o.holderPersonId).filter((id): id is string => !!id))]
+  if (ids.length === 0) return new Map()
+  const profiles = await batchGetItems<OfficeHolder & Record<string, unknown>>(ids.map(profileKey))
+  return new Map(
+    profiles
+      .filter((p) => p.personId && !isTestAccountEmail(p.primaryEmail))
+      .map((p) => [
+        p.personId,
+        { personId: p.personId, displayName: p.displayName, firstName: p.firstName, lastName: p.lastName, primaryEmail: p.primaryEmail },
+      ])
+  )
 }
 
 export interface RecipientDiff {
@@ -370,24 +419,39 @@ export class OfficeRepository {
    * `scripts/diff-inter-ecclesia-recipients.ts`).
    */
   async listInterEcclesiaContacts(ecclesiaId: string): Promise<InterEcclesiaContact[]> {
-    const offices = (await this.listOffices(ecclesiaId)).filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
-    const holderIds = offices.map((o) => o.holderPersonId).filter((id): id is string => !!id)
-    const cards = holderIds.length
-      ? await batchGetItems<PersonCard>(holderIds.map((id) => ({ pkey: `PERSON#${id}`, skey: CARD_SK })))
-      : []
-    return resolveInterEcclesiaContacts(offices, new Map(cards.map((c) => [c.personId, c])))
+    return this.listAllInterEcclesiaContacts([ecclesiaId])
   }
 
   /** `listInterEcclesiaContacts` for many ecclesias (one Query each, one BatchGet per 100 holders). */
   async listAllInterEcclesiaContacts(ecclesiaIds: string[]): Promise<InterEcclesiaContact[]> {
-    const offices = (await Promise.all([...new Set(ecclesiaIds)].map((id) => this.listOffices(id))))
+    const offices = [...(await this.listOfficesOf(ecclesiaIds)).values()]
       .flat()
       .filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
-    const holderIds = offices.map((o) => o.holderPersonId).filter((id): id is string => !!id)
-    const cards = holderIds.length
-      ? await batchGetItems<PersonCard>(holderIds.map((id) => ({ pkey: `PERSON#${id}`, skey: CARD_SK })))
-      : []
-    return resolveInterEcclesiaContacts(offices, new Map(cards.map((c) => [c.personId, c])))
+    return resolveInterEcclesiaContacts(offices, await loadHolders(offices))
+  }
+
+  /** Pattern 8 for many ecclesias: ecclesiaId → its offices, in display order. One Query per ecclesia. */
+  async listOfficesOf(ecclesiaIds: string[]): Promise<Map<string, OfficeRecord[]>> {
+    const ids = [...new Set(ecclesiaIds)]
+    const lists = await Promise.all(ids.map((id) => this.listOffices(id)))
+    return new Map(ids.map((id, i) => [id, [...lists[i]].sort(compareOffices)]))
+  }
+
+  /**
+   * Every office of each ecclesia with its holder and resolved address
+   * (Query per ecclesia + one BatchGet of holder PROFILEs). The office page,
+   * the Recording Brother reply-to and RB notifications read this.
+   * Redact holders per ADR-0005 before showing them to a viewer.
+   */
+  async listOfficeViews(ecclesiaIds: string[]): Promise<Map<string, OfficeView[]>> {
+    const byEcclesia = await this.listOfficesOf(ecclesiaIds)
+    const holders = await loadHolders([...byEcclesia.values()].flat())
+    return new Map(
+      [...byEcclesia].map(([id, offices]) => [
+        id,
+        offices.map((o) => resolveOfficeView(o, (o.holderPersonId && holders.get(o.holderPersonId)) || null)),
+      ])
+    )
   }
 
   /** True once the confirmed assignments are applied (`OFFICES_ASSIGNED_MARKER`). Cached for a minute. */
@@ -419,13 +483,12 @@ export class OfficeRepository {
     return this.write(next, current.version)
   }
 
-  /** The office plus its holder's CARD (one BatchGet). Redact the card per ADR-0005 before showing it. */
-  async getOfficeWithHolder(ecclesiaId: string, role: string): Promise<{ office: OfficeRecord; holder: PersonCard | null } | null> {
+  /** The office plus its holder (one BatchGet). Redact the holder per ADR-0005 before showing it. */
+  async getOfficeWithHolder(ecclesiaId: string, role: string): Promise<OfficeView | null> {
     const office = await this.getOffice(ecclesiaId, role)
     if (!office) return null
-    if (!office.holderPersonId) return { office, holder: null }
-    const [holder] = await batchGetItems<PersonCard>([{ pkey: `PERSON#${office.holderPersonId}`, skey: CARD_SK }])
-    return { office, holder: holder || null }
+    const holders = await loadHolders([office])
+    return resolveOfficeView(office, (office.holderPersonId && holders.get(office.holderPersonId)) || null)
   }
 
   private async write(item: OfficeRecord, expectedVersion: number | undefined): Promise<OfficeRecord> {

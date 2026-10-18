@@ -3,7 +3,7 @@ import { YStack, XStack, Text, Input, Card, Spinner } from 'tamagui'
 import { Button } from '../Button'
 import { UserPlus, ThumbsUp, Shield, User, Pencil, Clock, RefreshCw } from '@tamagui/lucide-icons'
 import { PersonAutocomplete } from '../form/person-autocomplete'
-import type { Nomination, DirectoryAuthProps } from './types'
+import type { Nomination, DirectoryAuthProps, OfficeSummary, RecordingBrotherSummary } from './types'
 
 interface MemberEmail {
   email: string
@@ -18,8 +18,10 @@ interface MemberWithEmails {
 
 interface RecordingBrotherManagerProps {
   ecclesiaName: string
-  recordingBrotherName?: string
-  recordingBrotherEmail?: string
+  /** The Recording Brother office (holder name + office inbox or holder address), resolved server-side. */
+  recordingBrother?: RecordingBrotherSummary | null
+  /** Every office of the ecclesia; Rep offices are listed under the Recording Brother. */
+  offices?: OfficeSummary[]
   nominations: Nomination[]
   authProps: DirectoryAuthProps
   /** Members of this ecclesia (with email info for nomination flow) */
@@ -27,7 +29,7 @@ interface RecordingBrotherManagerProps {
   onNominate: (nomineeEmail: string, nomineeName: string, emailPreference: 'personal' | 'ecclesia', rbEcclesiaEmail?: string) => Promise<void>
   onSecond: (nominationId: string) => Promise<void>
   onDirectSet?: (nomineeEmail: string, nomineeName: string, emailPreference: 'personal' | 'ecclesia', rbEcclesiaEmail?: string) => Promise<void>
-  /** Save RB directly via PATCH (admin editing from detail view) */
+  /** Nominate the RB office holder by address via PATCH (admin editing from detail view) */
   onSaveRb?: (email: string, name: string) => Promise<boolean>
   /** Resend confirmation email for a nomination */
   onResend?: (nominationId: string) => Promise<void>
@@ -35,8 +37,8 @@ interface RecordingBrotherManagerProps {
 
 export function RecordingBrotherManager({
   ecclesiaName,
-  recordingBrotherName,
-  recordingBrotherEmail,
+  recordingBrother,
+  offices = [],
   nominations,
   authProps,
   members = [],
@@ -46,7 +48,10 @@ export function RecordingBrotherManager({
   onSaveRb,
   onResend,
 }: RecordingBrotherManagerProps) {
-  const hasRb = !!(recordingBrotherName || recordingBrotherEmail)
+  const rbName = recordingBrother?.name
+  const rbEmail = recordingBrother?.email
+  const hasRb = !!(rbName || rbEmail)
+  const repOffices = offices.filter((o) => o.kind === 'rep')
   const isViewerEcclesia = authProps.viewerEcclesia === ecclesiaName
   const canEditRb = authProps.isAdminOrOwner || (authProps.isRecorderOrHigher && isViewerEcclesia)
 
@@ -57,8 +62,8 @@ export function RecordingBrotherManager({
 
   // Edit RB state (for admin direct editing)
   const [editingRb, setEditingRb] = useState(false)
-  const [editRbName, setEditRbName] = useState(recordingBrotherName || '')
-  const [editRbEmail, setEditRbEmail] = useState(recordingBrotherEmail || '')
+  const [editRbName, setEditRbName] = useState(rbName || '')
+  const [editRbEmail, setEditRbEmail] = useState(rbEmail || '')
   const [savingRb, setSavingRb] = useState(false)
 
   // Nomination form state
@@ -72,15 +77,15 @@ export function RecordingBrotherManager({
   const [resendingId, setResendingId] = useState<string | null>(null)
 
   const startEditingRb = () => {
-    setEditRbName(recordingBrotherName || '')
-    setEditRbEmail(recordingBrotherEmail || '')
+    setEditRbName(rbName || '')
+    setEditRbEmail(rbEmail || '')
     setEditingRb(true)
   }
 
   const cancelEditingRb = () => {
     setEditingRb(false)
-    setEditRbName(recordingBrotherName || '')
-    setEditRbEmail(recordingBrotherEmail || '')
+    setEditRbName(rbName || '')
+    setEditRbEmail(rbEmail || '')
   }
 
   const handleSaveRb = async () => {
@@ -246,13 +251,23 @@ export function RecordingBrotherManager({
             ) : null}
           </XStack>
           <YStack gap="$1">
-            {recordingBrotherName ? (
-              <Text fontSize="$3">{recordingBrotherName}</Text>
+            {rbName ? (
+              <Text fontSize="$3">{rbName}</Text>
             ) : null}
-            {recordingBrotherEmail ? (
-              <Text fontSize="$3" theme="alt2">{recordingBrotherEmail}</Text>
+            {rbEmail ? (
+              <Text fontSize="$3" theme="alt2">{rbEmail}</Text>
             ) : null}
           </YStack>
+          {repOffices.length > 0 ? (
+            <YStack gap="$1" paddingTop="$2">
+              <Text fontSize="$3" fontWeight="600">Reps</Text>
+              {repOffices.map((office) => (
+                <Text key={office.officeId} fontSize="$3" theme="alt2">
+                  {[office.holderName || 'Vacant', office.email].filter(Boolean).join(' · ')}
+                </Text>
+              ))}
+            </YStack>
+          ) : null}
         </YStack>
       </Card>
     )

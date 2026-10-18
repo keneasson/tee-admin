@@ -141,7 +141,7 @@ export const authOptions: NextAuthConfig = {
 
             const created = await personRepository.create({
               email,
-              firstName: rbEcclesia?.recordingBrotherName || '',
+              firstName: rbEcclesia?.rbHolderName || '',
               lastName: '',
               ecclesia: rbEcclesiaName,
               memberStatus: rbEcclesia ? 'member' : 'visitor',
@@ -154,8 +154,10 @@ export const authOptions: NextAuthConfig = {
 
           if (!person) return null
 
+          // Rep designation derived from offices once they are live (flagged)
+          const offices = await signInOfficeFlags(person, email)
           const role = person.role
-            || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? 'member' : undefined)
+            || (person.memberStatus === 'member' || offices.isInterEcclesiaRep ? 'member' : undefined)
             || 'guest'
 
           return {
@@ -179,9 +181,10 @@ export const authOptions: NextAuthConfig = {
           const person = await personRepository.getByEmail(email)
           if (!person) return null
 
-          // Derive role if still missing (belt and suspenders)
+          // Derive role if still missing (belt and suspenders); Rep from offices (flagged)
+          const offices = await signInOfficeFlags(person, email)
           const role = person.role
-            || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? 'member' : undefined)
+            || (person.memberStatus === 'member' || offices.isInterEcclesiaRep ? 'member' : undefined)
             || 'guest'
 
           return {
@@ -302,9 +305,10 @@ export const authOptions: NextAuthConfig = {
           // STEP 1: Check PersonRecord via GSI1 (O(1) lookup - no scan!)
           const person = await personRepository.getByEmailForAuth(userEmail)
           if (person) {
-            // Derive role: explicit role → memberStatus/isInterEcclesiaRep → undefined
+            // Derive role: explicit role → memberStatus/Rep office (flagged) → undefined
+            const offices = await signInOfficeFlags(person, userEmail)
             const derivedRole = person.role
-              || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
+              || (person.memberStatus === 'member' || offices.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
 
             if (derivedRole) {
               // Block deceased users from signing in
@@ -349,8 +353,8 @@ export const authOptions: NextAuthConfig = {
                 const oauthProfile: GoogleOAuthProfile = {
                   id: user.id || '',
                   email: userEmail,
-                  name: user.name || rbEcclesia.recordingBrotherName || undefined,
-                  given_name: rbEcclesia.recordingBrotherName || undefined,
+                  name: user.name || rbEcclesia.rbHolderName || undefined,
+                  given_name: rbEcclesia.rbHolderName || undefined,
                   family_name: undefined,
                   picture: user.image || undefined,
                 }

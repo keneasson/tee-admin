@@ -192,7 +192,7 @@ export function EcclesiaList({
                   </XStack>
 
                   {/* Recording Brother (read-only on list) */}
-                  {(ecclesia.recordingBrotherEmail || ecclesia.recordingBrotherName) ? (
+                  {ecclesia.recordingBrother ? (
                     <YStack
                       gap="$1"
                       padding="$3"
@@ -206,9 +206,9 @@ export function EcclesiaList({
                         </Text>
                       </XStack>
                       <Text fontSize="$3">
-                        {ecclesia.recordingBrotherName ? `${ecclesia.recordingBrotherName} ` : ''}
-                        {ecclesia.recordingBrotherEmail ? (
-                          `<${ecclesia.recordingBrotherEmail}>`
+                        {ecclesia.recordingBrother.name ? `${ecclesia.recordingBrother.name} ` : ''}
+                        {ecclesia.recordingBrother.email ? (
+                          `<${ecclesia.recordingBrother.email}>`
                         ) : ''}
                       </Text>
                     </YStack>

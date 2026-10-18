@@ -66,6 +66,7 @@ const contentManagerPages: MainPageType[] = [
 const systemAdminPages: MainPageType[] = [
   { path: '/admin/youtube', label: 'YouTube' },
   { path: '/admin/schedule-overrides', label: 'Service Overrides' },
+  { path: '/admin/offices', label: 'Ecclesia Offices' },
   { path: '/admin/data-sync', label: 'Data Sync' },
   { path: '/admin/metrics', label: 'Metrics' },
   { path: '/admin/email-tester', label: 'Email Tester' },

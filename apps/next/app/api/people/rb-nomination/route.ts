@@ -5,6 +5,7 @@ import { rbNominationRepository } from '@my/app/provider/dynamodb/repositories/r
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
 import { sendRBConfirmationEmail } from '../../../../utils/email/send-rb-confirmation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { recordingBrotherOf } from '@/utils/ecclesia-offices'
 
 /**
  * GET /api/people/rb-nomination?ecclesia=X — Get open nominations for an ecclesia
@@ -30,9 +31,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'ecclesia parameter is required' }, { status: 400 })
     }
 
-    // Check if ecclesia has a Recording Brother via EcclesiaRecord
+    // Check if the ecclesia's Recording Brother office is filled
     const ecclesiaRecord = await getEcclesiaByName(ecclesia)
-    const hasRecordingBrother = !!ecclesiaRecord?.recordingBrotherEmail
+    const hasRecordingBrother = !!(await recordingBrotherOf(ecclesiaRecord))
 
     const nominations = await rbNominationRepository.getActiveByEcclesia(ecclesia)
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
       // Check if ecclesia already has a Recording Brother
       const ecclesiaRecord = await getEcclesiaByName(ecclesia)
-      if (ecclesiaRecord?.recordingBrotherEmail) {
+      if (await recordingBrotherOf(ecclesiaRecord)) {
         return NextResponse.json(
           { error: 'This ecclesia already has a Recording Brother' },
           { status: 409 }
@@ -155,9 +156,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if ecclesia already has a Recording Brother via EcclesiaRecord
+    // Check if the ecclesia's Recording Brother office is already filled
     const ecclesiaRecord = await getEcclesiaByName(ecclesia)
-    const hasRB = !!ecclesiaRecord?.recordingBrotherEmail
+    const hasRB = !!(await recordingBrotherOf(ecclesiaRecord))
     if (hasRB) {
       return NextResponse.json(
         { error: 'This ecclesia already has a Recording Brother' },

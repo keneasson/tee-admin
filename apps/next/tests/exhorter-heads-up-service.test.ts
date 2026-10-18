@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   generateEmailPreferencesUrl: vi.fn(),
   fetchServiceOverrides: vi.fn(),
   getEcclesiaByName: vi.fn(),
+  recordingBrotherOf: vi.fn(),
 }))
 
 vi.mock('@my/app/provider/dynamodb/schedule-service', () => ({
@@ -43,6 +44,8 @@ vi.mock('@my/app/utils/service-overrides/merge', async (importOriginal) => {
   return { ...actual, fetchServiceOverrides: h.fetchServiceOverrides }
 })
 vi.mock('../utils/dynamodb/locations', () => ({ getEcclesiaByName: h.getEcclesiaByName }))
+// The Recording Brother is the ecclesia's office (R3), not fields on the record.
+vi.mock('../utils/ecclesia-offices', () => ({ recordingBrotherOf: h.recordingBrotherOf }))
 
 import {
   resolveAndSendExhorterHeadsUp,
@@ -134,11 +137,10 @@ beforeEach(() => {
     province: 'ON',
     city: 'Toronto',
     address: '975 Cosburn Ave., East York, ON M4C 2W8, Canada',
-    recordingBrotherName: 'Ken Easson',
-    recordingBrotherEmail: 'teerecbro@gmail.com',
     createdAt: new Date(0),
     updatedAt: new Date(0),
   })
+  h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Easson', email: 'teerecbro@gmail.com', source: 'office' })
 })
 
 afterEach(() => {
@@ -347,11 +349,11 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
       province: 'ON',
       city: 'Toronto',
       address: '975 Cosburn Ave., East York, ON M4C 2W8, Canada',
-      recordingBrotherName: 'Ken Easson',
-      recordingBrotherEmail: 'custom-rb@example.com', // prove it's record-driven
       createdAt: new Date(0),
       updatedAt: new Date(0),
     })
+    // prove it's office-driven
+    h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Easson', email: 'custom-rb@example.com', source: 'office' })
     const report = await resolveAndSendExhorterHeadsUp({
       date: TARGET_DATE,
       test: true,
@@ -370,6 +372,7 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
   })
 
   it('composes address from parts when no `address` field; falls back Reply-To', async () => {
+    h.recordingBrotherOf.mockResolvedValue(null)
     h.getEcclesiaByName.mockResolvedValue({
       name: 'Toronto East Ecclesia',
       country: 'Canada',

@@ -13,6 +13,7 @@ import type { NearbyEcclesiaItem } from './nearby-ecclesias-card'
 import { ScheduleEditor } from './schedule-editor'
 import { ScheduleViewer } from './schedule-viewer'
 import { ScheduleConfigEditor } from './schedule-config-editor'
+import type { OfficeSummary, RecordingBrotherSummary } from '../directory/types'
 
 export interface EcclesiaDetailData {
   name: string
@@ -24,8 +25,12 @@ export interface EcclesiaDetailData {
   venue?: string
   phone?: string
   contactEmail?: string
-  recordingBrotherEmail?: string
-  recordingBrotherName?: string
+  /** The Recording Brother office (read-only here; resolved server-side). */
+  recordingBrother?: RecordingBrotherSummary | null
+  /** Every office of the ecclesia: Recording Brother, then Reps. */
+  offices?: OfficeSummary[]
+  /** Update payload only: nominate the RB office's holder by address ('' vacates it). */
+  rbNomineeEmail?: string
   /** @deprecated Use scheduleConfig instead */
   services?: any[]
   website?: string
@@ -73,8 +78,8 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
   const [editPostalCode, setEditPostalCode] = useState(ecclesia.postalCode || '')
   const [editPhone, setEditPhone] = useState(ecclesia.phone || '')
   const [editContactEmail, setEditContactEmail] = useState(ecclesia.contactEmail || '')
-  const [editRbName, setEditRbName] = useState(ecclesia.recordingBrotherName || '')
-  const [editRbEmail, setEditRbEmail] = useState(ecclesia.recordingBrotherEmail || '')
+  const [editRbName, setEditRbName] = useState(ecclesia.recordingBrother?.name || '')
+  const [editRbEmail, setEditRbEmail] = useState(ecclesia.recordingBrother?.email || '')
 
   const startEditing = () => {
     setEditName(ecclesia.name)
@@ -83,8 +88,8 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
     setEditPostalCode(ecclesia.postalCode || '')
     setEditPhone(ecclesia.phone || '')
     setEditContactEmail(ecclesia.contactEmail || '')
-    setEditRbName(ecclesia.recordingBrotherName || '')
-    setEditRbEmail(ecclesia.recordingBrotherEmail || '')
+    setEditRbName(ecclesia.recordingBrother?.name || '')
+    setEditRbEmail(ecclesia.recordingBrother?.email || '')
     setEditing(true)
   }
 
@@ -103,8 +108,8 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
         postalCode: editPostalCode,
         phone: editPhone,
         contactEmail: editContactEmail,
-        recordingBrotherName: editRbName,
-        recordingBrotherEmail: editRbEmail,
+        // Only a changed address nominates (or, when emptied, vacates) the RB office holder
+        ...(editRbEmail.trim() !== (ecclesia.recordingBrother?.email || '') ? { rbNomineeEmail: editRbEmail.trim() } : {}),
       })
       if (success) {
         setEditing(false)

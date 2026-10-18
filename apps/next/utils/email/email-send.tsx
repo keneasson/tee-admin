@@ -3,6 +3,7 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
+import { interEcclesiaRecipientsFromOffices } from './inter-ecclesia-recipients'
 import { chunkArray } from '../chunkArray'
 import {
   generateEcclesiaUpdateUrl,
@@ -227,14 +228,23 @@ export const emailSend = async function ({
     const sesClient = getSesClient()
 
     console.log('why test=false sends test', { test, listTopic })
-    const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
-    if (!contacts) {
-      return { sends: [], skips: [], campaignId }
-    }
+    // Inter-ecclesia (never a test send): offices decide once the flag is on and
+    // the confirmed assignments are applied (R3); otherwise null → the SES topic.
+    const fromOffices =
+      listTopic === senders['inter-ecclesia'].contactList ? await interEcclesiaRecipientsFromOffices(sesClient) : null
 
-    const senderEmails = contacts
-      .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
-      .map((contact) => contact.EmailAddress as string)
+    let senderEmails: string[]
+    if (fromOffices) {
+      senderEmails = fromOffices
+    } else {
+      const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
+      if (!contacts) {
+        return { sends: [], skips: [], campaignId }
+      }
+      senderEmails = contacts
+        .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
+        .map((contact) => contact.EmailAddress as string)
+    }
 
     // Universal one-click login (feature-flagged). Read globally with a null
     // session, so it is active only when the flag is set to 'everyone'. When

@@ -13,7 +13,9 @@
  *   - the inter-ecclesia recipient diff: today's `isInterEcclesiaRep` addresses
  *     vs. what the planned offices would yield
  *
- * --apply refuses while any row has an error, backs up every ECCLESIA_ID#
+ * --apply refuses while any row has an error, and while the recipient diff is
+ * not empty unless `--accept-diff` is passed (the owner accepted those
+ * differences; the count is recorded on the marker). It backs up every ECCLESIA_ID#
  * item, every referenced PROFILE and the offices marker to
  *   s3://tee-admin-backups/backups/<date>-office-assignments/
  * then writes ONLY through `officeRepository`, re-plans to verify nothing is
@@ -22,7 +24,7 @@
  *
  * Usage:
  *   npx tsx scripts/backfill-office-assignments.ts --input <file.json>            # dry run
- *   npx tsx scripts/backfill-office-assignments.ts --input <file.json> --apply
+ *   npx tsx scripts/backfill-office-assignments.ts --input <file.json> --apply [--accept-diff]
  */
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -37,6 +39,7 @@ async function main() {
   const inputPath = arg('--input')
   if (!inputPath) throw new Error('--input <confirmed-assignments.json> is required')
   const apply = process.argv.includes('--apply')
+  const acceptDiff = process.argv.includes('--accept-diff')
   const file = JSON.parse(readFileSync(inputPath, 'utf8'))
   if (!Array.isArray(file?.assignments)) throw new Error('input must be { "assignments": [...] }')
 
@@ -96,6 +99,13 @@ async function main() {
     return
   }
   if (plan.errors.length > 0) throw new Error(`Refusing to --apply: ${plan.errors.length} row error(s) above`)
+  const diffCount = diff.onlyLegacy.length + diff.onlyOffices.length
+  if (diffCount > 0 && !acceptDiff) {
+    throw new Error(
+      `Refusing to --apply: the offices would reach ${diffCount} address(es) differently from today's inter-ecclesia path. ` +
+        'Fix the input, or pass --accept-diff once the owner has accepted the differences above.'
+    )
+  }
 
   // --- Back up every affected key range first ---
   const referenced = new Set(
@@ -136,7 +146,11 @@ async function main() {
     process.exitCode = 1
     return
   }
-  await offices.writeOfficesAssignedMarker({ offices: after.snap.offices.length, ecclesias: after.snap.ecclesiaIds.length })
+  await offices.writeOfficesAssignedMarker({
+    offices: after.snap.offices.length,
+    ecclesias: after.snap.ecclesiaIds.length,
+    recipientDiffAccepted: diffCount,
+  })
   console.log(`Applied ${plan.actions.length} office writes. Verification pass: 0 differences. Offices marker written.`)
 }
 

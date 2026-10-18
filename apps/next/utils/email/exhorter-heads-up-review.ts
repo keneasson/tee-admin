@@ -3,6 +3,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
 import { resolveTenantFromEnv } from '@my/app/config/tenants'
 import { getEcclesiaByName } from '../dynamodb/locations'
+import { recordingBrotherOf } from '../ecclesia-offices'
 import { escapeHtml } from '../html'
 import { sendEmail } from './sesClient'
 import {
@@ -130,7 +131,7 @@ export async function prepareHeadsUpForReview(
   const ecclesia = await getEcclesiaByName(tenant.homeEcclesiaName ?? '')
   const reviewerEmail =
     params.reviewerEmail ||
-    ecclesia?.recordingBrotherEmail ||
+    (await recordingBrotherOf(ecclesia).catch(() => null))?.email ||
     process.env.EXHORTER_HEADSUP_REVIEWER ||
     ''
 
