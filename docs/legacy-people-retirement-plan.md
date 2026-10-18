@@ -244,7 +244,7 @@ The cleanup must support the unified editor's smart-profile widgets: CMS Slice 7
 |---|---|---|
 | **Person** | `PERSON#<personId>` (PROFILE plus sub-items) | name, emails, phones, addresses, privacy, family links, subscriptions, credentials |
 | **Ecclesia / Organization** | `ECCLESIA#<country\|prov city>` / `<city>#<name>` (Organization item later, ADR-0001) | name, location and venue, service times, offices |
-| **Office** (Recording Brother, Inter-Ecclesia Rep, office contact) | a **reference**: `ECCLESIA#… / OFFICE#<office>#<personId>`, plus its inverse `PERSON#<id> / OFFICE#<ecclesiaKey>#<office>` | nothing but the link. The name and email are read from the Person. |
+| **Office** (Recording Brother, Treasurer, Inter-Ecclesia Rep, …) | its **own source item**: `ECCLESIA_ID#<ecclesiaId> / OFFICE#<role>` (#58, owner decision 2026-10-17) | its own contact channels (office email such as a role inbox, optional phone and postal address), a `holderPersonId` **reference** to the current holder, and the term history (`terms: [{personId, from, to}]`). The holder changes; the office's contact details stay. It never stores the holder's name or email. |
 
 **Smart contact** ("contact <a member> for details"):
 - The post stores `{ personId }` only.
@@ -258,6 +258,12 @@ The cleanup must support the unified editor's smart-profile widgets: CMS Slice 7
 - The post stores the ecclesia key only.
 - Readers get the ecclesia's name, location and venue, and its service times (`resolveServiceTime`, with seasonal schedules and occurrence overrides).
 - Office links resolve each `OFFICE#` reference to a Person and render as a smart contact. That gives "Recording Brother: <smart contact>".
+
+**Offices (#58).** An office is an entity, not a person and not a flag:
+- Sending "to the Treasurer" uses the office email. "Who is the Recording Brother" resolves `holderPersonId` to a Person and renders it as a smart contact through the ADR-0005 tiers.
+- An office mailbox is **never** a nameless PersonRecord. Today's blank records for role inboxes and ecclesia mailboxes (§3, "nameless PROFILEs") are that mistake; they are retired with the owner's reconciliation, not before.
+- Writer: `officeRepository` only (`packages/app/provider/dynamodb/repositories/office-repository.ts`). Writes are version-conditional so concurrent holder changes cannot lose a term.
+- Not yet migrated: the existing `recordingBrother*` fields on ECCLESIA items and the `isRecordingBrother` / `isInterEcclesiaRep` person flags still carry today's data. Moving them into OFFICE# items comes with the confirmed reconciliation (Phase 1).
 
 **Snapshots to remove:**
 - the registration block `contactEmail` / `contactPhone` (`packages/app/types/post.ts:257-258`)
@@ -291,6 +297,19 @@ Each is replaced by an id reference.
 | 12 | Inter-ecclesia reps | Query on the `OFFICE#REP` references (pattern 8), or a sparse `gsi4pk=OFFICE#REP` | Query | **Scan**: `listInterEcclesiaReps` (repo :1146-1151) | An office reference, same as RB |
 | 13 | Person by Google id | sparse `gsi1pk=GOOGLE#<id>` on PROFILE | Query | **Scan**: `getByGoogleId` (repo :1382-1388; unused) | Add only if needed; otherwise delete |
 | 14 | Counts | `Select: COUNT` on pattern 4, or a counter item | Query | **Scan**: `count` (repo :1047-1052) | Replace |
+
+**Built in #275 (Phase 2 step 0).** Code: `packages/app/provider/dynamodb/people-index/` (`keys.ts` derives, `projections.ts` writes, `reader.ts` reads). Rebuild: `scripts/rebuild-people-projections.ts` (dry run by default).
+
+| Pattern | Item / index entry | Writer |
+|---|---|---|
+| 3 typeahead | `PERSON#<id> / NAMETOK#<token>`, gsi3 `NAMEPFX#ALL#<2 letters>` / `<token>#<id>` | `personRepository` |
+| 4 everyone / by ecclesia, 10 BatchGet | `PERSON#<id> / CARD`, gsi4 `PEOPLE#ALL`, gsi2 `ECCPEOPLE#<ecclesiaId>` (both `<last>#<first>#<id>`) | `personRepository` |
+| 7 stable id, 9 all ecclesias | `ECCLESIA_ID#<ecclesiaId> / ECCLESIA` (points at the ECCLESIA key), gsi2 `ECCLESIAS` / `<country>\|<prov>\|<city>#<name>`; RB-email sign-in entry on gsi1 `RBEMAIL#<addr>` | `locations.ts` |
+| 8/12 offices of an ecclesia | **source** item `ECCLESIA_ID#<id> / OFFICE#<role>`: `Query pkey, begins_with(skey,'OFFICE#')` | `officeRepository` |
+| 11 offices held by a person | sparse gsi1 on the office item: `OFFICEHOLDER#<personId>` / `OFFICE#<ecclesiaId>#<role>` | `officeRepository` |
+| office inbox → office (sign-in, sends) | sparse gsi3 on the office item: `OFFICEMAIL#<addr>` | `officeRepository` |
+
+The ecclesia id is the slug of the name at creation, stored as `ecclesiaId` and carried across renames. Readers switch only once the backfill marker `PEOPLE_INDEX#META / BUILD` exists; the sign-in RB check also needs the `people_index_signin` flag, and then looks up the Recording Brother office's inbox first and the legacy `recordingBrotherEmail` (indexed on the alias, gsi1 `RBEMAIL#`) second, until offices are migrated. Offices are source data: the backfill never writes or deletes an OFFICE# item. `count` and `getByGoogleId` (patterns 13, 14) had no callers and were deleted.
 
 **What the current key design cannot serve without new items:**
 - name typeahead on a prefix of either name (pattern 3)

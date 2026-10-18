@@ -3,8 +3,8 @@ import { auth } from '../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { privacyRepository } from '@my/app/provider/dynamodb/repositories/privacy-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { getCachedMembers, setCachedMembers, CACHE_TTL_MS } from './cache'
+import { loadDirectoryPeople } from './load-directory'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 
 interface MemberListItem {
@@ -23,7 +23,8 @@ interface MemberListItem {
 
 /**
  * GET /api/people - List all ecclesia members
- * Sources from PersonRecords (tee-admin PERSON# items via scan with skey=PROFILE)
+ * Sources from PersonRecords: the person CARD projections (one gsi4 Query)
+ * once the people index is built, else a Scan of the PROFILE items.
  * Each person appears exactly once regardless of how many emails they have.
  * Results are cached for 5 minutes for performance.
  */
@@ -86,26 +87,9 @@ export async function GET(request: NextRequest) {
       guestCounts = cached.guestCounts
       fromCache = true
     } else {
-      // Fetch all PersonRecords (PROFILE items only)
-      const allPersons: PersonRecord[] = []
-      let lastKey: Record<string, any> | undefined
-
-      do {
-        const result = await personRepository.listAll({ lastEvaluatedKey: lastKey })
-        allPersons.push(...result.items)
-        lastKey = result.lastEvaluatedKey
-      } while (lastKey)
-
-      // One scan for every phone number, behind the same 5-minute cache as the
-      // member list. Phones have no index on the number, so the alternative is a
-      // scan per keystroke.
-      let phonesByPerson = new Map<string, string[]>()
-      try {
-        phonesByPerson = await personRepository.getAllPhonesByPerson()
-      } catch (phoneError) {
-        // Search by name and email still works; only phone matching is lost.
-        console.error('Failed to load phones for search:', phoneError)
-      }
+      // Everyone, with phone digits for search: one Query of the person
+      // cards once the people index is built (two Scans before that).
+      const { people: allPersons } = await loadDirectoryPeople({ withPhones: true })
 
       // Build member list - each person appears exactly once
       // Guests go into a separate list; suspicious users are hidden entirely
@@ -132,7 +116,7 @@ export async function GET(request: NextRequest) {
           name,
           lastName: lastName.toLowerCase(),
           ecclesia: person.ecclesia || undefined,
-          phones: phonesByPerson.get(person.personId),
+          phones: person.phones,
         }
 
         // Guests go to a separate list

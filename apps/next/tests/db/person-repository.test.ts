@@ -39,6 +39,9 @@ describe('PersonRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     repository = new PersonRepository()
+    // These tests script the client call-by-call; projection sync (its own
+    // reads/writes after each write) is covered by people-index-sync.test.ts.
+    repository.setProjectionSync(null)
   })
 
   afterEach(() => {
