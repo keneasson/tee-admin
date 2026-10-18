@@ -15,12 +15,12 @@
  * PROJECTIONS (derived only; each has exactly one writer):
  *   PERSON#<id> / CARD                  person card: pattern 4 (everyone, by ecclesia) + 10 (BatchGet)
  *   PERSON#<id> / NAMETOK#<token>       name typeahead tokens, pattern 3 (gsi3)
- *   PERSON#<id> / OFFICE#<eid>#REP      offices held by a person, pattern 11 (writer: person)
- *   ECCLESIA_ID#<eid> / OFFICE#REP#<id> ecclesia → office holder, pattern 8/12 (writer: person)
  *   ECCLESIA_ID#<eid> / ECCLESIA        stable id alias + directory entry, patterns 7/9 (writer: ecclesia)
- *   ECCLESIA_ID#<eid> / OFFICE#RB#<id>  ecclesia → Recording Brother, pattern 8 (writer: ecclesia)
- *   PERSON#<id> / OFFICE#<eid>#RB       offices held by a person, pattern 11 (writer: ecclesia)
  *   PEOPLE_INDEX#META / BUILD           "the backfill has run" marker
+ *
+ * OFFICES are NOT projections: an office (Recording Brother, Treasurer, …) is
+ * its own SOURCE entity at ECCLESIA_ID#<eid> / OFFICE#<role>, written only by
+ * `officeRepository` (see `office-keys.ts`). Nothing here derives or deletes one.
  *
  * Every index entry is SPARSE: only these items carry the new key values, and
  * each prefix is new, so no existing Query can see them.
@@ -31,7 +31,6 @@ export const PEOPLE_NAMESPACE = 'ALL'
 
 export const CARD_SK = 'CARD'
 export const NAMETOK_PREFIX = 'NAMETOK#'
-export const OFFICE_PREFIX = 'OFFICE#'
 export const ECCLESIA_ID_PREFIX = 'ECCLESIA_ID#'
 export const ECCLESIA_ALIAS_SK = 'ECCLESIA'
 export const ECCLESIA_DIRECTORY_PK = 'ECCLESIAS'
@@ -39,8 +38,6 @@ export const INDEX_META_PK = 'PEOPLE_INDEX#META'
 export const INDEX_META_SK = 'BUILD'
 /** Bump when a projection's shape changes, so the backfill rewrites it. */
 export const PROJECTION_SCHEMA_VERSION = 1
-
-export type OfficeKind = 'RB' | 'REP'
 
 export const peopleRosterPk = () => `PEOPLE#${PEOPLE_NAMESPACE}`
 export const ecclesiaPeoplePk = (ecclesiaId: string) => `ECCPEOPLE#${ecclesiaId}`
@@ -281,38 +278,13 @@ export function derivePersonProjections(input: {
     )
   }
 
-  if (profile.isInterEcclesiaRep) {
-    items.push(...officeRefPair('REP', ecclesiaId, personId))
-  }
-
   return items
 }
 
-/** Both directions of an office reference. Nothing but the link. */
-export function officeRefPair(office: OfficeKind, ecclesiaId: string, personId: string): ProjectionItem[] {
-  const base = { type: 'OFFICE_REF', schemaVersion: PROJECTION_SCHEMA_VERSION, office, ecclesiaId, personId }
-  return [
-    { pkey: ecclesiaIdPk(ecclesiaId), skey: `${OFFICE_PREFIX}${office}#${personId}`, ...base },
-    { pkey: `PERSON#${personId}`, skey: `${OFFICE_PREFIX}${ecclesiaId}#${office}`, ...base },
-  ]
-}
-
-/**
- * Does the PERSON writer own this existing item? It owns its partition's CARD,
- * NAMETOK# items and REP office refs (both halves). RB refs belong to the
- * ecclesia writer even when they sit in a person's partition.
- */
+/** Does the PERSON writer own this existing item? Its partition's CARD and NAMETOK# items. */
 export function isPersonWriterItem(item: { pkey: string; skey: string }): boolean {
-  if (item.pkey.startsWith('PERSON#')) {
-    if (item.skey === CARD_SK) return true
-    if (item.skey.startsWith(NAMETOK_PREFIX)) return true
-    if (item.skey.startsWith(OFFICE_PREFIX) && item.skey.endsWith('#REP')) return true
-    return false
-  }
-  if (item.pkey.startsWith(ECCLESIA_ID_PREFIX)) {
-    return item.skey.startsWith(`${OFFICE_PREFIX}REP#`)
-  }
-  return false
+  if (!item.pkey.startsWith('PERSON#')) return false
+  return item.skey === CARD_SK || item.skey.startsWith(NAMETOK_PREFIX)
 }
 
 // ---------------------------------------------------------------------------
@@ -339,26 +311,18 @@ export function deriveEcclesiaProjections(source: EcclesiaSource | null, ecclesi
     ecclesiaSkey: source.skey,
     gsi2pk: ECCLESIA_DIRECTORY_PK,
     gsi2sk: `${country}|${province}|${city}#${source.name}`,
-    // Sign-in RB check for an address that has no PersonRecord yet.
+    // Sign-in RB check for an address that has no PersonRecord yet. Indexes
+    // the LEGACY copied `recordingBrotherEmail` until offices are migrated
+    // (the office's own email is indexed by officeRepository).
     gsi1pk: rbEmail ? rbEmailPk(rbEmail) : undefined,
     gsi1sk: rbEmail ? ECCLESIA_ALIAS_SK : undefined,
   }) as ProjectionItem
-  const items: ProjectionItem[] = [alias]
-  if (source.recordingBrotherPersonId) {
-    items.push(...officeRefPair('RB', ecclesiaId, source.recordingBrotherPersonId))
-  }
-  return items
+  return [alias]
 }
 
-/** Does the ECCLESIA writer own this existing item? */
+/** Does the ECCLESIA writer own this existing item? Only the alias/directory entry (never an OFFICE#). */
 export function isEcclesiaWriterItem(item: { pkey: string; skey: string }): boolean {
-  if (item.pkey.startsWith(ECCLESIA_ID_PREFIX)) {
-    return item.skey === ECCLESIA_ALIAS_SK || item.skey.startsWith(`${OFFICE_PREFIX}RB#`)
-  }
-  if (item.pkey.startsWith('PERSON#')) {
-    return item.skey.startsWith(OFFICE_PREFIX) && item.skey.endsWith('#RB')
-  }
-  return false
+  return item.pkey.startsWith(ECCLESIA_ID_PREFIX) && item.skey === ECCLESIA_ALIAS_SK
 }
 
 /**

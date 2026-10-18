@@ -3,7 +3,8 @@
  *
  * Writes ONLY derived projection items (see
  * `packages/app/provider/dynamodb/people-index/keys.ts`):
- *   PERSON#<id> / CARD, NAMETOK#…, OFFICE#…      ECCLESIA_ID#<id> / ECCLESIA, OFFICE#…
+ *   PERSON#<id> / CARD, NAMETOK#…      ECCLESIA_ID#<id> / ECCLESIA
+ *   (never an OFFICE# item: offices are source data, written by officeRepository)
  *   PEOPLE_INDEX#META / BUILD (the "index is built" marker readers wait for)
  * It never writes a PROFILE / EMAIL# / PHONE# / ECCLESIA item: every write goes
  * through the same writer the app uses (`refreshPersonProjections`,
@@ -81,9 +82,7 @@ async function main() {
     if (k.pkey === idx.INDEX_META_PK) return 'marker'
     if (k.skey === idx.CARD_SK) return 'card'
     if (k.skey.startsWith(idx.NAMETOK_PREFIX)) return 'nameToken'
-    if (k.skey === idx.ECCLESIA_ALIAS_SK) return 'ecclesiaDirectory'
-    if (k.skey.includes('RB')) return 'officeRB'
-    return 'officeREP'
+    return 'ecclesiaDirectory'
   }
   type Tally = Record<string, { put: number; delete: number }>
   const tally = (t: Tally, kind: string, field: 'put' | 'delete') => {

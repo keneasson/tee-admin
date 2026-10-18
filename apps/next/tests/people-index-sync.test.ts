@@ -21,8 +21,6 @@ import { sharedFake as fake } from './fixtures/fake-dynamo'
 import { PersonRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import {
   clearEcclesiaIdCache,
-  getEcclesiaOffices,
-  getOfficesHeldBy,
   getPeopleCards,
   listEcclesiaDirectory,
   listPeopleCards,
@@ -46,7 +44,7 @@ const repo = new PersonRepository()
 const projectionKeys = (pkey: string) =>
   fake
     .items()
-    .filter((i) => i.pkey === pkey && (i.skey === 'CARD' || i.skey.startsWith('NAMETOK#') || i.skey.startsWith('OFFICE#')))
+    .filter((i) => i.pkey === pkey && (i.skey === 'CARD' || i.skey.startsWith('NAMETOK#')))
     .map((i) => i.skey)
     .sort()
 
@@ -112,24 +110,6 @@ describe('person projections follow every person write', () => {
     expect(await listPeopleCards()).toEqual([])
   })
 
-  it('REP office references move with the person and vanish when cleared', async () => {
-    await seedEcclesia('Cambridge Ecclesia', 'Cambridge')
-    await seedEcclesia('Guelph Ecclesia', 'Guelph')
-    const p = await repo.create({ email: 'r@x.org', firstName: 'Rae', lastName: 'Po', ecclesia: 'Cambridge Ecclesia' })
-
-    await repo.setInterEcclesiaRep(p.personId, true)
-    expect(await getEcclesiaOffices('cambridge-ecclesia', 'REP')).toEqual([expect.objectContaining({ personId: p.personId })])
-    expect(await getOfficesHeldBy(p.personId)).toEqual([expect.objectContaining({ office: 'REP', ecclesiaId: 'cambridge-ecclesia' })])
-
-    await repo.updatePerson(p.personId, { ecclesia: 'Guelph Ecclesia' })
-    expect(await getEcclesiaOffices('cambridge-ecclesia')).toEqual([])
-    expect(await getEcclesiaOffices('guelph-ecclesia', 'REP')).toHaveLength(1)
-
-    await repo.setInterEcclesiaRep(p.personId, false)
-    expect(await getEcclesiaOffices('guelph-ecclesia')).toEqual([])
-    expect(await getOfficesHeldBy(p.personId)).toEqual([])
-  })
-
   it('never writes a source item, and a re-run is a no-op', async () => {
     const p = await repo.create({ email: 'd@x.org', firstName: 'Di', lastName: 'Al', ecclesia: 'Elsewhere' })
     const sourceBefore = fake.items().filter((i) => ['PROFILE'].includes(i.skey) || i.skey.startsWith('EMAIL#'))
@@ -175,39 +155,25 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect(dir).toEqual([expect.objectContaining({ ecclesiaId: 'old-name', name: 'New Name', ecclesiaSkey: 'Barrie#New Name' })])
   })
 
-  it('RB assignment writes both office halves and the sign-in email entry; clearing removes them', async () => {
+  it('sign-in RB lookup: legacy unless the flag is on and the index is built; then office inbox, then legacy field', async () => {
     await seedEcclesia()
-    const rb = await repo.create({ email: 'rb@x.org', firstName: 'Rob', lastName: 'Bee', ecclesia: 'Toronto East Ecclesia' })
-    await updateEcclesiaFields('Toronto East Ecclesia', {
-      recordingBrotherPersonId: rb.personId,
-      recordingBrotherEmail: 'office@x.org',
-      recordingBrotherName: 'Rob Bee',
-    })
-    expect(await getEcclesiaOffices('toronto-east-ecclesia', 'RB')).toEqual([expect.objectContaining({ personId: rb.personId })])
-    expect(await getOfficesHeldBy(rb.personId)).toEqual([expect.objectContaining({ office: 'RB' })])
+    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherEmail: 'legacy-rb@x.org' })
+    expect(fake.items().filter((i) => i.skey.startsWith('OFFICE#'))).toEqual([])
 
-    // A person write never removes the ecclesia-owned RB reference.
-    await repo.updatePerson(rb.personId, { firstName: 'Robert' })
-    expect(await getOfficesHeldBy(rb.personId)).toHaveLength(1)
-
-    // Sign-in lookup: legacy unless the flag is on and the index is built.
     await writeIndexMarker({})
     fake.calls.length = 0
     flagState.signin = true
-    expect((await findRecordingBrotherEcclesia('Office@x.org'))?.name).toBe('Toronto East Ecclesia')
+    expect((await findRecordingBrotherEcclesia('Legacy-RB@x.org'))?.name).toBe('Toronto East Ecclesia')
     expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
 
-    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherPersonId: '', recordingBrotherEmail: '', recordingBrotherName: '' })
-    expect(await getEcclesiaOffices('toronto-east-ecclesia')).toEqual([])
-    expect(await getOfficesHeldBy(rb.personId)).toEqual([])
-    expect(await findRecordingBrotherEcclesia('office@x.org')).toBeNull()
+    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherEmail: '' })
+    expect(await findRecordingBrotherEcclesia('legacy-rb@x.org')).toBeNull()
   })
 
-  it('delete removes the alias and RB references', async () => {
+  it('delete removes the alias projection', async () => {
     await seedEcclesia()
-    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherPersonId: 'p-rb' })
     await deleteEcclesia('Toronto East Ecclesia')
-    expect(fake.items().filter((i) => i.pkey.startsWith('ECCLESIA_ID#') || i.skey.startsWith('OFFICE#'))).toEqual([])
+    expect(fake.items().filter((i) => i.pkey.startsWith('ECCLESIA_ID#'))).toEqual([])
   })
 })
 

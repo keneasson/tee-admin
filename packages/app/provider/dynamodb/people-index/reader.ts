@@ -10,14 +10,12 @@
 import { BatchGetCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
 import {
-  type OfficeKind,
   type PersonCard,
   CARD_SK,
   ECCLESIA_ALIAS_SK,
   ECCLESIA_DIRECTORY_PK,
   INDEX_META_PK,
   INDEX_META_SK,
-  OFFICE_PREFIX,
   ecclesiaIdPk,
   ecclesiaPeoplePk,
   nameTokens,
@@ -203,30 +201,6 @@ export async function getEcclesiaById(ecclesiaId: string): Promise<EcclesiaDirec
     new GetCommand({ TableName: TABLE, Key: { pkey: ecclesiaIdPk(ecclesiaId), skey: ECCLESIA_ALIAS_SK } })
   )
   return (result?.Item as EcclesiaDirectoryEntry) || null
-}
-
-export interface OfficeRef {
-  office: OfficeKind
-  ecclesiaId: string
-  personId: string
-}
-
-/** Pattern 8 / 12: who holds each office of an ecclesia (BatchGet the cards for names). */
-export async function getEcclesiaOffices(ecclesiaId: string, office?: OfficeKind): Promise<OfficeRef[]> {
-  return queryAll<OfficeRef>({
-    TableName: TABLE,
-    KeyConditionExpression: 'pkey = :pk AND begins_with(skey, :sk)',
-    ExpressionAttributeValues: { ':pk': ecclesiaIdPk(ecclesiaId), ':sk': `${OFFICE_PREFIX}${office ? `${office}#` : ''}` },
-  })
-}
-
-/** Pattern 11: the offices a person holds. */
-export async function getOfficesHeldBy(personId: string): Promise<OfficeRef[]> {
-  return queryAll<OfficeRef>({
-    TableName: TABLE,
-    KeyConditionExpression: 'pkey = :pk AND begins_with(skey, :sk)',
-    ExpressionAttributeValues: { ':pk': `PERSON#${personId}`, ':sk': OFFICE_PREFIX },
-  })
 }
 
 /**

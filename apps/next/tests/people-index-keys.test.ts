@@ -80,23 +80,7 @@ describe('people-index keys', () => {
     )
   })
 
-  it('writes REP office references (both directions) only for a rep', () => {
-    const none = derivePersonProjections({ profile, emails: [], phones: [], ecclesiaId: 'e1' })
-    expect(none.some((i) => i.skey.startsWith('OFFICE#'))).toBe(false)
-    const rep = derivePersonProjections({
-      profile: { ...profile, isInterEcclesiaRep: true },
-      emails: [],
-      phones: [],
-      ecclesiaId: 'e1',
-    })
-    const refs = rep.filter((i) => i.type === 'OFFICE_REF').map((i) => [i.pkey, i.skey])
-    expect(refs).toEqual([
-      ['ECCLESIA_ID#e1', 'OFFICE#REP#p1'],
-      ['PERSON#p1', 'OFFICE#e1#REP'],
-    ])
-  })
-
-  it('derives the ecclesia alias/directory entry and the RB office reference', () => {
+  it('derives the ecclesia alias/directory entry — and never an office', () => {
     const items = deriveEcclesiaProjections(
       {
         pkey: 'ECCLESIA#CA|ON',
@@ -120,10 +104,13 @@ describe('people-index keys', () => {
       gsi1pk: 'RBEMAIL#rb@example.org',
       gsi1sk: 'ECCLESIA',
     })
-    expect(items.slice(1).map((i) => [i.pkey, i.skey])).toEqual([
-      ['ECCLESIA_ID#toronto-east-ecclesia', 'OFFICE#RB#p9'],
-      ['PERSON#p9', 'OFFICE#toronto-east-ecclesia#RB'],
-    ])
+    expect(items).toHaveLength(1)
+    // Offices are source entities, not projections of a person flag.
+    expect(
+      derivePersonProjections({ profile: { ...profile, isInterEcclesiaRep: true }, emails: [], phones: [], ecclesiaId: 'e' }).some(
+        (i) => i.skey.startsWith('OFFICE#')
+      )
+    ).toBe(false)
     // No RB email → no sign-in index entry.
     const bare = deriveEcclesiaProjections({ pkey: 'ECCLESIA#CA|ON', skey: 'X#X', name: 'X' }, 'x')
     expect(bare[0].gsi1pk).toBeUndefined()
@@ -137,16 +124,14 @@ describe('people-index keys', () => {
       { pkey: 'PERSON#p1', skey: 'TOKEN#otp#1' },
       { pkey: 'ECCLESIA#CA|ON', skey: 'Toronto#Toronto East Ecclesia' },
       { pkey: 'USER#a@b.c', skey: 'USER' },
+      { pkey: 'ECCLESIA_ID#e', skey: 'OFFICE#treasurer' },
     ]) {
       expect(isProjectionKey(source)).toBe(false)
     }
     for (const proj of [
       { pkey: 'PERSON#p1', skey: 'CARD' },
       { pkey: 'PERSON#p1', skey: 'NAMETOK#zoe' },
-      { pkey: 'PERSON#p1', skey: 'OFFICE#e#REP' },
-      { pkey: 'PERSON#p1', skey: 'OFFICE#e#RB' },
       { pkey: 'ECCLESIA_ID#e', skey: 'ECCLESIA' },
-      { pkey: 'ECCLESIA_ID#e', skey: 'OFFICE#RB#p1' },
       { pkey: 'PEOPLE_INDEX#META', skey: 'BUILD' },
     ]) {
       expect(isProjectionKey(proj)).toBe(true)

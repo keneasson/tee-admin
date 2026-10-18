@@ -14,7 +14,7 @@ Changes in this file flag code modifications that require **matching manual upda
 ### Prod data — people-index backfill for #275 (run AFTER this deploys), then the sign-in flag
 - **Date**: 2026-10-17
 - **Branch**: `feat/people-access-patterns`
-- **Code change**: new derived projection items on `tee-admin` (person `CARD`, `NAMETOK#…`, `OFFICE#…`; `ECCLESIA_ID#<id>` directory/alias + office refs). `PersonRepository` and `locations.ts` keep them in sync on every write. Readers (`/api/people`, `/api/people/guests`, the ecclesia list/picker, `/api/people/typeahead`) switch to them **only once the backfill marker `PEOPLE_INDEX#META/BUILD` exists**; before that they keep the legacy Scans.
+- **Code change**: new derived projection items on `tee-admin` (person `CARD`, `NAMETOK#…`; `ECCLESIA_ID#<id>` directory/alias). Also a new OFFICE source entity (`ECCLESIA_ID#<id> / OFFICE#<role>`, `officeRepository`); no office data is migrated yet. `PersonRepository` and `locations.ts` keep them in sync on every write. Readers (`/api/people`, `/api/people/guests`, the ecclesia list/picker, `/api/people/typeahead`) switch to them **only once the backfill marker `PEOPLE_INDEX#META/BUILD` exists**; before that they keep the legacy Scans.
 - **External action** (after the merge to `main` has deployed to prod):
   1. `npx tsx scripts/rebuild-people-projections.ts` (dry run; counts only).
   2. `npx tsx scripts/rebuild-people-projections.ts --apply --after-deploy` — backs up PERSON#/ECCLESIA/ECCLESIA_ID# to `s3://tee-admin-backups/backups/<date>-people-index-backfill/`, writes only projection items, re-verifies (0 differences), then writes the marker.

@@ -27,14 +27,12 @@ import {
   ECCLESIA_ALIAS_SK,
   INDEX_META_PK,
   INDEX_META_SK,
-  OFFICE_PREFIX,
   PROJECTION_SCHEMA_VERSION,
   deriveEcclesiaProjections,
   derivePersonProjections,
   diffProjections,
   ecclesiaIdOf,
   ecclesiaIdPk,
-  isEcclesiaWriterItem,
   isPersonWriterItem,
   isProjectionKey,
   slugifyEcclesia,
@@ -144,11 +142,6 @@ export async function refreshPersonProjections(
   const phones = partition.filter((i) => i.skey.startsWith('PHONE#')) as unknown as PhoneSource[]
 
   const existing = partition.filter(isPersonWriterItem)
-  // The ECCLESIA-side half of each REP reference this person holds (or held):
-  // read it rather than assume it, so a half-written pair is repaired.
-  const repInverse = existing.filter((i) => i.skey.startsWith(OFFICE_PREFIX))
-  const ecclesiaIds = new Set(repInverse.map((i) => i.ecclesiaId as string))
-
   const ecclesiaId = await resolveEcclesiaId(profile?.ecclesia)
   const desired = derivePersonProjections({
     profile: profile ? { ...profile, personId: profile.personId || personId } : null,
@@ -156,12 +149,6 @@ export async function refreshPersonProjections(
     phones,
     ecclesiaId,
   })
-  if (profile?.isInterEcclesiaRep) ecclesiaIds.add(ecclesiaId)
-
-  for (const eid of ecclesiaIds) {
-    const forward = await getItem(ecclesiaIdPk(eid), `${OFFICE_PREFIX}REP#${personId}`)
-    if (forward) existing.push(forward)
-  }
 
   const diff = diffProjections(existing, desired)
   if (!opts.dryRun) await applyProjectionDiff(diff)
@@ -178,18 +165,9 @@ export interface EcclesiaRefreshResult extends ProjectionDiff {
   collision?: { ecclesiaPkey: string; ecclesiaSkey: string }
 }
 
-async function existingEcclesiaWriterItems(ecclesiaId: string, extraRbPersonIds: string[] = []) {
-  const own = (await queryPartition(ecclesiaIdPk(ecclesiaId))).filter(isEcclesiaWriterItem)
-  const rbPersonIds = new Set<string>(extraRbPersonIds)
-  for (const i of own) {
-    if (i.skey.startsWith(`${OFFICE_PREFIX}RB#`)) rbPersonIds.add(i.personId as string)
-  }
-  const items = [...own]
-  for (const pid of rbPersonIds) {
-    const inverse = await getItem(`PERSON#${pid}`, `${OFFICE_PREFIX}${ecclesiaId}#RB`)
-    if (inverse) items.push(inverse)
-  }
-  return items
+async function existingEcclesiaWriterItems(ecclesiaId: string) {
+  const alias = await getItem(ecclesiaIdPk(ecclesiaId), ECCLESIA_ALIAS_SK)
+  return alias ? [alias] : []
 }
 
 /** Re-derive one ecclesia's projections from its ECCLESIA item. */
@@ -222,15 +200,15 @@ export async function refreshEcclesiaProjections(
   }
 
   const desired = deriveEcclesiaProjections(source, ecclesiaId)
-  const newRb = source.recordingBrotherPersonId ? [source.recordingBrotherPersonId] : []
-  const existing = await existingEcclesiaWriterItems(ecclesiaId, newRb)
+  const existing = await existingEcclesiaWriterItems(ecclesiaId)
   const diff = diffProjections(existing, desired)
   if (!opts.dryRun) await applyProjectionDiff(diff)
   return { ecclesiaId, ...diff }
 }
 
 /**
- * Remove an ecclesia's projections after its ECCLESIA item is deleted. Only
+ * Remove an ecclesia's projections after its ECCLESIA item is deleted. Its
+ * OFFICE# items are source data and are left alone. Only
  * when the alias still points at the deleted item — a rename has already
  * re-pointed it at the new one.
  */

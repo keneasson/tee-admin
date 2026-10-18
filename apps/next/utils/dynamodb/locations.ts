@@ -4,6 +4,7 @@ import { getAwsDbConfig } from '../email/sesClient'
 import {
   ecclesiaIdOf,
   findEcclesiaByRecordingBrotherEmail,
+  getEcclesiaById,
   getEcclesiaItems,
   listEcclesiaDirectory,
   peopleIndexReady,
@@ -12,6 +13,7 @@ import {
   removeEcclesiaProjections,
   slugifyEcclesia,
 } from '@my/app/provider/dynamodb/people-index'
+import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
@@ -797,6 +799,17 @@ export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise
  * instead of a Scan. Only used once the index is ready.
  */
 export async function getEcclesiaByRecordingBrotherEmailIndexed(email: string): Promise<EcclesiaData | null> {
+  // 1. The Recording Brother OFFICE's own inbox (the office model, #58).
+  const offices = (await officeRepository.findOfficesByEmail(email)).filter(
+    (o) => o.role === OFFICE_ROLES.RECORDING_BROTHER
+  )
+  for (const office of offices.sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))) {
+    const entry = await getEcclesiaById(office.ecclesiaId)
+    if (!entry) continue
+    const found = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
+    if (found.Item) return mapItemToEcclesia(found.Item)
+  }
+  // 2. Until offices are migrated: the legacy copied `recordingBrotherEmail`.
   const entry = await findEcclesiaByRecordingBrotherEmail(email)
   if (!entry) return null
   const result = await client.get({
