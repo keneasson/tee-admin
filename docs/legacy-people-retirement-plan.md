@@ -1,12 +1,68 @@
-# Retiring the legacy people stores
+# People, offices and mailing lists: requirements
 
-Epic #270 · Decision: [ADR-0006](adr/0006-one-source-of-truth-for-people.md) · Audit date: 2026-10-17 (read-only)
+Epic #270 · Decision: [ADR-0006](adr/0006-one-source-of-truth-for-people.md) · Written 2026-10-17
 
-> This repo is public. This document holds **counts and person ids only**. The per-person review sheet, which contains PII, is stored at `s3://tee-admin-backups/backups/2026-10-17-legacy-people-audit/`:
-> - `reconciliation.html`
-> - `reconciliation.json`
-> - raw exports of every store that was read
-> - the scripts that produced them
+> This repo is public. This document holds **counts and person ids only**. Per-person review data (PII) lives in the private `tee-admin-backups` bucket and the owner's private review page.
+
+This is the **single requirements document** for this work. It replaces the separate issues listed in §0.5. Work is finished when every requirement in §0.2 meets its acceptance check and §0.4 holds. Anything not listed in §0.2 is out of scope (§0.3). A new finding goes in §0.3 as one line, **not** into a new issue, PR or agent, unless it is a live security or data-loss emergency.
+
+## 0.1 Goal
+
+One source of truth for **people**, **ecclesias and their offices**, and **mailing-list subscriptions**. Every page, email and widget reads from those objects, or from a projection rebuilt only from them. The legacy stores, the code that reads them, and the migration tooling are deleted.
+
+## 0.2 Requirements and acceptance checks
+
+| # | Requirement | Done when |
+|---|---|---|
+| R1 | **People data reconciled.** The owner-confirmed review page is applied: missing spouses created, couples linked, household address/phone/email shared, stale addresses dropped, deceased recorded, blank twins merged, "name unknown" subscribed readers created as people. Backup first. Writes go only through `personRecords` repository methods. | Audit re-run: 0 unapplied confirmed items; 0 blank twins; every explicitly opted-in SES address maps to a person. |
+| R2 | **Household sign-in.** People sharing an email can each sign in ("who's signing in?" after the code is verified). The session carries `personId`. | The owner signs in as himself through a shared-address flow on his own account. No email-keyed lookup decides identity. |
+| R3 | **Ecclesias and offices.** One record per ecclesia (duplicates merged; missing ones created) with a stable id. Each has a Recording Brother office and zero or more Rep offices. An office holds its own email/phone/address and a reference to its current holder (nullable). `isRecordingBrother` / `isInterEcclesiaRep` are derived from offices. Copied RB name/email fields are deleted. Assignments come from the owner's confirmed review page. | Every ecclesia shows an RB office. Inter-ecclesia sends reach the same addresses as before cutover, verified by a diff. RB detection at sign-in reads offices. No office is a nameless person. |
+| R4 | **Email Lists on people.** The page reads only person records. Subscription status uses the same rule as sending (explicit opt-in only). SES drift is shown, never silently "fixed". (PR #279) | Desmond and Radica show as two people sharing one address. No legacy-directory card exists. |
+| R5 | **Mailing lists in-house.** Subscriptions live in the registry (`LIST#` / `SUB#` per person, #182). The `sesTopicPreferences` field is retired. Every subscribe/unsubscribe writes the registry. List sends resolve recipients from the registry, filtered by the SES suppression list. SES topics stop being a source. | Backfill applied; parity diff empty for all 7 lists; one test-list send through the registry; flag on; SES topic writers removed. |
+| R6 | **Smart widgets supported (data and API only).** A post stores a person or ecclesia id. A server endpoint returns that person's contact card, or the ecclesia's location and offices, redacted per viewer tier (ADR-0005), in one batch read. | Endpoint tests per tier: anon gets the floor; member gets email and phone per the person's privacy; ecclesia gets location plus RB/Rep links. No Scan on the request path. |
+| R7 | **Every reader moved.** Password sign-in, registration, verify and reset; email-keyed privacy, relationships and requests; RB detection; the Sheets people lookup. All read person or office records. | A CI grep gate fails on any legacy-store read. Owner-account sign-in test for each method. |
+| R8 | **Legacy deleted.** Code: legacy repositories, routes, scripts, Pages Router email/contact routes, migration tools. Data: `DIRECTORY#MEMBERS`, legacy `USER#` people items, copied ecclesia RB fields, committed subscriber files (with history purge, #78). Final backup first. | A scan shows 0 legacy items. The grep gate passes. `yarn smoke:prod` passes. |
+
+## 0.3 Out of scope ("Not now")
+
+Not part of this work. Each is one line here, not an issue.
+
+- Widget **UI** in the editor (CMS slices #221 / #263 / #256). This work only provides the data and endpoint (R6).
+- `List-Unsubscribe` one-click header.
+- Trust weighting / community verification of contact details.
+- Multi-tenant newsletters for other ecclesias (#26).
+- Rotted test files (#244) and the dead `apps/next` lint (#216), except where a file this work touches must pass.
+
+## 0.4 Definition of done
+
+1. Every R1–R8 acceptance check holds in production.
+2. Every PR for this work is merged; no open branch, draft or `wip` issue remains for it.
+3. The issues in §0.5 are closed with a one-line pointer to this document.
+4. The owner has been sent a short done-vs-left report.
+
+## 0.5 Issues this document replaces
+
+These issues are folded into epic #270 and closed when their requirement is done:
+
+| Issue | Folded into |
+|---|---|
+| #267 | R1, R4 |
+| #268 | R2 |
+| #276 | R4 |
+| #280, #58 (office part) | R3 |
+| #182 | R5 |
+| #129 | R1, R7 |
+| #238 | R7 (cache invalidated on every person write) |
+
+## 0.6 Order and owner inputs
+
+R4 and R6 can proceed now. R3 and R1 need the owner's confirmed review page. R5 needs R1, because every subscriber needs a person. R2 is needed before email-keyed records move (R7). R8 comes last.
+
+The owner's only remaining inputs are the review-page answers, plus approval of this document.
+
+---
+
+The sections below are the original audit inventory and technical design, kept as reference. Where they conflict with §0, §0 wins.
 
 ## 1. Store inventory
 
@@ -199,7 +255,7 @@ Each phase ends with its own verification. No phase starts until the previous on
 ### Phase 2: move every reader (Email Lists first)
 0. **Access patterns first** (§7): add the new key items and sparse index entries (name tokens, OFFICE references, the ecclesia directory entry, the contact CARD, gsi2 on contact sub-items). Backfill them with a rebuild script that reads only PersonRecords and ECCLESIA items. Then replace each request-path Scan with its §7 Query. Every later step builds on these patterns.
 1. **Email Lists:** rebuild search and list on `listByEcclesia` and the §7 typeahead, plus `getEmails`. Do not use `listAll`, because it is a Scan. with SES topics and suppression shown as read-only status. Merge, migrate, reorder and archive call `personRepository`. Delete the `tee-schedules` branches.
-2. **Subscriptions:** every topic change (public subscribe, the preferences page, Email Lists) writes PersonRecord `sesTopicPreferences` first. The cron, or a synchronous projection call, pushes it to SES. Remove the SES-only writers.
+2. **Subscriptions:** superseded by R5. Every subscription change writes the mailing-list registry (`SUB#`), not `sesTopicPreferences`, which is retired.
 3. **Auth:** move password sign-in, registration, verify and reset onto the PersonRecord credential methods. Do this behind a feature flag. Include a one-time copy of the 7 legacy password hashes; all 7 map to a PersonRecord. Remove the broken Sheets lookup.
 4. **Email-keyed per-person data:** move privacy, relationships, connections, edit and contact requests, and preferences to `PERSON#<id>` sub-items, with a one-time copy.
 5. **Recording Brother detection and reply-to:** read the `OFFICE#` references (§7, patterns 8 and 11). The copied ECCLESIA name and email fields become an rb-service-only projection until Phase 4 deletes them.
