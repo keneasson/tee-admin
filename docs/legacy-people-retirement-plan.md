@@ -197,11 +197,12 @@ Each phase ends with its own verification. No phase starts until the previous on
 **Verify:** re-run the audit scripts. Expected: 0 MISSING_ON_PERSON with an approved target, 0 twins, 0 GSI1 PROFILE collisions apart from approved households. Every SES subscribed address maps to a PersonRecord, or has been opted out by owner decision.
 
 ### Phase 2: move every reader (Email Lists first)
-1. **Email Lists:** rebuild search and list on `listAll`/`searchByName` plus `getEmails`, with SES topics and suppression shown as read-only status. Merge, migrate, reorder and archive call `personRepository`. Delete the `tee-schedules` branches.
+0. **Access patterns first** (§7): add the new key items and sparse index entries (name tokens, OFFICE references, the ecclesia directory entry, the contact CARD, gsi2 on contact sub-items). Backfill them with a rebuild script that reads only PersonRecords and ECCLESIA items. Then replace each request-path Scan with its §7 Query. Every later step builds on these patterns.
+1. **Email Lists:** rebuild search and list on `listByEcclesia` and the §7 typeahead, plus `getEmails`. Do not use `listAll`, because it is a Scan. with SES topics and suppression shown as read-only status. Merge, migrate, reorder and archive call `personRepository`. Delete the `tee-schedules` branches.
 2. **Subscriptions:** every topic change (public subscribe, the preferences page, Email Lists) writes PersonRecord `sesTopicPreferences` first. The cron, or a synchronous projection call, pushes it to SES. Remove the SES-only writers.
 3. **Auth:** move password sign-in, registration, verify and reset onto the PersonRecord credential methods. Do this behind a feature flag. Include a one-time copy of the 7 legacy password hashes; all 7 map to a PersonRecord. Remove the broken Sheets lookup.
 4. **Email-keyed per-person data:** move privacy, relationships, connections, edit and contact requests, and preferences to `PERSON#<id>` sub-items, with a one-time copy.
-5. **Recording Brother detection and reply-to:** read PersonRecord `isRecordingBrother`. The ECCLESIA fields stay as an rb-service-only projection.
+5. **Recording Brother detection and reply-to:** read the `OFFICE#` references (§7, patterns 8 and 11). The copied ECCLESIA name and email fields become an rb-service-only projection until Phase 4 deletes them.
 6. **List sends:** switch `emailSend` to `resolveListRecipients` (PersonRecord) once parity is shown.
 
 **Verify:**
@@ -234,3 +235,116 @@ Remember the CLAUDE.md warning: contact-list edits are destructive, so back up f
 | **Unauthenticated send route** | `pages/api/email/[reason].ts` | Add auth in Phase 2, or delete in Phase 3 |
 | **Households** | A shared address on two people breaks email-keyed identity. | #268 (personId in the session) is a prerequisite for moving email-keyed records |
 | **PII** | The audit artifacts contain PII. | Stored only in the private bucket; this doc and the issues hold counts and ids only |
+
+## 6. Entities and smart widgets
+
+The cleanup must support the unified editor's smart-profile widgets: CMS Slice 7 #221 (name → live contact link), #263 (warn when the audience is wider than the contact's privacy) and #256 (scoped access requests). Both widgets render from the **two source entities**, through ADR-0005's server-side, tier-based projection.
+
+| Entity | Source item | What it owns |
+|---|---|---|
+| **Person** | `PERSON#<personId>` (PROFILE plus sub-items) | name, emails, phones, addresses, privacy, family links, subscriptions, credentials |
+| **Ecclesia / Organization** | `ECCLESIA#<country\|prov city>` / `<city>#<name>` (Organization item later, ADR-0001) | name, location and venue, service times, offices |
+| **Office** (Recording Brother, Inter-Ecclesia Rep, office contact) | a **reference**: `ECCLESIA#… / OFFICE#<office>#<personId>`, plus its inverse `PERSON#<id> / OFFICE#<ecclesiaKey>#<office>` | nothing but the link. The name and email are read from the Person. |
+
+**Smart contact** ("contact <a member> for details"):
+- The post stores `{ personId }` only.
+- At render, the server resolves the person, then applies the person's per-field privacy and the reader's tier:
+  - Anonymous readers get the first-name floor plus "sign in to view contact details".
+  - Members get email and phone, wherever the person's privacy allows it.
+  - An escalation action (#256) appears wherever privacy withholds something.
+- #263's audience-versus-privacy warning reads the same CARD (pattern 10).
+
+**Smart place** ("at the Mississauga West ecclesia"):
+- The post stores the ecclesia key only.
+- Readers get the ecclesia's name, location and venue, and its service times (`resolveServiceTime`, with seasonal schedules and occurrence overrides).
+- Office links resolve each `OFFICE#` reference to a Person and render as a smart contact. That gives "Recording Brother: <smart contact>".
+
+**Snapshots to remove:**
+- the registration block `contactEmail` / `contactPhone` (`packages/app/types/post.ts:257-258`)
+- event `registration.contactEmail/Phone` (`packages/app/types/events.ts:106-107`)
+- the ECCLESIA `recordingBrotherName/Email`
+- RB_NOM `nomineeName/Email`
+
+Each is replaced by an id reference.
+
+## 7. Access patterns (single `tee-admin` table)
+
+**Current table.** On-demand billing. Four GSIs (`gsi1`–`gsi4`), **all `ProjectionType: ALL`**. Keys are `pkey`/`skey`, kept for compatibility (CLAUDE.md).
+
+**Rules:**
+- No Scan on any request path. Crons may Scan only when a pattern below does not cover them, and must say so.
+- "New" entries reuse the existing GSIs by overloading their key prefixes, so no new GSI is needed. Every new index entry is **sparse**: only the items that carry the attributes appear in it.
+
+| # | Pattern | Key condition / index | Op | Today | Change needed |
+|---|---|---|---|---|---|
+| 1 | Person by id | `pkey=PERSON#<id>`, `skey=PROFILE`. The whole person is `Query pkey=PERSON#<id>`. | GetItem / Query | **Exists** (`getById`, `person-repository.ts:123`) | — |
+| 2 | Person by any email (sign-in) | `gsi1`: `gsi1pk=EMAIL#<addr>`, `begins_with(gsi1sk,'PERSON')`. PROFILE has `gsi1sk=PERSON`; secondaries have `PERSON#<id>`. | Query | **Exists** (`getByEmail` :142, `getAllPersonsByEmail` :167) | Shared household addresses return more than one person, so this becomes the chooser input (#268). Fix the twins (§3). |
+| 3 | Typeahead by name (smart-contact picker) | Today: `gsi3`: `gsi3pk=NAME#<last>`, `begins_with(gsi3sk,'<first>')`. **New:** name-token items `PERSON#<id> / NAMETOK#<token>` with `gsi3pk=NAMEPFX#<tenant>#<first 2 letters>` and `gsi3sk=<token>#<personId>`, `begins_with(gsi3sk,'<typed>')`. | Query | **Partial**: only works after an exact last name. Cannot serve a partial name such as "Jo Sm…", or a prefix of either name. | **New sparse token items on gsi3.** The person writer writes 2–3 small items per person. Optionally project the display name, then BatchGet the CARD (pattern 10) for the top hits. |
+| 4 | People by ecclesia (directory, Email Lists) | `gsi2`: `gsi2pk=ECCLESIA#<name>`, `gsi2sk=<last>#<first>#<id>` | Query | **Exists** (`listByEcclesia` :204), but the request paths Scan: `/api/people` → `listAll` (`people/route.ts:94`, repo :1126-1130) and `getAllPhonesByPerson` (`people/route.ts:104`, repo :1104-1108). | Replace both Scans with this Query. Put `gsi2pk/gsi2sk` on the PHONE#, EMAIL# and ADDRESS# sub-items too, so one Query returns each person's item collection. Key `gsi2pk` by a stable ecclesia id, not the display name, so a rename cannot orphan people. "Everyone" means iterating pattern 9, or a tenant-wide key. |
+| 5 | People by list/topic (audiences) | `gsi1`: `gsi1pk=LISTSUB#<listId>`, `gsi1sk=<email>` on `PERSON#<id> / SUB#<listId>#<emailId>` | Query | **Exists** (`mailing-list-repository.ts:193-199`) but **not used by sends**. Sends call SES `ListContacts` (`email-send.tsx:161-176`). The SES sync cron Scans (`cron/sync-ses-contacts/route.ts:72`). | Sends and the SES projection both read this Query. SES is rebuilt from it. |
+| 6 | Household / family members of a person | **New:** `PERSON#<id> / REL#<type>#<otherId>`, written in both directions in one transaction. `Query pkey=PERSON#<id>, begins_with(skey,'REL#')`. | Query | Email-keyed: `USER#<email> / RELATIONSHIP#<email>#<type>` (`relationship-repository.ts:46-60`) | Move into the person partition. The rows come back in the same Query as pattern 1. |
+| 7 | Ecclesia by id / name | `pkey`/`skey` GetItem when the key is known. `gsi1`: `gsi1pk=ECCLESIA#<name>` Query by name. | GetItem / Query | **Exists** (`getEcclesiaByName`, `locations.ts:304`) | The key embeds location and name, so there is **no stable short id or slug**. Add an alias item `ECCLESIA_ID#<slug> / ECCLESIA` pointing to the key, or adopt the key pair as the id that posts store. |
+| 8 | Ecclesia offices → person | **New:** `Query pkey=ECCLESIA#…, begins_with(skey,'OFFICE#')`, then BatchGet the person CARDs | Query + BatchGet | Copied fields `recordingBrotherName/Email`; 5 of the 12 ecclesias with RB fields carry `recordingBrotherPersonId` | **New OFFICE# reference items.** rb-service is the only writer. |
+| 9 | All ecclesias (place picker) | **New sparse entry** on each ECCLESIA item: `gsi2pk=ECCLESIAS` (or `ECCLESIAS#<country>`), `gsi2sk=<country>\|<prov>\|<city>#<name>`. Filter by country or province with `begins_with`. | Query | **Scan**: `locations.ts:346` (`getAllEcclesiasWithCache`), `:403` (by country), `:465` (`getAllEcclesia`) | Replace all three. Cache the result: a small, slow-changing set. |
+| 10 | Render a post's smart references | `BatchGetItem` over `PERSON#<id> / CARD` and the ECCLESIA keys (≤100 keys per call) | BatchGet | **Partial**: there is no CARD. Contact details live on separate PHONE#/EMAIL# items. | **New `CARD` projection item** per person: display name, primary email, primary phone, privacy flags. One BatchGet renders every reference in a post. The server-side tier redaction (ADR-0005) runs on the result. |
+| 11 | Offices held by a person (sign-in RB check, permissions) | `Query pkey=PERSON#<id>, begins_with(skey,'OFFICE#')` | Query | **Scan**: `getEcclesiaByRecordingBrotherEmail` (`locations.ts:680-684`), called from auth (`auth.ts:134,256,341`) | Inverse OFFICE# items (pattern 8) |
+| 12 | Inter-ecclesia reps | Query on the `OFFICE#REP` references (pattern 8), or a sparse `gsi4pk=OFFICE#REP` | Query | **Scan**: `listInterEcclesiaReps` (repo :1146-1151) | An office reference, same as RB |
+| 13 | Person by Google id | sparse `gsi1pk=GOOGLE#<id>` on PROFILE | Query | **Scan**: `getByGoogleId` (repo :1382-1388; unused) | Add only if needed; otherwise delete |
+| 14 | Counts | `Select: COUNT` on pattern 4, or a counter item | Query | **Scan**: `count` (repo :1047-1052) | Replace |
+
+**What the current key design cannot serve without new items:**
+- name typeahead on a prefix of either name (pattern 3)
+- offices → person, and person → offices (patterns 8, 11, 12)
+- listing all ecclesias (pattern 9)
+- a single-call post render (pattern 10, no CARD)
+- a stable ecclesia id (pattern 7)
+- person-keyed family links (pattern 6)
+
+All of these can be served by overloading the existing GSIs with sparse entries or adding items in the source partitions. None needs a new GSI.
+
+## 8. Projections and their writers
+
+A projection is rebuilt from its source object and is **never written independently**. Each projection has exactly one writer:
+
+| Projection | Derived from | Only writer | Rebuild |
+|---|---|---|---|
+| `gsi1`/`gsi2`/`gsi3` key attributes on person items, NAMETOK# items, the CARD item | PersonRecord | `personRepository` (every mutating method updates them in the same `TransactWriteItems`) | `scripts/rebuild-person-projections` (to write): reads PERSON# partitions only |
+| REL# inverse rows | the forward REL# row | the `personRepository` relationship methods (transaction writes both directions) | from the forward rows |
+| ECCLESIA directory entry (pattern 9), ECCLESIA_ID# alias | ECCLESIA item | `locations.ts` create/update (to become an ecclesia repository) | from ECCLESIA items |
+| OFFICE# references (both directions) | the owner's or RB's office assignment | `rb-service` (and a future office service) | from the ECCLESIA side |
+| ECCLESIA `recordingBrotherName/Email` (until deleted) | OFFICE# + Person | `rb-service` only. `admin/ecclesias/route.ts:118-119` must stop writing them. | from OFFICE# |
+| SES `TEEAdmin` contacts and topics | PersonRecord EMAIL# + `SUB#` subscriptions | the `cron/sync-ses-contacts` projection (plus a synchronous push after a preference write) | full rebuild from pattern 5, **after a backup** (CLAUDE.md SES warning) |
+| `/api/people` cache | pattern 4 | in-memory cache filled by the people route | invalidated by **`personRepository` writes**, not per route. Moving `invalidatePeopleCache` (`apps/next/app/api/people/cache.ts:39`) behind the repository closes the class of bug in #238. |
+| `SEND#…/RECIPIENT#…`, `EXHORTER_HEADSUP#` | send events | the send path | an event log. Never read back as a people source. |
+
+## 9. Cost at scale (on-demand, ca-central-1)
+
+**Today:**
+- Table: about 2.2 MB, 8,160 items, 180 people, about 40 ecclesias.
+- Size: 63% of items are `SEND#…/RECIPIENT#` send logs, about 450 B each.
+- Typical item sizes: PROFILE about 0.5–0.8 KB, EMAIL# about 0.5 KB, PHONE# about 0.4 KB.
+
+**Cost model:**
+- An eventually consistent read costs 0.5 RRU per 4 KB. A write costs 1 WRU per 1 KB, **for the base item and for each GSI it projects into**.
+- Indicative prices: about $0.28 per million RRU and about $1.40 per million WRU. Check current pricing.
+
+**Read cost per page, in RRU.** "Cold" means a cache miss.
+
+| Page / operation | Today: Scan | 10× (about 1,800 people, 400 ecclesias, 22 MB) | 100× (about 18,000 people, 4,000 ecclesias, 220 MB) | With the §7 patterns |
+|---|---|---|---|---|
+| `/api/people` cold load: `listAll` + `getAllPhonesByPerson`, two full Scans | about 540 | about 5,400 | about 54,000 (about $0.015 per load). It grows with **send history**, not people. | One ecclesia of about 100 people: one gsi2 Query of the item collection, about 120 KB ≈ **15 RRU** at any scale |
+| Place picker: ecclesia Scan | about 270 | about 2,700 | about 27,000 | pattern 9 Query: 40 → 4,000 items × about 0.5 KB ≈ 3–250 RRU, cached |
+| Sign-in | GSI1 Query + GetItem, about 1 RRU | 1 | 1 | **plus** pattern 11 Query (≈0.5) instead of the RB Scan (about 270 → 27,000 per sign-in today) |
+| Post render with 5 smart references | — | — | — | one BatchGet of 5 CARDs + 1 ecclesia ≈ **3 RRU** |
+| Typeahead keystroke | — | — | — | one gsi3 Query of ≤20 small token items ≈ **0.5–1 RRU** |
+| Audience for a send (about 150 → 15,000 subscribers) | SES ListContacts (no DynamoDB) | — | — | pattern 5 Query: about 0.3 KB × N ≈ 12 → 1,200 RRU per send |
+
+**Choices that keep it cheap:**
+1. **No Scans on request paths.** At 100×, each remaining Scan costs as much as about 2,000 Query-backed page loads, and the cost keeps rising with every newsletter sent.
+2. **ProjectionType.** The existing GSIs are `ALL`, so every PROFILE write costs about 4× (base + gsi1 + gsi2 + gsi3).
+   - Do not add a GSI. Overload the existing ones with **sparse**, small items (NAMETOK#, OFFICE#, the directory entry), so the extra write cost is tiny and only the items that need indexing pay it.
+   - If a GSI is ever rebuilt, use `INCLUDE` with the display fields, or `KEYS_ONLY`, plus a BatchGet of CARDs.
+3. **BatchGetItem for rendering.** The CARD item makes a post's references one round trip of ≤100 keys, instead of one Query per person.
+4. **Caching tied to writes.** The people cache, the ecclesia list and CARDs are invalidated by the source repository's write path (#238), so caches can be long-lived without going stale.
+5. **Keep send logs out of people reads.** `SEND#/RECIPIENT#` already carries a TTL. Because person reads use keyed patterns, log growth never touches people cost.
+6. **Write volume stays small.** People change rarely. A full projection rebuild at 100× (18,000 people × about 6 items × about 4 index writes) costs about 430,000 WRU, roughly $0.60 per rebuild.

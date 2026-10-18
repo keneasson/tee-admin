@@ -39,6 +39,21 @@ The 2026-10-17 read-only audit found 17 people who exist only in legacy rows, 33
    4. **Old data deleted:** this happens after a final backup to the private `tee-admin-backups` bucket.
 
    A migration that stops after step 1 is **not done**, and must not be reported as done.
+6. **There are two source entities: Person and Ecclesia/Organization.**
+   - A **Person** is a PersonRecord.
+   - An **Ecclesia** or **Organization** is an `ECCLESIA#…` item, and later an Organization item (ADR-0001).
+   - An **office** is a *reference* from the ecclesia to a `personId`. Offices include Recording Brother, Inter-Ecclesia Rep and the office contact address.
+   - An office is never a copied name or email. The `recordingBrotherName` / `recordingBrotherEmail` fields on ECCLESIA items are the duplication this ADR retires. Until they are deleted, they are a display projection, and only rb-service may write them.
+7. **Smart widgets render from the source entities, never from snapshots.**
+   - A post stores the `personId` or `ecclesiaId` it references. It never stores the person's email or phone, or the ecclesia's address.
+   - Two widgets render from those ids through ADR-0005's server-side, tier-based projection:
+     - **Smart contact:** "contact <a member> for details". Anonymous readers get the first-name floor plus a sign-in action. Members get the person's email and phone, subject to that person's per-field privacy.
+     - **Smart place:** "at the Mississauga West ecclesia". Readers get the ecclesia's name and location, its service times, and office links such as who the Recording Brother is.
+   - Related editor work: CMS Slice 7 #221, #263, #256.
+8. **Every request-path read is a GetItem, Query or BatchGetItem against the single `tee-admin` table. Scans are not allowed on request paths.**
+   - The access patterns, keys and indexes are listed in `docs/legacy-people-retirement-plan.md` §7.
+   - Each index or projection has exactly one named writer, the source entity's repository. Each one can be rebuilt from the source.
+   - A new GSI is added only with ProjectionType `KEYS_ONLY` or `INCLUDE`, unless the plan justifies `ALL`. Sparse indexes are preferred.
 
 ## Consequences
 - The legacy-directory screens are deleted, not ported: Email Lists' merge/migrate actions and Directory Email Sync. Email Lists is rebuilt on PersonRecords, with SES topics and suppression layered on as read-only status.
@@ -46,6 +61,9 @@ The 2026-10-17 read-only audit found 17 people who exist only in legacy rows, 33
 - SES becomes a pure projection. Subscription changes are written to the PersonRecord, and the sync cron pushes them to SES. Direct SES-only writes (public subscribe, Email Lists edits, consolidate) are removed. Today the cron reverts those writes anyway.
 - Family links, privacy and the other email-keyed records need new `PERSON#` sub-items and a one-time move. That is planned work, not a side effect.
 - Short-term cost: several screens lose features until they are rebuilt. The owner prefers that to keeping a second source alive.
+- Smart widgets are cheap and always current. A post reference is a single key, so rendering a post's references takes one BatchGetItem. Changing a person's phone updates every post that mentions them, with no re-sync.
+- Several of today's request paths scan the whole table: `/api/people` → `listAll`, `getAllPhonesByPerson`, and the ecclesia picker. Each needs the replacement key pattern from the plan (§7) before it can scale.
+- The registration block still stores `contactEmail` / `contactPhone` as snapshots (`packages/app/types/post.ts:257-258`). They must become a `contactPerson.personId` reference resolved at render time.
 - Household modelling (a shared address held by two people) stays a PersonRecord concern (#267, #268). It is not a reason to keep a legacy household row.
 
 ## References
