@@ -22,7 +22,7 @@ import { verifyCredentialsUser, findCredentialsUserByEmail } from './dynamodb/cr
 import { personRepository, type GoogleOAuthProfile } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { verifyEcclesiaToken } from './email/ecclesia-token'
-import { findRecordingBrotherEcclesia } from './dynamodb/locations'
+import { findRecordingBrotherEcclesia, signInOfficeFlags } from './dynamodb/locations'
 
 // Feature flag for unified people system - uses PersonRecord instead of scan-based USER# lookups
 const USE_UNIFIED_PEOPLE = process.env.UNIFIED_PEOPLE_AUTH === 'true'
@@ -236,9 +236,11 @@ export const authOptions: NextAuthConfig = {
         try {
           const person = await personRepository.getByEmailForAuth(token.email as string)
           if (person) {
+            // RB / Rep designation: derived from offices once they are live (flagged)
+            const offices = await signInOfficeFlags(person, token.email as string)
             // Derive role: explicit role → memberStatus/isInterEcclesiaRep → keep existing
             const derivedRole = person.role
-              || (person.memberStatus === 'member' || person.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
+              || (person.memberStatus === 'member' || offices.isInterEcclesiaRep ? ROLES.MEMBER : undefined)
             if (derivedRole) {
               token.role = derivedRole
             }
@@ -250,7 +252,7 @@ export const authOptions: NextAuthConfig = {
               ;(token as JWT & { ecclesia?: string }).ecclesia = person.ecclesia
             }
             // RB is a designation, not a role — sync to JWT
-            token.isRecordingBrother = !!person.isRecordingBrother
+            token.isRecordingBrother = offices.isRecordingBrother
           } else if (!token.role) {
             // Only check RB fallback if we still have no role
             const rbEcclesia = await findRecordingBrotherEcclesia(token.email as string)

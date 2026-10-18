@@ -57,6 +57,32 @@ export const INTER_ECCLESIA_KINDS: readonly string[] = [OFFICE_ROLES.RECORDING_B
 
 export const repOfficeId = (slot: number) => `${OFFICE_ROLES.REP}#${slot}`
 
+/**
+ * Written once the owner-confirmed office assignments have been applied
+ * (`scripts/backfill-office-assignments.ts`). Until it exists, nothing derives
+ * person flags from offices: an empty office table must never demote a
+ * Recording Brother.
+ */
+export const OFFICES_ASSIGNED_MARKER = { pkey: 'OFFICES#META', skey: 'ASSIGNED' } as const
+
+/**
+ * Test accounts (plus-tagged `+hacker` addresses) are excluded from every
+ * office derivation: they never hold an office, never count as an office
+ * inbox, and never appear in an inter-ecclesia recipient list.
+ */
+export function isTestAccountEmail(email: string | null | undefined): boolean {
+  const local = (email || '').trim().toLowerCase().split('@')[0] || ''
+  return local.split('+').slice(1).some((tag) => tag.startsWith('hacker'))
+}
+
+export interface InterEcclesiaContact {
+  ecclesiaId: string
+  officeId: string
+  email: string | null
+  holderPersonId?: string
+  via: 'office' | 'holder' | 'none'
+}
+
 export interface OfficeTerm {
   personId: string
   from: string
@@ -136,6 +162,7 @@ export function parseOfficeId(officeId: string): { kind: string; slot?: number }
  * independently once offices are live.
  */
 export function deriveOfficeFlags(heldOffices: Array<Pick<OfficeRecord, 'kind' | 'ecclesiaId'>>) {
+  heldOffices = [...new Map(heldOffices.map((o) => [`${o.ecclesiaId}#${o.kind}`, o])).values()]
   const rb = heldOffices.filter((o) => o.kind === OFFICE_ROLES.RECORDING_BROTHER).map((o) => o.ecclesiaId)
   const rep = heldOffices.filter((o) => o.kind === OFFICE_ROLES.REP).map((o) => o.ecclesiaId)
   return {
@@ -185,9 +212,58 @@ export function applyHolderChange(office: OfficeRecord, personId: string | null,
   })
 }
 
+/**
+ * Pure: RB/Rep offices + their holders' cards → inter-ecclesia addresses.
+ * The office inbox wins; otherwise the holder's primary address. Test
+ * accounts never count.
+ */
+export function resolveInterEcclesiaContacts(
+  offices: OfficeRecord[],
+  cards: Map<string, Pick<PersonCard, 'personId' | 'primaryEmail'>>
+): InterEcclesiaContact[] {
+  return offices
+    .filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
+    .map((o) => {
+      const base = { ecclesiaId: o.ecclesiaId, officeId: o.role, holderPersonId: o.holderPersonId }
+      if (o.email && !isTestAccountEmail(o.email)) return { ...base, email: o.email, via: 'office' as const }
+      const holderEmail = o.holderPersonId ? cards.get(o.holderPersonId)?.primaryEmail : undefined
+      if (holderEmail && !isTestAccountEmail(holderEmail)) {
+        return { ...base, email: holderEmail.trim().toLowerCase(), via: 'holder' as const }
+      }
+      return { ...base, email: null, via: 'none' as const }
+    })
+}
+
+export interface RecipientDiff {
+  same: number
+  /** Addresses today's path reaches that the offices would not. */
+  onlyLegacy: string[]
+  /** Addresses the offices would reach that today's path does not. */
+  onlyOffices: string[]
+}
+
+/** Pure: compare two recipient address sets (case-insensitive; test accounts dropped from both). */
+export function diffRecipientAddresses(legacy: Iterable<string>, offices: Iterable<string>): RecipientDiff {
+  const norm = (xs: Iterable<string>) =>
+    new Set([...xs].map((e) => e.trim().toLowerCase()).filter((e) => e && !isTestAccountEmail(e)))
+  const a = norm(legacy)
+  const b = norm(offices)
+  return {
+    same: [...a].filter((e) => b.has(e)).length,
+    onlyLegacy: [...a].filter((e) => !b.has(e)).sort(),
+    onlyOffices: [...b].filter((e) => !a.has(e)).sort(),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Repository
 // ---------------------------------------------------------------------------
+
+let assignedCache: { value: boolean; expires: number } | null = null
+/** Test hook. */
+export function resetOfficesAssignedCache() {
+  assignedCache = null
+}
 
 export interface SaveOfficeInput {
   ecclesiaId: string
@@ -288,23 +364,50 @@ export class OfficeRepository {
 
   /**
    * Where inter-ecclesia email for this ecclesia goes: each RB/Rep office's own
-   * inbox, else its holder's primary address. Not yet wired to the send path
-   * (which keeps its current recipients until cutover).
+   * inbox, else its holder's primary address. Test accounts are skipped. Not
+   * wired to the send path: sends keep today's `isInterEcclesiaRep` recipients
+   * until the owner cuts over (prove parity with
+   * `scripts/diff-inter-ecclesia-recipients.ts`).
    */
-  async listInterEcclesiaContacts(ecclesiaId: string): Promise<Array<{ officeId: string; email: string | null; holderPersonId?: string; via: 'office' | 'holder' | 'none' }>> {
+  async listInterEcclesiaContacts(ecclesiaId: string): Promise<InterEcclesiaContact[]> {
     const offices = (await this.listOffices(ecclesiaId)).filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
-    const holderIds = offices.filter((o) => !o.email && o.holderPersonId).map((o) => o.holderPersonId as string)
+    const holderIds = offices.map((o) => o.holderPersonId).filter((id): id is string => !!id)
     const cards = holderIds.length
       ? await batchGetItems<PersonCard>(holderIds.map((id) => ({ pkey: `PERSON#${id}`, skey: CARD_SK })))
       : []
-    const byId = new Map(cards.map((c) => [c.personId, c]))
-    return offices.map((o) => {
-      if (o.email) return { officeId: o.role, email: o.email, holderPersonId: o.holderPersonId, via: 'office' as const }
-      const card = o.holderPersonId ? byId.get(o.holderPersonId) : undefined
-      return card?.primaryEmail
-        ? { officeId: o.role, email: card.primaryEmail, holderPersonId: o.holderPersonId, via: 'holder' as const }
-        : { officeId: o.role, email: null, holderPersonId: o.holderPersonId, via: 'none' as const }
-    })
+    return resolveInterEcclesiaContacts(offices, new Map(cards.map((c) => [c.personId, c])))
+  }
+
+  /** `listInterEcclesiaContacts` for many ecclesias (one Query each, one BatchGet per 100 holders). */
+  async listAllInterEcclesiaContacts(ecclesiaIds: string[]): Promise<InterEcclesiaContact[]> {
+    const offices = (await Promise.all([...new Set(ecclesiaIds)].map((id) => this.listOffices(id))))
+      .flat()
+      .filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
+    const holderIds = offices.map((o) => o.holderPersonId).filter((id): id is string => !!id)
+    const cards = holderIds.length
+      ? await batchGetItems<PersonCard>(holderIds.map((id) => ({ pkey: `PERSON#${id}`, skey: CARD_SK })))
+      : []
+    return resolveInterEcclesiaContacts(offices, new Map(cards.map((c) => [c.personId, c])))
+  }
+
+  /** True once the confirmed assignments are applied (`OFFICES_ASSIGNED_MARKER`). Cached for a minute. */
+  async officesAssigned(): Promise<boolean> {
+    if (assignedCache && assignedCache.expires > Date.now()) return assignedCache.value
+    const result = await docClient.send(new GetCommand({ TableName: TABLE, Key: { ...OFFICES_ASSIGNED_MARKER } }))
+    const value = !!result?.Item
+    assignedCache = { value, expires: Date.now() + 60_000 }
+    return value
+  }
+
+  /** Only the backfill script calls this, after a verified apply. */
+  async writeOfficesAssignedMarker(meta: Record<string, string | number>): Promise<void> {
+    await docClient.send(
+      new PutCommand({
+        TableName: TABLE,
+        Item: { ...OFFICES_ASSIGNED_MARKER, type: 'OFFICES_META', ...meta, writtenAt: new Date().toISOString() },
+      })
+    )
+    assignedCache = null
   }
 
   /** Change (or vacate, with null) the holder, recording the term. */

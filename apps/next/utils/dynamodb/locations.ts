@@ -13,7 +13,12 @@ import {
   removeEcclesiaProjections,
   slugifyEcclesia,
 } from '@my/app/provider/dynamodb/people-index'
-import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import {
+  deriveOfficeFlags,
+  isTestAccountEmail,
+  officeRepository,
+  OFFICE_ROLES,
+} from '@my/app/provider/dynamodb/repositories/office-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
@@ -801,7 +806,7 @@ export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise
 export async function getEcclesiaByRecordingBrotherEmailIndexed(email: string): Promise<EcclesiaData | null> {
   // 1. The Recording Brother OFFICE's own inbox (the office model, #58).
   const offices = (await officeRepository.findOfficesByEmail(email)).filter(
-    (o) => o.role === OFFICE_ROLES.RECORDING_BROTHER
+    (o) => o.kind === OFFICE_ROLES.RECORDING_BROTHER
   )
   for (const office of offices.sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))) {
     const entry = await getEcclesiaById(office.ecclesiaId)
@@ -838,6 +843,41 @@ export async function findRecordingBrotherEcclesia(email: string): Promise<Eccle
     console.error('people-index: indexed RB lookup failed; using legacy scan', error)
   }
   return getEcclesiaByRecordingBrotherEmail(email)
+}
+
+/**
+ * Sign-in's Recording Brother / Rep designation for a known person.
+ *
+ * Launch-dark, like `findRecordingBrotherEcclesia`: offices decide only when
+ * the `people_index_signin` flag is on for everyone AND the owner-confirmed
+ * assignments have been applied (the offices marker). Then the flags are
+ * DERIVED from the offices the person holds plus any office whose own inbox is
+ * the address they signed in with (whoever can read the inbox can sign in with
+ * it). Otherwise — or on any error — the stored person flags are used, as today.
+ */
+export async function signInOfficeFlags(
+  person: { personId: string; isRecordingBrother?: boolean; isInterEcclesiaRep?: boolean },
+  signInEmail: string
+): Promise<{ isRecordingBrother: boolean; isInterEcclesiaRep: boolean }> {
+  const legacy = { isRecordingBrother: !!person.isRecordingBrother, isInterEcclesiaRep: !!person.isInterEcclesiaRep }
+  try {
+    if (
+      !(await checkFeatureFlagFromDB(FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN, null)) ||
+      !(await officeRepository.officesAssigned())
+    ) {
+      return legacy
+    }
+    if (isTestAccountEmail(signInEmail)) return { isRecordingBrother: false, isInterEcclesiaRep: false }
+    const [held, byInbox] = await Promise.all([
+      officeRepository.listOfficesHeldBy(person.personId),
+      officeRepository.findOfficesByEmail(signInEmail),
+    ])
+    const { isRecordingBrother, isInterEcclesiaRep } = deriveOfficeFlags([...held, ...byInbox])
+    return { isRecordingBrother, isInterEcclesiaRep }
+  } catch (error) {
+    console.error('offices: sign-in office lookup failed; using stored person flags', error)
+    return legacy
+  }
 }
 
 // Initialization function to populate Canadian provinces
