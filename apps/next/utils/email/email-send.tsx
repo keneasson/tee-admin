@@ -3,6 +3,7 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
+import { resolveRegistryAudience } from '../mailing-lists/registry-send'
 import { chunkArray } from '../chunkArray'
 import {
   generateEcclesiaUpdateUrl,
@@ -226,15 +227,30 @@ export const emailSend = async function ({
     const listTopic = test === true ? 'testList' : (customList || senders[reason].contactList)
     const sesClient = getSesClient()
 
-    console.log('why test=false sends test', { test, listTopic })
-    const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
-    if (!contacts) {
-      return { sends: [], skips: [], campaignId }
-    }
+    // R5 per-list cutover: a list whose `sendFromRegistry` is on takes its
+    // recipients from the mailing-list registry. Null (not cut over, or any
+    // registry error) → the SES-topic path below, unchanged.
+    const registryAudience = await resolveRegistryAudience(listTopic)
 
-    const senderEmails = contacts
-      .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
-      .map((contact) => contact.EmailAddress as string)
+    let senderEmails: string[]
+    if (registryAudience) {
+      senderEmails = registryAudience.emails
+      console.log('[emailSend] recipients from registry', {
+        listTopic,
+        listId: registryAudience.listId,
+        stats: registryAudience.stats,
+      })
+    } else {
+      console.log('why test=false sends test', { test, listTopic })
+      const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
+      if (!contacts) {
+        return { sends: [], skips: [], campaignId }
+      }
+
+      senderEmails = contacts
+        .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
+        .map((contact) => contact.EmailAddress as string)
+    }
 
     // Universal one-click login (feature-flagged). Read globally with a null
     // session, so it is active only when the flag is set to 'everyone'. When

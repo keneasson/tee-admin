@@ -509,7 +509,7 @@ export interface PersonRecord extends BaseRecord {
   // Provenance — set when a record is auto-created from an external source
   // rather than by a person (e.g. a visiting speaker harvested from the
   // memorial schedule). Lets an admin trace/undo machine-created records.
-  source?: 'schedule-import'
+  source?: 'schedule-import' | 'mailing-list-backfill'
   sourceRef?: string                // Free-form ref to the origin, e.g. "visiting-speakers:{sheetId}"
 
   createdAt: string
@@ -909,9 +909,9 @@ export function isOrganizationRecord(record: any): record is OrganizationRecord 
 }
 
 // ===== MAILING LIST REGISTRY (multi-tenant, in-house subscriptions) =====
-// Phase 1 of moving mailing-list subscriptions IN-HOUSE (SES becomes a
-// suppression safety-net only). Nothing reads these yet — everything is gated
-// behind the MAILING_LIST_REGISTRY feature flag and changes NO send behaviour.
+// Mailing-list subscriptions live IN-HOUSE (R5). A list's sends read the
+// registry only once that list's `sendFromRegistry` is on; until then the SES
+// topic path is unchanged. SES topics stay as the final safety-net gate.
 //
 // IMPORTANT: subscriptions live in their OWN items (ListSubscriptionRecord),
 // NOT in PersonEmailRecord.sesTopicPreferences. The cron + existing email
@@ -934,35 +934,47 @@ export type ConsentCategory =
 // The scope a list is offered at. Scope ladder: ecclesia → region → continent → global.
 export type MailingListScope = 'ecclesia' | 'region' | 'continent' | 'global'
 
-// A tenant is an ecclesia OR an organization (ADR-0001) — keyed by ownerType + ownerName.
+// A tenant is an ecclesia OR an organization (ADR-0001) — keyed by ownerType + ownerId.
 export type MailingListOwnerType = 'ecclesia' | 'organization'
 
 // Mailing List Record — a subscribable list owned by a tenant, offered at a scope.
+// The owner is stored BY ID (the ecclesia's stable `ecclesiaId`, or the
+// organization's slug id), never by name: a rename must not orphan a list. The
+// display name ("Toronto East Newsletter") is DERIVED at read time from the
+// owner's current name plus `name` — it is never stored.
 // pkey: LIST#{listId}, skey: 'DETAILS'
-// GSI1 (list by tenant): gsi1pk = TENANT#{ownerType}#{ownerName}, gsi1sk = {scope}#{name}
-// GSI2 (list by scope):  gsi2pk = SCOPE#{scope}#{scopeValue},     gsi2sk = {ownerName}#{name}
+// GSI1 (list by tenant): gsi1pk = TENANT#{ownerType}#{ownerId}, gsi1sk = {scope}#{name}
+// GSI2 (list by scope):  gsi2pk = SCOPE#{scope}#{scopeValue},   gsi2sk = {ownerId}#{name}
+// GSI4 (every list):     gsi4pk = MAILING_LISTS,                gsi4sk = {ownerType}#{ownerId}#{name}
 export interface MailingListRecord extends BaseRecord {
   pkey: string           // LIST#{listId}
   skey: string           // 'DETAILS'
-  gsi1pk: string         // TENANT#{ownerType}#{ownerName}
+  gsi1pk: string         // TENANT#{ownerType}#{ownerId}
   gsi1sk: string         // {scope}#{name}
   gsi2pk: string         // SCOPE#{scope}#{scopeValue}
-  gsi2sk: string         // {ownerName}#{name}
+  gsi2sk: string         // {ownerId}#{name}
+  gsi4pk?: string        // MAILING_LISTS
+  gsi4sk?: string        // {ownerType}#{ownerId}#{name}
 
   listId: string         // uuid
   ownerType: MailingListOwnerType
-  ownerName: string
+  ownerId: string        // ecclesiaId (R3) or organization id
   scope: MailingListScope
-  scopeValue: string     // ecclesia name / region key / continent key / '' for global
+  // ecclesia scope → an ecclesiaId; region → region key; continent → continent
+  // key; global → ''.
+  scopeValue: string
   category: ConsentCategory
   key: string            // slug (e.g. 'newsletter')
-  name: string
+  name: string           // the list's own name, WITHOUT the owner ("Newsletter")
   description: string
   defaultOptIn: boolean
   status: 'active' | 'archived'
-  // LEGACY bridge: set ONLY on the 7 migrated Toronto East lists so the existing
-  // SES send path can keep routing them by topic. Omitted on every new list.
+  // LEGACY bridge: set ONLY on the 7 migrated Toronto East lists. It is the SES
+  // topic a send names as its final safety-net gate. Omitted on every new list.
   sesTopic?: string
+  // Per-list cutover. true → sends resolve recipients from the registry
+  // (LISTSUB#); absent/false → the unchanged SES-topic path. Default OFF.
+  sendFromRegistry?: boolean
   createdAt: string
 }
 

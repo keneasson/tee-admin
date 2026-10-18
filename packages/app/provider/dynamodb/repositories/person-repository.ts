@@ -31,7 +31,7 @@ export interface CreatePersonInput {
   provider?: 'google' | 'credentials'
   userId?: string
   // Provenance for machine-created records (e.g. schedule ingest).
-  source?: 'schedule-import'
+  source?: 'schedule-import' | 'mailing-list-backfill'
   sourceRef?: string
 }
 
