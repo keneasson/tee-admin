@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { listPeopleCards, peopleIndexReady } from '@my/app/provider/dynamodb/people-index'
 import { buildEmailListsOverview } from '@my/app/utils/email-lists-overview'
-import { listAllSesContacts, listSesTopics, listSuppressedAddresses } from '@/utils/email/ses-snapshot'
+import { getSubscriptionSource } from '@/utils/email/subscription-source'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,13 +32,14 @@ export async function GET() {
   }
 
   try {
-    const [cards, sesContacts, suppressed, topics] = await Promise.all([
-      listPeopleCards(),
-      listAllSesContacts(),
-      listSuppressedAddresses(),
-      listSesTopics(),
-    ])
-    const overview = buildEmailListsOverview({ cards, sesContacts, suppressed, topics })
+    const [cards, subs] = await Promise.all([listPeopleCards(), getSubscriptionSource().load()])
+    const overview = buildEmailListsOverview({
+      cards,
+      sesContacts: subs.subscribers,
+      suppressed: subs.suppressed,
+      topics: subs.topics,
+      subscriptionSource: subs.source,
+    })
     return NextResponse.json(overview, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Email Lists overview failed:', error)

@@ -23,6 +23,8 @@ vi.mock('@/utils/email/ses-snapshot', () => ({
   listSuppressedAddresses: h.suppressed,
   listSesTopics: h.topics,
 }))
+// The route reads subscriptions only through the subscription-source seam
+// (the real one, which wraps the mocked SES snapshot above).
 
 import { GET } from '../app/api/admin/email/search/route'
 
@@ -63,5 +65,7 @@ describe('GET /api/admin/email/search', () => {
     expect(body.people.map((p: any) => p.personId)).toEqual(['a', 'b'])
     expect(body.people.map((p: any) => p.emails[0].sharedWith)).toEqual([['b'], ['a']])
     expect(body.findings.sharedAddresses).toEqual([{ email: 'shared@x.org', personIds: ['a', 'b'] }])
+    expect(body.subscriptionSource).toBe('ses')
+    expect(body.people[0].emails[0].ses.topics).toEqual({ newsletter: true })
   })
 })

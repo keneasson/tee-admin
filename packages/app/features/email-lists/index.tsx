@@ -131,8 +131,9 @@ export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
           <Card bordered padding="$4" backgroundColor="$background">
             <YStack gap="$3">
               <Paragraph color="$gray11">
-                People come from the member records. SES status is read from SES and compared; this page never
-                changes SES. Fix a person on their profile.
+                People come from the member records. Subscriptions are read from{' '}
+                {overview?.subscriptionSource === 'registry' ? 'the mailing-list registry' : 'SES'} exactly as list sends
+                read them (explicit opt-ins only) and compared; this page changes nothing. Fix a person on their profile.
               </Paragraph>
               {overview ? (
                 <XStack gap="$4" flexWrap="wrap">

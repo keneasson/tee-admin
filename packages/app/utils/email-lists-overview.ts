@@ -123,6 +123,8 @@ export interface EmailListsFindings {
 
 export interface EmailListsOverview {
   generatedAt: string
+  /** Which subscription store the topic columns were read from ('ses' today; the in-house registry later). */
+  subscriptionSource: 'ses' | 'registry'
   topics: EmailListsTopic[]
   counts: {
     people: number
@@ -142,6 +144,7 @@ export function buildEmailListsOverview(input: {
   sesContacts: OverviewSesContactInput[]
   suppressed: Array<{ email: string; reason?: string }>
   topics: EmailListsTopic[]
+  subscriptionSource?: 'ses' | 'registry'
   now?: Date
 }): EmailListsOverview {
   const topicNames = input.topics.map((t) => t.name)
@@ -283,6 +286,7 @@ export function buildEmailListsOverview(input: {
 
   return {
     generatedAt: (input.now || new Date()).toISOString(),
+    subscriptionSource: input.subscriptionSource || 'ses',
     topics: input.topics,
     counts: {
       people: people.length,
