@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import { addContact, getContacts, updateContact } from '../../../utils/email/contact'
 import { CreateContactType, DirectoryType } from '@my/app/types'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
-import { requireAdminPagesApi } from '../../../utils/require-admin-pages-api'
 
 /**
  * Main API Endpoint for sending an Email for a Specific Reason
@@ -13,8 +12,6 @@ import { requireAdminPagesApi } from '../../../utils/require-admin-pages-api'
  * @param res NextApiResponse
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
-  if (!(await requireAdminPagesApi(req, res))) return
-
   try {
     /**
      * ***************************************
