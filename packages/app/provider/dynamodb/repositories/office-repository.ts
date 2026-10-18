@@ -1,7 +1,12 @@
 /**
  * OFFICES — a first-class SOURCE entity (#58, ADR-0006 §6, owner 2026-10-17).
  *
- * An office (Recording Brother, Treasurer, Inter-Ecclesia Rep, …) belongs to
+ * EVERY ecclesia has a Recording Brother office (`OFFICE#rb`) and zero or more
+ * Rep offices (`OFFICE#rep#<n>`). A Rep is an assistant to the Recording
+ * Brother; RB and Reps receive inter-ecclesia email. Other offices (e.g.
+ * `OFFICE#treasurer`) are allowed.
+ *
+ * An office belongs to
  * an ecclesia and owns its OWN contact channels — e.g. a role inbox such as
  * "treasurer@…" — plus a REFERENCE to the person who currently holds it.
  * The holder changes; the office's contact details do not.
@@ -13,7 +18,10 @@
  *     smart-component tiers (ADR-0005) — the office stores no name.
  *   - An office mailbox is NEVER modelled as a nameless PersonRecord.
  *
- * Item:   pkey ECCLESIA_ID#<ecclesiaId>   skey OFFICE#<role>
+ * Item:   pkey ECCLESIA_ID#<ecclesiaId>   skey OFFICE#<officeId>   (officeId: rb | rep#<n> | <slug>)
+ *
+ * `isRecordingBrother` / `isInterEcclesiaRep` are DERIVED from these holders
+ * (`deriveOfficeFlags`); the office writer never writes person flags.
  * Sparse index entries on the office item (only when present):
  *   gsi1  OFFICEHOLDER#<personId> / OFFICE#<ecclesiaId>#<role>   person → offices held (Query)
  *   gsi3  OFFICEMAIL#<email>      / OFFICE#<ecclesiaId>#<role>   office inbox → office (Query)
@@ -29,18 +37,25 @@ import { ecclesiaIdPk, foldName, type PersonCard, CARD_SK } from '../people-inde
 const TABLE = tableNames.admin
 export const OFFICE_SK_PREFIX = 'OFFICE#'
 
-/** Well-known roles. Any other slug is allowed (e.g. an organization's "president"). */
+/** Office kinds. Any other slug is allowed (e.g. an organization's "president"). */
 export const OFFICE_ROLES = {
-  RECORDING_BROTHER: 'recording-brother',
+  /** Exactly one per ecclesia: `OFFICE#rb`. */
+  RECORDING_BROTHER: 'rb',
+  /** Zero or more per ecclesia: `OFFICE#rep#<n>`. Assistant to the RB; receives inter-ecclesia email. */
+  REP: 'rep',
   TREASURER: 'treasurer',
-  INTER_ECCLESIA_REP: 'inter-ecclesia-rep',
 } as const
 
 export const OFFICE_TITLES: Record<string, string> = {
   [OFFICE_ROLES.RECORDING_BROTHER]: 'Recording Brother',
+  [OFFICE_ROLES.REP]: 'Rep',
   [OFFICE_ROLES.TREASURER]: 'Treasurer',
-  [OFFICE_ROLES.INTER_ECCLESIA_REP]: 'Inter-Ecclesia Representative',
 }
+
+/** Kinds whose offices receive inter-ecclesia email. */
+export const INTER_ECCLESIA_KINDS: readonly string[] = [OFFICE_ROLES.RECORDING_BROTHER, OFFICE_ROLES.REP]
+
+export const repOfficeId = (slot: number) => `${OFFICE_ROLES.REP}#${slot}`
 
 export interface OfficeTerm {
   personId: string
@@ -62,7 +77,12 @@ export interface OfficeRecord {
   skey: string
   type: 'OFFICE'
   ecclesiaId: string
+  /** The office id within its ecclesia: `rb`, `rep#2`, `treasurer`. */
   role: string
+  /** `rb`, `rep`, `treasurer`, … (the id without its slot). */
+  kind: string
+  /** Rep slot number. */
+  slot?: number
   title: string
   /** The office's own inbox (e.g. a role address). Optional: some offices have none. */
   email?: string
@@ -86,10 +106,44 @@ export interface OfficeRecord {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Canonical office id: a kind slug plus an optional `#<n>` slot.
+ * "Recording Brother" → `rb`; "rep#2" → `rep#2`. A Rep office must carry a slot.
+ */
 export function normalizeOfficeRole(role: string): string {
-  const slug = foldName(role).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  if (!slug) throw new Error('office role is required')
-  return slug
+  const [rawKind, rawSlot, ...extra] = (role || '').split('#')
+  if (extra.length > 0) throw new Error(`invalid office id "${role}"`)
+  let kind = foldName(rawKind).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  if (kind === 'recording-brother') kind = OFFICE_ROLES.RECORDING_BROTHER
+  if (!kind) throw new Error('office role is required')
+  if (rawSlot === undefined) {
+    if (kind === OFFICE_ROLES.REP) throw new Error('a Rep office needs a slot, e.g. "rep#1"')
+    return kind
+  }
+  const slot = Number(rawSlot)
+  if (!Number.isInteger(slot) || slot < 1) throw new Error(`invalid office slot in "${role}"`)
+  if (kind === OFFICE_ROLES.RECORDING_BROTHER) throw new Error('there is one Recording Brother office per ecclesia ("rb")')
+  return `${kind}#${slot}`
+}
+
+export function parseOfficeId(officeId: string): { kind: string; slot?: number } {
+  const [kind, slot] = normalizeOfficeRole(officeId).split('#')
+  return slot ? { kind, slot: Number(slot) } : { kind }
+}
+
+/**
+ * The person flags, DERIVED from the offices a person holds — never stored
+ * independently once offices are live.
+ */
+export function deriveOfficeFlags(heldOffices: Array<Pick<OfficeRecord, 'kind' | 'ecclesiaId'>>) {
+  const rb = heldOffices.filter((o) => o.kind === OFFICE_ROLES.RECORDING_BROTHER).map((o) => o.ecclesiaId)
+  const rep = heldOffices.filter((o) => o.kind === OFFICE_ROLES.REP).map((o) => o.ecclesiaId)
+  return {
+    isRecordingBrother: rb.length > 0,
+    isInterEcclesiaRep: rep.length > 0,
+    recordingBrotherOf: [...new Set(rb)].sort(),
+    repOf: [...new Set(rep)].sort(),
+  }
 }
 
 export const officeKey = (ecclesiaId: string, role: string) => ({
@@ -193,6 +247,7 @@ export class OfficeRepository {
   /** Create the office, or change its title / contact channels. Never touches the holder. */
   async saveOffice(input: SaveOfficeInput): Promise<OfficeRecord> {
     const role = normalizeOfficeRole(input.role)
+    const { kind, slot } = parseOfficeId(role)
     const now = new Date().toISOString()
     const current = await this.getOffice(input.ecclesiaId, role)
     const base: Omit<OfficeRecord, 'gsi1pk' | 'gsi1sk' | 'gsi3pk' | 'gsi3sk'> = current
@@ -202,7 +257,9 @@ export class OfficeRepository {
           type: 'OFFICE',
           ecclesiaId: input.ecclesiaId,
           role,
-          title: OFFICE_TITLES[role] || role,
+          kind,
+          slot,
+          title: OFFICE_TITLES[kind] ? `${OFFICE_TITLES[kind]}${slot && slot > 1 ? ` ${slot}` : ''}` : role,
           terms: [],
           createdAt: now,
           updatedAt: now,
@@ -215,6 +272,39 @@ export class OfficeRepository {
     if (input.phone !== undefined) next.phone = input.phone ? input.phone.trim() : undefined
     if (input.postalAddress !== undefined) next.postalAddress = input.postalAddress || undefined
     return this.write(withOfficeIndexes(next), current?.version)
+  }
+
+  /** The ecclesia's Recording Brother office, created (vacant, no channels) if missing. */
+  async ensureRecordingBrotherOffice(ecclesiaId: string): Promise<OfficeRecord> {
+    return (await this.getOffice(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER)) ||
+      this.saveOffice({ ecclesiaId, role: OFFICE_ROLES.RECORDING_BROTHER })
+  }
+
+  /** Add a Rep office in the next free slot. */
+  async addRepOffice(ecclesiaId: string, channels: Omit<SaveOfficeInput, 'ecclesiaId' | 'role'> = {}): Promise<OfficeRecord> {
+    const slots = (await this.listOffices(ecclesiaId)).filter((o) => o.kind === OFFICE_ROLES.REP).map((o) => o.slot || 0)
+    return this.saveOffice({ ...channels, ecclesiaId, role: repOfficeId(Math.max(0, ...slots) + 1) })
+  }
+
+  /**
+   * Where inter-ecclesia email for this ecclesia goes: each RB/Rep office's own
+   * inbox, else its holder's primary address. Not yet wired to the send path
+   * (which keeps its current recipients until cutover).
+   */
+  async listInterEcclesiaContacts(ecclesiaId: string): Promise<Array<{ officeId: string; email: string | null; holderPersonId?: string; via: 'office' | 'holder' | 'none' }>> {
+    const offices = (await this.listOffices(ecclesiaId)).filter((o) => INTER_ECCLESIA_KINDS.includes(o.kind))
+    const holderIds = offices.filter((o) => !o.email && o.holderPersonId).map((o) => o.holderPersonId as string)
+    const cards = holderIds.length
+      ? await batchGetItems<PersonCard>(holderIds.map((id) => ({ pkey: `PERSON#${id}`, skey: CARD_SK })))
+      : []
+    const byId = new Map(cards.map((c) => [c.personId, c]))
+    return offices.map((o) => {
+      if (o.email) return { officeId: o.role, email: o.email, holderPersonId: o.holderPersonId, via: 'office' as const }
+      const card = o.holderPersonId ? byId.get(o.holderPersonId) : undefined
+      return card?.primaryEmail
+        ? { officeId: o.role, email: card.primaryEmail, holderPersonId: o.holderPersonId, via: 'holder' as const }
+        : { officeId: o.role, email: null, holderPersonId: o.holderPersonId, via: 'none' as const }
+    })
   }
 
   /** Change (or vacate, with null) the holder, recording the term. */
