@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   getRows: vi.fn(),
   getByEmail: vi.fn(),
   setListSubscription: vi.fn(),
+  resolveSubscriber: vi.fn(),
 }))
 
 vi.mock('@/utils/auth', () => ({ auth: h.auth }))
@@ -59,6 +60,7 @@ vi.mock('@/utils/mailing-lists/owners', async (orig) => ({
 vi.mock('@/utils/mailing-lists/subscriptions', () => ({
   defaultSubscriptionDeps: vi.fn(async () => ({})),
   setListSubscription: h.setListSubscription,
+  resolveSubscriber: h.resolveSubscriber,
 }))
 
 import { GET, POST } from '../app/api/subscribe/route'
@@ -100,6 +102,7 @@ beforeEach(() => {
   h.getOffered.mockResolvedValue(LISTS)
   h.getRows.mockResolvedValue([])
   h.getByEmail.mockResolvedValue({ personId: 'p1', ecclesia: 'Toronto East Ecclesia' })
+  h.resolveSubscriber.mockResolvedValue({ personId: 'p1', emailId: 'e1', email: 'reader@example.org' })
   h.setListSubscription.mockResolvedValue('subscribed')
 })
 
@@ -162,6 +165,14 @@ describe('flag ON — lists', () => {
     ])
     const prefs = h.sesSend.mock.calls[0][0].input.TopicPreferences
     expect(prefs).toEqual([{ TopicName: 'newsletter', SubscriptionStatus: 'OPT_OUT' }])
+  })
+
+  it('POST with lists for an address no person holds changes nothing, SES included (409)', async () => {
+    h.resolveSubscriber.mockResolvedValue(null)
+    const res = await POST(postReq({ lists: { 'L-NEWS': false, 'L-NEW': true } }))
+    expect(res.status).toBe(409)
+    expect(h.sesSend).not.toHaveBeenCalled()
+    expect(h.setListSubscription).not.toHaveBeenCalled()
   })
 
   it('a token-only (recognized) caller still cannot save', async () => {

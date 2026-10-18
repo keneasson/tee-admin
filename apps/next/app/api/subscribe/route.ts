@@ -17,7 +17,7 @@ import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { listEcclesiasCached } from '@/utils/dynamodb/locations'
 import { buildListPreferences, planListSave, isSelfServe } from '@/utils/mailing-lists/preferences'
 import { ownerNamesFor, ownerNameOf } from '@/utils/mailing-lists/owners'
-import { defaultSubscriptionDeps, setListSubscription } from '@/utils/mailing-lists/subscriptions'
+import { defaultSubscriptionDeps, resolveSubscriber, setListSubscription } from '@/utils/mailing-lists/subscriptions'
 
 /** Serving-tenant brand, so the page reads as a clear entrypoint into tee-admin.com OR echadhub.org. */
 function tenantBrand(request: NextRequest) {
@@ -209,6 +209,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Registry choices need a person; check before any SES write so a save is
+    // never half-applied.
+    const deps = listChanges.length > 0 ? await defaultSubscriptionDeps() : null
+    if (deps && !(await resolveSubscriber(email, deps))) {
+      return NextResponse.json(
+        { error: 'We could not find your profile to save list choices. Please sign in again.' },
+        { status: 409 }
+      )
+    }
+
     // Reuse getContact() (null when not yet a contact) for the existing-prefs
     // read — no bespoke NotFoundException handling.
     const existing = await getContact(email)
@@ -243,8 +253,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Registry writes (every list, bridged or not).
-    if (listChanges.length > 0) {
-      const deps = await defaultSubscriptionDeps()
+    if (deps) {
       for (const change of listChanges) {
         const result = await setListSubscription(
           { listId: change.list.listId, email, subscribed: change.subscribed },
