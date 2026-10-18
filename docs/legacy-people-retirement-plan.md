@@ -49,14 +49,15 @@ These issues are folded into epic #270 and closed when their requirement is done
 | #267 | R1, R4 |
 | #268 | R2 |
 | #276 | R4 |
-| #280, #58 (office part) | R3 |
+| #280, #58 (office part), branch `feat/office-rb-rep-slots` (WIP: 1 type error, 2 stale tests) | R3 |
 | #182 | R5 |
 | #129 | R1, R7 |
 | #238 | R7 (cache invalidated on every person write) |
+| #275 (access patterns; code merged in #278, readers waiting on the projection backfill) | R6, R7 |
 
 ## 0.6 Order and owner inputs
 
-R4 and R6 can proceed now. R3 and R1 need the owner's confirmed review page. R5 needs R1, because every subscriber needs a person. R2 is needed before email-keyed records move (R7). R8 comes last.
+R4 and R6 can proceed now. Both start by applying the people-projection backfill from #278 (dry run: 180 CARD, 300 NAMETOK and 39 ecclesia directory items, no deletes). Readers stay on the legacy Scans until that backfill exists. Note that today's single-page `getAllEcclesia` Scan returns only 35 of the 39 ecclesias. R3 and R1 need the owner's confirmed review page. R5 needs R1, because every subscriber needs a person. R2 is needed before email-keyed records move (R7). R8 comes last.
 
 The owner's only remaining inputs are the review-page answers, plus approval of this document.
 
