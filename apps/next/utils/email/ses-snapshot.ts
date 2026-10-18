@@ -52,5 +52,5 @@ export async function listSuppressedAddresses(): Promise<Array<{ email: string; 
 
 export async function listSesTopics(): Promise<EmailListsTopic[]> {
   const { lists } = await getContactLists()
-  return lists.map((l) => ({ name: l.listName, displayName: l.displayName || l.listName }))
+  return lists.map((l) => ({ name: l.listName, displayName: l.displayName || l.listName, defaultOptIn: l.defaultOptIn }))
 }

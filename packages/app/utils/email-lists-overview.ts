@@ -40,6 +40,8 @@ export interface OverviewSesContactInput {
 export interface EmailListsTopic {
   name: string
   displayName: string
+  /** The topic's default. List sends IGNORE it (`UseDefaultIfPreferenceUnavailable: false`). */
+  defaultOptIn?: boolean
 }
 
 export interface EmailListsSesStatus {
@@ -58,6 +60,7 @@ export type EmailFlag =
   | 'not-in-ses'
   | 'ses-case-duplicate'
   | 'unsubscribed-all'
+  | 'ses-defaults-only'
 
 export interface EmailListsEmailRow {
   email: string
@@ -101,6 +104,12 @@ export interface EmailListsFindings {
   personEmailNotInSes: Array<{ email: string; personIds: string[] }>
   /** One address held by several people — expected for households; listed so it is visible. */
   sharedAddresses: Array<{ email: string; personIds: string[] }>
+  /**
+   * SES contacts with NO explicit topic preferences. They look subscribed via
+   * the topics' default OPT_IN, but list sends read explicit preferences only,
+   * so they receive nothing. `personIds` is empty when no person holds the address.
+   */
+  sesDefaultsOnly: Array<{ email: string; defaultTopics: string[]; personIds: string[] }>
 }
 
 export interface EmailListsOverview {
@@ -127,13 +136,18 @@ export function buildEmailListsOverview(input: {
   now?: Date
 }): EmailListsOverview {
   const topicNames = input.topics.map((t) => t.name)
+  const defaultOptInTopics = input.topics.filter((t) => t.defaultOptIn).map((t) => t.name).sort()
 
   // --- SES, folded by lower-cased address ---
-  const sesByAddress = new Map<string, { variants: string[]; unsubscribeAll: boolean; topics: Record<string, boolean> }>()
+  const sesByAddress = new Map<
+    string,
+    { variants: string[]; unsubscribeAll: boolean; topics: Record<string, boolean>; explicit: boolean }
+  >()
   for (const c of input.sesContacts) {
     const key = lower(c.email)
     if (!key) continue
-    const entry = sesByAddress.get(key) || { variants: [], unsubscribeAll: false, topics: {} }
+    const entry = sesByAddress.get(key) || { variants: [], unsubscribeAll: false, topics: {}, explicit: false }
+    entry.explicit = entry.explicit || Object.keys(c.topics || {}).length > 0
     entry.variants.push(c.email)
     // Several case variants: an address counts as opted in to a topic if ANY
     // variant is, because each variant receives that send.
@@ -162,6 +176,7 @@ export function buildEmailListsOverview(input: {
     suppressedButMarkedActive: [],
     personEmailNotInSes: [],
     sharedAddresses: [],
+    sesDefaultsOnly: [],
   }
 
   const people: EmailListsPersonRow[] = input.cards.map((card) => {
@@ -176,6 +191,7 @@ export function buildEmailListsOverview(input: {
       if (!ses && !archived) flags.push('not-in-ses')
       if (ses && ses.variants.length > 1) flags.push('ses-case-duplicate')
       if (ses?.unsubscribeAll) flags.push('unsubscribed-all')
+      if (ses && isDefaultsOnly(ses)) flags.push('ses-defaults-only')
       return {
         email: e.email,
         emailType: e.emailType,
@@ -230,6 +246,9 @@ export function buildEmailListsOverview(input: {
     if (notInSes.length > 0) findings.personEmailNotInSes.push({ email, personIds: notInSes.sort() })
   }
   for (const [email, ses] of sesByAddress) {
+    if (isDefaultsOnly(ses)) {
+      findings.sesDefaultsOnly.push({ email, defaultTopics: defaultOptInTopics, personIds: (holders.get(email) || []).slice().sort() })
+    }
     if (ses.variants.length > 1) findings.sesCaseDuplicates.push({ email, variants: ses.variants.slice().sort() })
     if (holders.has(email)) continue
     const optedIn = Object.entries(ses.topics).filter(([, v]) => v).map(([t]) => t)
@@ -238,6 +257,9 @@ export function buildEmailListsOverview(input: {
     } else {
       findings.sesUnsubscribedNoPerson++
     }
+  }
+  function isDefaultsOnly(ses: { explicit: boolean; unsubscribeAll: boolean }) {
+    return !ses.explicit && !ses.unsubscribeAll && defaultOptInTopics.length > 0
   }
   for (const list of Object.values(findings)) {
     if (Array.isArray(list)) (list as Array<{ email: string }>).sort((a, b) => a.email.localeCompare(b.email))

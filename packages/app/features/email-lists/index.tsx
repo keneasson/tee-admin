@@ -52,9 +52,10 @@ const FLAG_LABEL: Record<EmailFlag, string> = {
   'not-in-ses': 'Not in SES',
   'ses-case-duplicate': 'Duplicate SES contact (letter case)',
   'unsubscribed-all': 'Unsubscribed from all',
+  'ses-defaults-only': 'No explicit topic choices in SES — list sends skip it',
 }
 
-const WARNING_FLAGS: EmailFlag[] = ['suppressed-but-marked-active', 'not-in-ses', 'ses-case-duplicate']
+const WARNING_FLAGS: EmailFlag[] = ['suppressed-but-marked-active', 'not-in-ses', 'ses-case-duplicate', 'ses-defaults-only']
 
 export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
   const router = useRouter()
@@ -369,6 +370,24 @@ function FindingsPanel({
           ))}
         </FindingGroup>
         <FindingGroup
+          title="In SES with no explicit topic choices — list sends skip them"
+          note={`They look subscribed through the topic defaults (${overview.topics
+            .filter((t) => t.defaultOptIn)
+            .map((t) => t.displayName)
+            .join(', ')}), but sends use explicit choices only, so they receive nothing.`}
+          count={f.sesDefaultsOnly.length}
+        >
+          {f.sesDefaultsOnly.map((x) => (
+            <YStack key={x.email} gap="$1">
+              <Text fontSize="$3">
+                {x.email}
+                {x.personIds.length === 0 ? ' — no person holds this address' : ''}
+              </Text>
+              {x.personIds.length > 0 ? people(x.personIds) : null}
+            </YStack>
+          ))}
+        </FindingGroup>
+        <FindingGroup
           title="Suppressed by SES, but still marked active on the person"
           count={f.suppressedButMarkedActive.length}
         >
@@ -410,7 +429,7 @@ function FindingsPanel({
         </FindingGroup>
         {f.sesUnsubscribedNoPerson > 0 ? (
           <Text fontSize="$2" color="$gray11">
-            Also {f.sesUnsubscribedNoPerson} SES contacts with no person and no opt-ins (they receive nothing).
+            Also {f.sesUnsubscribedNoPerson} SES contacts with no person and no explicit opt-ins (they receive nothing).
           </Text>
         ) : null}
       </YStack>

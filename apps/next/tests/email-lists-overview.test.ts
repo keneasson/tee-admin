@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { buildEmailListsOverview, personMatches, type OverviewCardInput } from '@my/app/utils/email-lists-overview'
 
 const topics = [
-  { name: 'newsletter', displayName: 'Newsletter' },
-  { name: 'memorial', displayName: 'Memorial' },
+  { name: 'newsletter', displayName: 'Newsletter', defaultOptIn: true },
+  { name: 'memorial', displayName: 'Memorial', defaultOptIn: false },
 ]
 
 // A household: two people, one shared inbox (the #267 shape). Fake addresses.
@@ -47,6 +47,9 @@ function build() {
       { email: 'gone@example.org', topics: { newsletter: 'OPT_OUT' } },
       { email: 'Case@Example.org', topics: { memorial: 'OPT_IN' } },
       { email: 'case@example.org', topics: {} },
+      // No explicit preferences: "subscribed" only via the topic default.
+      { email: 'defaults@example.org', topics: {} },
+      { email: 'quit@example.org', topics: {}, unsubscribeAll: true },
     ],
     suppressed: [{ email: 'LOU@example.org', reason: 'BOUNCE' }],
     topics,
@@ -76,7 +79,7 @@ describe('Email Lists overview (PersonRecords only)', () => {
       { email: 'case@example.org', topics: ['memorial'], suppressed: undefined },
       { email: 'stranger@example.org', topics: ['newsletter'], suppressed: undefined },
     ])
-    expect(o.findings.sesUnsubscribedNoPerson).toBe(1)
+    expect(o.findings.sesUnsubscribedNoPerson).toBe(3)
   })
 
   it('reports letter-case duplicate SES contacts', () => {
@@ -98,6 +101,22 @@ describe('Email Lists overview (PersonRecords only)', () => {
     expect(work.personSesStatus).toBe('bounced')
     expect(work.flags).toEqual(['bounced-on-person'])
     expect(build().findings.personEmailNotInSes).toEqual([{ email: 'lou@example.org', personIds: ['p-loner'] }])
+  })
+
+  it('reports contacts subscribed only through topic defaults, which list sends skip', () => {
+    // The send path filters with UseDefaultIfPreferenceUnavailable: false.
+    expect(build().findings.sesDefaultsOnly).toEqual([
+      { email: 'defaults@example.org', defaultTopics: ['newsletter'], personIds: [] },
+    ])
+    const o = buildEmailListsOverview({
+      cards: [loner],
+      sesContacts: [{ email: 'lou@example.org', topics: {} }],
+      suppressed: [],
+      topics,
+    })
+    expect(o.findings.sesDefaultsOnly).toEqual([{ email: 'lou@example.org', defaultTopics: ['newsletter'], personIds: ['p-loner'] }])
+    expect(o.people[0].emails[0].flags).toContain('ses-defaults-only')
+    expect(o.people[0].findingCount).toBe(1)
   })
 
   it('filters by name, ecclesia or address', () => {
