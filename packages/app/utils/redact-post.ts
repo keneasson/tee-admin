@@ -186,6 +186,10 @@ function redactRegistration(
   channel: Channel,
   withheld: Withheld
 ): RegistrationBlock {
+  // A referenced contact was already shaped for this viewer at read
+  // (`resolvePostReferences`); report what it withheld. A `scope` gap is not
+  // something signing in fixes, so it does not raise the sign-in banner.
+  if (block.contactWithheld && block.contactWithheldReason !== 'scope') noteWithheld(withheld, 'contact')
   if (canRevealPii(viewer, channel)) return block
   // contact-class — drop email/phone; keep the public registration url + logistics.
   const { contactEmail: _e, contactPhone: _p, contactPerson, ...rest } = block
