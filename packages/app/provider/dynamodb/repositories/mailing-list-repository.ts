@@ -9,20 +9,22 @@ import type {
   ConsentCategory,
 } from '../types'
 
+/** gsi4 partition holding one sparse entry per list (the admin listing). */
+export const MAILING_LISTS_GSI4PK = 'MAILING_LISTS'
+
 /**
- * Repository for the multi-tenant mailing-list registry (Phase 1 of moving
- * subscriptions in-house). Two entity types share the `tee-admin` table:
+ * Repository for the mailing-list registry (R5: subscriptions in-house). Two
+ * entity types share the `tee-admin` table:
  *
  *  - MailingListRecord      pkey LIST#{listId}       skey DETAILS
  *  - ListSubscriptionRecord pkey PERSON#{personId}   skey SUB#{listId}#{emailId}
  *
- * GSIs used (all are existing, overloaded indexes on `tee-admin`; GSI keys are
- * per-item so different entity types coexist safely in the same index):
- *  - gsi1: lists by tenant (TENANT#…) AND subscriptions by list (LISTSUB#…)
- *  - gsi2: lists by scope  (SCOPE#…)
- *
- * Nothing in the send path or UI reads these yet — the whole feature is dark
- * behind the MAILING_LIST_REGISTRY flag.
+ * A list's owner is an ecclesia or organization BY ID. GSIs (existing,
+ * overloaded indexes; every entry is sparse):
+ *  - gsi1: lists by tenant (TENANT#{ownerType}#{ownerId}) AND subscriptions by
+ *          list (LISTSUB#{listId}, sort = email)
+ *  - gsi2: lists by scope  (SCOPE#{scope}#{scopeValue})
+ *  - gsi4: every list      (MAILING_LISTS)
  */
 export class MailingListRepository extends BaseRepository<MailingListRecord> {
   constructor() {
@@ -39,8 +41,8 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     return `LIST#${listId}`
   }
 
-  private tenantGsi1Pk(ownerType: MailingListOwnerType, ownerName: string): string {
-    return `TENANT#${ownerType}#${ownerName}`
+  private tenantGsi1Pk(ownerType: MailingListOwnerType, ownerId: string): string {
+    return `TENANT#${ownerType}#${ownerId}`
   }
 
   private scopeGsi2Pk(scope: MailingListScope, scopeValue: string): string {
@@ -51,11 +53,27 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     return `SUB#${listId}#${emailId}`
   }
 
+  /** Every page of a query (a list's audience must never be truncated at 1 MB). */
+  private async queryAll(
+    keyConditionExpression: string,
+    values: Record<string, any>,
+    indexName?: string
+  ): Promise<MailingListRecord[]> {
+    const items: MailingListRecord[] = []
+    let lastEvaluatedKey: Record<string, any> | undefined
+    do {
+      const page = await this.query(keyConditionExpression, values, { indexName, lastEvaluatedKey })
+      items.push(...page.items)
+      lastEvaluatedKey = page.lastEvaluatedKey
+    } while (lastEvaluatedKey)
+    return items
+  }
+
   // ===== LISTS =============================================================
 
   async createList(input: {
     ownerType: MailingListOwnerType
-    ownerName: string
+    ownerId: string
     scope: MailingListScope
     scopeValue: string
     category: ConsentCategory
@@ -67,19 +85,22 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     sesTopic?: string
     listId?: string // allow a caller-supplied id for deterministic seeding
   }): Promise<MailingListRecord> {
+    if (!input.ownerId) throw new Error('createList: ownerId is required')
     const listId = input.listId || uuidv4()
     const now = new Date().toISOString()
 
     const record: MailingListRecord = {
       pkey: this.listPk(listId),
       skey: 'DETAILS',
-      gsi1pk: this.tenantGsi1Pk(input.ownerType, input.ownerName),
+      gsi1pk: this.tenantGsi1Pk(input.ownerType, input.ownerId),
       gsi1sk: `${input.scope}#${input.name}`,
       gsi2pk: this.scopeGsi2Pk(input.scope, input.scopeValue),
-      gsi2sk: `${input.ownerName}#${input.name}`,
+      gsi2sk: `${input.ownerId}#${input.name}`,
+      gsi4pk: MAILING_LISTS_GSI4PK,
+      gsi4sk: `${input.ownerType}#${input.ownerId}#${input.name}`,
       listId,
       ownerType: input.ownerType,
-      ownerName: input.ownerName,
+      ownerId: input.ownerId,
       scope: input.scope,
       scopeValue: input.scopeValue,
       category: input.category,
@@ -104,29 +125,48 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
   }
 
   /** All lists owned by a tenant (active + archived), via GSI1. */
-  async listByTenant(
-    ownerType: MailingListOwnerType,
-    ownerName: string
-  ): Promise<MailingListRecord[]> {
-    const result = await this.query(
-      'gsi1pk = :gsi1pk',
-      { ':gsi1pk': this.tenantGsi1Pk(ownerType, ownerName) },
-      { indexName: 'gsi1' }
-    )
-    return result.items
+  async listByTenant(ownerType: MailingListOwnerType, ownerId: string): Promise<MailingListRecord[]> {
+    return this.queryAll('gsi1pk = :gsi1pk', { ':gsi1pk': this.tenantGsi1Pk(ownerType, ownerId) }, 'gsi1')
   }
 
   /** Active lists offered at a given scope, via GSI2. */
-  async listByScope(
-    scope: MailingListScope,
-    scopeValue: string
-  ): Promise<MailingListRecord[]> {
-    const result = await this.query(
+  async listByScope(scope: MailingListScope, scopeValue: string): Promise<MailingListRecord[]> {
+    const items = await this.queryAll(
       'gsi2pk = :gsi2pk',
       { ':gsi2pk': this.scopeGsi2Pk(scope, scopeValue) },
-      { indexName: 'gsi2' }
+      'gsi2'
     )
-    return result.items.filter((l) => l.status === 'active')
+    return items.filter((l) => l.status === 'active')
+  }
+
+  /** Every list (active + archived), via the sparse gsi4 entry. No Scan. */
+  async listAllLists(): Promise<MailingListRecord[]> {
+    return this.queryAll('gsi4pk = :pk', { ':pk': MAILING_LISTS_GSI4PK }, 'gsi4')
+  }
+
+  /**
+   * The ACTIVE list that carries a legacy SES topic bridge, or null. More than
+   * one active list claiming the same topic is a configuration error; it
+   * returns null so the caller keeps the unchanged SES path.
+   */
+  async findBySesTopic(sesTopic: string): Promise<MailingListRecord | null> {
+    const matches = (await this.listAllLists()).filter(
+      (l) => l.status === 'active' && l.sesTopic === sesTopic
+    )
+    if (matches.length !== 1) {
+      if (matches.length > 1) {
+        console.error(`mailing-lists: ${matches.length} active lists claim SES topic "${sesTopic}"`)
+      }
+      return null
+    }
+    return matches[0]
+  }
+
+  /** Per-list cutover switch (registry vs SES-topic recipients). */
+  async setSendFromRegistry(listId: string, on: boolean): Promise<MailingListRecord> {
+    return this.update(this.listPk(listId), 'DETAILS', {
+      sendFromRegistry: on,
+    } as Partial<MailingListRecord>)
   }
 
   async archiveList(listId: string): Promise<MailingListRecord> {
@@ -139,20 +179,19 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
    * Every active list OFFERED to a person, deduped by listId, across the scope
    * ladder ecclesia → region → continent → global.
    *
-   * `region` must be resolved by the caller (a PersonRecord carries no region,
-   * and ecclesia→region resolution lives in apps/next which packages/* cannot
-   * import). When region is omitted/unknown, region + continent scopes are
-   * skipped (ecclesia + global still apply). The continent is derived here from
-   * the region via getContinent.
+   * `ecclesiaId` is the person's ecclesia's stable id and `region` its region;
+   * both are resolved by the caller (packages/* cannot import the apps/next
+   * ecclesia helpers). A missing ecclesiaId skips the ecclesia rung; a missing or
+   * unknown region skips the region + continent rungs. Global always applies.
    */
   async getOfferedListsForPerson(
-    person: { ecclesia?: string | null },
+    person: { ecclesiaId?: string | null },
     region?: string | null
   ): Promise<MailingListRecord[]> {
     const queries: Array<Promise<MailingListRecord[]>> = []
 
-    if (person.ecclesia) {
-      queries.push(this.listByScope('ecclesia', person.ecclesia))
+    if (person.ecclesiaId) {
+      queries.push(this.listByScope('ecclesia', person.ecclesiaId))
     }
     if (region && isValidRegion(region)) {
       queries.push(this.listByScope('region', region))
@@ -225,25 +264,45 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     ) as unknown as Promise<ListSubscriptionRecord>
   }
 
+  /** Flip an existing subscription row (by its keys) to opt_in or opt_out. */
+  async setSubscriptionStatus(
+    row: Pick<ListSubscriptionRecord, 'pkey' | 'skey'>,
+    status: ListSubscriptionRecord['status']
+  ): Promise<ListSubscriptionRecord> {
+    return this.update(row.pkey, row.skey, {
+      status,
+      ...(status === 'opt_in' ? { subscribedAt: new Date().toISOString() } : {}),
+    } as unknown as Partial<MailingListRecord>) as unknown as Promise<ListSubscriptionRecord>
+  }
+
   /** All of a person's list subscriptions (opt_in + opt_out). */
   async getPersonSubscriptions(personId: string): Promise<ListSubscriptionRecord[]> {
-    const result = await this.query(
-      'pkey = :pk AND begins_with(skey, :skPrefix)',
-      { ':pk': `PERSON#${personId}`, ':skPrefix': 'SUB#' }
+    const items = await this.queryAll('pkey = :pk AND begins_with(skey, :skPrefix)', {
+      ':pk': `PERSON#${personId}`,
+      ':skPrefix': 'SUB#',
+    })
+    return items as unknown as ListSubscriptionRecord[]
+  }
+
+  /** Every row (opt_in + opt_out) for one address on one list, via GSI1. */
+  async getListSubscriptionsForEmail(listId: string, email: string): Promise<ListSubscriptionRecord[]> {
+    const items = await this.queryAll(
+      'gsi1pk = :gsi1pk AND gsi1sk = :email',
+      { ':gsi1pk': `LISTSUB#${listId}`, ':email': email.toLowerCase() },
+      'gsi1'
     )
-    return result.items as unknown as ListSubscriptionRecord[]
+    return items as unknown as ListSubscriptionRecord[]
+  }
+
+  /** Every row for a list (opt_in + opt_out), via GSI1. Used by backfill idempotency. */
+  async listAllSubscriptionRows(listId: string): Promise<ListSubscriptionRecord[]> {
+    const items = await this.queryAll('gsi1pk = :gsi1pk', { ':gsi1pk': `LISTSUB#${listId}` }, 'gsi1')
+    return items as unknown as ListSubscriptionRecord[]
   }
 
   /** Opted-in subscribers for a list, via GSI1 (send-path fan-out). */
   async listSubscribers(listId: string): Promise<ListSubscriptionRecord[]> {
-    const result = await this.query(
-      'gsi1pk = :gsi1pk',
-      { ':gsi1pk': `LISTSUB#${listId}` },
-      { indexName: 'gsi1' }
-    )
-    return (result.items as unknown as ListSubscriptionRecord[]).filter(
-      (s) => s.status === 'opt_in'
-    )
+    return (await this.listAllSubscriptionRows(listId)).filter((s) => s.status === 'opt_in')
   }
 }
 

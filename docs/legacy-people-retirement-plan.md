@@ -33,6 +33,9 @@ Not part of this work. Each is one line here, not an issue.
 - Multi-tenant newsletters for other ecclesias (#26).
 - Rotted test files (#244) and the dead `apps/next` lint (#216), except where a file this work touches must pass.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
+- Sending to a list with no SES topic (a list made on `/admin/email/mailing-lists`) from the send screens; only the 7 bridged Toronto East lists send today (R5 switchover PR).
+- Applying a list's `defaultOptIn` to new people; it is stored, nobody is subscribed automatically.
+- `cron/sync-ses-contacts` rewrites every contact's topics from the empty `sesTopicPreferences` (all OPT_OUT); it now fails closed without `CRON_SECRET`, and is deleted with the SES topic writers.
 
 ## 0.4 Definition of done
 

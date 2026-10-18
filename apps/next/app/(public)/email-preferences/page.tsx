@@ -23,6 +23,9 @@ import { Button } from '@my/ui'
 import { Check, Mail } from '@tamagui/lucide-icons'
 
 type Sub = { topic: string; label: string; subscribed: boolean }
+// R5 (flagged): every list offered to the person, grouped by owner.
+type ListPref = { listId: string; name: string; description: string; subscribed: boolean }
+type ListGroup = { ownerType: string; ownerId: string; ownerName: string; lists: ListPref[] }
 type Tenant = { id: string; publicName: string; senderDomain: string }
 type Data = {
   email: string | null // full address — present only when authenticated
@@ -30,6 +33,7 @@ type Data = {
   authenticated: boolean
   name: string | null
   subscriptions: Sub[]
+  listGroups?: ListGroup[] // present only when the mailing-list registry flag is on
   unsubscribedAll: boolean
   tenant: Tenant
 }
@@ -57,6 +61,7 @@ export default function SubscribePage() {
 
   const [data, setData] = useState<Data | null>(null)
   const [subs, setSubs] = useState<Record<string, boolean>>({})
+  const [listSubs, setListSubs] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -94,6 +99,11 @@ export default function SubscribePage() {
         if (cancelled) return
         setData(d)
         setSubs(Object.fromEntries(d.subscriptions.map((s) => [s.topic, s.subscribed])))
+        if (d.listGroups) {
+          setListSubs(
+            Object.fromEntries(d.listGroups.flatMap((g) => g.lists.map((l) => [l.listId, l.subscribed])))
+          )
+        }
       })
       .catch((e) => !cancelled && setError(e.message))
       .finally(() => !cancelled && setLoading(false))
@@ -113,7 +123,9 @@ export default function SubscribePage() {
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, subscriptions: subs }),
+        // Registry view saves per list (the API also updates each list's SES
+        // topic); the legacy view saves per topic.
+        body: JSON.stringify(data.listGroups ? { token, lists: listSubs } : { token, subscriptions: subs }),
       })
       if (!res.ok) throw new Error('Could not save your preferences. Please try again.')
       setSaved(true)
@@ -309,39 +321,85 @@ export default function SubscribePage() {
               </Paragraph>
             </YStack>
 
-            {/* Grouped by ecclesia/organization. For now every public list
-                belongs to Toronto East, so there's a single group. */}
-            <Text fontSize="$3" fontWeight="700">Toronto East Christadelphians</Text>
+            {data.listGroups ? (
+              /* Registry view: every list offered to this person, grouped by
+                 its ecclesia or organization. Read-only until confirmed. */
+              data.listGroups.length === 0 ? (
+                <Paragraph color="$textSecondary">There are no lists to choose from yet.</Paragraph>
+              ) : (
+                <YStack gap="$4" opacity={data.authenticated ? 1 : 0.6}>
+                  {data.listGroups.map((g) => (
+                    <YStack key={`${g.ownerType}#${g.ownerId}`} gap="$3">
+                      <Text fontSize="$3" fontWeight="700">{g.ownerName}</Text>
+                      {g.lists.map((l) => (
+                        <XStack key={l.listId} gap="$3" alignItems="flex-start">
+                          <Checkbox
+                            id={l.listId}
+                            checked={!!listSubs[l.listId]}
+                            disabled={!data.authenticated}
+                            onCheckedChange={(v) => setListSubs((cur) => ({ ...cur, [l.listId]: !!v }))}
+                            size="$5"
+                          >
+                            <Checkbox.Indicator>
+                              <Check />
+                            </Checkbox.Indicator>
+                          </Checkbox>
+                          <YStack
+                            flex={1}
+                            onPress={
+                              data.authenticated
+                                ? () => setListSubs((cur) => ({ ...cur, [l.listId]: !cur[l.listId] }))
+                                : undefined
+                            }
+                          >
+                            <Text>{l.name}</Text>
+                            {l.description ? (
+                              <Text fontSize="$2" color="$textSecondary">{l.description}</Text>
+                            ) : null}
+                          </YStack>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  ))}
+                </YStack>
+              )
+            ) : (
+              <>
+                {/* Grouped by ecclesia/organization. For now every public list
+                    belongs to Toronto East, so there's a single group. */}
+                <Text fontSize="$3" fontWeight="700">Toronto East Christadelphians</Text>
 
-            {/* Recognized (not confirmed) → the toggles are read-only. Changing
-                them is a protected action; confirm first (below). */}
-            <YStack gap="$3" opacity={data.authenticated ? 1 : 0.6}>
-              {data.subscriptions.map((s) => (
-                <XStack key={s.topic} gap="$3" alignItems="center">
-                  <Checkbox
-                    id={s.topic}
-                    checked={!!subs[s.topic]}
-                    disabled={!data.authenticated}
-                    onCheckedChange={(v) => setSubs((cur) => ({ ...cur, [s.topic]: !!v }))}
-                    size="$5"
-                  >
-                    <Checkbox.Indicator>
-                      <Check />
-                    </Checkbox.Indicator>
-                  </Checkbox>
-                  <Text
-                    flex={1}
-                    onPress={
-                      data.authenticated
-                        ? () => setSubs((cur) => ({ ...cur, [s.topic]: !cur[s.topic] }))
-                        : undefined
-                    }
-                  >
-                    {s.label}
-                  </Text>
-                </XStack>
-              ))}
-            </YStack>
+                {/* Recognized (not confirmed) → the toggles are read-only. Changing
+                    them is a protected action; confirm first (below). */}
+                <YStack gap="$3" opacity={data.authenticated ? 1 : 0.6}>
+                  {data.subscriptions.map((s) => (
+                    <XStack key={s.topic} gap="$3" alignItems="center">
+                      <Checkbox
+                        id={s.topic}
+                        checked={!!subs[s.topic]}
+                        disabled={!data.authenticated}
+                        onCheckedChange={(v) => setSubs((cur) => ({ ...cur, [s.topic]: !!v }))}
+                        size="$5"
+                      >
+                        <Checkbox.Indicator>
+                          <Check />
+                        </Checkbox.Indicator>
+                      </Checkbox>
+                      <Text
+                        flex={1}
+                        onPress={
+                          data.authenticated
+                            ? () => setSubs((cur) => ({ ...cur, [s.topic]: !cur[s.topic] }))
+                            : undefined
+                        }
+                      >
+                        {s.label}
+                      </Text>
+                    </XStack>
+                  ))}
+                </YStack>
+              </>
+            )}
 
             {data.authenticated ? (
               <Button

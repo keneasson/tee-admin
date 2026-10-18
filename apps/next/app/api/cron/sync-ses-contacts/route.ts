@@ -39,10 +39,13 @@ export async function GET(request: NextRequest) {
 
   // Check for cron secret or allow local development
   const isAuthorized =
-    (authHeader === `Bearer ${cronSecret}`) ||
+    (!!cronSecret && authHeader === `Bearer ${cronSecret}`) ||
     process.env.NODE_ENV === 'development'
 
-  if (!isAuthorized && cronSecret) {
+  // Fail closed (R5): with CRON_SECRET unset this used to run for anyone. It
+  // rewrites every contact's TopicPreferences from PersonRecord
+  // sesTopicPreferences, which is empty in prod, i.e. it would opt everyone out.
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -255,10 +258,13 @@ export async function POST(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
 
   const isAuthorized =
-    (authHeader === `Bearer ${cronSecret}`) ||
+    (!!cronSecret && authHeader === `Bearer ${cronSecret}`) ||
     process.env.NODE_ENV === 'development'
 
-  if (!isAuthorized && cronSecret) {
+  // Fail closed (R5): with CRON_SECRET unset this used to run for anyone. It
+  // rewrites every contact's TopicPreferences from PersonRecord
+  // sesTopicPreferences, which is empty in prod, i.e. it would opt everyone out.
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
