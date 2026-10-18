@@ -47,10 +47,17 @@ export interface EmailListsTopic {
 export interface EmailListsSesStatus {
   inSes: boolean
   unsubscribeAll: boolean
-  /** Topic name → opted in (explicitly). */
+  /**
+   * Topic name → subscribed, computed EXACTLY as the list send does
+   * (`utils/email/contact.ts` getContacts: TopicFilter with
+   * `UseDefaultIfPreferenceUnavailable: false`): an explicit OPT_IN only.
+   * A topic default never counts.
+   */
   topics: Record<string, boolean>
   /** How many SES contacts hold this address in some letter case (>1 = duplicate). */
   sesVariants: number
+  /** In SES but no explicit topic preference at all: receives nothing (topic defaults are ignored by sends). */
+  noExplicitPreference: boolean
 }
 
 export type EmailFlag =
@@ -60,7 +67,7 @@ export type EmailFlag =
   | 'not-in-ses'
   | 'ses-case-duplicate'
   | 'unsubscribed-all'
-  | 'ses-defaults-only'
+  | 'no-explicit-preference'
 
 export interface EmailListsEmailRow {
   email: string
@@ -105,11 +112,13 @@ export interface EmailListsFindings {
   /** One address held by several people — expected for households; listed so it is visible. */
   sharedAddresses: Array<{ email: string; personIds: string[] }>
   /**
-   * SES contacts with NO explicit topic preferences. They look subscribed via
-   * the topics' default OPT_IN, but list sends read explicit preferences only,
-   * so they receive nothing. `personIds` is empty when no person holds the address.
+   * SES contacts with NO explicit topic preference. They receive nothing:
+   * sends read explicit OPT_IN only. (An owner-made unsubscribe leaves a
+   * contact like this; the topic DEFAULTS still read OPT_IN, which is why an
+   * export of TopicDefaultPreferences wrongly showed them as subscribed.)
+   * `personIds` is empty when no person holds the address.
    */
-  sesDefaultsOnly: Array<{ email: string; defaultTopics: string[]; personIds: string[] }>
+  sesNoExplicitPreference: Array<{ email: string; personIds: string[] }>
 }
 
 export interface EmailListsOverview {
@@ -136,7 +145,6 @@ export function buildEmailListsOverview(input: {
   now?: Date
 }): EmailListsOverview {
   const topicNames = input.topics.map((t) => t.name)
-  const defaultOptInTopics = input.topics.filter((t) => t.defaultOptIn).map((t) => t.name).sort()
 
   // --- SES, folded by lower-cased address ---
   const sesByAddress = new Map<
@@ -176,7 +184,7 @@ export function buildEmailListsOverview(input: {
     suppressedButMarkedActive: [],
     personEmailNotInSes: [],
     sharedAddresses: [],
-    sesDefaultsOnly: [],
+    sesNoExplicitPreference: [],
   }
 
   const people: EmailListsPersonRow[] = input.cards.map((card) => {
@@ -191,7 +199,7 @@ export function buildEmailListsOverview(input: {
       if (!ses && !archived) flags.push('not-in-ses')
       if (ses && ses.variants.length > 1) flags.push('ses-case-duplicate')
       if (ses?.unsubscribeAll) flags.push('unsubscribed-all')
-      if (ses && isDefaultsOnly(ses)) flags.push('ses-defaults-only')
+      if (ses && isNoExplicit(ses)) flags.push('no-explicit-preference')
       return {
         email: e.email,
         emailType: e.emailType,
@@ -205,6 +213,7 @@ export function buildEmailListsOverview(input: {
           unsubscribeAll: !!ses?.unsubscribeAll,
           topics: Object.fromEntries(topicNames.map((t) => [t, !!ses?.topics[t]])),
           sesVariants: ses?.variants.length || 0,
+          noExplicitPreference: !!ses && isNoExplicit(ses),
         },
         suppressed,
         sharedWith: (holders.get(e.email) || []).filter((id) => id !== card.personId),
@@ -212,7 +221,7 @@ export function buildEmailListsOverview(input: {
       }
     })
     const findingCount = emails.reduce(
-      (n, e) => n + e.flags.filter((f) => f !== 'suppressed' && f !== 'unsubscribed-all').length,
+      (n, e) => n + e.flags.filter((f) => f !== 'suppressed' && f !== 'unsubscribed-all' && f !== 'no-explicit-preference').length,
       0
     )
     return {
@@ -246,8 +255,8 @@ export function buildEmailListsOverview(input: {
     if (notInSes.length > 0) findings.personEmailNotInSes.push({ email, personIds: notInSes.sort() })
   }
   for (const [email, ses] of sesByAddress) {
-    if (isDefaultsOnly(ses)) {
-      findings.sesDefaultsOnly.push({ email, defaultTopics: defaultOptInTopics, personIds: (holders.get(email) || []).slice().sort() })
+    if (isNoExplicit(ses)) {
+      findings.sesNoExplicitPreference.push({ email, personIds: (holders.get(email) || []).slice().sort() })
     }
     if (ses.variants.length > 1) findings.sesCaseDuplicates.push({ email, variants: ses.variants.slice().sort() })
     if (holders.has(email)) continue
@@ -258,8 +267,8 @@ export function buildEmailListsOverview(input: {
       findings.sesUnsubscribedNoPerson++
     }
   }
-  function isDefaultsOnly(ses: { explicit: boolean; unsubscribeAll: boolean }) {
-    return !ses.explicit && !ses.unsubscribeAll && defaultOptInTopics.length > 0
+  function isNoExplicit(ses: { explicit: boolean; unsubscribeAll: boolean }) {
+    return !ses.explicit && !ses.unsubscribeAll
   }
   for (const list of Object.values(findings)) {
     if (Array.isArray(list)) (list as Array<{ email: string }>).sort((a, b) => a.email.localeCompare(b.email))

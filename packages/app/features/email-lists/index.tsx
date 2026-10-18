@@ -52,10 +52,10 @@ const FLAG_LABEL: Record<EmailFlag, string> = {
   'not-in-ses': 'Not in SES',
   'ses-case-duplicate': 'Duplicate SES contact (letter case)',
   'unsubscribed-all': 'Unsubscribed from all',
-  'ses-defaults-only': 'No explicit topic choices in SES — list sends skip it',
+  'no-explicit-preference': 'No explicit preference (receives nothing)',
 }
 
-const WARNING_FLAGS: EmailFlag[] = ['suppressed-but-marked-active', 'not-in-ses', 'ses-case-duplicate', 'ses-defaults-only']
+const WARNING_FLAGS: EmailFlag[] = ['suppressed-but-marked-active', 'not-in-ses', 'ses-case-duplicate']
 
 export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
   const router = useRouter()
@@ -308,16 +308,18 @@ function EmailRow({
       </XStack>
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         {row.ses.inSes ? (
-          optedIn.length > 0 ? (
+          row.ses.unsubscribeAll ? (
+            <Badge tone="red">Unsubscribed from all (receives nothing)</Badge>
+          ) : row.ses.noExplicitPreference ? (
+            <Badge tone="orange">No explicit preference (receives nothing)</Badge>
+          ) : optedIn.length > 0 ? (
             optedIn.map((t) => <Badge key={t.name}>{t.displayName}</Badge>)
           ) : (
-            <Text fontSize="$2" color="$gray11">
-              In SES, no topic opt-ins
-            </Text>
+            <Badge tone="orange">Unsubscribed from every topic (receives nothing)</Badge>
           )
         ) : null}
         {row.flags
-          .filter((f) => WARNING_FLAGS.includes(f) || f === 'unsubscribed-all')
+          .filter((f) => WARNING_FLAGS.includes(f))
           .map((f) => (
             <XStack key={f} gap="$1" alignItems="center">
               <AlertTriangle size={14} color="$orange10" />
@@ -359,7 +361,7 @@ function FindingsPanel({
         </Paragraph>
         <FindingGroup
           title="Subscribed in SES, but no person holds the address"
-          note="These addresses still receive list sends."
+          note="Explicitly opted in to at least one topic, so these addresses still receive list sends."
           count={f.sesSubscribedNoPerson.length}
         >
           {f.sesSubscribedNoPerson.map((x) => (
@@ -370,14 +372,11 @@ function FindingsPanel({
           ))}
         </FindingGroup>
         <FindingGroup
-          title="In SES with no explicit topic choices — list sends skip them"
-          note={`They look subscribed through the topic defaults (${overview.topics
-            .filter((t) => t.defaultOptIn)
-            .map((t) => t.displayName)
-            .join(', ')}), but sends use explicit choices only, so they receive nothing.`}
-          count={f.sesDefaultsOnly.length}
+          title="In SES with no explicit preference — they receive nothing"
+          note="Not subscribed: list sends use explicit opt-ins only. (The topic defaults still say OPT_IN, so an export of the defaults shows them as subscribed.)"
+          count={f.sesNoExplicitPreference.length}
         >
-          {f.sesDefaultsOnly.map((x) => (
+          {f.sesNoExplicitPreference.map((x) => (
             <YStack key={x.email} gap="$1">
               <Text fontSize="$3">
                 {x.email}

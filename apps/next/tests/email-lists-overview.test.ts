@@ -103,20 +103,23 @@ describe('Email Lists overview (PersonRecords only)', () => {
     expect(build().findings.personEmailNotInSes).toEqual([{ email: 'lou@example.org', personIds: ['p-loner'] }])
   })
 
-  it('reports contacts subscribed only through topic defaults, which list sends skip', () => {
+  it('counts only EXPLICIT opt-ins as subscribed (as the send path does); no preference = receives nothing', () => {
     // The send path filters with UseDefaultIfPreferenceUnavailable: false.
-    expect(build().findings.sesDefaultsOnly).toEqual([
-      { email: 'defaults@example.org', defaultTopics: ['newsletter'], personIds: [] },
+    expect(build().findings.sesNoExplicitPreference).toEqual([
+      { email: 'defaults@example.org', personIds: [] },
     ])
+    expect(build().findings.sesSubscribedNoPerson.map((x) => x.email)).not.toContain('defaults@example.org')
     const o = buildEmailListsOverview({
       cards: [loner],
       sesContacts: [{ email: 'lou@example.org', topics: {} }],
       suppressed: [],
       topics,
     })
-    expect(o.findings.sesDefaultsOnly).toEqual([{ email: 'lou@example.org', defaultTopics: ['newsletter'], personIds: ['p-loner'] }])
-    expect(o.people[0].emails[0].flags).toContain('ses-defaults-only')
-    expect(o.people[0].findingCount).toBe(1)
+    expect(o.findings.sesNoExplicitPreference).toEqual([{ email: 'lou@example.org', personIds: ['p-loner'] }])
+    expect(o.people[0].emails[0].flags).toContain('no-explicit-preference')
+    expect(o.people[0].emails[0].ses).toMatchObject({ inSes: true, noExplicitPreference: true, topics: { newsletter: false, memorial: false } })
+    // A state, not a problem to fix.
+    expect(o.people[0].findingCount).toBe(0)
   })
 
   it('filters by name, ecclesia or address', () => {
