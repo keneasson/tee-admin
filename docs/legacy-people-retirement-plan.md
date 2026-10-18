@@ -96,8 +96,8 @@ About 75 non-test files and about 250 call sites. Paths are relative to the repo
 
 | file:line | R/W | Live | Replace with |
 |---|---|---|---|
-| `apps/next/app/api/admin/email/search/route.ts:130-134` | R | **Email Lists** | `searchByName` + `getEmailsByEmail` |
-| `apps/next/app/api/admin/email/consolidate/route.ts:147,162,204,249,255,272,300,323,382,424,454,466,517,582,651,665,679,777,796,844,872` | R/W | Email Lists / directory-email-sync | `getEmails`, `addEmail`, `setEmailOrder`, `undoEmailRetire`, new `mergePersons`; delete the legacy branch |
+| `apps/next/app/api/admin/email/search/route.ts:130-134` | R | **Email Lists** | **done** (#276): person CARDs + read-only SES snapshot |
+| `apps/next/app/api/admin/email/consolidate/route.ts:147,162,204,249,255,272,300,323,382,424,454,466,517,582,651,665,679,777,796,844,872` | R/W | Email Lists / directory-email-sync | **deleted** (#276); person fixes are made on the profile |
 | `apps/next/pages/api/contact/index.ts:58` (`getDirectoryData`; names joined at :91-102) | R | Email Lists | `listAll` / `getByEmail` |
 | `packages/app/provider/dynamodb/schedule-service.ts:235-245, 269-295` | R | via callers | delete |
 | `apps/next/app/api/directory/route.ts:60,149` | R | reachable, no UI | delete route |
@@ -143,7 +143,7 @@ All of these need new `PERSON#<id>` sub-items, because nothing exists on PersonR
 **SES-only writers** (the cron then reverts them, or they overwrite `AttributesData`):
 - `apps/next/app/api/subscribe/route.ts:158` (public)
 - `pages/api/contact/index.ts:25,39`
-- `consolidate/route.ts:566,574,736`
+- ~~`consolidate/route.ts:566,574,736`~~ (deleted, #276)
 - `directory-email-sync/{create-entry:82, link-contact:62, sync-members-list:140, batch-member:122, add-email:113, delete:81}`
 - `contacts/[email]/route.ts:79`
 - `import-inter-ecclesia/route.ts:278,328`
@@ -154,8 +154,8 @@ Each of these should write to the PersonRecord first and let the projection push
 **The intended projection, which stays:** `app/api/cron/sync-ses-contacts/route.ts:157,171,306,313`.
 
 **`AttributesData` read as a people source:**
-- `admin/email/search/route.ts:245-250,296-305`
-- `packages/app/features/email-lists/index.tsx:789-795`
+- ~~`admin/email/search/route.ts:245-250,296-305`~~ (#276)
+- ~~`packages/app/features/email-lists/index.tsx:789-795`~~ (#276)
 - `admin/metrics/email/[campaignId]/recipients/route.ts:47-49`
 - `migrate-inter-ecclesia:143-145`
 - `import-inter-ecclesia:268-270`
