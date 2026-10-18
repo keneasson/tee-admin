@@ -68,10 +68,10 @@ async function seed() {
   await privacyRepository.updatePrivacySettings('ben@example.org', { showPhone: 'private', showEmail: 'authenticated' } as any)
   rb = (await persons.create({ email: 'rb@example.org', firstName: 'Rob', lastName: 'Gamma', ecclesia: EAST, role: 'member' })).personId
   rep = (await persons.create({ email: 'rep@example.org', firstName: 'Rae', lastName: 'Delta', ecclesia: EAST, role: 'member' })).personId
-  await officeRepository.saveOffice({ ecclesiaId: EID, role: 'recording-brother', email: 'recbro@example.org', phone: '555-0300' })
-  await officeRepository.assignHolder(EID, 'recording-brother', rb, 't1')
-  await officeRepository.saveOffice({ ecclesiaId: EID, role: 'inter-ecclesia-rep' })
-  await officeRepository.assignHolder(EID, 'inter-ecclesia-rep', rep, 't1')
+  await officeRepository.saveOffice({ ecclesiaId: EID, role: 'rb', email: 'recbro@example.org', phone: '555-0300' })
+  await officeRepository.assignHolder(EID, 'rb', rb, 't1')
+  await officeRepository.saveOffice({ ecclesiaId: EID, role: 'rep#1' })
+  await officeRepository.assignHolder(EID, 'rep#1', rep, 't1')
   await writeIndexMarker({})
 }
 
@@ -155,7 +155,7 @@ describe('ecclesia reference, per tier', () => {
     })
     expect(e.offices.map((o) => [o.kind, o.title, o.holder?.firstName])).toEqual([
       ['rb', 'Recording Brother', 'Rob'],
-      ['rep', 'Inter-Ecclesia Representative', 'Rae'],
+      ['rep', 'Rep', 'Rae'],
     ])
     expect(e.offices[0].withheld).toEqual([{ field: 'email', reason: 'sign-in' }, { field: 'phone', reason: 'sign-in' }])
     expect(e.offices[0].holder?.id).toBeUndefined()
@@ -167,7 +167,7 @@ describe('ecclesia reference, per tier', () => {
     expect(e.location).toMatchObject({ address: '1 Hall St', postalCode: 'A1A 1A1' })
     expect(e.withheld).toEqual([])
     const [rbOffice, repOffice] = e.offices
-    expect(rbOffice).toMatchObject({ officeId: 'recording-brother', email: 'recbro@example.org', phone: '555-0300', withheld: [] })
+    expect(rbOffice).toMatchObject({ officeId: 'rb', email: 'recbro@example.org', phone: '555-0300', withheld: [] })
     expect(rbOffice.holder).toMatchObject({ id: rb, firstName: 'Rob', lastName: 'Gamma', email: 'rb@example.org' })
     expect(repOffice.holder).toMatchObject({ id: rep, lastName: 'Delta' })
   })
