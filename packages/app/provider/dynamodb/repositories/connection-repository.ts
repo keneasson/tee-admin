@@ -1,4 +1,5 @@
 import { BaseRepository } from './base-repository'
+import { batchGetItems } from '../people-index/reader'
 import type {
   ConnectionRecord,
   ConnectionStatus,
@@ -82,6 +83,19 @@ export class ConnectionRepository extends BaseRepository<ConnectionRecord> {
     const sk = `CONNECTION#${targetEmail}`
     const connection = await this.get(pk, sk)
     return connection?.status === 'active'
+  }
+
+  /**
+   * Which of `userEmails` have an active connection to `targetEmail` — the
+   * batch form of {@link isConnected}, one BatchGetItem for the smart
+   * reference resolver (plan §0 R6). Returns the connected user emails.
+   */
+  async connectedTo(userEmails: string[], targetEmail: string): Promise<Set<string>> {
+    if (userEmails.length === 0) return new Set()
+    const rows = await batchGetItems<ConnectionRecord & { pkey: string }>(
+      userEmails.map((e) => ({ pkey: `USER#${e}`, skey: `CONNECTION#${targetEmail}` }))
+    )
+    return new Set(rows.filter((r) => r.status === 'active').map((r) => r.pkey.slice('USER#'.length)))
   }
 
   /**
