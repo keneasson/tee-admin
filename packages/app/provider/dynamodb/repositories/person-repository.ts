@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient, tableNames } from '../config'
+import { projectionWritesEnabled, refreshPersonProjections } from '../people-index/projections'
 import type {
   ContactVoteRecord,
   PersonRecord,
@@ -144,9 +145,59 @@ export function chooseSignInHolder(
   return pool[0]
 }
 
+/** Re-derives a person's projections (CARD, NAMETOK#, REP office refs). */
+export type PersonProjectionSync = (personId: string) => Promise<unknown>
+
 export class PersonRepository extends BaseRepository<PersonRecord> {
+  /**
+   * The ONE writer of every person projection (ADR-0006 §8). Every write this
+   * repository makes to a PROFILE / EMAIL# / PHONE# item — through a named
+   * method or the base put/update/delete — re-derives the person's
+   * projections before returning, so a read after the write sees them.
+   * `null` disables it (unit tests that script the client call-by-call).
+   */
+  private projectionSync: PersonProjectionSync | null = (personId) =>
+    projectionWritesEnabled() ? refreshPersonProjections(personId) : Promise.resolve()
+
   constructor() {
     super('admin', false) // false = lowercase keys (pkey, skey)
+  }
+
+  setProjectionSync(sync: PersonProjectionSync | null) {
+    this.projectionSync = sync
+  }
+
+  private async afterWrite(pk: string, sk: string): Promise<void> {
+    if (!this.projectionSync || !pk?.startsWith('PERSON#')) return
+    if (!(sk === 'PROFILE' || sk.startsWith('EMAIL#') || sk.startsWith('PHONE#'))) return
+    try {
+      await this.projectionSync(pk.slice('PERSON#'.length))
+    } catch (error) {
+      // The source write succeeded; a stale projection is repaired by the next
+      // write or by scripts/rebuild-people-projections.ts. Never fail the write.
+      console.error(`people-index: projection refresh failed for ${pk}`, error)
+    }
+  }
+
+  async put(item: PersonRecord): Promise<void> {
+    await super.put(item)
+    await this.afterWrite(item.pkey, item.skey)
+  }
+
+  async update(
+    pk: string,
+    sk: string,
+    updates: Partial<PersonRecord>,
+    options?: Parameters<BaseRepository<PersonRecord>['update']>[3]
+  ): Promise<PersonRecord> {
+    const result = await super.update(pk, sk, updates, options)
+    await this.afterWrite(pk, sk)
+    return result
+  }
+
+  async delete(pk: string, sk: string): Promise<void> {
+    await super.delete(pk, sk)
+    await this.afterWrite(pk, sk)
   }
 
   protected buildSheetPK(_sheetId: string): string {
@@ -528,6 +579,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       ExpressionAttributeValues: { ':lastUpdated': new Date().toISOString() },
     })
     await docClient.send(command)
+    await this.afterWrite(`PERSON#${personId}`, `EMAIL#${emailId}`)
   }
 
   /**
@@ -1107,26 +1159,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /**
-   * Count all persons (for migration validation)
-   */
-  async count(): Promise<number> {
-    let count = 0
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(pkey, :prefix) AND skey = :skey',
-        expressionAttributeValues: { ':prefix': 'PERSON#', ':skey': 'PROFILE' },
-        lastEvaluatedKey: lastKey,
-      })
-      count += result.items.length
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return count
-  }
-
-  /**
    * Count members in a specific ecclesia using GSI2 with Select: 'COUNT'.
    * Reads only index metadata — no item data is transferred.
    */
@@ -1438,32 +1470,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       role: person.role,
       displayName: person.displayName,
     }
-  }
-
-  /**
-   * Get person by Google ID
-   * Used for OAuth account linking
-   */
-  async getByGoogleId(googleId: string): Promise<PersonRecord | null> {
-    // This requires a scan since googleId is not indexed
-    // Consider adding GSI5 for googleId if this is called frequently
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'skey = :skey AND googleId = :googleId',
-        expressionAttributeValues: { ':skey': 'PROFILE', ':googleId': googleId },
-        lastEvaluatedKey: lastKey,
-      })
-
-      if (result.items.length > 0) {
-        return result.items[0]
-      }
-
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return null
   }
 
   /**

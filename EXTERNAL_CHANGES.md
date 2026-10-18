@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — people-index backfill for #275 (run AFTER this deploys), then the sign-in flag
+- **Date**: 2026-10-17
+- **Branch**: `feat/people-access-patterns`
+- **Code change**: new derived projection items on `tee-admin` (person `CARD`, `NAMETOK#…`, `OFFICE#…`; `ECCLESIA_ID#<id>` directory/alias + office refs). `PersonRepository` and `locations.ts` keep them in sync on every write. Readers (`/api/people`, `/api/people/guests`, the ecclesia list/picker, `/api/people/typeahead`) switch to them **only once the backfill marker `PEOPLE_INDEX#META/BUILD` exists**; before that they keep the legacy Scans.
+- **External action** (after the merge to `main` has deployed to prod):
+  1. `npx tsx scripts/rebuild-people-projections.ts` (dry run; counts only).
+  2. `npx tsx scripts/rebuild-people-projections.ts --apply --after-deploy` — backs up PERSON#/ECCLESIA/ECCLESIA_ID# to `s3://tee-admin-backups/backups/<date>-people-index-backfill/`, writes only projection items, re-verifies (0 differences), then writes the marker.
+  3. Owner, when ready: `/admin/evolution/feature-flags` → `people_index_signin` → **everyone**. Until then the sign-in Recording Brother check for a brand-new address keeps the table Scan.
+- **Kill switches** (Vercel env, no code change): `PEOPLE_INDEX_READS=off` (all readers back to legacy), `PEOPLE_INDEX_WRITES=off` (stop the projection writer; re-run the script afterwards to repair).
+- **Status**: PENDING
+
 ### Prod data — household shared email for issue #267 (run AFTER this deploys)
 - **Date**: 2026-10-17
 - **Branch**: `fix/267-household-email-headsup-resend`

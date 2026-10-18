@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { loadDirectoryPeople } from '../load-directory'
 import { getCachedGuests, setCachedGuests, GUEST_CACHE_TTL_MS } from './cache'
 
 interface GuestListItem {
@@ -62,15 +62,8 @@ export async function GET() {
     if (cached && (now - cached.timestamp) < GUEST_CACHE_TTL_MS) {
       allGuests = cached.guests
     } else {
-      // Scan for all guest role PersonRecords
-      const allPersons: PersonRecord[] = []
-      let lastKey: Record<string, any> | undefined
-
-      do {
-        const result = await personRepository.listAll({ lastEvaluatedKey: lastKey })
-        allPersons.push(...result.items)
-        lastKey = result.lastEvaluatedKey
-      } while (lastKey)
+      // Everyone (one card Query once the people index is built), then keep guests
+      const { people: allPersons } = await loadDirectoryPeople()
 
       allGuests = []
       for (const person of allPersons) {

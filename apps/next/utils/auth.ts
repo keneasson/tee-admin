@@ -22,7 +22,7 @@ import { verifyCredentialsUser, findCredentialsUserByEmail } from './dynamodb/cr
 import { personRepository, type GoogleOAuthProfile } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { verifyEcclesiaToken } from './email/ecclesia-token'
-import { getEcclesiaByRecordingBrotherEmail } from './dynamodb/locations'
+import { findRecordingBrotherEcclesia } from './dynamodb/locations'
 
 // Feature flag for unified people system - uses PersonRecord instead of scan-based USER# lookups
 const USE_UNIFIED_PEOPLE = process.env.UNIFIED_PEOPLE_AUTH === 'true'
@@ -131,7 +131,7 @@ export const authOptions: NextAuthConfig = {
           let person = await personRepository.getByEmail(email)
           if (!person) {
             // Check if this email is a Recording Brother — auto-assign member role + ecclesia
-            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(email)
+            const rbEcclesia = await findRecordingBrotherEcclesia(email)
             const rbRole = rbEcclesia ? 'member' : 'guest'
             const rbEcclesiaName = rbEcclesia?.name || 'Unknown'
 
@@ -253,7 +253,7 @@ export const authOptions: NextAuthConfig = {
             token.isRecordingBrother = !!person.isRecordingBrother
           } else if (!token.role) {
             // Only check RB fallback if we still have no role
-            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(token.email as string)
+            const rbEcclesia = await findRecordingBrotherEcclesia(token.email as string)
             if (rbEcclesia) {
               console.log('📋 JWT callback: Recording Brother for', rbEcclesia.name, '→ member')
               token.role = ROLES.MEMBER
@@ -338,7 +338,7 @@ export const authOptions: NextAuthConfig = {
           const legacyUser = await getUserFromLegacyDirectory({ email: userEmail })
           if (!legacyUser) {
             // STEP 2.5: Check if this email is a Recording Brother
-            const rbEcclesia = await getEcclesiaByRecordingBrotherEmail(userEmail)
+            const rbEcclesia = await findRecordingBrotherEcclesia(userEmail)
             if (rbEcclesia) {
               console.log('📋 [Unified] Recording Brother detected for', rbEcclesia.name, '— assigning member role')
               extUser.role = ROLES.MEMBER

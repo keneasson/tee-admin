@@ -292,6 +292,18 @@ Each is replaced by an id reference.
 | 13 | Person by Google id | sparse `gsi1pk=GOOGLE#<id>` on PROFILE | Query | **Scan**: `getByGoogleId` (repo :1382-1388; unused) | Add only if needed; otherwise delete |
 | 14 | Counts | `Select: COUNT` on pattern 4, or a counter item | Query | **Scan**: `count` (repo :1047-1052) | Replace |
 
+**Built in #275 (Phase 2 step 0).** Code: `packages/app/provider/dynamodb/people-index/` (`keys.ts` derives, `projections.ts` writes, `reader.ts` reads). Rebuild: `scripts/rebuild-people-projections.ts` (dry run by default).
+
+| Pattern | Item / index entry | Writer |
+|---|---|---|
+| 3 typeahead | `PERSON#<id> / NAMETOK#<token>`, gsi3 `NAMEPFX#ALL#<2 letters>` / `<token>#<id>` | `personRepository` |
+| 4 everyone / by ecclesia, 10 BatchGet | `PERSON#<id> / CARD`, gsi4 `PEOPLE#ALL`, gsi2 `ECCPEOPLE#<ecclesiaId>` (both `<last>#<first>#<id>`) | `personRepository` |
+| 7 stable id, 9 all ecclesias | `ECCLESIA_ID#<ecclesiaId> / ECCLESIA` (points at the ECCLESIA key), gsi2 `ECCLESIAS` / `<country>\|<prov>\|<city>#<name>`; RB-email sign-in entry on gsi1 `RBEMAIL#<addr>` | `locations.ts` |
+| 8/11 RB office | `ECCLESIA_ID#<id> / OFFICE#RB#<personId>` + `PERSON#<id> / OFFICE#<ecclesiaId>#RB` | `locations.ts` (from `recordingBrotherPersonId`) |
+| 8/11/12 REP office | `ECCLESIA_ID#<id> / OFFICE#REP#<personId>` + `PERSON#<id> / OFFICE#<ecclesiaId>#REP` | `personRepository` (from `isInterEcclesiaRep`) |
+
+The ecclesia id is the slug of the name at creation, stored as `ecclesiaId` and carried across renames. Readers switch only once the backfill marker `PEOPLE_INDEX#META / BUILD` exists; the sign-in RB check also needs the `people_index_signin` flag. `count` and `getByGoogleId` (patterns 13, 14) had no callers and were deleted.
+
 **What the current key design cannot serve without new items:**
 - name typeahead on a prefix of either name (pattern 3)
 - offices → person, and person → offices (patterns 8, 11, 12)
