@@ -5,9 +5,9 @@
  * suppression entry.
  */
 import { ListContactsCommand, ListSuppressedDestinationsCommand } from '@aws-sdk/client-sesv2'
-import type { OverviewSesContactInput, EmailListsTopic } from '@my/app/utils/email-lists-overview'
+import type { OverviewSesContactInput } from '@my/app/utils/email-lists-overview'
 import { getSesClient } from './sesClient'
-import { getContactLists, inputTemplate } from './contact-lists'
+import { inputTemplate } from './contact-lists'
 
 /** Every contact on the list, unfiltered (ListContacts pages are followed by hand). */
 export async function listAllSesContacts(): Promise<OverviewSesContactInput[]> {
@@ -48,9 +48,4 @@ export async function listSuppressedAddresses(): Promise<Array<{ email: string; 
     nextToken = page.NextToken
   } while (nextToken)
   return out
-}
-
-export async function listSesTopics(): Promise<EmailListsTopic[]> {
-  const { lists } = await getContactLists()
-  return lists.map((l) => ({ name: l.listName, displayName: l.displayName || l.listName, defaultOptIn: l.defaultOptIn }))
 }

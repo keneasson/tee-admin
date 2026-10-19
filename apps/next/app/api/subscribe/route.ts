@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CreateContactCommand, UpdateContactCommand, SubscriptionStatus } from '@aws-sdk/client-sesv2'
-import { getSesClient } from '@/utils/email/sesClient'
-import { getContact } from '@/utils/email/contact'
-import { inputTemplate } from '@/utils/email/contact-lists'
+import { getContact, setUnsubscribeAll } from '@/utils/email/contact'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
 import { auth } from '@/utils/auth'
 import { maskEmail } from '@/utils/mask-email'
-import { PUBLIC_TOPICS, PUBLIC_TOPIC_LABELS } from '@/utils/email/public-topics'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
 import { ecclesiaIdOf, slugifyEcclesia } from '@my/app/provider/dynamodb/people-index/keys'
 import { getDefaultRegion } from '@my/app/config/regions'
-import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
-import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { listEcclesiasCached } from '@/utils/dynamodb/locations'
 import { buildListPreferences, planListSave, isSelfServe } from '@/utils/mailing-lists/preferences'
 import { ownerNamesFor, ownerNameOf } from '@/utils/mailing-lists/owners'
@@ -35,13 +29,15 @@ async function firstNameForEmail(email: string): Promise<string | null> {
 }
 
 /**
- * Self-serve subscription management (Issue #75).
+ * Self-serve subscription management (Issue #75, R5).
  *
- * SECURITY: only the PUBLIC, self-manageable topics are exposed here. Office /
- * membership topics (`interEcclesia` = conferred by the Recording-Brother
- * office; `members` = TEE membership; `testList`) are NEVER shown or changed by
- * this endpoint — they're set by role/membership, not self-serve. This is the
- * fix for the SES hosted page exposing every topic.
+ * Writes ONLY the mailing-list registry (SUB# rows), plus the SES contact's
+ * UnsubscribeAll ("stop all email"), which stays in SES. No SES topic is read
+ * or written: topics are safety nets now, not lists.
+ *
+ * SECURITY: only self-serve lists (reminders / newsletters) are shown or
+ * changed. Office / membership lists (inter-ecclesial correspondence, members,
+ * the test list) are conferred by role, never self-serve.
  */
 async function emailForToken(token: string | null): Promise<string | null> {
   if (!token) return null
@@ -68,17 +64,12 @@ async function resolveIdentity(
   return null
 }
 
-/** Mailing-list registry (R5) is visible to this caller? (owner-first rollout) */
-async function registryOn(session: any): Promise<boolean> {
-  return checkFeatureFlagFromDB(FEATURE_FLAGS.MAILING_LIST_REGISTRY, session)
-}
-
 /**
  * Every self-serve list offered to this address (scope ladder from the
  * person's ecclesia), plus any list it already has a registry row on, grouped
- * by owner with the state that decides delivery today.
+ * by owner with its registry state (defaultOptIn applied).
  */
-async function loadListPreferences(email: string, sesOptIns: Set<string>) {
+async function loadListPreferences(email: string) {
   const [allLists, person] = await Promise.all([
     mailingListRepository.listAllLists(),
     personRepository.getByEmail(email),
@@ -106,7 +97,6 @@ async function loadListPreferences(email: string, sesOptIns: Set<string>) {
     allLists: candidates,
     offeredIds: new Set(offered.map((l) => l.listId)),
     registryStatus,
-    sesOptIns,
     ownerName: (l) => ownerNameOf(names, l),
   })
 }
@@ -124,7 +114,7 @@ function identityFields(id: { email: string; authenticated: boolean }) {
   }
 }
 
-/** GET /api/subscribe?token=… (or a session) → current opt-in state for the public topics. */
+/** GET /api/subscribe?token=… (or a session) → the lists offered to this address and its state on each. */
 export async function GET(request: NextRequest) {
   const token = new URL(request.url).searchParams.get('token')
   const id = await resolveIdentity(token)
@@ -133,34 +123,12 @@ export async function GET(request: NextRequest) {
   }
   const email = id.email
   try {
-    // getContact() returns null when the address isn't a contact yet (it
-    // swallows NotFoundException), so an absent contact reads as "opted into
-    // nothing" with no special-case branch.
-    const contact = await getContact(email)
-    const prefs = new Map(
-      (contact?.TopicPreferences ?? []).map((p) => [p.TopicName, p.SubscriptionStatus])
-    )
-    const subscriptions = PUBLIC_TOPICS.map((t) => ({
-      topic: t,
-      label: PUBLIC_TOPIC_LABELS[t],
-      subscribed: prefs.get(t) === SubscriptionStatus.OPT_IN,
-    }))
-    // R5 (flagged): every list offered to this person, grouped by owner.
-    // Absent when the flag is off → the page renders the topic toggles as before.
-    let listGroups: Awaited<ReturnType<typeof loadListPreferences>> | undefined
-    if (await registryOn(id.session)) {
-      const sesOptIns = new Set(
-        [...prefs.entries()]
-          .filter(([, status]) => status === SubscriptionStatus.OPT_IN)
-          .map(([topic]) => topic as string)
-      )
-      listGroups = await loadListPreferences(email, sesOptIns)
-    }
+    // getContact() is null when the address isn't an SES contact: not stopped.
+    const [contact, listGroups] = await Promise.all([getContact(email), loadListPreferences(email)])
     return NextResponse.json({
       ...identityFields(id),
-      ...(listGroups ? { listGroups } : {}),
+      listGroups,
       name: await firstNameForEmail(email),
-      subscriptions,
       unsubscribedAll: !!contact?.UnsubscribeAll,
       tenant: tenantBrand(request),
     })
@@ -171,8 +139,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/subscribe { token, subscriptions: { newsletter?: boolean, … } }
- * Updates ONLY the public topics; preserves every other topic exactly.
+ * POST /api/subscribe { token, lists: { [listId]: boolean }, unsubscribeAll?: boolean }
+ * Writes the registry for changed self-serve lists, and UnsubscribeAll in SES.
  */
 export async function POST(request: NextRequest) {
   let body: any
@@ -194,69 +162,36 @@ export async function POST(request: NextRequest) {
     )
   }
   const email = id.email
-  const requested: Record<string, boolean> = { ...(body?.subscriptions ?? {}) }
-
-  // R5 (flagged): `lists: { [listId]: boolean }`. Validated against the real
-  // lists; a bridged list's change is ALSO applied to its SES topic below.
-  let listChanges: ReturnType<typeof planListSave>['changes'] = []
-  if (body?.lists && typeof body.lists === 'object') {
-    if (!(await registryOn(id.session))) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-    const planned = planListSave(body.lists, await mailingListRepository.listAllLists())
-    listChanges = planned.changes
-    Object.assign(requested, planned.sesTopics)
-  }
 
   try {
-    // Registry choices need a person; check before any SES write so a save is
-    // never half-applied.
-    const deps = listChanges.length > 0 ? await defaultSubscriptionDeps() : null
-    if (deps && !(await resolveSubscriber(email, deps))) {
-      return NextResponse.json(
-        { error: 'We could not find your profile to save list choices. Please sign in again.' },
-        { status: 409 }
+    // Only lists whose state actually changed are written, so saving never
+    // turns a list's defaultOptIn into a stored row.
+    let changes: ReturnType<typeof planListSave>['changes'] = []
+    if (body?.lists && typeof body.lists === 'object') {
+      const current = new Map(
+        (await loadListPreferences(email)).flatMap((g) => g.lists.map((l) => [l.listId, l.subscribed] as const))
       )
+      changes = planListSave(body.lists, await mailingListRepository.listAllLists(), current).changes
     }
 
-    // Reuse getContact() (null when not yet a contact) for the existing-prefs
-    // read — no bespoke NotFoundException handling.
-    const existing = await getContact(email)
-
-    // Start from existing prefs so non-public topics are preserved verbatim.
-    const current = new Map<string, SubscriptionStatus>(
-      (existing?.TopicPreferences ?? []).map((p) => [
-        p.TopicName as string,
-        p.SubscriptionStatus as SubscriptionStatus,
-      ])
-    )
-    for (const t of PUBLIC_TOPICS) {
-      if (t in requested) {
-        current.set(t, requested[t] ? SubscriptionStatus.OPT_IN : SubscriptionStatus.OPT_OUT)
+    if (changes.length > 0) {
+      const deps = await defaultSubscriptionDeps()
+      // Registry choices need a person; check before any write so a save is
+      // never half-applied.
+      if (!(await resolveSubscriber(email, deps))) {
+        return NextResponse.json(
+          { error: 'We could not find your profile to save list choices. Please sign in again.' },
+          { status: 409 }
+        )
       }
-    }
-    const TopicPreferences = Array.from(current.entries()).map(([TopicName, SubscriptionStatus]) => ({
-      TopicName,
-      SubscriptionStatus,
-    }))
-
-    const touchesSes = Object.keys(requested).some((t) => (PUBLIC_TOPICS as readonly string[]).includes(t))
-    if (existing) {
-      await getSesClient().send(
-        new UpdateContactCommand({ ...inputTemplate, EmailAddress: email, TopicPreferences })
-      )
-    } else if (touchesSes && TopicPreferences.some((p) => p.SubscriptionStatus === SubscriptionStatus.OPT_IN)) {
-      // No SES contact yet: create it with the requested topics only.
-      await getSesClient().send(
-        new CreateContactCommand({ ...inputTemplate, EmailAddress: email, TopicPreferences })
-      )
-    }
-
-    // Registry writes (every list, bridged or not).
-    if (deps) {
-      for (const change of listChanges) {
+      for (const change of changes) {
         const result = await setListSubscription(
-          { listId: change.list.listId, email, subscribed: change.subscribed },
+          {
+            listId: change.list.listId,
+            email,
+            subscribed: change.subscribed,
+            defaultOptIn: change.list.defaultOptIn === true,
+          },
           deps
         )
         if (result === 'no-person') {
@@ -266,6 +201,11 @@ export async function POST(request: NextRequest) {
           )
         }
       }
+    }
+
+    // "Stop all email" stays in SES (UnsubscribeAll), the gate every send checks.
+    if (typeof body?.unsubscribeAll === 'boolean') {
+      await setUnsubscribeAll(email, body.unsubscribeAll)
     }
     return NextResponse.json({ success: true })
   } catch (error) {

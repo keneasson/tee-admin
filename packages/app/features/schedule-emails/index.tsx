@@ -21,6 +21,7 @@ import {
 import { brandColors } from '@my/ui/src/branding/brand-colors'
 import { Edit3 as Edit, Clock, Mail, Calendar, Users, Trash2 } from '@tamagui/lucide-icons'
 import { EmailType, EmailSchedule, QueueSummary, DayOfWeek } from '@my/app/types/send-queue'
+import { getContactsList } from '@my/app/provider/get-data'
 
 interface ScheduleEmailsProps {}
 
@@ -94,12 +95,20 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
   const [editing, setEditing] = useState<EmailType | null>(null)
   const [creating, setCreating] = useState(false)
   const [editForm, setEditForm] = useState<Partial<EmailSchedule>>({})
+  // Registry lists a schedule can send to (R5): key = listId.
+  const [lists, setLists] = useState<{ key: string; label: string }[]>([])
 
   useEffect(() => {
     loadSchedules()
     loadQueueSummary()
     loadAvailableTypes()
+    getContactsList()
+      .then((d) => setLists((d.lists ?? []).filter((l) => !l.isTest).map((l) => ({ key: l.key, label: l.displayName }))))
+      .catch(() => setLists([]))
   }, [])
+
+  const listLabel = (listId?: string) =>
+    listId ? (lists.find((l) => l.key === listId)?.label ?? 'A list that no longer exists') : 'Default list'
 
   const loadSchedules = async () => {
     try {
@@ -189,7 +198,8 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
 
       // Create or update via API
       const method = creating ? 'POST' : 'PATCH'
-      const body = creating ? editForm : { emailType: editing, ...editForm }
+      // listId '' clears a schedule's list (back to the email type's default).
+      const body = creating ? editForm : { emailType: editing, ...editForm, listId: editForm.listId ?? '' }
 
       const response = await fetch('/api/email-schedules', {
         method,
@@ -463,6 +473,10 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                             {formatTime(schedule.time)}
                           </Text>
                         </XStack>
+                        <XStack alignItems="center" gap="$1">
+                          <Mail size={16} color={colors.textSecondary} />
+                          <Text color={colors.textSecondary}>{listLabel(schedule.listId)}</Text>
+                        </XStack>
                         {typeStats ? <XStack alignItems="center" gap="$1">
                             <Users size={16} color={statusColor} />
                             <Text color={statusColor}>
@@ -715,6 +729,38 @@ export const ScheduleEmails: React.FC<ScheduleEmailsProps> = () => {
                   backgroundColor={colors.background}
                   borderColor={colors.border}
                 />
+              </View>
+
+              <View>
+                <Text color={colors.textPrimary} marginBottom="$2">
+                  Mailing list
+                </Text>
+                <XStack gap="$2" flexWrap="wrap">
+                  {[{ key: '', label: 'Default list' }, ...lists].map((l) => {
+                    const selected = (editForm.listId ?? '') === l.key
+                    return (
+                      <Button
+                        key={l.key || 'default'}
+                        size="$3"
+                        onPress={() => setEditForm({ ...editForm, listId: l.key || undefined })}
+                        backgroundColor={selected ? colors.primary : colors.backgroundTertiary}
+                        borderColor={selected ? colors.primary : colors.border}
+                        borderWidth={1}
+                        hoverStyle={{
+                          backgroundColor: selected ? colors.primary : colors.backgroundSecondary,
+                          borderColor: selected ? colors.primary : colors.textSecondary,
+                          opacity: 0.9,
+                        }}
+                        pressStyle={{
+                          backgroundColor: selected ? colors.primary : colors.backgroundSecondary,
+                          opacity: 0.8,
+                        }}
+                      >
+                        <Text color={selected ? colors.primaryForeground : colors.textPrimary}>{l.label}</Text>
+                      </Button>
+                    )
+                  })}
+                </XStack>
               </View>
 
               <XStack alignItems="center" justifyContent="space-between">

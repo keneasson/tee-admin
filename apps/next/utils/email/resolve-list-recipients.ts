@@ -1,6 +1,8 @@
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import type { MailingListRecord } from '@my/app/provider/dynamodb/types'
 import { getSuppressedSet } from './suppression'
+import { eligiblePeopleForList, type EligiblePerson } from '../mailing-lists/default-opt-in'
 
 /**
  * Phase 2 — the in-house recipient resolver.
@@ -17,9 +19,12 @@ import { getSuppressedSet } from './suppression'
  *      canonical EMAIL# item (PersonEmailRecord.verified, see
  *      packages/app/provider/dynamodb/types.ts). We join to it per person.
  *
- * DARK: nothing calls this on the live send path yet. It is exercised only by
- * the flag-gated parity harness (/api/admin/mailing-lists/parity) until the
- * Phase 4 cutover. It performs NO writes.
+ * DEFAULT OPT-IN (R5): for a list with `defaultOptIn`, eligible people with no
+ * row on the list are added as candidates (see mailing-lists/default-opt-in.ts
+ * for the rule), then filtered exactly like everyone else.
+ *
+ * Used by every list send (via mailing-lists/registry-send.ts) and by parity.
+ * It performs NO writes.
  */
 
 export interface ResolvedRecipient {
@@ -39,6 +44,8 @@ export interface ResolveStats {
   duplicatesRemoved: number
   /** final recipient count (== recipients.length). */
   recipients: number
+  /** candidates added by the list's defaultOptIn (before filtering). */
+  defaultOptIn?: number
 }
 
 export interface ResolveResult {
@@ -114,9 +121,33 @@ export interface ResolveDeps {
   /** canonical EMAIL# rows for a person → verification lookup. */
   getEmailsForPerson: (
     personId: string
-  ) => Promise<Array<{ emailId: string; verified: boolean }>>
+  ) => Promise<Array<{ emailId: string; verified: boolean; email?: string }>>
   /** SES account suppression lookup for a batch of addresses. */
   getSuppressed: (emails: string[]) => Promise<Set<string>>
+  /** Every row (opt_in + opt_out) on a list. Needed only for a defaultOptIn list. */
+  listAllRows?: (listId: string) => Promise<Array<{ email: string; personId: string; status: 'opt_in' | 'opt_out' }>>
+  /** Everyone a defaultOptIn list reaches by default. Needed only for a defaultOptIn list. */
+  eligiblePeople?: (list: ResolvableList) => Promise<EligiblePerson[]>
+}
+
+/** The list fields the resolver reads. A bare listId means "no defaultOptIn". */
+export type ResolvableList = Pick<MailingListRecord, 'listId' | 'defaultOptIn' | 'scope' | 'scopeValue'>
+
+/**
+ * Pure: the default-opt-in candidates. An eligible person is added only when
+ * they have NO row on the list and their address has no opt-out row on it.
+ * `emailId` is left empty; the resolver fills it from the person's EMAIL# rows
+ * (no matching row → unverified → dropped, fail-closed).
+ */
+export function defaultOptInCandidates(
+  eligible: EligiblePerson[],
+  rows: Array<{ email: string; personId: string; status: 'opt_in' | 'opt_out' }>
+): RecipientCandidate[] {
+  const personsWithRow = new Set(rows.map((r) => r.personId))
+  const optedOut = new Set(rows.filter((r) => r.status === 'opt_out').map((r) => r.email.toLowerCase()))
+  return eligible
+    .filter((p) => p.email && !personsWithRow.has(p.personId) && !optedOut.has(p.email.toLowerCase()))
+    .map((p) => ({ email: p.email.toLowerCase(), personId: p.personId, emailId: '' }))
 }
 
 const defaultDeps: ResolveDeps = {
@@ -131,9 +162,16 @@ const defaultDeps: ResolveDeps = {
   },
   getEmailsForPerson: async (personId) => {
     const emails = await personRepository.getEmails(personId)
-    return emails.map((e) => ({ emailId: e.emailId, verified: e.verified }))
+    return emails.map((e) => ({ emailId: e.emailId, verified: e.verified, email: e.email }))
   },
   getSuppressed: (emails) => getSuppressedSet(emails),
+  listAllRows: async (listId) =>
+    (await mailingListRepository.listAllSubscriptionRows(listId)).map((r) => ({
+      email: r.email,
+      personId: r.pkey.replace(/^PERSON#/, ''),
+      status: r.status,
+    })),
+  eligiblePeople: (list) => eligiblePeopleForList(list),
 }
 
 /**
@@ -142,10 +180,22 @@ const defaultDeps: ResolveDeps = {
  * real repositories and the SES account suppression list.
  */
 export async function resolveListRecipients(
-  listId: string,
+  listOrId: string | ResolvableList,
   deps: ResolveDeps = defaultDeps
 ): Promise<ResolveResult> {
-  const candidates = await deps.listSubscribers(listId)
+  const list = typeof listOrId === 'string' ? null : listOrId
+  const listId = typeof listOrId === 'string' ? listOrId : listOrId.listId
+  const explicit = await deps.listSubscribers(listId)
+
+  let defaults: RecipientCandidate[] = []
+  if (list?.defaultOptIn) {
+    if (!deps.listAllRows || !deps.eligiblePeople) {
+      throw new Error('resolveListRecipients: a defaultOptIn list needs listAllRows + eligiblePeople')
+    }
+    const [rows, eligible] = await Promise.all([deps.listAllRows(listId), deps.eligiblePeople(list)])
+    defaults = defaultOptInCandidates(eligible, rows)
+  }
+  const candidates = [...explicit, ...defaults]
 
   // Suppression: one batched pass, cached for this resolve.
   const suppressed = await deps.getSuppressed(candidates.map((c) => c.email))
@@ -159,8 +209,15 @@ export async function resolveListRecipients(
       for (const e of emails) {
         verifiedByEmailId.set(`${personId}#${e.emailId}`, e.verified)
       }
+      // A default candidate carries only an address: find its EMAIL# row.
+      for (const c of defaults) {
+        if (c.personId !== personId) continue
+        const row = emails.find((e) => (e.email || '').toLowerCase() === c.email)
+        if (row) c.emailId = row.emailId
+      }
     })
   )
 
-  return filterRecipients(candidates, suppressed, verifiedByEmailId)
+  const result = filterRecipients(candidates, suppressed, verifiedByEmailId)
+  return list?.defaultOptIn ? { ...result, stats: { ...result.stats, defaultOptIn: defaults.length } } : result
 }

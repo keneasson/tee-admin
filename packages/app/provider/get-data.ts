@@ -1,14 +1,11 @@
 import Constants from 'expo-constants'
 import {
-  CreateContactType,
   CycType,
   DataTypes,
-  GetContactType,
   ProgramsTypes,
   SimplifiedContactListType,
   EmailReasonType,
 } from '@my/app/types'
-import { CreateUpdateListType } from '../types'
 import type { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
 import type { Post } from '@my/app/types/post'
@@ -85,9 +82,8 @@ export const sendEmail = async (
 
 /**
  * Trigger a News item email blast (Issue #57). Sends the given News item to a
- * chosen audience via the existing `/api/admin/news/[id]/send-alert` route,
- * which already accepts a `list` audience override (incl. inter-ecclesia
- * leaders). Test sends always go to the test list, enforced server-side.
+ * chosen list (`audienceKey` = its listId) via `/api/admin/news/[id]/send-alert`.
+ * Test sends always go to the test list, enforced server-side.
  */
 export const sendNewsAlert = async (
   newsId: string,
@@ -275,55 +271,14 @@ export const getActiveNews = async (): Promise<NewsItem[]> => {
 }
 
 /**
- * Get a list of all Subscriber Lists.
+ * The mailing lists a send screen can target (R5): every active registry list,
+ * `key` = its listId, named by owner + list. Includes lists with no SES topic.
  */
 export const getContactsList = async (): Promise<SimplifiedContactListType> => {
-  const url = `${API_PATH}api/contact/list/`
+  const url = `${API_PATH}api/admin/mailing-lists/sendable`
   const list = await fetch(url, { cache: 'no-store' })
+  if (!list.ok) throw new Error(`Could not load lists (${list.status})`)
   return await list.json()
-}
-
-/**
- * Add a new Subscriber List (Topic)
- */
-export const addContactsList = async (createContact: CreateUpdateListType): Promise<string> => {
-  const url = `${API_PATH}api/contact/list/`
-  const body = JSON.stringify(createContact)
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  return await response.json()
-}
-
-/**
- * Get all the contacts from a Specific List (Topic)
- * @param nextToken if there's more - pass this to get "next page"
- */
-export const getContacts = async (nextToken?: string | false): Promise<GetContactType> => {
-  const urlNextToken = nextToken ? `?NextToken=${nextToken}` : ''
-  const url = `${API_PATH}api/contact${urlNextToken}`
-  const rawContacts = await fetch(url, { cache: 'no-store', method: 'GET' })
-  return await rawContacts.json()
-}
-
-/**
- * add a contact to subscriber list
- * @param contact Add this contact to the subscriber list
- */
-export const addContacts = async (contact: CreateContactType): Promise<string> => {
-  const url = `${API_PATH}api/contact/`
-  const body = JSON.stringify(contact)
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  return await response.json()
-}
-
-/**
- * update a contact in subscriber list
- * @param contact Add this contact to the subscriber list
- */
-export const updateContacts = async (contact: CreateContactType): Promise<string> => {
-  const url = `${API_PATH}api/contact/`
-  const body = JSON.stringify(contact)
-  const response = await fetch(url, { cache: 'no-store', method: 'PATCH', body })
-  return await response.json()
 }
 
 /**
@@ -422,7 +377,7 @@ export const deleteDraftPost = async (id: string): Promise<void> => {
 
 export const sendPostAnnouncement = async (
   id: string,
-  options: { test?: boolean; list: string; allowDraft?: boolean }
+  options: { test?: boolean; /** listId */ list: string; allowDraft?: boolean }
 ): Promise<{ test: boolean; sentCount: number; skippedCount: number }> => {
   const url = `${API_PATH}api/admin/posts/${encodeURIComponent(id)}/send`
   const response = await fetch(url, {
@@ -431,7 +386,7 @@ export const sendPostAnnouncement = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       test: options.test !== false,
-      list: options.list,
+      listId: options.list,
       ...(options.allowDraft ? { allowDraft: true } : null),
     }),
   })

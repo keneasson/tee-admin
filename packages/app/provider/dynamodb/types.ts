@@ -546,7 +546,9 @@ export interface PersonEmailRecord extends BaseRecord {
   // SES integration
   sesSubscribed: boolean
   sesStatus: 'active' | 'bounced' | 'complained' | 'unsubscribed'
-  sesTopicPreferences?: Record<string, boolean>
+  // `sesTopicPreferences` is retired (R5): list subscriptions live only in the
+  // mailing-list registry (ListSubscriptionRecord). Old rows may still carry
+  // the attribute until scripts/retire-ses-topic-fields.ts removes it.
   sesLastSynced?: string
 }
 
@@ -909,15 +911,10 @@ export function isOrganizationRecord(record: any): record is OrganizationRecord 
 }
 
 // ===== MAILING LIST REGISTRY (multi-tenant, in-house subscriptions) =====
-// Mailing-list subscriptions live IN-HOUSE (R5). A list's sends read the
-// registry only once that list's `sendFromRegistry` is on; until then the SES
-// topic path is unchanged. SES topics stay as the final safety-net gate.
-//
-// IMPORTANT: subscriptions live in their OWN items (ListSubscriptionRecord),
-// NOT in PersonEmailRecord.sesTopicPreferences. The cron + existing email
-// helpers enumerate the fixed EmailListTypes and would silently drop any
-// dynamic (per-tenant) list key, so registry subscriptions must never be folded
-// back into sesTopicPreferences.
+// Mailing-list subscriptions live IN-HOUSE (R5), keyed only by listId. Sends
+// name a listId and resolve recipients from the registry. SES topics are no
+// longer per list: a send names one SAFETY-NET topic (see
+// apps/next/utils/mailing-lists/safety-net.ts) as its final gate.
 
 // Consent basis for a list.
 //   reminders               — service/class reminders (self-serve)
@@ -969,11 +966,14 @@ export interface MailingListRecord extends BaseRecord {
   description: string
   defaultOptIn: boolean
   status: 'active' | 'archived'
-  // LEGACY bridge: set ONLY on the 7 migrated Toronto East lists. It is the SES
-  // topic a send names as its final safety-net gate. Omitted on every new list.
+  // LEGACY bridge: set ONLY on the 7 migrated Toronto East lists. Read by a send
+  // only while the SES safety-net topics are not yet switched on (a list not
+  // cut over still sends from this topic, and a cut-over list still names it).
+  // Deleted by scripts/retire-ses-topic-fields.ts after the switch.
   sesTopic?: string
   // Per-list cutover. true → sends resolve recipients from the registry
-  // (LISTSUB#); absent/false → the unchanged SES-topic path. Default OFF.
+  // (LISTSUB#); absent/false on a bridged list → its SES topic. A list with no
+  // sesTopic always sends from the registry. Ignored once the safety net is on.
   sendFromRegistry?: boolean
   createdAt: string
 }

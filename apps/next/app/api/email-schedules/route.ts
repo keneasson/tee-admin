@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sendQueueRepo } from '@my/app/provider/dynamodb/repositories/send-queue-repository'
 import { CreateScheduleRequest, UpdateScheduleRequest } from '@my/app/types/send-queue'
 import { auth } from '@/utils/auth'
+import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
+
+/** A schedule's listId must name an active list ('' / absent = the default list). */
+async function invalidListId(listId: unknown): Promise<NextResponse | null> {
+  if (listId === undefined || listId === '') return null
+  if (typeof listId !== 'string') return NextResponse.json({ error: 'listId must be a string' }, { status: 400 })
+  const list = await mailingListRepository.getList(listId)
+  if (!list || list.status !== 'active') {
+    return NextResponse.json({ error: 'That list does not exist or is archived.' }, { status: 400 })
+  }
+  return null
+}
 
 /**
  * GET /api/email-schedules
@@ -59,6 +71,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
+    const badList = await invalidListId(body.listId)
+    if (badList) return badList
 
     const schedule = await sendQueueRepo.putSchedule(body)
     return NextResponse.json({ schedule }, { status: 201 })
@@ -98,6 +112,8 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       )
     }
+    const badList = await invalidListId(body.listId)
+    if (badList) return badList
 
     const schedule = await sendQueueRepo.updateSchedule(body)
     return NextResponse.json({ schedule })

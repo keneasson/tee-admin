@@ -11,6 +11,19 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### SES + prod data — finish R5: safety-net topics, retire topic fields (owner-run, in order)
+- **Date**: 2026-10-18
+- **Branch**: `feat/r5-finish`
+- **Code change**: every send names a mailing-list `listId`; `/email-preferences` writes only the registry (+ UnsubscribeAll); all SES topic writers and `cron/sync-ses-contacts` are deleted; sends name the SES safety-net topic once the stored setting `MAILING_LIST_SETTINGS / SAFETY_NET` is on (until then, each bridged list's legacy topic).
+- **Why the order matters**: (1) with topic writes gone, a preference change only reaches delivery for a list that sends from the registry, so all 7 lists must be cut over before this merges; (2) `update-contact-list` wipes every contact's TopicPreferences, so it runs only after cutover and a backup, and a send naming a deleted topic fails.
+- **External action**:
+  1. Before merge: `npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity`, then `cutover --topic <t> --to registry --apply` for every list still on SES (Sunday–Tuesday).
+  2. After deploy: one test-list send from the Email Sender.
+  3. Sunday–Tuesday, no manual sends running: `npx tsx scripts/ses-safety-net-topics.ts` (dry run), then `--apply` (backs up to `s3://tee-admin-backups/backups/<date>-ses-safety-net/`, replaces the topics with `safetyNetDefault`, flips the setting, keeps UnsubscribeAll, merges the 8 case-duplicate contacts, verifies).
+  4. `npx tsx scripts/retire-ses-topic-fields.ts` (dry run), then `--apply`; re-run dry to confirm 0 remain.
+  5. Vercel: no app code reads `CRON_SECRET` any more (only the deleted `cron/sync-ses-contacts` did); removing it is optional.
+- **Status**: PENDING
+
 ### Prod data — people-index backfill for #275 (run AFTER this deploys), then the sign-in flag
 - **Date**: 2026-10-17
 - **Branch**: `feat/people-access-patterns`

@@ -23,6 +23,24 @@ One source of truth for **people**, **ecclesias and their offices**, and **maili
 | R7 | **Every reader moved.** Password sign-in, registration, verify and reset; email-keyed privacy, relationships and requests; RB detection; the Sheets people lookup. All read person or office records. | A CI grep gate fails on any legacy-store read. Owner-account sign-in test for each method. |
 | R8 | **Legacy deleted.** Code: legacy repositories, routes, scripts, Pages Router email/contact routes, migration tools. Data: `DIRECTORY#MEMBERS`, legacy `USER#` people items, copied ecclesia RB fields, committed subscriber files (with history purge, #78). Final backup first. | A scan shows 0 legacy items. The grep gate passes. `yarn smoke:prod` passes. |
 
+### R5 status (2026-10-18)
+
+Done in code (PR #285 and the R5-finish PR):
+
+- Every send names a `listId`: the Email Sender, the News/Events composer, the post and news-alert senders, meeting sends, scheduled sends (a schedule can carry a `listId`) and test sends resolve one registry list (`utils/mailing-lists/send-target.ts`). The audience picker lists every active list by its derived name, including lists with no SES topic. The send record stores the `listId`. The `EmailListTypes` enum is deleted; an old list key ('newsletter') is still read only from records saved before R5 (drafts, meetings, news blasts, schedules without a `listId`) and resolved to the owner's list.
+- `defaultOptIn` applies: an eligible person (the list is offered to them by the scope ladder) with no row on the list is treated as subscribed, source `default`, at read time. Any row the person has, or an opt-out of that address, wins. Leaving such a list writes an `opt_out` row.
+- Safety net: sends name the topic from `utils/mailing-lists/safety-net.ts` (`safetyNetDefault`, default OPT_IN) once the stored setting is on; until then a bridged list names its legacy topic and a new list names none.
+- SES topic writers removed: `/api/subscribe` writes only the registry plus UnsubscribeAll; `contact.ts` add/update helpers, the email-tester SES contact/topic editor, `pages/api/contact/*`, `import-inter-ecclesia`, `migrate-inter-ecclesia`, the SES init scripts and `cron/sync-ses-contacts` are deleted. An admin email change moves registry rows. The Email Lists page reads the registry.
+- `sesTopicPreferences` is removed from the types and from every reader and writer.
+
+Owner-run steps, in order (each is a dry run first; `--apply` backs up first):
+
+1. Cut over every bridged list: `npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity`, then `cutover --topic <topic> --to registry --apply` for each (Sunday–Tuesday). Merge the R5-finish PR only after all 7 lists show `sendFromRegistry: true`, because `/email-preferences` no longer writes SES topics.
+2. Send one test-list email from the Email Sender.
+3. Sunday–Tuesday, with no manual send running: `npx tsx scripts/ses-safety-net-topics.ts`, then `--apply`. It backs up every contact, the topic list and the suppression list, replaces the topics with the safety net, switches sends to it, keeps UnsubscribeAll, merges the 8 letter-case duplicates and verifies.
+4. `npx tsx scripts/retire-ses-topic-fields.ts`, then `--apply`: removes `sesTopicPreferences` from EMAIL# items, and (after step 3) each list's `sesTopic`.
+5. Re-run step 4 as a dry run: 0 remaining. R5 is done when these steps are complete.
+
 ## 0.3 Out of scope ("Not now")
 
 Not part of this work. Each is one line here, not an issue.
@@ -32,10 +50,9 @@ Not part of this work. Each is one line here, not an issue.
 - Trust weighting / community verification of contact details.
 - Multi-tenant newsletters for other ecclesias (#26).
 - Rotted test files (#244) and the dead `apps/next` lint (#216), except where a file this work touches must pass.
+- `unsubscribeContact` (bounce webhook, deceased) finds the SES contact by the address as given, not lower-cased.
+- A list's `defaultOptIn` reaches people through `listEcclesiasCached`, which today returns 35 of 39 ecclesias (§0.6), so a default list misses people of the other 4 until that Scan is fixed.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
-- Sending to a list with no SES topic (a list made on `/admin/email/mailing-lists`) from the send screens; only the 7 bridged Toronto East lists send today (R5 switchover PR).
-- Applying a list's `defaultOptIn` to new people; it is stored, nobody is subscribed automatically.
-- `cron/sync-ses-contacts` rewrites every contact's topics from the empty `sesTopicPreferences` (all OPT_OUT); it now fails closed without `CRON_SECRET`, and is deleted with the SES topic writers.
 
 ## 0.4 Definition of done
 

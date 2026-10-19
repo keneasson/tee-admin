@@ -1,7 +1,5 @@
 import {
   CreateContactCommand,
-  CreateContactCommandInput,
-  CreateContactCommandOutput,
   GetContactCommand,
   ListContactsCommand,
   ListContactsRequest,
@@ -12,20 +10,24 @@ import {
 } from '@aws-sdk/client-sesv2'
 
 import { inputTemplate } from './contact-lists'
-import {
-  CreateContactType,
-  EmailListTypeKeys,
-  EmailListTypes,
-  GetContactsProps,
-} from '@my/app/types'
+import { GetContactsProps } from '@my/app/types'
+import type { ListSubscriptionRecord, MailingListRecord } from '@my/app/provider/dynamodb/types'
 import { getSesClient } from './sesClient'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+
+/*
+ * SES contact helpers. R5: nothing here writes a TOPIC preference. List
+ * subscriptions live in the mailing-list registry; SES keeps only the contact,
+ * its UnsubscribeAll ("stop all mail") and the account suppression list.
+ */
 
 const PAGE_SIZE = 100
 
 /**
- * Return all the Contacts that Subscribe to the specific List Name
- * @param listTopic the SES Topic - from the Email send reason
+ * Return the contacts explicitly opted into one SES topic (read-only). Used
+ * only for a bridged list that is not cut over, and for parity, while the
+ * legacy topics still exist.
+ * @param listTopic the SES topic
  * @param nextPageToken String - if there's more than one page, this will be a reference ot the next page.
  */
 export async function getContacts({
@@ -57,53 +59,6 @@ export async function getContacts({
   return await client.send(command)
 }
 
-export async function addContact(contact: CreateContactType): Promise<CreateContactCommandOutput> {
-  const client = getSesClient()
-  console.log('in addContact BE', { contact })
-  const sesPref = Object.keys(EmailListTypes).map((p) => {
-    return {
-      TopicName: p,
-      SubscriptionStatus: contact.lists[p as EmailListTypeKeys]
-        ? SubscriptionStatus.OPT_IN
-        : SubscriptionStatus.OPT_OUT,
-    }
-  })
-
-  const input: CreateContactCommandInput = {
-    ...inputTemplate,
-    EmailAddress: contact.email,
-    AttributesData: '',
-    TopicPreferences: sesPref,
-  }
-  const command = new CreateContactCommand(input)
-  return await client.send(command)
-}
-
-export async function updateContact({
-  email,
-  lists,
-}: CreateContactType): Promise<UpdateContactCommandOutput> {
-  const client = getSesClient()
-  console.log('in updateContact BE', { email, lists })
-  const sesPref = Object.keys(EmailListTypes).map((p) => {
-    return {
-      TopicName: p,
-      SubscriptionStatus: lists[p as EmailListTypeKeys]
-        ? SubscriptionStatus.OPT_IN
-        : SubscriptionStatus.OPT_OUT,
-    }
-  })
-
-  const input: CreateContactCommandInput = {
-    ...inputTemplate,
-    EmailAddress: email,
-    AttributesData: '',
-    TopicPreferences: sesPref,
-  }
-  const command = new UpdateContactCommand(input)
-  return await client.send(command)
-}
-
 /**
  * Check if a contact exists in the SES contact list
  */
@@ -124,105 +79,100 @@ export async function getContact(email: string) {
 }
 
 /**
- * Move a member's topic subscriptions from one address to another, writing BOTH
- * sides of the source of truth so the change actually sticks.
+ * Move a member's LIST subscriptions from one address to another (R5: the
+ * mailing-list registry is the only subscription store; no SES topic is
+ * written).
  *
- * Why both writes matter: SES v2 holds per-contact `TopicPreferences`, but the
- * PersonRecord EMAIL# row is CANONICAL — the `sync-ses-contacts` cron pushes the
- * PRIMARY email's `sesTopicPreferences` → SES one-way. So an SES-only edit to a
- * primary address is silently reverted on the next sync. This helper writes the
- * PersonRecord rows too (the fix for that drift).
+ * For every list the OLD address is opted into, the NEW address is opted in
+ * (under the person the new address resolves to — this person). The old
+ * address's rows are flipped to opt_out, UNLESS somebody else still holds the
+ * old address (a shared household inbox, #267): opting it out would stop the
+ * rest of the household's mail because one of them moved. Rows are never
+ * deleted.
  *
- * Steps:
- *  1. Read the OLD address's current opt-ins from SES.
- *  2. SES: copy those opt-ins onto the NEW address; clear the OLD address.
- *  3. PersonRecord: set the NEW EMAIL# row `sesTopicPreferences` to the copied
- *     opt-ins + `sesSubscribed = true`; set the OLD EMAIL# row to all-false +
- *     `sesSubscribed = false`. The PersonRecord write is best-effort/logged so a
- *     missing row can't undo the SES change that already succeeded.
- *
- * `sesTopicPreferences` shape is a full `Record<topic, boolean>` over every
- * `EmailListTypes` key — matching how the cron reads it
- * (`primaryEmailRecord.sesTopicPreferences[topic]`).
- *
- * @returns the topics that were carried over (the OPT_IN ones).
+ * @returns the names of the lists that moved.
  */
-export async function migrateSubscriptions(
+export async function moveListSubscriptions(
   oldEmail: string,
   newEmail: string,
-  opts: { personId: string }
-): Promise<{ movedTopics: string[] }> {
-  const oldLower = oldEmail.toLowerCase()
-  const newLower = newEmail.toLowerCase()
-  const allTopics = Object.keys(EmailListTypes)
+  opts: { personId: string },
+  deps?: MoveSubscriptionDeps
+): Promise<{ movedLists: string[] }> {
+  const d = deps ?? (await defaultMoveDeps())
+  const oldLower = oldEmail.trim().toLowerCase()
+  const newLower = newEmail.trim().toLowerCase()
 
-  // 1. Read the OLD address's current topic opt-ins from SES. Build a full map
-  //    over every topic (default false), then flip the OPT_IN ones true.
-  const oldPrefs: Record<string, boolean> = {}
-  const allFalse: Record<string, boolean> = {}
-  for (const topic of allTopics) {
-    oldPrefs[topic] = false
-    allFalse[topic] = false
-  }
-
-  const oldContact = await getContact(oldLower)
-  if (oldContact?.TopicPreferences) {
-    for (const pref of oldContact.TopicPreferences) {
-      if (pref.TopicName) {
-        oldPrefs[pref.TopicName] = pref.SubscriptionStatus === SubscriptionStatus.OPT_IN
-      }
+  const othersOnOld = (await d.getAllPersonsByEmail(oldLower)).filter((p) => p.personId !== opts.personId)
+  const movedLists: string[] = []
+  for (const list of await d.listAllLists()) {
+    const rows = await d.getListSubscriptionsForEmail(list.listId, oldLower)
+    if (!rows.some((r) => r.status === 'opt_in')) continue
+    await d.setListSubscription({ listId: list.listId, email: newLower, subscribed: true })
+    if (othersOnOld.length === 0) {
+      for (const row of rows.filter((r) => r.status === 'opt_in')) await d.setSubscriptionStatus(row, 'opt_out')
     }
+    movedLists.push(list.name)
   }
-
-  const movedTopics = allTopics.filter((topic) => oldPrefs[topic])
-
-  // 2. SES: copy opt-ins onto the new address, then clear the old one —
-  //    UNLESS somebody else still uses the old address (a shared household
-  //    inbox, #267). Clearing it then would opt the rest of the household out
-  //    of everything because one of them moved.
-  const othersOnOld = (await personRepository.getAllPersonsByEmail(oldLower)).filter(
-    (p) => p.personId !== opts.personId
-  )
-  await addContact({ email: newLower, lists: oldPrefs as any })
-  if (othersOnOld.length === 0) {
-    await updateContact({ email: oldLower, lists: allFalse as any })
-  } else {
+  if (othersOnOld.length > 0 && movedLists.length > 0) {
     console.log(
-      `migrateSubscriptions: old address is shared with ${othersOnOld.length} other person(s) — left subscribed`
+      `moveListSubscriptions: old address is shared with ${othersOnOld.length} other person(s) — left subscribed`
     )
   }
+  return { movedLists }
+}
 
-  // 3. PersonRecord (canonical) — otherwise the one-way SES sync cron reverts (2).
-  try {
-    const emails = await personRepository.getEmails(opts.personId)
-    const newRow = emails.find((e) => e.email.toLowerCase() === newLower)
-    const oldRow = emails.find((e) => e.email.toLowerCase() === oldLower)
+export interface MoveSubscriptionDeps {
+  listAllLists: () => Promise<Array<Pick<MailingListRecord, 'listId' | 'name'>>>
+  getListSubscriptionsForEmail: (listId: string, email: string) => Promise<ListSubscriptionRecord[]>
+  setSubscriptionStatus: (
+    row: Pick<ListSubscriptionRecord, 'pkey' | 'skey'>,
+    status: ListSubscriptionRecord['status']
+  ) => Promise<unknown>
+  setListSubscription: (input: { listId: string; email: string; subscribed: boolean }) => Promise<unknown>
+  getAllPersonsByEmail: (email: string) => Promise<Array<{ personId: string }>>
+}
 
-    if (newRow) {
-      await personRepository.update(newRow.pkey, newRow.skey, {
-        sesTopicPreferences: oldPrefs,
-        sesSubscribed: true,
-      } as any)
-    } else {
-      console.warn(
-        `migrateSubscriptions: no EMAIL# row for new address ${newLower} on person ${opts.personId} — SES updated, PersonRecord skipped`
-      )
-    }
-
-    if (oldRow) {
-      await personRepository.update(oldRow.pkey, oldRow.skey, {
-        sesTopicPreferences: allFalse,
-        sesSubscribed: false,
-      } as any)
-    }
-  } catch (error) {
-    console.error(
-      'migrateSubscriptions: PersonRecord update failed (SES already updated):',
-      error
-    )
+async function defaultMoveDeps(): Promise<MoveSubscriptionDeps> {
+  const [{ mailingListRepository }, { setListSubscription, defaultSubscriptionDeps }] = await Promise.all([
+    import('@my/app/provider/dynamodb/repositories/mailing-list-repository'),
+    import('../mailing-lists/subscriptions'),
+  ])
+  const subDeps = await defaultSubscriptionDeps()
+  return {
+    listAllLists: () => mailingListRepository.listAllLists(),
+    getListSubscriptionsForEmail: (l, e) => mailingListRepository.getListSubscriptionsForEmail(l, e),
+    setSubscriptionStatus: (row, st) => mailingListRepository.setSubscriptionStatus(row, st),
+    setListSubscription: (input) => setListSubscription(input, subDeps),
+    getAllPersonsByEmail: (e) => personRepository.getAllPersonsByEmail(e),
   }
+}
 
-  return { movedTopics }
+/**
+ * Set or clear a contact's SES UnsubscribeAll (the global "stop all mail",
+ * which stays in SES; R5). SES UpdateContact replaces the whole contact, so the
+ * contact's explicit topic preferences and attributes are passed back as-is.
+ * Clearing it on an address that is not a contact is a no-op.
+ */
+export async function setUnsubscribeAll(email: string, on: boolean): Promise<void> {
+  const client = getSesClient()
+  const address = email.trim().toLowerCase()
+  const existing = await getContact(address)
+  if (!existing) {
+    if (on) {
+      await client.send(new CreateContactCommand({ ...inputTemplate, EmailAddress: address, UnsubscribeAll: true }))
+    }
+    return
+  }
+  if (!!existing.UnsubscribeAll === on) return
+  await client.send(
+    new UpdateContactCommand({
+      ...inputTemplate,
+      EmailAddress: address,
+      UnsubscribeAll: on,
+      ...(existing.TopicPreferences ? { TopicPreferences: existing.TopicPreferences } : {}),
+      ...(existing.AttributesData ? { AttributesData: existing.AttributesData } : {}),
+    })
+  )
 }
 
 /**

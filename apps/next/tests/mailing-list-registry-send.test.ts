@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { applyUnsubscribeAll, resolveRegistryAudience, type RegistrySendDeps } from '../utils/mailing-lists/registry-send'
+import { applyUnsubscribeAll, resolveSendAudience, type SendAudienceDeps } from '../utils/mailing-lists/registry-send'
 import { runListParity } from '../utils/mailing-lists/parity'
 import { cutoverAllowed, inSendWindow } from '../utils/mailing-lists/mailing-list-ops'
 import type { MailingListRecord } from '@my/app/provider/dynamodb/types'
@@ -28,47 +28,71 @@ const resolved = (emails: string[]) => ({
   stats: { candidates: emails.length, suppressedRemoved: 0, unverifiedRemoved: 0, duplicatesRemoved: 0, recipients: emails.length },
 })
 
-const deps = (o: Partial<RegistrySendDeps> = {}): RegistrySendDeps => ({
-  findBySesTopic: vi.fn(async () => list({ sendFromRegistry: true })),
+const deps = (o: Partial<SendAudienceDeps> = {}): SendAudienceDeps => ({
   resolveListRecipients: vi.fn(async () => resolved(['a@example.org', 'b@example.org'])),
   getUnsubscribedAll: vi.fn(async () => new Set<string>()),
+  sesTopicRecipients: vi.fn(async () => ['ses-a@example.org']),
   ...o,
 })
 
-describe('resolveRegistryAudience — per-list cutover, default off, fail-safe', () => {
-  it('cutover OFF (flag absent): null → the SES path, and the registry is not read', async () => {
-    const d = deps({ findBySesTopic: vi.fn(async () => list()) })
-    expect(await resolveRegistryAudience('bibleClass', d)).toBeNull()
+describe('resolveSendAudience — safety net OFF (today)', () => {
+  it('bridged list not cut over: its SES topic, and the registry is not read', async () => {
+    const d = deps()
+    const a = await resolveSendAudience(list(), false, d)
+    expect(a).toMatchObject({ source: 'ses-topic', topicName: 'bibleClass', emails: ['ses-a@example.org'] })
     expect(d.resolveListRecipients).not.toHaveBeenCalled()
   })
 
-  it('no list for the topic, or an archived list: null', async () => {
-    expect(await resolveRegistryAudience('memorial', deps({ findBySesTopic: vi.fn(async () => null) }))).toBeNull()
-    expect(
-      await resolveRegistryAudience('bibleClass', deps({ findBySesTopic: vi.fn(async () => list({ sendFromRegistry: true, status: 'archived' })) }))
-    ).toBeNull()
-  })
-
-  it('cutover ON: registry recipients minus SES UnsubscribeAll, keeping the topic as the safety net', async () => {
+  it('bridged list cut over: registry minus UnsubscribeAll, naming its legacy topic', async () => {
     const d = deps({ getUnsubscribedAll: vi.fn(async () => new Set(['b@example.org'])) })
-    const audience = await resolveRegistryAudience('bibleClass', d)
-    expect(audience).toMatchObject({
-      source: 'registry',
-      listId: 'L1',
-      sesTopic: 'bibleClass',
-      emails: ['a@example.org'],
-    })
-    expect(audience?.stats.unsubscribedAllRemoved).toBe(1)
+    const a = await resolveSendAudience(list({ sendFromRegistry: true }), false, d)
+    expect(a).toMatchObject({ source: 'registry', listId: 'L1', topicName: 'bibleClass', emails: ['a@example.org'] })
+    expect(a.stats.unsubscribedAllRemoved).toBe(1)
   })
 
-  it('cutover ON but 0 recipients (e.g. backfill missing): falls back to SES', async () => {
+  it('cut over but 0 recipients (backfill missing): falls back to the SES topic', async () => {
     const d = deps({ resolveListRecipients: vi.fn(async () => resolved([])) })
-    expect(await resolveRegistryAudience('bibleClass', d)).toBeNull()
+    expect(await resolveSendAudience(list({ sendFromRegistry: true }), false, d)).toMatchObject({
+      source: 'ses-topic',
+      topicName: 'bibleClass',
+    })
   })
 
-  it('any registry error: falls back to SES instead of failing the send', async () => {
+  it('cut over and the registry read fails: falls back to the SES topic instead of failing the send', async () => {
     const d = deps({ resolveListRecipients: vi.fn(async () => { throw new Error('dynamo down') }) })
-    expect(await resolveRegistryAudience('bibleClass', d)).toBeNull()
+    expect(await resolveSendAudience(list({ sendFromRegistry: true }), false, d)).toMatchObject({ source: 'ses-topic' })
+  })
+
+  it('a list with NO SES topic (e.g. a new "Cambridge Memorial Recap"): the registry, naming no topic', async () => {
+    const d = deps()
+    const a = await resolveSendAudience(list({ sesTopic: undefined, key: 'memorial-recap' }), false, d)
+    expect(a).toMatchObject({ source: 'registry', topicName: undefined, emails: ['a@example.org', 'b@example.org'] })
+    expect(d.sesTopicRecipients).not.toHaveBeenCalled()
+  })
+
+  it('a list with no SES topic that resolves to nobody sends to nobody (no fallback exists)', async () => {
+    const d = deps({ resolveListRecipients: vi.fn(async () => resolved([])) })
+    const a = await resolveSendAudience(list({ sesTopic: undefined }), false, d)
+    expect(a).toMatchObject({ source: 'registry', emails: [] })
+  })
+})
+
+describe('resolveSendAudience — safety net ON', () => {
+  it('every list sends from the registry naming the safety-net topic, even one never cut over', async () => {
+    const d = deps()
+    const a = await resolveSendAudience(list(), true, d)
+    expect(a).toMatchObject({ source: 'registry', topicName: 'safetyNetDefault' })
+    expect(d.sesTopicRecipients).not.toHaveBeenCalled()
+  })
+
+  it('never falls back to a legacy topic (it no longer exists): 0 recipients stays 0, errors throw', async () => {
+    const empty = deps({ resolveListRecipients: vi.fn(async () => resolved([])) })
+    expect(await resolveSendAudience(list({ sendFromRegistry: true }), true, empty)).toMatchObject({
+      source: 'registry',
+      emails: [],
+    })
+    const broken = deps({ resolveListRecipients: vi.fn(async () => { throw new Error('dynamo down') }) })
+    await expect(resolveSendAudience(list({ sendFromRegistry: true }), true, broken)).rejects.toThrow('dynamo down')
   })
 
   it('applyUnsubscribeAll lower-cases before comparing', () => {

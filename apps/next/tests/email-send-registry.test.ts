@@ -1,29 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * emailSend + the R5 per-list cutover. The registry answers only for a list
- * that is cut over; otherwise (null) the SES-topic path runs unchanged. Either
- * way each send still names the SES topic (the safety-net gate).
+ * emailSend (R5): every send resolves ONE registry list (by listId), takes its
+ * audience from registry-send.ts, names the audience's SES topic (or none) in
+ * ListManagementOptions, and records the listId on the send record.
  */
 
-const { mockSesSend, mockGetContacts, mockResolveRegistryAudience } = vi.hoisted(() => ({
-  mockSesSend: vi.fn(),
-  mockGetContacts: vi.fn(),
-  mockResolveRegistryAudience: vi.fn(),
+const h = vi.hoisted(() => ({
+  sesSend: vi.fn(),
+  resolveSendList: vi.fn(),
+  resolveSendAudience: vi.fn(),
+  safetyNetEnabled: vi.fn(),
+  createSendRecord: vi.fn(),
 }))
 
-// The global setup mocks SendEmailCommand as a bare fn; keep each command's input.
 vi.mock('@aws-sdk/client-sesv2', () => ({
   SESv2Client: vi.fn(),
   SendEmailCommand: vi.fn().mockImplementation((input) => ({ input })),
 }))
 vi.mock('../utils/email/sesClient', () => ({
-  getSesClient: () => ({ send: mockSesSend }),
+  getSesClient: () => ({ send: h.sesSend }),
   emailsEnabled: () => true,
 }))
-vi.mock('../utils/email/contact', () => ({ getContacts: mockGetContacts }))
+vi.mock('../utils/email/contact-lists', () => ({ inputTemplate: { ContactListName: 'TEEAdmin' } }))
+vi.mock('../utils/mailing-lists/send-target', () => ({ resolveSendList: h.resolveSendList }))
 vi.mock('../utils/mailing-lists/registry-send', () => ({
-  resolveRegistryAudience: mockResolveRegistryAudience,
+  resolveSendAudience: h.resolveSendAudience,
+  safetyNetEnabled: h.safetyNetEnabled,
 }))
 vi.mock('../utils/email/ecclesia-token', () => ({
   generateEcclesiaUpdateUrl: vi.fn(),
@@ -32,7 +35,7 @@ vi.mock('../utils/email/ecclesia-token', () => ({
   buildSigninUrl: vi.fn(),
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/send-record-repository', () => ({
-  sendRecordRepository: { createSendRecord: vi.fn(), finalizeSendCounts: vi.fn() },
+  sendRecordRepository: { createSendRecord: h.createSendRecord, finalizeSendCounts: vi.fn() },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/send-recipient-repository', () => ({
   sendRecipientRepository: { snapshotRoster: vi.fn() },
@@ -43,55 +46,87 @@ vi.mock('@my/app/features/feature-flags/use-feature-flag-wrapper', () => ({
 
 import { emailSend } from '../utils/email/email-send'
 
-const sentTo = () =>
-  mockSesSend.mock.calls.map((c) => ({
+const NEWSLETTER = { listId: '11111111-1111-4111-8111-111111111111', key: 'newsletter', sesTopic: 'newsletter' }
+const CAMBRIDGE = { listId: '22222222-2222-4222-8222-222222222222', key: 'memorial-recap' }
+
+const sent = () =>
+  h.sesSend.mock.calls.map((c) => ({
     to: c[0].input.Destination.ToAddresses[0],
-    topic: c[0].input.ListManagementOptions.TopicName,
+    list: c[0].input.ListManagementOptions,
   }))
 
-describe('emailSend recipient source', () => {
+describe('emailSend — every send names a listId', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSesSend.mockResolvedValue({})
-    mockGetContacts.mockResolvedValue({
-      Contacts: [
-        { EmailAddress: 'ses-a@example.org', UnsubscribeAll: false },
-        { EmailAddress: 'ses-stopped@example.org', UnsubscribeAll: true },
-      ],
-    })
+    h.sesSend.mockResolvedValue({})
+    h.safetyNetEnabled.mockResolvedValue(false)
   })
 
-  it('list not cut over (registry → null): the unchanged SES-topic path', async () => {
-    mockResolveRegistryAudience.mockResolvedValue(null)
-    const result = await emailSend({ reason: 'bible-class', emailHtml: '<p>x</p>', emailText: 'x' })
-
-    expect(mockResolveRegistryAudience).toHaveBeenCalledWith('bibleClass')
-    expect(mockGetContacts).toHaveBeenCalledWith({ listTopic: 'bibleClass', nextPageToken: undefined })
-    expect(sentTo()).toEqual([{ to: 'ses-a@example.org', topic: 'bibleClass' }])
-    expect(result).toMatchObject({ sends: ['ses-a@example.org'], skips: [] })
-  })
-
-  it('list cut over: recipients come from the registry, and the SES topic is still named', async () => {
-    mockResolveRegistryAudience.mockResolvedValue({
+  it('no list given: resolves the reason default for the tenant and records its listId', async () => {
+    h.resolveSendList.mockResolvedValue(NEWSLETTER)
+    h.resolveSendAudience.mockResolvedValue({
       source: 'registry',
-      listId: 'L-BC',
-      sesTopic: 'bibleClass',
-      emails: ['reg-a@example.org', 'reg-b@example.org'],
+      listId: NEWSLETTER.listId,
+      topicName: 'newsletter',
+      emails: ['a@example.org'],
       stats: {},
     })
-    await emailSend({ reason: 'bible-class', emailHtml: '<p>x</p>', emailText: 'x' })
+    const result = await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x' })
 
-    expect(mockGetContacts).not.toHaveBeenCalled()
-    expect(sentTo()).toEqual([
-      { to: 'reg-a@example.org', topic: 'bibleClass' },
-      { to: 'reg-b@example.org', topic: 'bibleClass' },
+    expect(h.resolveSendList).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'newsletter', test: false, list: undefined })
+    )
+    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, false)
+    expect(sent()).toEqual([
+      { to: 'a@example.org', list: { ContactListName: 'TEEAdmin', TopicName: 'newsletter' } },
     ])
+    expect(h.createSendRecord).toHaveBeenCalledWith(expect.objectContaining({ listId: NEWSLETTER.listId }))
+    expect(result).toMatchObject({ sends: ['a@example.org'], listId: NEWSLETTER.listId })
   })
 
-  it('a test send resolves the test list (so the test list can be cut over first)', async () => {
-    mockResolveRegistryAudience.mockResolvedValue(null)
-    await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x', test: true })
-    expect(mockResolveRegistryAudience).toHaveBeenCalledWith('testList')
-    expect(mockGetContacts).toHaveBeenCalledWith({ listTopic: 'testList', nextPageToken: undefined })
+  it('a list with no SES topic (before the safety net): sends naming the contact list only', async () => {
+    h.resolveSendList.mockResolvedValue(CAMBRIDGE)
+    h.resolveSendAudience.mockResolvedValue({
+      source: 'registry',
+      listId: CAMBRIDGE.listId,
+      topicName: undefined,
+      emails: ['b@example.org'],
+      stats: {},
+    })
+    await emailSend({ reason: 'custom', emailHtml: '<p>x</p>', emailText: 'x', listId: CAMBRIDGE.listId })
+
+    expect(h.resolveSendList).toHaveBeenCalledWith(expect.objectContaining({ list: CAMBRIDGE.listId }))
+    expect(sent()).toEqual([{ to: 'b@example.org', list: { ContactListName: 'TEEAdmin' } }])
+  })
+
+  it('safety net on: the audience is asked with safetyNet=true and its topic is named', async () => {
+    h.safetyNetEnabled.mockResolvedValue(true)
+    h.resolveSendList.mockResolvedValue(NEWSLETTER)
+    h.resolveSendAudience.mockResolvedValue({
+      source: 'registry',
+      listId: NEWSLETTER.listId,
+      topicName: 'safetyNetDefault',
+      emails: ['a@example.org'],
+      stats: {},
+    })
+    await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x' })
+    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, true)
+    expect(sent()[0].list).toEqual({ ContactListName: 'TEEAdmin', TopicName: 'safetyNetDefault' })
+  })
+
+  it('a test send asks for the test list (test=true), whatever list was named', async () => {
+    h.resolveSendList.mockResolvedValue({ listId: '33333333-3333-4333-8333-333333333333', key: 'testList' })
+    h.resolveSendAudience.mockResolvedValue({ source: 'registry', listId: 'x', emails: [], stats: {} })
+    await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x', test: true, listId: CAMBRIDGE.listId })
+    expect(h.resolveSendList).toHaveBeenCalledWith(expect.objectContaining({ test: true, list: CAMBRIDGE.listId }))
+  })
+
+  it('an unknown list throws before anything is read or sent', async () => {
+    h.resolveSendList.mockRejectedValue(new Error('That list does not exist or is archived.'))
+    await expect(
+      emailSend({ reason: 'custom', emailHtml: '<p>x</p>', emailText: 'x', listId: 'nope' })
+    ).rejects.toThrow('does not exist')
+    expect(h.resolveSendAudience).not.toHaveBeenCalled()
+    expect(h.sesSend).not.toHaveBeenCalled()
   })
 })

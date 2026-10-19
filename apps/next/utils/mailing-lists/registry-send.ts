@@ -1,35 +1,44 @@
 import type { MailingListRecord } from '@my/app/provider/dynamodb/types'
-import type { ResolveResult } from '../email/resolve-list-recipients'
+import type { ResolveResult, ResolvableList } from '../email/resolve-list-recipients'
+import { chooseSendTopic } from './safety-net'
 
 /**
- * Registry send audience (R5, per-list cutover).
+ * The audience of one list send (R5). Every send names a list (by listId,
+ * resolved in send-target.ts); this answers who receives it and which SES
+ * topic the send names as its final gate.
  *
- * `emailSend` asks this for its recipients BEFORE its unchanged SES-topic path.
- * It answers only for a list whose `sendFromRegistry` is on; for every other
- * list, and on ANY error, it answers null and the SES path runs exactly as
- * before. That keeps the switch per list, default off, and fail-safe.
- *
- * Registry recipients = opt_in SUB# rows (LISTSUB#{listId})
+ * Registry recipients = opt_in SUB# rows (LISTSUB#{listId}) + defaultOptIn
  *   − SES account suppression list (bounces/complaints)
  *   − unverified EMAIL# rows
  *   − addresses whose SES contact has UnsubscribeAll (the global "stop all mail")
- * The send still names the list's SES topic, so SES's own per-topic check stays
- * the final safety net.
+ *
+ * Which path:
+ *  - safety net ON (scripts/ses-safety-net-topics.ts has run): the registry,
+ *    always, naming the safety-net topic. The legacy topics no longer exist.
+ *  - safety net OFF:
+ *     · a list with no SES topic (made on /admin/email/mailing-lists): the
+ *       registry, naming no topic (the contact list still honours UnsubscribeAll);
+ *     · a bridged list cut over (sendFromRegistry): the registry, naming its
+ *       legacy topic; if it resolves to NOBODY (almost certainly a missing
+ *       backfill) or the registry read fails, it falls back to its SES topic,
+ *       as before;
+ *     · a bridged list not cut over: its SES topic's explicit OPT_INs.
  */
 
-export interface RegistryAudience {
-  source: 'registry'
+export interface SendAudience {
+  source: 'registry' | 'ses-topic'
   listId: string
-  /** SES topic named on each send as the safety-net gate. */
-  sesTopic: string
+  /** The SES topic named on each send, or undefined for none. */
+  topicName?: string
   emails: string[]
-  stats: ResolveResult['stats'] & { unsubscribedAllRemoved: number }
+  stats: Partial<ResolveResult['stats']> & { unsubscribedAllRemoved?: number }
 }
 
-export interface RegistrySendDeps {
-  findBySesTopic: (topic: string) => Promise<MailingListRecord | null>
-  resolveListRecipients: (listId: string) => Promise<ResolveResult>
+export interface SendAudienceDeps {
+  resolveListRecipients: (list: ResolvableList) => Promise<ResolveResult>
   getUnsubscribedAll: () => Promise<Set<string>>
+  /** Today's SES-topic audience (explicit OPT_IN − UnsubscribeAll). Only for a bridged list before the safety net. */
+  sesTopicRecipients: (topic: string) => Promise<string[]>
 }
 
 /** Pure: drop SES UnsubscribeAll addresses from the resolver's recipients. */
@@ -46,47 +55,65 @@ export function applyUnsubscribeAll(
   return { emails, removed }
 }
 
-/**
- * The registry audience for a send, or null to use the unchanged SES path.
- *
- * @param topic the SES topic the send uses today (`listTopic` in emailSend). The
- *              list that carries it as its bridge is the list being sent.
- */
-export async function resolveRegistryAudience(
-  topic: string,
-  deps?: RegistrySendDeps
-): Promise<RegistryAudience | null> {
+export async function resolveSendAudience(
+  list: MailingListRecord,
+  safetyNetEnabled: boolean,
+  deps?: SendAudienceDeps
+): Promise<SendAudience> {
+  const d = deps ?? (await defaultSendAudienceDeps())
+  const topicName = chooseSendTopic(list, safetyNetEnabled)
+  const legacyTopic = !safetyNetEnabled && list.sesTopic ? list.sesTopic : null
+
+  const sesPath = async (topic: string): Promise<SendAudience> => ({
+    source: 'ses-topic',
+    listId: list.listId,
+    topicName: topic,
+    emails: await d.sesTopicRecipients(topic),
+    stats: {},
+  })
+
+  if (legacyTopic && list.sendFromRegistry !== true) return sesPath(legacyTopic)
+
+  let resolved: ResolveResult
+  let unsubscribedAll: Set<string>
   try {
-    const d = deps ?? (await defaultRegistrySendDeps())
-    const list = await d.findBySesTopic(topic)
-    if (!list || list.status !== 'active') return null
-    if (list.sendFromRegistry !== true) return null // not cut over: SES path
-
-    const [resolved, unsubscribedAll] = await Promise.all([
-      d.resolveListRecipients(list.listId),
-      d.getUnsubscribedAll(),
-    ])
-    const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)
-
-    if (emails.length === 0) {
-      // A cut-over bridged list that resolves to nobody is almost certainly a
-      // missing backfill, not an empty audience. Keep today's behaviour.
-      console.error(
-        `[registry-send] list ${list.listId} (topic ${list.sesTopic}) resolved 0 recipients — using the SES path`
-      )
-      return null
-    }
-
-    return {
-      source: 'registry',
-      listId: list.listId,
-      sesTopic: topic,
-      emails,
-      stats: { ...resolved.stats, unsubscribedAllRemoved: removed },
-    }
+    ;[resolved, unsubscribedAll] = await Promise.all([d.resolveListRecipients(list), d.getUnsubscribedAll()])
   } catch (error) {
-    console.error('[registry-send] registry resolution failed — using the SES path:', error)
-    return null
+    // Before the safety net a bridged list can still fall back to its topic;
+    // after it there is nothing to fall back to, so the send fails (and the
+    // cron retries) rather than guessing.
+    if (!legacyTopic) throw error
+    console.error(`[registry-send] list ${list.listId} registry read failed — using its SES topic:`, error)
+    return sesPath(legacyTopic)
+  }
+  const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)
+
+  if (emails.length === 0 && legacyTopic) {
+    console.error(
+      `[registry-send] list ${list.listId} (topic ${legacyTopic}) resolved 0 recipients — using its SES topic`
+    )
+    return sesPath(legacyTopic)
+  }
+
+  return {
+    source: 'registry',
+    listId: list.listId,
+    topicName,
+    emails,
+    stats: { ...resolved.stats, unsubscribedAllRemoved: removed },
+  }
+}
+
+/** Is the SES safety net switched on? Any read error → off (the legacy topics still exist then). */
+export async function safetyNetEnabled(): Promise<boolean> {
+  try {
+    const { mailingListRepository } = await import(
+      '@my/app/provider/dynamodb/repositories/mailing-list-repository'
+    )
+    return (await mailingListRepository.getSafetyNetSetting()).enabled
+  } catch (error) {
+    console.error('[registry-send] could not read the safety-net setting — treating it as off:', error)
+    return false
   }
 }
 
@@ -115,7 +142,8 @@ export async function getSesUnsubscribedAll(): Promise<Set<string>> {
 /**
  * The addresses today's SES-topic send path would mail for `topic`: explicit
  * OPT_IN contacts, minus UnsubscribeAll — the same filter emailSend applies.
- * Lower-cased and de-duplicated. Used by parity, never by a send.
+ * Lower-cased and de-duplicated. Used by parity, and by a send to a bridged
+ * list that is not cut over while the safety net is still off.
  */
 export async function getSesTopicRecipients(topic: string): Promise<string[]> {
   const { getContacts } = await import('../email/contact')
@@ -131,14 +159,11 @@ export async function getSesTopicRecipients(topic: string): Promise<string[]> {
   return [...out]
 }
 
-async function defaultRegistrySendDeps(): Promise<RegistrySendDeps> {
-  const [{ mailingListRepository }, { resolveListRecipients }] = await Promise.all([
-    import('@my/app/provider/dynamodb/repositories/mailing-list-repository'),
-    import('../email/resolve-list-recipients'),
-  ])
+async function defaultSendAudienceDeps(): Promise<SendAudienceDeps> {
+  const { resolveListRecipients } = await import('../email/resolve-list-recipients')
   return {
-    findBySesTopic: (t) => mailingListRepository.findBySesTopic(t),
-    resolveListRecipients: (id) => resolveListRecipients(id),
+    resolveListRecipients: (list) => resolveListRecipients(list),
     getUnsubscribedAll: () => getSesUnsubscribedAll(),
+    sesTopicRecipients: (topic) => getSesTopicRecipients(topic),
   }
 }

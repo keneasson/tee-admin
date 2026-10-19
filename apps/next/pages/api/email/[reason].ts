@@ -3,6 +3,7 @@ import { emailReasons, emailSend } from 'next-app/utils/email/email-send'
 import { getEmailContent } from 'next-app/utils/email/get-email-content'
 import { pendingEmailNoteRepository } from '@my/app/provider/dynamodb/repositories/pending-email-note-repository'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
+import { SendListError } from 'next-app/utils/mailing-lists/send-target'
 
 export const config = {
   maxDuration: 60, // 60 seconds
@@ -43,7 +44,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // For custom emails, we need additional parameters from the request body
   let customHtmlContent: string | undefined
   let customSubject: string | undefined
-  let customList: string | undefined
+  // The mailing list (listId) chosen on the send screen. Absent → the reason's
+  // default list; a test send always goes to the test list.
+  let listId: string | undefined
   let eventId: string | undefined
   let eventType: string | undefined
   let meetingId: string | undefined
@@ -52,9 +55,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const body = req.body
     customHtmlContent = body.htmlContent
     customSubject = body.subject
-    customList = body.selectedList
+    listId = body.selectedList
 
-    if (!customHtmlContent || !customSubject || !customList) {
+    if (!customHtmlContent || !customSubject || !listId) {
       return res.status(400).json({
         failed: 'Custom email requires htmlContent, subject, and selectedList in request body'
       })
@@ -67,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[event-announcement] Request body:', JSON.stringify(body, null, 2))
     eventId = body.eventId
     eventType = body.eventType
-    customList = body.selectedList || 'newsletter' // Default to newsletter list
+    listId = body.selectedList || undefined // absent → the newsletter list (send-target.ts)
 
     if (!eventId || !eventType) {
       console.log('[event-announcement] Missing eventId or eventType:', { eventId, eventType })
@@ -112,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       emailHtml,
       emailText,
       test: isTest,
-      customList,
+      listId,
       customSubject: generatedSubject || customSubject, // Use generated subject if available
       tenant,
     })
@@ -128,6 +131,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     return res.status(200).json(result)
   } catch (e) {
+    if (e instanceof SendListError) {
+      return res.status(400).json({ failed: e.message })
+    }
     console.log('email[reason] failed with error:', e)
     const failed = {
       message: 'Failed in outside catch',

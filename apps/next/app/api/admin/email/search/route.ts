@@ -11,9 +11,10 @@ export const dynamic = 'force-dynamic'
  *
  * People come ONLY from PersonRecords: one person CARD per person (one gsi4
  * Query), each listing every address that person holds, so a shared
- * household address appears on each person who holds it. SES contacts,
- * topic preferences and the suppression list are read (List calls only) and
- * compared against them; every disagreement is returned as a finding.
+ * household address appears on each person who holds it. Subscriptions come
+ * from the mailing-list registry (R5). SES contacts and the suppression list
+ * are read (List calls only) and compared against them; every disagreement is
+ * returned as a finding.
  *
  * Owner/admin only. Writes nothing — not to DynamoDB, not to SES.
  */
@@ -39,6 +40,8 @@ export async function GET() {
       suppressed: subs.suppressed,
       topics: subs.topics,
       subscriptionSource: subs.source,
+      subscriptions: subs.subscriptions,
+      safetyNetTopics: subs.safetyNetTopics,
     })
     return NextResponse.json(overview, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

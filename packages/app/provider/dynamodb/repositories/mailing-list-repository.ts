@@ -12,6 +12,22 @@ import type {
 /** gsi4 partition holding one sparse entry per list (the admin listing). */
 export const MAILING_LISTS_GSI4PK = 'MAILING_LISTS'
 
+/** The one settings item for list sends (not a list: no gsi entries). */
+export const SAFETY_NET_SETTING_KEY = { pkey: 'MAILING_LIST_SETTINGS', skey: 'SAFETY_NET' } as const
+
+/**
+ * Whether sends name the SES safety-net topic(s) instead of a list's legacy
+ * `sesTopic`. Written ONLY by scripts/ses-safety-net-topics.ts, right after it
+ * has replaced the SES topic list (a send naming a topic that does not exist
+ * fails, so this must never be on before the topics exist).
+ */
+export interface SafetyNetSetting {
+  enabled: boolean
+  /** The topic names that exist in SES (for the read-back check). */
+  topics: string[]
+  enabledAt?: string
+}
+
 /**
  * Repository for the mailing-list registry (R5: subscriptions in-house). Two
  * entity types share the `tee-admin` table:
@@ -144,22 +160,45 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     return this.queryAll('gsi4pk = :pk', { ':pk': MAILING_LISTS_GSI4PK }, 'gsi4')
   }
 
-  /**
-   * The ACTIVE list that carries a legacy SES topic bridge, or null. More than
-   * one active list claiming the same topic is a configuration error; it
-   * returns null so the caller keeps the unchanged SES path.
-   */
-  async findBySesTopic(sesTopic: string): Promise<MailingListRecord | null> {
-    const matches = (await this.listAllLists()).filter(
-      (l) => l.status === 'active' && l.sesTopic === sesTopic
+  /** The active list an owner holds under a slug key (e.g. Toronto East's 'newsletter'), or null. */
+  async findByOwnerKey(
+    ownerType: MailingListOwnerType,
+    ownerId: string,
+    key: string
+  ): Promise<MailingListRecord | null> {
+    const matches = (await this.listByTenant(ownerType, ownerId)).filter(
+      (l) => l.status === 'active' && l.key === key
     )
-    if (matches.length !== 1) {
-      if (matches.length > 1) {
-        console.error(`mailing-lists: ${matches.length} active lists claim SES topic "${sesTopic}"`)
-      }
+    if (matches.length > 1) {
+      console.error(`mailing-lists: ${matches.length} active lists of ${ownerType} ${ownerId} share key "${key}"`)
       return null
     }
-    return matches[0]
+    return matches[0] ?? null
+  }
+
+  // ===== SAFETY-NET SETTING ================================================
+
+  async getSafetyNetSetting(): Promise<SafetyNetSetting> {
+    const item = (await this.get(SAFETY_NET_SETTING_KEY.pkey, SAFETY_NET_SETTING_KEY.skey)) as unknown as
+      | (SafetyNetSetting & Record<string, unknown>)
+      | null
+    if (!item) return { enabled: false, topics: [] }
+    return {
+      enabled: item.enabled === true,
+      topics: Array.isArray(item.topics) ? item.topics : [],
+      ...(item.enabledAt ? { enabledAt: item.enabledAt } : {}),
+    }
+  }
+
+  async setSafetyNetSetting(setting: SafetyNetSetting): Promise<void> {
+    await this.put({
+      ...SAFETY_NET_SETTING_KEY,
+      enabled: setting.enabled,
+      topics: setting.topics,
+      enabledAt: setting.enabledAt ?? new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      version: 0,
+    } as unknown as MailingListRecord)
   }
 
   /** Per-list cutover switch (registry vs SES-topic recipients). */
@@ -216,7 +255,11 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
   // technique person-repository uses to write EMAIL#/PHONE# rows through the
   // PersonRecord-typed repo).
 
-  /** Upsert an opt-in subscription for one person's email onto a list. */
+  /**
+   * Upsert a subscription row for one person's email on a list. Opt-in by
+   * default; `status: 'opt_out'` records an explicit opt-out where no row
+   * existed (e.g. leaving a defaultOptIn list).
+   */
   async subscribe(input: {
     personId: string
     listId: string
@@ -224,6 +267,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     email: string
     source: ListSubscriptionRecord['source']
     basis: ListSubscriptionRecord['basis']
+    status?: ListSubscriptionRecord['status']
   }): Promise<ListSubscriptionRecord> {
     const now = new Date().toISOString()
     const email = input.email.toLowerCase()
@@ -236,7 +280,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
       listId: input.listId,
       emailId: input.emailId,
       email,
-      status: 'opt_in',
+      status: input.status ?? 'opt_in',
       source: input.source,
       basis: input.basis,
       subscribedAt: now,

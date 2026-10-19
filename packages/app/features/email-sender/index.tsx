@@ -25,7 +25,7 @@ import { Check, Send, Mail, AlertCircle, Newspaper, Calendar, Users } from '@tam
 import { sendEmail, sendNewsAlert, getContactsList, savePendingNote, getPendingNote, clearPendingNote, getRecentEvents, getActiveNews } from '../../provider/get-data'
 import { CustomEmailCreator } from '../custom-email-creator'
 import { DirectRecipientSend } from './direct-recipient-send'
-import { EmailListTypeKeys, EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
+import { EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import {
   Event,
   isEventActive,
@@ -127,16 +127,19 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     | { kind: 'error'; label: string; message: string }
     | null
   >(null)
-  const [availableLists, setAvailableLists] = useState<{ key: EmailListTypeKeys; label: string }[]>([])
+  // Registry lists (R5): `key` is the listId, `label` the owner + list name.
+  const [availableLists, setAvailableLists] = useState<
+    { key: string; label: string; isTest?: boolean; listKey?: string }[]
+  >([])
   const [activeTab, setActiveTab] = useState<string>('templates')
   const [recentEvents, setRecentEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState<boolean>(true)
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [loadingNews, setLoadingNews] = useState<boolean>(true)
-  // Audience override for the shared News + Events composer. Defaults to the
-  // newsletter list; any SES topic (incl. inter-ecclesia leaders) is selectable.
+  // Audience override for the shared News + Events composer: a listId. Starts
+  // on the newsletter list once the lists load; any list is selectable.
   // Test mode still forces the test list server-side regardless of this value.
-  const [composerAudience, setComposerAudience] = useState<EmailListTypeKeys>('newsletter')
+  const [composerAudience, setComposerAudience] = useState<string>('')
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     isOpen: false,
     emailName: '',
@@ -157,8 +160,11 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
           lists.lists.map((list) => ({
             key: list.key,
             label: list.displayName,
+            isTest: list.isTest,
+            listKey: list.listKey,
           }))
         )
+        setComposerAudience((cur) => cur || lists.defaultListId || '')
       } catch (error) {
         console.error('Failed to load email lists:', error)
       }
@@ -348,7 +354,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
 
   // Human label for the currently-selected composer audience.
   const composerAudienceLabel =
-    availableLists.find((l) => l.key === composerAudience)?.label ?? composerAudience
+    availableLists.find((l) => l.key === composerAudience)?.label ?? (composerAudience || 'the newsletter list')
 
   // Send event-specific email (funeral/baptism/wedding/engagement announcement)
   // to the audience chosen in the shared composer (defaults to the newsletter list).
@@ -488,11 +494,13 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   const handleCustomEmailSend = async (emailData: {
     subject: string
     htmlContent: string
-    selectedList: EmailListTypeKeys
+    selectedList: string
     note: string
     draftId?: string
   }) => {
-    const isTestSend = emailData.selectedList === 'testList'
+    const isTestSend =
+      emailData.selectedList === 'testList' ||
+      !!availableLists.find((l) => l.key === emailData.selectedList)?.isTest
     const listLabel = availableLists.find(l => l.key === emailData.selectedList)?.label || emailData.selectedList
 
     showSendConfirmation(emailData.subject, 'Custom Email', () => {
@@ -505,7 +513,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     emailData: {
       subject: string
       htmlContent: string
-      selectedList: EmailListTypeKeys
+      selectedList: string
       note: string
       draftId?: string
     },
@@ -647,7 +655,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                 Custom/freeform email is for emergencies only — use the tab above.
               </Text>
 
-              {/* Audience override — any SES list, incl. inter-ecclesia leaders. */}
+              {/* Audience override — any registry list, by listId. */}
               <YStack gap="$2">
                 <XStack gap="$2" alignItems="center">
                   <Users size={16} color="$purple10" />
@@ -655,7 +663,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                 </XStack>
                 <Select
                   value={composerAudience}
-                  onValueChange={(value) => setComposerAudience(value as EmailListTypeKeys)}
+                  onValueChange={(value) => setComposerAudience(value)}
                 >
                   <Select.Trigger minWidth={280} iconAfter={null} backgroundColor="$background">
                     <Select.Value placeholder="Select an audience…" />
@@ -681,7 +689,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                     <Select.Viewport>
                       <Select.Group>
                         {availableLists
-                          .filter((list) => list.key !== 'testList')
+                          .filter((list) => !list.isTest)
                           .map((list, idx) => (
                             <Select.Item key={list.key} index={idx} value={list.key}>
                               <Select.ItemText>{list.label}</Select.ItemText>
