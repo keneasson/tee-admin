@@ -438,6 +438,11 @@ async function getAllEcclesiasWithCache(): Promise<EcclesiaData[]> {
   return ecclesiaCacheData
 }
 
+/** Every ecclesia, from the 5-minute server cache (mailing-list owner names and pickers). */
+export async function listEcclesiasCached(): Promise<EcclesiaData[]> {
+  return getAllEcclesiasWithCache()
+}
+
 /** Invalidate the ecclesia search cache (call after add/update/delete) */
 export function invalidateEcclesiaCache() {
   ecclesiaCacheData = null

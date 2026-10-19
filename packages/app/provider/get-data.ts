@@ -12,6 +12,7 @@ import { CreateUpdateListType } from '../types'
 import type { Event } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
 import type { Post } from '@my/app/types/post'
+import type { EmailListsOverview } from '@my/app/utils/email-lists-overview'
 
 // Use shared EmailReasonType instead of importing from next-app
 type emailReasons = EmailReasonType
@@ -326,161 +327,15 @@ export const updateContacts = async (contact: CreateContactType): Promise<string
 }
 
 /**
- * Search for contacts across both SES and DynamoDB directory
- * @param searchTerm The search term (minimum 2 characters)
+ * The Email Lists overview: every person (from PersonRecords) with each
+ * address's SES status, plus the SES-vs-PersonRecord findings. Read-only.
  */
-export const searchContacts = async (searchTerm: string): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/search?q=${encodeURIComponent(searchTerm)}`
+export const getEmailListsOverview = async (): Promise<EmailListsOverview> => {
+  const url = `${API_PATH}api/admin/email/search`
   const response = await fetch(url, { cache: 'no-store', method: 'GET' })
-  return await response.json()
-}
-
-/**
- * Merge two contact records into one
- * @param sourcePK Source contact partition key
- * @param sourceSK Source contact sort key
- * @param targetPK Target contact partition key
- * @param targetSK Target contact sort key
- */
-export const mergeContacts = async (
-  sourcePK: string,
-  sourceSK: string,
-  targetPK: string,
-  targetSK: string
-): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'merge',
-    sourcePK,
-    sourceSK,
-    targetPK,
-    targetSK,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Merge failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
-}
-
-/**
- * Migrate email: copy subscriptions from old email to new email, unsubscribe old, update primary
- * @param oldEmail Old email address to migrate from
- * @param newEmail New email address to migrate to
- * @param pkey Person partition key
- * @param skey Person sort key
- */
-export const migrateEmail = async (
-  oldEmail: string,
-  newEmail: string,
-  pkey: string,
-  skey: string
-): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'migrate',
-    oldEmail,
-    newEmail,
-    pkey,
-    skey,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Migrate failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
-}
-
-/**
- * Reorder emails for a person (first email becomes primary)
- * @param pkey Person partition key
- * @param emails Array of email addresses in desired order (max 2)
- */
-export const reorderEmails = async (pkey: string, emails: string[]): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'reorder',
-    pkey,
-    emails,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Reorder failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
-}
-
-/**
- * Global unsubscribe: unsubscribe email from all lists (compliance)
- * @param email Email address to unsubscribe
- */
-export const unsubscribeAllLists = async (email: string): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'unsubscribe-all',
-    email,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Unsubscribe failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
-}
-
-/**
- * Archive an email: mark email as archived (max 2 active emails allowed)
- * @param pkey Person partition key
- * @param email Email address to archive
- */
-export const archiveEmail = async (pkey: string, email: string): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'archive-email',
-    pkey,
-    email,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Archive failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
-}
-
-/**
- * Unarchive an email: mark email as active (enforces max 2 active emails)
- * @param pkey Person partition key
- * @param email Email address to unarchive
- */
-export const unarchiveEmail = async (pkey: string, email: string): Promise<any> => {
-  const url = `${API_PATH}api/admin/email/consolidate`
-  const body = JSON.stringify({
-    operation: 'unarchive-email',
-    pkey,
-    email,
-  })
-  const response = await fetch(url, { cache: 'no-store', method: 'POST', body })
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error || `Unarchive failed: ${response.status} ${response.statusText}`)
-  }
-
-  return data
+  const body = await response.json()
+  if (!response.ok) throw new Error(body?.error || `Email Lists failed (${response.status})`)
+  return body
 }
 
 // -----------------------------------------------------------------------------

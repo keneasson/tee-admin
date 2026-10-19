@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAssurance } from '../../../../../utils/auth-trust'
-import { getContacts } from '../../../../../utils/email/contact'
-import { resolveListRecipients } from '../../../../../utils/email/resolve-list-recipients'
-import { computeParityDiff } from '../../../../../utils/mailing-lists/parity'
+import { runListParity } from '../../../../../utils/mailing-lists/parity'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
@@ -63,30 +61,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // --- SES side: page through every OPT_IN contact for the legacy topic,
-    //     exactly as the live send path filters (getContacts).
-    const sesEmails: string[] = []
-    let nextPageToken: string | undefined
-    do {
-      const page = await getContacts({ listTopic: list.sesTopic, nextPageToken })
-      for (const contact of page.Contacts ?? []) {
-        if (contact.EmailAddress) sesEmails.push(contact.EmailAddress)
-      }
-      nextPageToken = page.NextToken
-    } while (nextPageToken)
-
-    // --- In-house side: the Phase 2 resolver (suppression + verification + dedupe).
-    const inHouse = await resolveListRecipients(listId)
-    const inHouseEmails = inHouse.recipients.map((r) => r.email)
-
-    const diff = computeParityDiff(sesEmails, inHouseEmails)
-
-    return NextResponse.json({
-      listId,
-      sesTopic: list.sesTopic,
-      diff,
-      resolverStats: inHouse.stats,
-    })
+    // Both sides use the same filters their send paths apply (see runListParity).
+    const parity = await runListParity(list)
+    return NextResponse.json(parity)
   } catch (error) {
     console.error('mailing-lists parity harness failed:', error)
     return NextResponse.json({ error: 'Failed to compute parity' }, { status: 500 })

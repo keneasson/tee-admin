@@ -18,7 +18,7 @@ One source of truth for **people**, **ecclesias and their offices**, and **maili
 | R2 | **Household sign-in.** People sharing an email can each sign in ("who's signing in?" after the code is verified). The session carries `personId`. | The owner signs in as himself through a shared-address flow on his own account. No email-keyed lookup decides identity. |
 | R3 | **Ecclesias and offices.** One record per ecclesia (duplicates merged; missing ones created) with a stable id. Each has a Recording Brother office and zero or more Rep offices. An office holds its own email/phone/address and a reference to its current holder (nullable). `isRecordingBrother` / `isInterEcclesiaRep` are derived from offices. Copied RB name/email fields are deleted. Assignments come from the owner's confirmed review page. | Every ecclesia shows an RB office. Inter-ecclesia sends reach the same addresses as before cutover, verified by a diff. RB detection at sign-in reads offices. No office is a nameless person. |
 | R4 | **Email Lists on people.** The page reads only person records. Subscription status uses the same rule as sending (explicit opt-in only). SES drift is shown, never silently "fixed". (PR #279) | Desmond and Radica show as two people sharing one address. No legacy-directory card exists. |
-| R5 | **Mailing lists in-house.** Subscriptions live in the registry (`LIST#` / `SUB#` per person, #182). The `sesTopicPreferences` field is retired. Every subscribe/unsubscribe writes the registry. List sends resolve recipients from the registry, filtered by the SES suppression list. SES topics stop being a source. | Backfill applied; parity diff empty for all 7 lists; one test-list send through the registry; flag on; SES topic writers removed. |
+| R5 | **Mailing lists in-house.** Subscriptions live in the registry (`LIST#` / `SUB#` per person, #182). The `sesTopicPreferences` field is retired. Every subscribe/unsubscribe writes the registry. List sends resolve recipients from the registry, filtered by the SES suppression list. Each list is identified by its UUID `listId` and owned by an ecclesia or organization **by id** (the R3 ecclesia id), not by name; the `TENANT#`/`SCOPE#` keys use those ids. A list's display name is derived from its owner plus its own name ("Toronto East Newsletter", "Cambridge Memorial Recap", "Toronto Area CYC"), never stored twice. Each list carries its own `defaultOptIn`. Sends target a `listId`; the fixed `EmailListTypes` names (`newsletter`, `recap`, …) stop being identifiers. SES topics stop deciding who gets what; they become **safety nets**: a few broad categories (for example by country) that a send checks as its final gate. The safety nets are an operational setting, not legal advice; if a law such as CASL or GDPR needs it, a lawyer reviews them. | Backfill applied; parity diff empty for all 7 lists; one test-list send through the registry; flag on; SES topic writers removed; every list owner is an id and every send names a `listId`. No person or subscription record stores a topic name (`memorial`, `newsletter`, …): subscriptions are keyed only by `listId` (`SUB#<listId>#<emailId>`); the list's `sesTopic` bridge field is deleted once that list is cut over, and `sesTopicPreferences` is removed. The 7 per-email-type topics are replaced by the safety-net topics only after cutover, after a full SES backup (a topic edit wipes every contact's preferences). Every email address is stored lower case only; SES holds no case duplicates (today 8, written by `utils/email/contact.ts` and `import-inter-ecclesia`, which don't lower-case), and each pair's opt-ins are merged onto the lower-case contact. |
 | R6 | **Smart widgets supported (data and API only).** A post stores a person or ecclesia id. A server endpoint returns that person's contact card, or the ecclesia's location and offices, redacted per viewer tier (ADR-0005), in one batch read. | Endpoint tests per tier: anon gets the floor; member gets email and phone per the person's privacy; ecclesia gets location plus RB/Rep links. No Scan on the request path. |
 | R7 | **Every reader moved.** Password sign-in, registration, verify and reset; email-keyed privacy, relationships and requests; RB detection; the Sheets people lookup. All read person or office records. | A CI grep gate fails on any legacy-store read. Owner-account sign-in test for each method. |
 | R8 | **Legacy deleted.** Code: legacy repositories, routes, scripts, Pages Router email/contact routes, migration tools. Data: `DIRECTORY#MEMBERS`, legacy `USER#` people items, copied ecclesia RB fields, committed subscriber files (with history purge, #78). Final backup first. | A scan shows 0 legacy items. The grep gate passes. `yarn smoke:prod` passes. |
@@ -34,6 +34,9 @@ Not part of this work. Each is one line here, not an issue.
 - Rotted test files (#244) and the dead `apps/next` lint (#216), except where a file this work touches must pass.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
 - Signing in with an office inbox that has no PersonRecord still creates a PersonRecord for that inbox; signing in *as the office holder* belongs with R2's chooser.
+- Sending to a list with no SES topic (a list made on `/admin/email/mailing-lists`) from the send screens; only the 7 bridged Toronto East lists send today (R5 switchover PR).
+- Applying a list's `defaultOptIn` to new people; it is stored, nobody is subscribed automatically.
+- `cron/sync-ses-contacts` rewrites every contact's topics from the empty `sesTopicPreferences` (all OPT_OUT); it now fails closed without `CRON_SECRET`, and is deleted with the SES topic writers.
 
 ## 0.4 Definition of done
 
@@ -97,8 +100,8 @@ About 75 non-test files and about 250 call sites. Paths are relative to the repo
 
 | file:line | R/W | Live | Replace with |
 |---|---|---|---|
-| `apps/next/app/api/admin/email/search/route.ts:130-134` | R | **Email Lists** | `searchByName` + `getEmailsByEmail` |
-| `apps/next/app/api/admin/email/consolidate/route.ts:147,162,204,249,255,272,300,323,382,424,454,466,517,582,651,665,679,777,796,844,872` | R/W | Email Lists / directory-email-sync | `getEmails`, `addEmail`, `setEmailOrder`, `undoEmailRetire`, new `mergePersons`; delete the legacy branch |
+| `apps/next/app/api/admin/email/search/route.ts:130-134` | R | **Email Lists** | **done** (#276): person CARDs + read-only SES snapshot |
+| `apps/next/app/api/admin/email/consolidate/route.ts:147,162,204,249,255,272,300,323,382,424,454,466,517,582,651,665,679,777,796,844,872` | R/W | Email Lists / directory-email-sync | **deleted** (#276); person fixes are made on the profile |
 | `apps/next/pages/api/contact/index.ts:58` (`getDirectoryData`; names joined at :91-102) | R | Email Lists | `listAll` / `getByEmail` |
 | `packages/app/provider/dynamodb/schedule-service.ts:235-245, 269-295` | R | via callers | delete |
 | `apps/next/app/api/directory/route.ts:60,149` | R | reachable, no UI | delete route |
@@ -144,7 +147,7 @@ All of these need new `PERSON#<id>` sub-items, because nothing exists on PersonR
 **SES-only writers** (the cron then reverts them, or they overwrite `AttributesData`):
 - `apps/next/app/api/subscribe/route.ts:158` (public)
 - `pages/api/contact/index.ts:25,39`
-- `consolidate/route.ts:566,574,736`
+- ~~`consolidate/route.ts:566,574,736`~~ (deleted, #276)
 - `directory-email-sync/{create-entry:82, link-contact:62, sync-members-list:140, batch-member:122, add-email:113, delete:81}`
 - `contacts/[email]/route.ts:79`
 - `import-inter-ecclesia/route.ts:278,328`
@@ -155,8 +158,8 @@ Each of these should write to the PersonRecord first and let the projection push
 **The intended projection, which stays:** `app/api/cron/sync-ses-contacts/route.ts:157,171,306,313`.
 
 **`AttributesData` read as a people source:**
-- `admin/email/search/route.ts:245-250,296-305`
-- `packages/app/features/email-lists/index.tsx:789-795`
+- ~~`admin/email/search/route.ts:245-250,296-305`~~ (#276)
+- ~~`packages/app/features/email-lists/index.tsx:789-795`~~ (#276)
 - `admin/metrics/email/[campaignId]/recipients/route.ts:47-49`
 - `migrate-inter-ecclesia:143-145`
 - `import-inter-ecclesia:268-270`
@@ -238,7 +241,7 @@ Highlights (ids only):
 - **Households without a family link: 22 people.** Family links today live only in the email-keyed legacy `RELATIONSHIP#` store.
 - **Bounced primaries still marked `sesStatus: active`: 3 PersonRecords.**
 - **SES:**
-  - 28 contacts are subscribed to topics, but no PersonRecord holds the address. They still receive sends.
+  - 22 contacts have an explicit topic opt-in, but no PersonRecord holds the address. They still receive sends. (An earlier count of 28 wrongly included 6 addresses that only match a topic default; sends never use defaults.)
   - 8 addresses exist twice in SES, differing only by letter case.
   - 25 PersonRecord emails have no SES contact.
 - **#267 data step:** `837ffa40`'s bounced work-address `EMAIL#` item is **absent**. The #267 comment says it was archived, but it is not in the table. It survives only in the #267 S3 backup.

@@ -4,6 +4,7 @@ import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/cl
 import { emailsEnabled, getSesClient } from './sesClient'
 import { getContacts } from './contact'
 import { interEcclesiaRecipientsFromOffices } from './inter-ecclesia-recipients'
+import { resolveRegistryAudience } from '../mailing-lists/registry-send'
 import { chunkArray } from '../chunkArray'
 import {
   generateEcclesiaUpdateUrl,
@@ -227,20 +228,32 @@ export const emailSend = async function ({
     const listTopic = test === true ? 'testList' : (customList || senders[reason].contactList)
     const sesClient = getSesClient()
 
-    console.log('why test=false sends test', { test, listTopic })
     // Inter-ecclesia (never a test send): offices decide once the flag is on and
-    // the confirmed assignments are applied (R3); otherwise null → the SES topic.
+    // the confirmed assignments are applied (R3); otherwise null.
     const fromOffices =
       listTopic === senders['inter-ecclesia'].contactList ? await interEcclesiaRecipientsFromOffices(sesClient) : null
+    // R5 per-list cutover: a list whose `sendFromRegistry` is on takes its
+    // recipients from the mailing-list registry. Null (not cut over, or any
+    // registry error) → the SES-topic path below, unchanged.
+    const registryAudience = fromOffices ? null : await resolveRegistryAudience(listTopic)
 
     let senderEmails: string[]
     if (fromOffices) {
       senderEmails = fromOffices
+    } else if (registryAudience) {
+      senderEmails = registryAudience.emails
+      console.log('[emailSend] recipients from registry', {
+        listTopic,
+        listId: registryAudience.listId,
+        stats: registryAudience.stats,
+      })
     } else {
+      console.log('why test=false sends test', { test, listTopic })
       const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
       if (!contacts) {
         return { sends: [], skips: [], campaignId }
       }
+
       senderEmails = contacts
         .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
         .map((contact) => contact.EmailAddress as string)
