@@ -22,3 +22,4 @@ References. Keep it to a page. Number sequentially, `NNNN-kebab-title.md`.
 | [0003](0003-ui-layering-and-the-design-language-seam.md) | UI layering — route files are mount points; `@my/ui` is the design-language seam | Accepted |
 | [0004](0004-rich-text-storage.md) | Rich-text storage — capture losslessly, render progressively | Accepted |
 | [0005](0005-never-silently-withhold.md) | Never silently withhold — the smart-component contract (floor + escalation action: sign in now, scoped access requests later) | Accepted |
+| [0006](0006-one-source-of-truth-for-people.md) | One source of truth for people: PersonRecords only, projections derived from them, "done" means data reconciled, readers moved, and old code and data deleted | Proposed |

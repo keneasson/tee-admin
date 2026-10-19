@@ -27,6 +27,11 @@ import { Send, AlertTriangle, CheckCircle2, Ban, RefreshCw } from '@tamagui/luci
  *   - **Re-send the verification email** — after the fix, a fresh copy with a
  *     fresh link, rendered from the corrected schedule.
  *
+ * And once it has gone: if it BOUNCED and his address has since been corrected,
+ * **Prepare a corrected copy** lifts the send guard and redirects a fresh QA
+ * copy addressed to his current address (#267). It is sent on from that copy's
+ * link like any other — this page never emails the speaker directly.
+ *
  * Every one is a POST. Mail clients prefetch links, so the footer link must
  * never do anything by itself.
  */
@@ -44,6 +49,15 @@ interface Delivery {
   opens?: number
   bouncedAt?: string
   bounceType?: string
+}
+
+/** Present when the send BOUNCED: can a corrected copy be prepared? (#267) */
+interface BounceResend {
+  eligible: boolean
+  /** His address on file now — where a corrected copy would go. */
+  currentEmail?: string
+  /** Why not, when it cannot. */
+  reason?: string
 }
 
 interface ConfirmData {
@@ -81,6 +95,7 @@ export default function ExhorterHeadsUpReviewPage() {
     recipientEmail?: string
     sentAt?: string
     delivery?: Delivery
+    bounceResend?: BounceResend
   } | null>(null)
   /**
    * Stopped: the email was wrong and it has been invalidated.
@@ -90,7 +105,9 @@ export default function ExhorterHeadsUpReviewPage() {
    * back here to re-send once the data is right.
    */
   const [stopped, setStopped] = useState<{ date?: string; recipientName?: string } | null>(null)
-  const [busyAction, setBusyAction] = useState<'invalidate' | 'resend' | null>(null)
+  const [busyAction, setBusyAction] = useState<
+    'invalidate' | 'resend' | 'resend-after-bounce' | null
+  >(null)
   const [resentTo, setResentTo] = useState<string | null>(null)
   const [nothingWaiting, setNothingWaiting] = useState(false)
 
@@ -112,7 +129,11 @@ export default function ExhorterHeadsUpReviewPage() {
             recipientEmail: body.recipientEmail,
             sentAt: body.sentAt,
             delivery: body.delivery,
+            bounceResend: body.bounceResend,
           })
+          // Opened without a token: a bounced copy found by the server still
+          // needs one for the "corrected copy" button to act on.
+          if (body.token) setToken(String(body.token))
           return
         }
         if (body.superseded) {
@@ -160,7 +181,7 @@ export default function ExhorterHeadsUpReviewPage() {
     }
   }
 
-  const act = async (action: 'invalidate' | 'resend') => {
+  const act = async (action: 'invalidate' | 'resend' | 'resend-after-bounce') => {
     setBusyAction(action)
     setSendError(null)
     try {
@@ -263,12 +284,53 @@ export default function ExhorterHeadsUpReviewPage() {
                   </Text>
                 </XStack>
                 {alreadySent.delivery?.bouncedAt ? (
-                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                    <AlertTriangle size={16} color="$error" />
-                    <Text fontSize="$3" color="$error">
-                      {`It BOUNCED${alreadySent.delivery.bounceType ? ` (${alreadySent.delivery.bounceType})` : ''} — they have not been told. Reach them another way.`}
-                    </Text>
-                  </XStack>
+                  <YStack gap="$2">
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                      <AlertTriangle size={16} color="$error" />
+                      <Text fontSize="$3" color="$error">
+                        {`It BOUNCED${alreadySent.delivery.bounceType ? ` (${alreadySent.delivery.bounceType})` : ''} — they have not been told.`}
+                      </Text>
+                    </XStack>
+
+                    {/* The way back from a bounce: a corrected copy for his
+                        CURRENT address, redirected for QA exactly like the
+                        first one. Nothing goes to him from this button. */}
+                    {resentTo ? (
+                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                        <CheckCircle2 size={18} color="$success" />
+                        <Text fontSize="$3">
+                          {`A corrected copy, addressed to ${alreadySent.bounceResend?.currentEmail ?? 'his current address'}, is on its way to ${resentTo}. Check it, then send it from the link in that email.`}
+                        </Text>
+                      </XStack>
+                    ) : alreadySent.bounceResend?.eligible ? (
+                      <YStack gap="$2">
+                        <Text fontSize="$3">
+                          {`His address on file is now ${alreadySent.bounceResend.currentEmail}. Prepare a corrected copy for that address — it comes to you first to check, just like the original.`}
+                        </Text>
+                        {sendError ? (
+                          <Text fontSize="$3" color="$error">
+                            {sendError}
+                          </Text>
+                        ) : null}
+                        <XStack gap="$2" justifyContent="flex-end">
+                          <Button
+                            theme="blue"
+                            icon={RefreshCw}
+                            disabled={busyAction !== null || !token}
+                            onPress={() => act('resend-after-bounce')}
+                          >
+                            {busyAction === 'resend-after-bounce'
+                              ? 'Preparing…'
+                              : `Prepare a corrected copy for ${alreadySent.bounceResend.currentEmail}`}
+                          </Button>
+                        </XStack>
+                      </YStack>
+                    ) : (
+                      <Text fontSize="$3">
+                        {alreadySent.bounceResend?.reason ?? 'Reach them another way.'}
+                      </Text>
+                    )}
+                  </YStack>
                 ) : alreadySent.delivery?.deliveredAt ? (
                   <Text fontSize="$3" theme="alt2">
                     {`Delivered${

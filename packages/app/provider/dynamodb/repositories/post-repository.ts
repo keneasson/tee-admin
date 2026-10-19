@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { BaseRepository } from './base-repository'
 import type { Post } from '@my/app/types/post'
 import { normalizePost } from '../../../utils/normalize-post'
+import { storeReferences } from '../../../utils/post-references'
 
 /**
  * PostRepository — native storage for the unified {@link Post} model
@@ -177,7 +178,7 @@ export class PostRepository extends BaseRepository<PostRecord> {
       visibility: input.visibility,
       sharingScope: input.sharingScope,
       lifecycle: input.lifecycle ?? {},
-      blocks: input.blocks ?? [],
+      blocks: storeReferences(input.blocks ?? []),
       createdAt: now,
       updatedAt: now,
       status: input.status ?? 'draft',
@@ -250,6 +251,7 @@ export class PostRepository extends BaseRepository<PostRecord> {
 
     const updates: Partial<PostRecord> = {
       ...patch,
+      ...(patch.blocks ? { blocks: storeReferences(patch.blocks) } : {}),
       updatedAt: merged.updatedAt,
       gsi2sk: `${sortDate(merged.lifecycle, merged.createdAt)}#${merged.id}`,
     }

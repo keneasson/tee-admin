@@ -36,11 +36,6 @@ export * from './events'
 export * from './privacy/withheld-notice'
 
 // Email System
-export * from './email/contact-card'
-export * from './email/merge-dialog'
-export * from './email/add-email-dialog'
-export * from './email/migrate-email-dialog'
-export * from './email/person-selector-dialog'
 
 // Directory System
 export * from './directory'

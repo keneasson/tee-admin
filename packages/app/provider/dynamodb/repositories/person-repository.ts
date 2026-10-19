@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient, tableNames } from '../config'
+import { projectionWritesEnabled, refreshPersonProjections } from '../people-index/projections'
 import type {
   ContactVoteRecord,
   PersonRecord,
@@ -30,7 +31,7 @@ export interface CreatePersonInput {
   provider?: 'google' | 'credentials'
   userId?: string
   // Provenance for machine-created records (e.g. schedule ingest).
-  source?: 'schedule-import'
+  source?: 'schedule-import' | 'mailing-list-backfill'
   sourceRef?: string
 }
 
@@ -105,9 +106,98 @@ export interface PersonProfileView {
  * Repository for Person records - UUID-based identity
  * Uses 'tee-admin' table with lowercase keys (pkey, skey)
  */
+/**
+ * Pick the ONE person an address shared by several people resolves to (#267).
+ *
+ * Deterministic, never "whichever DynamoDB returned first":
+ *   1. people whose EMAIL# row for this address is `loginExcluded` are dropped
+ *      (they receive mail there; it does not sign them in) — unless that would
+ *      drop everyone;
+ *   2. ties break on personId, so the answer is the same on every request.
+ *
+ * Pure, so the rule is testable without DynamoDB.
+ */
+export function chooseSignInHolder(
+  address: string,
+  candidates: PersonRecord[],
+  emailRows: Array<Pick<PersonEmailRecord, 'pkey' | 'email' | 'loginExcluded'>>
+): PersonRecord | null {
+  if (candidates.length === 0) return null
+  if (candidates.length === 1) return candidates[0]
+  const lower = address.toLowerCase()
+  const excluded = new Set(
+    emailRows
+      .filter((r) => r.loginExcluded && r.email?.toLowerCase() === lower)
+      .map((r) => r.pkey.replace('PERSON#', ''))
+  )
+  const eligible = candidates.filter((c) => !excluded.has(c.personId))
+  // A named person outranks a nameless orphan (pre-#130 duplicates share an
+  // address with the real record) — never sign someone in as a blank profile.
+  const named = (c: PersonRecord) => (c.firstName?.trim() ? 0 : 1)
+  const pool = (eligible.length > 0 ? eligible : candidates)
+    .slice()
+    .sort((a, b) => named(a) - named(b) || a.personId.localeCompare(b.personId))
+  if (pool.length > 1) {
+    console.warn(
+      `[getByEmail] a shared address resolves to ${pool.length} people with no sign-in holder marked; using the named person with the lowest personId`
+    )
+  }
+  return pool[0]
+}
+
+/** Re-derives a person's projections (CARD, NAMETOK#, REP office refs). */
+export type PersonProjectionSync = (personId: string) => Promise<unknown>
+
 export class PersonRepository extends BaseRepository<PersonRecord> {
+  /**
+   * The ONE writer of every person projection (ADR-0006 §8). Every write this
+   * repository makes to a PROFILE / EMAIL# / PHONE# item — through a named
+   * method or the base put/update/delete — re-derives the person's
+   * projections before returning, so a read after the write sees them.
+   * `null` disables it (unit tests that script the client call-by-call).
+   */
+  private projectionSync: PersonProjectionSync | null = (personId) =>
+    projectionWritesEnabled() ? refreshPersonProjections(personId) : Promise.resolve()
+
   constructor() {
     super('admin', false) // false = lowercase keys (pkey, skey)
+  }
+
+  setProjectionSync(sync: PersonProjectionSync | null) {
+    this.projectionSync = sync
+  }
+
+  private async afterWrite(pk: string, sk: string): Promise<void> {
+    if (!this.projectionSync || !pk?.startsWith('PERSON#')) return
+    if (!(sk === 'PROFILE' || sk.startsWith('EMAIL#') || sk.startsWith('PHONE#'))) return
+    try {
+      await this.projectionSync(pk.slice('PERSON#'.length))
+    } catch (error) {
+      // The source write succeeded; a stale projection is repaired by the next
+      // write or by scripts/rebuild-people-projections.ts. Never fail the write.
+      console.error(`people-index: projection refresh failed for ${pk}`, error)
+    }
+  }
+
+  async put(item: PersonRecord): Promise<void> {
+    await super.put(item)
+    await this.afterWrite(item.pkey, item.skey)
+  }
+
+  async update(
+    pk: string,
+    sk: string,
+    updates: Partial<PersonRecord>,
+    options?: Parameters<BaseRepository<PersonRecord>['update']>[3]
+  ): Promise<PersonRecord> {
+    const result = await super.update(pk, sk, updates, options)
+    await this.afterWrite(pk, sk)
+    return result
+  }
+
+  async delete(pk: string, sk: string): Promise<void> {
+    await super.delete(pk, sk)
+    await this.afterWrite(pk, sk)
   }
 
   protected buildSheetPK(_sheetId: string): string {
@@ -135,9 +225,15 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * that already belonged to someone. We now try the primary fast-path, then fall
    * back to resolving the address as a secondary.
    *
-   * If an address is shared by more than one person (e.g. a couple), this returns
-   * a single best-effort owner (primary-owner if any, else the first) and logs —
-   * shared-address disambiguation is handled by the caller where it matters.
+   * SHARED ADDRESSES (#267). A household address can be the primary of more
+   * than one person (a couple with one inbox). This lookup is also the sign-in
+   * lookup, so it must NEVER pick between them arbitrarily — DynamoDB returns
+   * items with identical GSI keys in no guaranteed order, and an arbitrary pick
+   * would sign one spouse in as the other. When several people hold the address
+   * the choice is made by `chooseSignInHolder` (deterministic). Until the "who's
+   * signing in?" chooser exists, the person who joined a shared address is
+   * marked `loginExcluded` on their EMAIL# row: sends reach them there, but it
+   * does not sign them in.
    */
   async getByEmail(email: string): Promise<PersonRecord | null> {
     const lower = email.toLowerCase()
@@ -147,14 +243,15 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       { ':gsi1pk': `EMAIL#${lower}`, ':gsi1sk': 'PERSON' },
       { indexName: 'gsi1' }
     )
-    if (primary.items[0]) return primary.items[0]
+    if (primary.items.length === 1) return primary.items[0]
+    if (primary.items.length > 1) {
+      return chooseSignInHolder(lower, primary.items, await this.getEmailsByEmail(lower))
+    }
 
     // Fallback: the address is a SECONDARY (EMAIL# item) — resolve to its profile.
     const owners = await this.getAllPersonsByEmail(lower)
     if (owners.length > 1) {
-      console.warn(
-        `[getByEmail] "${lower}" resolves to ${owners.length} persons (shared address); returning first`
-      )
+      return chooseSignInHolder(lower, owners, await this.getEmailsByEmail(lower))
     }
     return owners[0] || null
   }
@@ -430,6 +527,25 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     )
   }
 
+  /**
+   * Record an SES delivery outcome (hard bounce / complaint) on EVERY EMAIL# row
+   * holding this address — across people, because a shared household address
+   * that bounces is dead for all of them. Returns how many rows were updated.
+   * Only `sesStatus` changes: the address stays on the person for history, and
+   * nothing about login or which address is primary moves.
+   */
+  async markEmailSesStatusByAddress(
+    email: string,
+    sesStatus: PersonEmailRecord['sesStatus']
+  ): Promise<number> {
+    const rows = await this.getEmailsByEmail(email)
+    for (const row of rows) {
+      if (row.sesStatus === sesStatus) continue
+      await this.update(row.pkey, row.skey, { sesStatus } as unknown as Partial<PersonRecord>)
+    }
+    return rows.filter((r) => r.sesStatus !== sesStatus).length
+  }
+
   /** Default grace before a demoted former-primary email may be archived. */
   static readonly EMAIL_DEMOTE_GRACE_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -463,6 +579,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       ExpressionAttributeValues: { ':lastUpdated': new Date().toISOString() },
     })
     await docClient.send(command)
+    await this.afterWrite(`PERSON#${personId}`, `EMAIL#${emailId}`)
   }
 
   /**
@@ -1042,26 +1159,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /**
-   * Count all persons (for migration validation)
-   */
-  async count(): Promise<number> {
-    let count = 0
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(pkey, :prefix) AND skey = :skey',
-        expressionAttributeValues: { ':prefix': 'PERSON#', ':skey': 'PROFILE' },
-        lastEvaluatedKey: lastKey,
-      })
-      count += result.items.length
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return count
-  }
-
-  /**
    * Count members in a specific ecclesia using GSI2 with Select: 'COUNT'.
    * Reads only index metadata — no item data is transferred.
    */
@@ -1373,32 +1470,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       role: person.role,
       displayName: person.displayName,
     }
-  }
-
-  /**
-   * Get person by Google ID
-   * Used for OAuth account linking
-   */
-  async getByGoogleId(googleId: string): Promise<PersonRecord | null> {
-    // This requires a scan since googleId is not indexed
-    // Consider adding GSI5 for googleId if this is called frequently
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'skey = :skey AND googleId = :googleId',
-        expressionAttributeValues: { ':skey': 'PROFILE', ':googleId': googleId },
-        lastEvaluatedKey: lastKey,
-      })
-
-      if (result.items.length > 0) {
-        return result.items[0]
-      }
-
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return null
   }
 
   /**

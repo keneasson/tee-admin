@@ -3,20 +3,36 @@ import { describe, it, expect } from 'vitest'
 import {
   SEED_TOPICS,
   SEED_CATEGORY_BY_TOPIC,
-  TORONTO_EAST,
   buildSeedListDefs,
   buildSeedTopicLookup,
+  findLegacyNameKeyedLists,
   isPendingListId,
+  mergeSesContacts,
   pendingListId,
   planSeedLists,
   planSubscriptions,
-  type SesContactForBackfill,
   type ContactResolver,
   type ResolvedContact,
+  type SesContactForBackfill,
 } from '../utils/mailing-lists/backfill-mailing-lists'
 
-describe('backfill mapping — topic → consent category', () => {
-  it('maps every one of the 7 topics to the documented category', () => {
+const TE = 'toronto-east-ecclesia'
+
+const contact = (
+  email: string,
+  optIns: string[],
+  extra: Partial<SesContactForBackfill> = {}
+): SesContactForBackfill => ({
+  email,
+  topicPreferences: optIns.map((topic) => ({ topic, status: 'OPT_IN' as const })),
+  ...extra,
+})
+
+const resolverFrom = (people: Record<string, ResolvedContact>): ContactResolver => async (email) =>
+  people[email.toLowerCase()] ?? null
+
+describe('seed lists', () => {
+  it('maps every one of the 7 topics to its consent category', () => {
     expect(SEED_CATEGORY_BY_TOPIC).toEqual({
       bibleClass: 'reminders',
       sundaySchool: 'reminders',
@@ -28,229 +44,130 @@ describe('backfill mapping — topic → consent category', () => {
     })
   })
 
-  it('builds 7 seed defs, all Toronto East, all with a name/description + sesTopic bridge', () => {
+  it('builds 7 defs whose own names never repeat the owner (display name is derived)', () => {
     const defs = buildSeedListDefs()
     expect(defs).toHaveLength(7)
     expect(defs.map((d) => d.sesTopic).sort()).toEqual([...SEED_TOPICS].sort())
     for (const d of defs) {
-      expect(d.name.length).toBeGreaterThan(0)
-      expect(d.description.length).toBeGreaterThan(0)
-      expect(d.sesTopic).toBe(d.key) // bridge topic == slug
-      expect(d.category).toBe(SEED_CATEGORY_BY_TOPIC[d.key])
-    }
-    expect(TORONTO_EAST.ownerName).toBe('Toronto East Ecclesia')
-  })
-})
-
-describe('planSeedLists — idempotent seeding', () => {
-  it('seeds all 7 when none exist', () => {
-    const { toSeed, skipped } = planSeedLists([])
-    expect(toSeed).toHaveLength(7)
-    expect(skipped).toHaveLength(0)
-  })
-
-  it('skips topics already present (matched by ownerName + sesTopic)', () => {
-    const { toSeed, skipped } = planSeedLists([
-      { ownerName: 'Toronto East Ecclesia', sesTopic: 'newsletter' },
-      { ownerName: 'Toronto East Ecclesia', sesTopic: 'memorial' },
-      // a different tenant's newsletter must NOT count as present
-      { ownerName: 'Some Other Ecclesia', sesTopic: 'bibleClass' },
-    ])
-    expect(skipped.map((d) => d.sesTopic).sort()).toEqual(['memorial', 'newsletter'])
-    expect(toSeed).toHaveLength(5)
-    expect(toSeed.map((d) => d.sesTopic)).toContain('bibleClass')
-  })
-})
-
-describe('buildSeedTopicLookup — match against lists that WILL exist after seeding', () => {
-  it('covers all 7 topics with PENDING markers when nothing is seeded yet (dry-run case)', () => {
-    const lookup = buildSeedTopicLookup([])
-    expect(lookup.size).toBe(7)
-    for (const topic of SEED_TOPICS) {
-      const listId = lookup.get(topic)
-      expect(listId).toBe(pendingListId(topic))
-      expect(isPendingListId(listId!)).toBe(true)
+      expect(d.name).not.toMatch(/toronto/i)
+      expect(d.sesTopic).toBe(d.key)
     }
   })
 
-  it('lets an already-seeded real list win over the PENDING marker', () => {
-    const lookup = buildSeedTopicLookup([
-      { ownerName: 'Toronto East Ecclesia', sesTopic: 'newsletter', listId: 'real-newsletter' },
-    ])
-    expect(lookup.get('newsletter')).toBe('real-newsletter')
-    expect(isPendingListId(lookup.get('newsletter')!)).toBe(false)
-    // the rest stay PENDING
-    expect(lookup.get('memorial')).toBe(pendingListId('memorial'))
+  it('seeds all 7 when the owner has none; matches existing lists by owner ID + topic', () => {
+    expect(planSeedLists([], TE).toSeed).toHaveLength(7)
+    const { toSeed, skipped } = planSeedLists(
+      [
+        { ownerType: 'ecclesia', ownerId: TE, sesTopic: 'newsletter' },
+        { ownerType: 'ecclesia', ownerId: 'cambridge', sesTopic: 'memorial' }, // another owner
+        { ownerType: 'organization', ownerId: TE, sesTopic: 'bibleClass' }, // same id, not an ecclesia
+      ],
+      TE
+    )
+    expect(skipped.map((d) => d.sesTopic)).toEqual(['newsletter'])
+    expect(toSeed).toHaveLength(6)
   })
 
-  it('ignores a real list owned by a different tenant', () => {
-    const lookup = buildSeedTopicLookup([
-      { ownerName: 'Some Other Ecclesia', sesTopic: 'newsletter', listId: 'other-newsletter' },
-    ])
-    expect(lookup.get('newsletter')).toBe(pendingListId('newsletter'))
+  it('flags rows written before lists were owned by id', () => {
+    expect(findLegacyNameKeyedLists([{ ownerId: TE }, { ownerId: undefined }, {}])).toHaveLength(2)
+  })
+
+  it('topic lookup: pending markers for unseeded lists, real ids win', () => {
+    const map = buildSeedTopicLookup([{ ownerType: 'ecclesia', ownerId: TE, sesTopic: 'bibleClass', listId: 'real-bc' }], TE)
+    expect(map.get('bibleClass')).toBe('real-bc')
+    expect(map.get('newsletter')).toBe(pendingListId('newsletter'))
+    expect(isPendingListId(map.get('newsletter') as string)).toBe(true)
   })
 })
 
-describe('planSubscriptions — SES contacts → subscriptions (canonical source)', () => {
-  const listIdByTopic = new Map<string, string>([
-    ['newsletter', 'list-newsletter'],
-    ['memorial', 'list-memorial'],
-    ['bibleClass', 'list-bibleClass'],
-    ['sundaySchool', 'list-sundaySchool'],
-    ['members', 'list-members'],
-    ['interEcclesia', 'list-interEcclesia'],
-    ['testList', 'list-testList'],
-  ])
+describe('mergeSesContacts — lower case, case-merge, explicit opt-ins only', () => {
+  it('lower-cases and merges case duplicates into one address with the union of opt-ins', () => {
+    const { subscribers, caseDuplicateAddresses } = mergeSesContacts([
+      contact('Reader@Example.org', ['newsletter']),
+      contact('reader@example.org', ['bibleClass']),
+      contact('other@example.org', ['memorial']),
+    ])
+    expect(caseDuplicateAddresses).toBe(1)
+    expect(subscribers).toEqual([
+      { email: 'other@example.org', topics: ['memorial'], variants: 1 },
+      { email: 'reader@example.org', topics: ['bibleClass', 'newsletter'], variants: 2 },
+    ])
+  })
 
-  // A mock resolver backed by a fixed email → PersonRecord row table. Any email
-  // not in the table resolves to null (unresolved), exercising the report path
-  // without hitting AWS.
-  function makeResolver(table: Record<string, ResolvedContact>): ContactResolver {
-    return async (email: string) => table[email.toLowerCase()] ?? null
-  }
-
-  it('creates one opt_in per OPT_IN topic for a resolved contact; ignores OPT_OUT', async () => {
-    const contacts: SesContactForBackfill[] = [
-      {
-        email: 'A@x.com',
-        topicPreferences: [
+  it('ignores topic DEFAULTS — only explicit TopicPreferences count', () => {
+    const { subscribers } = mergeSesContacts([
+      contact('defaults-only@example.org', [], {
+        topicDefaultPreferences: [
           { topic: 'newsletter', status: 'OPT_IN' },
           { topic: 'memorial', status: 'OPT_IN' },
-          { topic: 'bibleClass', status: 'OPT_OUT' }, // ignored
         ],
-      },
-    ]
-    const resolve = makeResolver({
-      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
-    })
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
-
-    expect(plan.toCreate).toHaveLength(2)
-    const byTopic = Object.fromEntries(plan.toCreate.map((s) => [s.topic, s]))
-    expect(byTopic.newsletter).toMatchObject({
-      personId: 'p1',
-      listId: 'list-newsletter',
-      emailId: 'e1',
-      email: 'a@x.com',
-    })
-    expect(byTopic.memorial.listId).toBe('list-memorial')
-    expect(byTopic.bibleClass).toBeUndefined()
-    // subscriptionsFromSes counts OPT_IN rows only (the 2 opt-ins).
-    expect(plan.subscriptionsFromSes).toBe(2)
-    expect(plan.unresolvedSubscribers).toHaveLength(0)
-  })
-
-  it('reports an unresolved email (no PersonRecord) instead of dropping it', async () => {
-    const contacts: SesContactForBackfill[] = [
-      {
-        email: 'sanjaymondol80@gmail.com',
-        topicPreferences: [
-          { topic: 'newsletter', status: 'OPT_IN' },
-          { topic: 'bibleClass', status: 'OPT_IN' },
-          { topic: 'memorial', status: 'OPT_OUT' },
-        ],
-      },
-    ]
-    const resolve = makeResolver({}) // resolves nothing
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
-
-    expect(plan.toCreate).toHaveLength(0)
-    expect(plan.unresolvedSubscribers).toEqual([
-      { email: 'sanjaymondol80@gmail.com', topics: ['newsletter', 'bibleClass'] },
+      }),
     ])
-    // still counted as SES opt-in rows (2 OPT_INs), just not creatable
-    expect(plan.subscriptionsFromSes).toBe(2)
+    expect(subscribers).toEqual([])
   })
 
-  it('DRY-RUN: still plans a subscription when NO lists are seeded yet (regression)', async () => {
-    // The bug: in dry-run the seed lists aren't written, so a lookup built only
-    // from existingLists ([]) matched nothing and every opt-in fell into
-    // "topics with no matching list". Building the lookup from the seed defs (as
-    // PENDING markers) merged with existing lists fixes the preview.
-    const dryRunLookup = buildSeedTopicLookup([]) // nothing seeded yet
-    const contacts: SesContactForBackfill[] = [
-      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
-    ]
-    const resolve = makeResolver({
-      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+  it('ignores OPT_OUT and contacts with UnsubscribeAll (sends skip them today)', () => {
+    const { subscribers } = mergeSesContacts([
+      { email: 'out@example.org', topicPreferences: [{ topic: 'newsletter', status: 'OPT_OUT' }] },
+      contact('stopped@example.org', ['newsletter'], { unsubscribeAll: true }),
+      contact('Stopped2@Example.org', ['memorial'], { unsubscribeAll: true }),
+      contact('stopped2@example.org', ['bibleClass']), // the live variant still counts
+    ])
+    expect(subscribers).toEqual([{ email: 'stopped2@example.org', topics: ['bibleClass'], variants: 2 }])
+  })
+})
+
+describe('planSubscriptions', () => {
+  const lookup = new Map([
+    ['newsletter', 'L-NEWS'],
+    ['bibleClass', 'L-BC'],
+  ])
+
+  it('one opt_in row per topic for a resolved person', async () => {
+    const plan = await planSubscriptions({
+      subscribers: [{ email: 'a@example.org', topics: ['bibleClass', 'newsletter'], variants: 1 }],
+      listIdByTopic: lookup,
+      resolve: resolverFrom({ 'a@example.org': { personId: 'p1', emailId: 'e1', email: 'a@example.org', verified: true } }),
     })
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic: dryRunLookup, resolve })
-
-    expect(plan.toCreate).toHaveLength(1)
-    expect(plan.toCreate[0]).toMatchObject({ personId: 'p1', topic: 'newsletter' })
-    // listId is the PENDING marker (real id assigned at --apply time)
-    expect(isPendingListId(plan.toCreate[0].listId)).toBe(true)
-    // and crucially NOT dumped into the no-list anomaly bucket
-    expect(plan.anomalies.topicsWithNoList).toEqual({})
+    expect(plan.toCreate).toEqual([
+      { personId: 'p1', emailId: 'e1', listId: 'L-BC', email: 'a@example.org', topic: 'bibleClass' },
+      { personId: 'p1', emailId: 'e1', listId: 'L-NEWS', email: 'a@example.org', topic: 'newsletter' },
+    ])
+    expect(plan.subscriberRecordsToCreate).toEqual([])
+    expect(plan.optInRows).toBe(2)
   })
 
-  it('is idempotent — skips subscriptions that already exist', async () => {
-    const contacts: SesContactForBackfill[] = [
-      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
-    ]
-    const resolve = makeResolver({
-      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+  it('an opted-in address with no PersonRecord gets a subscriber-only record — never dropped', async () => {
+    const plan = await planSubscriptions({
+      subscribers: [{ email: 'nobody@example.org', topics: ['newsletter'], variants: 1 }],
+      listIdByTopic: lookup,
+      resolve: resolverFrom({}),
     })
-    const existingSubKeys = new Set(['p1#list-newsletter#e1'])
+    expect(plan.subscriberRecordsToCreate).toEqual([{ email: 'nobody@example.org', topics: ['newsletter'] }])
+    expect(plan.toCreate).toEqual([
+      { personId: null, emailId: null, listId: 'L-NEWS', email: 'nobody@example.org', topic: 'newsletter' },
+    ])
+  })
 
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve, existingSubKeys })
-
-    expect(plan.toCreate).toHaveLength(0)
+  it('idempotent: an existing row for (list, address) — opt_in OR opt_out — is left alone', async () => {
+    const plan = await planSubscriptions({
+      subscribers: [{ email: 'a@example.org', topics: ['bibleClass', 'newsletter'], variants: 1 }],
+      listIdByTopic: lookup,
+      resolve: resolverFrom({ 'a@example.org': { personId: 'p1', emailId: 'e1', email: 'a@example.org' } }),
+      // e.g. they opted out of the newsletter in the registry after the first run
+      existingRows: new Set(['L-NEWS#a@example.org']),
+    })
+    expect(plan.toCreate.map((s) => s.topic)).toEqual(['bibleClass'])
     expect(plan.anomalies.alreadyExists).toBe(1)
   })
 
-  it('flags an OPT_IN for a topic with no matching list as an anomaly', async () => {
-    const contacts: SesContactForBackfill[] = [
-      { email: 'a@x.com', topicPreferences: [{ topic: 'legacyTopic', status: 'OPT_IN' }] },
-    ]
-    const resolve = makeResolver({
-      'a@x.com': { personId: 'p1', emailId: 'e1', email: 'a@x.com' },
+  it('reports topics with no list and unverified targets', async () => {
+    const plan = await planSubscriptions({
+      subscribers: [{ email: 'a@example.org', topics: ['mystery', 'newsletter'], variants: 1 }],
+      listIdByTopic: lookup,
+      resolve: resolverFrom({ 'a@example.org': { personId: 'p1', emailId: 'e1', email: 'a@example.org', verified: false } }),
     })
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
-
-    expect(plan.toCreate).toHaveLength(0)
-    expect(plan.anomalies.topicsWithNoList).toEqual({ legacyTopic: 1 })
-  })
-
-  it('skips a contact with no OPT_IN topics entirely (no resolve, no rows)', async () => {
-    let resolveCalls = 0
-    const resolve: ContactResolver = async (email) => {
-      resolveCalls++
-      return { personId: 'p1', emailId: 'e1', email }
-    }
-    const contacts: SesContactForBackfill[] = [
-      { email: 'a@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_OUT' }] },
-      { email: 'b@x.com', topicPreferences: [] },
-    ]
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
-
-    expect(plan.toCreate).toHaveLength(0)
-    expect(plan.subscriptionsFromSes).toBe(0)
-    expect(plan.unresolvedSubscribers).toHaveLength(0)
-    expect(resolveCalls).toBe(0) // never resolves a contact with zero opt-ins
-  })
-
-  it('mixes resolved + unresolved contacts in one pass', async () => {
-    const contacts: SesContactForBackfill[] = [
-      { email: 'known@x.com', topicPreferences: [{ topic: 'newsletter', status: 'OPT_IN' }] },
-      { email: 'unknown@x.com', topicPreferences: [{ topic: 'memorial', status: 'OPT_IN' }] },
-    ]
-    const resolve = makeResolver({
-      'known@x.com': { personId: 'p1', emailId: 'e1', email: 'known@x.com' },
-    })
-
-    const plan = await planSubscriptions({ contacts, listIdByTopic, resolve })
-
-    expect(plan.toCreate).toHaveLength(1)
-    expect(plan.toCreate[0]).toMatchObject({ personId: 'p1', topic: 'newsletter' })
-    expect(plan.unresolvedSubscribers).toEqual([
-      { email: 'unknown@x.com', topics: ['memorial'] },
-    ])
-    expect(plan.subscriptionsFromSes).toBe(2)
+    expect(plan.anomalies.topicsWithNoList).toEqual({ mystery: 1 })
+    expect(plan.unverifiedTargets).toBe(1)
   })
 })

@@ -39,10 +39,13 @@ export async function GET(request: NextRequest) {
 
   // Check for cron secret or allow local development
   const isAuthorized =
-    (authHeader === `Bearer ${cronSecret}`) ||
+    (!!cronSecret && authHeader === `Bearer ${cronSecret}`) ||
     process.env.NODE_ENV === 'development'
 
-  if (!isAuthorized && cronSecret) {
+  // Fail closed (R5): with CRON_SECRET unset this used to run for anyone. It
+  // rewrites every contact's TopicPreferences from PersonRecord
+  // sesTopicPreferences, which is empty in prod, i.e. it would opt everyone out.
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -92,6 +95,18 @@ export async function GET(request: NextRequest) {
         // Get the person's email record for SES preferences
         const emails = await personRepository.getEmails(person.personId)
         const primaryEmailRecord = emails.find(e => e.emailType === 'primary')
+
+        // A shared household address (#267) has ONE SES contact but several
+        // people. Writing it once per person would make the last one win and
+        // could opt the whole household out. Only its sign-in holder syncs it.
+        if (primaryEmailRecord?.loginExcluded) {
+          results.push({
+            email,
+            action: 'skipped',
+            message: 'Shared address — synced from its sign-in holder',
+          })
+          continue
+        }
 
         // Build topic preferences from PersonRecord
         const topicPreferences = Object.keys(EmailListTypes).map(topic => {
@@ -243,10 +258,13 @@ export async function POST(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
 
   const isAuthorized =
-    (authHeader === `Bearer ${cronSecret}`) ||
+    (!!cronSecret && authHeader === `Bearer ${cronSecret}`) ||
     process.env.NODE_ENV === 'development'
 
-  if (!isAuthorized && cronSecret) {
+  // Fail closed (R5): with CRON_SECRET unset this used to run for anyone. It
+  // rewrites every contact's TopicPreferences from PersonRecord
+  // sesTopicPreferences, which is empty in prod, i.e. it would opt everyone out.
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

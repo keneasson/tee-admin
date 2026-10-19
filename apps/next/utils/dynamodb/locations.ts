@@ -1,6 +1,21 @@
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { getAwsDbConfig } from '../email/sesClient'
+import {
+  ecclesiaIdOf,
+  findEcclesiaByRecordingBrotherEmail,
+  getEcclesiaById,
+  getEcclesiaItems,
+  listEcclesiaDirectory,
+  peopleIndexReady,
+  projectionWritesEnabled,
+  refreshEcclesiaProjections,
+  removeEcclesiaProjections,
+  slugifyEcclesia,
+} from '@my/app/provider/dynamodb/people-index'
+import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 const dbClientConfig = getAwsDbConfig()
 const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
@@ -78,6 +93,12 @@ export interface ScheduleTypeConfig {
 export type EcclesiaScheduleConfig = Record<ScheduleTypeKey, ScheduleTypeConfig>
 
 export interface EcclesiaData {
+  /**
+   * Stable id (slug). Set at creation and carried across renames, so posts and
+   * people can reference an ecclesia without depending on its display name.
+   * Items written before ids existed read back with the slug of their name.
+   */
+  ecclesiaId?: string
   name: string
   country: string
   province: string
@@ -199,6 +220,7 @@ export async function getProvinces(countryCode: string): Promise<LocationData[]>
 // Helper to map a DynamoDB item to EcclesiaData
 function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
   return {
+    ecclesiaId: ecclesiaIdOf(item),
     name: item.name,
     country: item.country,
     province: item.province,
@@ -232,8 +254,55 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
   }
 }
 
+/**
+ * Keep the ecclesia projections (stable-id alias, directory entry, RB office
+ * reference) in step with the ECCLESIA item just written. This module is the
+ * ecclesia's only write path, so it is the projections' only writer.
+ * Never fails the source write: drift is repaired by the next write or by
+ * scripts/rebuild-people-projections.ts.
+ */
+async function syncEcclesiaProjections(key: { pkey: string; skey: string }): Promise<void> {
+  if (!projectionWritesEnabled()) return
+  try {
+    await refreshEcclesiaProjections(key)
+  } catch (error) {
+    console.error(`people-index: ecclesia projection refresh failed for ${key.pkey} / ${key.skey}`, error)
+  }
+}
+
+async function dropEcclesiaProjections(ecclesiaId: string, key: { pkey: string; skey: string }): Promise<void> {
+  if (!projectionWritesEnabled()) return
+  try {
+    await removeEcclesiaProjections(ecclesiaId, key)
+  } catch (error) {
+    console.error(`people-index: ecclesia projection removal failed for ${ecclesiaId}`, error)
+  }
+}
+
+const ecclesiaKey = (e: { country: string; province: string; city: string; name: string }) => ({
+  pkey: `ECCLESIA#${e.country}|${e.province}`,
+  skey: `${e.city}#${e.name}`,
+})
+
+/**
+ * Every ECCLESIA item through the directory index (Query + BatchGet), or null
+ * when the index is not ready / fails — the caller then uses its legacy read.
+ */
+async function getEcclesiasFromIndex(filter: { country?: string } = {}): Promise<EcclesiaData[] | null> {
+  try {
+    if (!(await peopleIndexReady())) return null
+    const entries = await listEcclesiaDirectory(filter)
+    const items = await getEcclesiaItems(entries)
+    return items.map(mapItemToEcclesia)
+  } catch (error) {
+    console.error('people-index: ecclesia directory read failed; using legacy scan', error)
+    return null
+  }
+}
+
 // Ecclesia functions
 export async function createEcclesia(data: {
+  ecclesiaId?: string
   name: string
   country: string
   province: string
@@ -245,6 +314,7 @@ export async function createEcclesia(data: {
   const now = new Date()
   const ecclesia: EcclesiaData = {
     ...data,
+    ecclesiaId: data.ecclesiaId || slugifyEcclesia(data.name),
     createdAt: now,
     updatedAt: now,
   }
@@ -285,6 +355,7 @@ export async function createEcclesia(data: {
     })
 
     invalidateEcclesiaCache()
+    await syncEcclesiaProjections(ecclesiaKey(data))
     return ecclesia
   } catch (error: any) {
     if (error.name === 'ConditionalCheckFailedException') {
@@ -343,6 +414,14 @@ async function getAllEcclesiasWithCache(): Promise<EcclesiaData[]> {
     return ecclesiaCacheData
   }
 
+  const indexed = await getEcclesiasFromIndex()
+  if (indexed) {
+    ecclesiaCacheData = indexed
+    ecclesiaCacheExpiry = now + ECCLESIA_CACHE_TTL_MS
+    return ecclesiaCacheData
+  }
+
+  // Legacy: Scan (pre-backfill only).
   const result = await client.scan({
     TableName: TABLE_NAME,
     IndexName: 'gsi1',
@@ -355,6 +434,11 @@ async function getAllEcclesiasWithCache(): Promise<EcclesiaData[]> {
   ecclesiaCacheData = (result.Items || []).map(mapItemToEcclesia)
   ecclesiaCacheExpiry = now + ECCLESIA_CACHE_TTL_MS
   return ecclesiaCacheData
+}
+
+/** Every ecclesia, from the 5-minute server cache (mailing-list owner names and pickers). */
+export async function listEcclesiasCached(): Promise<EcclesiaData[]> {
+  return getAllEcclesiasWithCache()
 }
 
 /** Invalidate the ecclesia search cache (call after add/update/delete) */
@@ -399,6 +483,10 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
 // New geographic query functions enabled by the new schema
 export async function getEcclesiaByCountry(country: string): Promise<EcclesiaData[]> {
   try {
+    const indexed = await getEcclesiasFromIndex({ country })
+    if (indexed) return indexed
+
+    // Legacy: Scan (pre-backfill only).
     // Use scan with filter since begins_with on PK isn't supported in Query
     const result = await client.scan({
       TableName: TABLE_NAME,
@@ -462,6 +550,11 @@ export async function getEcclesiaByCity(country: string, province: string, city:
 
 export async function getAllEcclesia(): Promise<EcclesiaData[]> {
   try {
+    const indexed = await getEcclesiasFromIndex()
+    if (indexed) return indexed
+
+    // Legacy: single-page Scan (pre-backfill only). It reads only the first
+    // 1 MB of the table, so it misses ecclesias stored past that point.
     const result = await client.scan({
       TableName: TABLE_NAME,
       FilterExpression: '#type = :ecclesiaType',
@@ -499,6 +592,8 @@ export async function deleteEcclesia(name: string): Promise<boolean> {
       },
     })
 
+    invalidateEcclesiaCache()
+    await dropEcclesiaProjections(ecclesiaIdOf(ecclesia), ecclesiaKey(ecclesia))
     return true
   } catch (error) {
     console.error('Error deleting ecclesia:', error)
@@ -542,8 +637,9 @@ export async function updateEcclesia(
         },
       })
 
-      // Create new record with updated data
-      return await createEcclesia(data)
+      // Create new record with updated data, keeping the stable id: the alias
+      // is re-pointed at the new key by createEcclesia's projection refresh.
+      return await createEcclesia({ ...data, ecclesiaId: ecclesiaIdOf(original) })
     } else {
       // Only address/postalCode changed - can update in place
       const now = new Date()
@@ -563,6 +659,7 @@ export async function updateEcclesia(
       })
 
       invalidateEcclesiaCache()
+      await syncEcclesiaProjections(ecclesiaKey(original))
       return {
         ...original,
         address: data.address,
@@ -662,6 +759,7 @@ export async function updateEcclesiaFields(
     })
 
     invalidateEcclesiaCache()
+    await syncEcclesiaProjections(ecclesiaKey(ecclesia))
     return {
       ...ecclesia,
       ...updates,
@@ -699,6 +797,52 @@ export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise
     console.error('Error looking up ecclesia by recording brother email:', error)
     return null
   }
+}
+
+/**
+ * The same lookup through the RB-email index entry (one Query + one GetItem)
+ * instead of a Scan. Only used once the index is ready.
+ */
+export async function getEcclesiaByRecordingBrotherEmailIndexed(email: string): Promise<EcclesiaData | null> {
+  // 1. The Recording Brother OFFICE's own inbox (the office model, #58).
+  const offices = (await officeRepository.findOfficesByEmail(email)).filter(
+    (o) => o.role === OFFICE_ROLES.RECORDING_BROTHER
+  )
+  for (const office of offices.sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))) {
+    const entry = await getEcclesiaById(office.ecclesiaId)
+    if (!entry) continue
+    const found = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
+    if (found.Item) return mapItemToEcclesia(found.Item)
+  }
+  // 2. Until offices are migrated: the legacy copied `recordingBrotherEmail`.
+  const entry = await findEcclesiaByRecordingBrotherEmail(email)
+  if (!entry) return null
+  const result = await client.get({
+    TableName: TABLE_NAME,
+    Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey },
+  })
+  return result.Item ? mapItemToEcclesia(result.Item) : null
+}
+
+/**
+ * Sign-in's Recording Brother check for an address with no PersonRecord.
+ *
+ * Launch-dark: the indexed lookup is used only when the `people_index_signin`
+ * flag is released to everyone AND the index is built. A wrong answer here
+ * makes a Recording Brother a guest, so the legacy Scan stays the default.
+ */
+export async function findRecordingBrotherEcclesia(email: string): Promise<EcclesiaData | null> {
+  try {
+    if (
+      (await checkFeatureFlagFromDB(FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN, null)) &&
+      (await peopleIndexReady())
+    ) {
+      return await getEcclesiaByRecordingBrotherEmailIndexed(email)
+    }
+  } catch (error) {
+    console.error('people-index: indexed RB lookup failed; using legacy scan', error)
+  }
+  return getEcclesiaByRecordingBrotherEmail(email)
 }
 
 // Initialization function to populate Canadian provinces

@@ -4,6 +4,7 @@ import { postRepository } from '@my/app/provider/dynamodb/repositories/post-repo
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { redactPost } from '@my/app/utils/redact-post'
+import { resolvePostReferences } from '@my/app/services/smart-refs-service'
 import type { Post } from '@my/app/types/post'
 
 /**
@@ -42,6 +43,8 @@ export async function getPublicPost(id: string): Promise<Post | null> {
 
   // Redact for the resolved viewer at the hard public-web tier. Returns null when
   // the viewer cannot reach the post's visibility at all.
+  // Referenced contacts (plan §0 R6) are filled for this viewer first, then
+  // the same redaction runs over the result.
   const viewer = await resolveViewer()
-  return redactPost(post, viewer, { channel: 'public-web' })
+  return redactPost(await resolvePostReferences(post, viewer), viewer, { channel: 'public-web' })
 }

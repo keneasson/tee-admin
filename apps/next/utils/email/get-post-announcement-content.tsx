@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import PostAnnouncement from 'email-builder/emails/PostAnnouncement'
 import { postRepository } from '@my/app/provider/dynamodb/repositories/post-repository'
 import { redactPost } from '@my/app/utils/redact-post'
+import { resolvePostReferences } from '@my/app/services/smart-refs-service'
 import { emailIdentityFromProfile } from '@my/app/types/brand-profile'
 import type { TenantConfig } from '@my/app/config/tenants'
 import type { Viewer } from '@my/app/utils/viewer-pii'
@@ -51,7 +52,7 @@ export async function getPostAnnouncementContent(
     email: null,
   }
 
-  const redacted = redactPost(post, viewer, { channel: 'newsletter-email' })
+  const redacted = redactPost(await resolvePostReferences(post, viewer), viewer, { channel: 'newsletter-email' })
   if (!redacted) {
     // Member tier can always reach the post; a null here means the post's own
     // visibility excludes even members (e.g. 'admins') — surface, don't send.
