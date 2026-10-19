@@ -30,16 +30,18 @@ Done in code (PR #285 and the R5-finish PR):
 - Every send names a `listId`: the Email Sender, the News/Events composer, the post and news-alert senders, meeting sends, scheduled sends (a schedule can carry a `listId`) and test sends resolve one registry list (`utils/mailing-lists/send-target.ts`). The audience picker lists every active list by its derived name, including lists with no SES topic. The send record stores the `listId`. The `EmailListTypes` enum is deleted; an old list key ('newsletter') is still read only from records saved before R5 (drafts, meetings, news blasts, schedules without a `listId`) and resolved to the owner's list.
 - `defaultOptIn` applies: an eligible person (the list is offered to them by the scope ladder) with no row on the list is treated as subscribed, source `default`, at read time. Any row the person has, or an opt-out of that address, wins. Leaving such a list writes an `opt_out` row.
 - Safety net: sends name the topic from `utils/mailing-lists/safety-net.ts` (`safetyNetDefault`, default OPT_IN) once the stored setting is on; until then a bridged list names its legacy topic and a new list names none.
+- No send falls back to an SES topic's audience (`utils/mailing-lists/registry-send.ts`): a bridged list that is not cut over refuses to send, and so does a cut-over list that resolves 0 recipients, because `/email-preferences` no longer writes SES topics. While the switch script runs, the setting is `switching` and every send refuses.
 - SES topic writers removed: `/api/subscribe` writes only the registry plus UnsubscribeAll; `contact.ts` add/update helpers, the email-tester SES contact/topic editor, `pages/api/contact/*`, `import-inter-ecclesia`, `migrate-inter-ecclesia`, the SES init scripts and `cron/sync-ses-contacts` are deleted. An admin email change moves registry rows. The Email Lists page reads the registry.
 - `sesTopicPreferences` is removed from the types and from every reader and writer.
 
 Owner-run steps, in order (each is a dry run first; `--apply` backs up first):
 
-1. Cut over every bridged list: `npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity`, then `cutover --topic <topic> --to registry --apply` for each (Sunday–Tuesday). Merge the R5-finish PR only after all 7 lists show `sendFromRegistry: true`, because `/email-preferences` no longer writes SES topics.
+1. Cut over every bridged list: `npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity`, then `cutover --topic <topic> --to registry --apply` for each (Sunday–Tuesday). Merge the R5-finish PR only after all 7 lists show `sendFromRegistry: true`: a list that is not cut over refuses to send after the merge.
 2. Send one test-list email from the Email Sender.
-3. Sunday–Tuesday, with no manual send running: `npx tsx scripts/ses-safety-net-topics.ts`, then `--apply`. It backs up every contact, the topic list and the suppression list, replaces the topics with the safety net, switches sends to it, keeps UnsubscribeAll, merges the 8 letter-case duplicates and verifies.
-4. `npx tsx scripts/retire-ses-topic-fields.ts`, then `--apply`: removes `sesTopicPreferences` from EMAIL# items, and (after step 3) each list's `sesTopic`.
-5. Re-run step 4 as a dry run: 0 remaining. R5 is done when these steps are complete.
+3. Sunday–Tuesday, with no manual send running: `npx tsx scripts/ses-safety-net-topics.ts`, then `--apply`. It backs up every contact, the topic list and the suppression list; marks the setting `switching` (every send refuses); replaces the topics with the safety net; checks UnsubscribeAll with a fast ListContacts pass, re-applies any that were lost and refuses to continue if one is still missing; only then switches sends to the safety net; and verifies.
+4. Sunday–Tuesday: `npx tsx scripts/ses-merge-case-duplicates.ts`, then `--apply`. It refuses until step 3 is verified, backs up the affected contacts, merges the 8 letter-case duplicates onto the lower-case address (UnsubscribeAll kept) and verifies.
+5. `npx tsx scripts/retire-ses-topic-fields.ts`, then `--apply`: removes `sesTopicPreferences` from EMAIL# items, and (after step 3) each list's `sesTopic`.
+6. Re-run step 5 as a dry run: 0 remaining. R5 is done when these steps are complete.
 
 ## 0.3 Out of scope ("Not now")
 

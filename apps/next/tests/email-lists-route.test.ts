@@ -40,24 +40,24 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.ready.mockResolvedValue(true)
   h.cards.mockResolvedValue([
-    { personId: 'a', displayName: 'A One', firstName: 'A', lastName: 'One', primaryEmail: 'shared@x.org', emails: [{ email: 'shared@x.org', emailType: 'primary' }] },
-    { personId: 'b', displayName: 'B Two', firstName: 'B', lastName: 'Two', primaryEmail: 'shared@x.org', emails: [{ email: 'shared@x.org', emailType: 'primary' }] },
+    { personId: 'a', displayName: 'A One', firstName: 'A', lastName: 'One', primaryEmail: 'shared@example.org', emails: [{ email: 'shared@example.org', emailType: 'primary' }] },
+    { personId: 'b', displayName: 'B Two', firstName: 'B', lastName: 'Two', primaryEmail: 'shared@example.org', emails: [{ email: 'shared@example.org', emailType: 'primary' }] },
   ])
   // SES still holds a legacy topic opt-in: the page must NOT read it as a subscription.
-  h.contacts.mockResolvedValue([{ email: 'shared@x.org', topics: { newsletter: 'OPT_IN', memorial: 'OPT_IN' } }])
+  h.contacts.mockResolvedValue([{ email: 'shared@example.org', topics: { newsletter: 'OPT_IN', memorial: 'OPT_IN' } }])
   h.suppressed.mockResolvedValue([])
   h.lists.mockResolvedValue([
     { listId: 'L-NEWS', ownerType: 'ecclesia', ownerId: 'toronto-east-ecclesia', name: 'Newsletter', status: 'active', defaultOptIn: false },
     { listId: 'L-MEM', ownerType: 'ecclesia', ownerId: 'toronto-east-ecclesia', name: 'Memorial Recap', status: 'active', defaultOptIn: false },
   ])
   h.subscribers.mockImplementation(async (listId: string) =>
-    listId === 'L-NEWS' ? [{ email: 'Shared@x.org', status: 'opt_in' }] : []
+    listId === 'L-NEWS' ? [{ email: 'Shared@example.org', status: 'opt_in' }] : []
   )
 })
 
 describe('GET /api/admin/email/search', () => {
   it('rejects anyone below admin', async () => {
-    for (const session of [null, { user: { email: 'm@x.org', role: 'member' } }]) {
+    for (const session of [null, { user: { email: 'm@example.org', role: 'member' } }]) {
       h.auth.mockResolvedValueOnce(session)
       expect((await GET()).status).toBe(401)
     }
@@ -66,20 +66,20 @@ describe('GET /api/admin/email/search', () => {
   })
 
   it('refuses (503) until the people index is built, rather than falling back to a Scan', async () => {
-    h.auth.mockResolvedValue({ user: { email: 'o@x.org', role: 'owner' } })
+    h.auth.mockResolvedValue({ user: { email: 'o@example.org', role: 'owner' } })
     h.ready.mockResolvedValue(false)
     expect((await GET()).status).toBe(503)
     expect(h.cards).not.toHaveBeenCalled()
   })
 
   it('returns one card per person, the shared address on both', async () => {
-    h.auth.mockResolvedValue({ user: { email: 'o@x.org', role: 'admin' } })
+    h.auth.mockResolvedValue({ user: { email: 'o@example.org', role: 'admin' } })
     const res = await GET()
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.people.map((p: any) => p.personId)).toEqual(['a', 'b'])
     expect(body.people.map((p: any) => p.emails[0].sharedWith)).toEqual([['b'], ['a']])
-    expect(body.findings.sharedAddresses).toEqual([{ email: 'shared@x.org', personIds: ['a', 'b'] }])
+    expect(body.findings.sharedAddresses).toEqual([{ email: 'shared@example.org', personIds: ['a', 'b'] }])
     expect(body.subscriptionSource).toBe('registry')
     expect(body.topics.map((t: any) => t.displayName)).toEqual(['Toronto East Memorial Recap', 'Toronto East Newsletter'])
     // From the registry only: the SES 'memorial' opt-in is ignored.

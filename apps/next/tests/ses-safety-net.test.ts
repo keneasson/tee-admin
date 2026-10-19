@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { chooseSendTopic, DEFAULT_SAFETY_NET_TOPIC, SAFETY_NET_TOPICS } from '../utils/mailing-lists/safety-net'
 import {
   lostUnsubscribeAll,
+  mergeRefusals,
   planCaseDuplicates,
   safetyNetTopicList,
   switchRefusals,
@@ -87,7 +88,7 @@ describe('(d) and (g): the topic list', () => {
   })
 })
 
-describe('(e): UnsubscribeAll survives, letter-case duplicates merge onto lower case', () => {
+describe('(e) UnsubscribeAll survives; the separate case-duplicate merge', () => {
   it('lostUnsubscribeAll lists only contacts that had it and lost it', () => {
     const before = [
       { email: 'a@example.org', unsubscribeAll: true },
@@ -116,6 +117,19 @@ describe('(e): UnsubscribeAll survives, letter-case duplicates merge onto lower 
       },
       { email: 'sam@example.org', lowerExists: false, unsubscribeAll: false, attributesData: undefined, deleteVariants: ['Sam@example.org'] },
     ])
+  })
+})
+
+describe('mergeRefusals — case-duplicate merge runs only after the safety net, Sun–Tue', () => {
+  it('refuses before the safety net (topic preferences would be dropped) and mid-switch', () => {
+    expect(mergeRefusals({ safetyNet: { enabled: false }, inSendWindow: false })).toHaveLength(1)
+    expect(mergeRefusals({ safetyNet: { enabled: false, switching: true }, inSendWindow: false })[0]).toMatch(/mid-way/)
+  })
+  it('refuses in the send window', () => {
+    expect(mergeRefusals({ safetyNet: { enabled: true }, inSendWindow: true })[0]).toMatch(/Wednesday/)
+  })
+  it('safety net on, Sunday: go', () => {
+    expect(mergeRefusals({ safetyNet: { enabled: true }, inSendWindow: false })).toEqual([])
   })
 })
 

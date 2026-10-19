@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   sesSend: vi.fn(),
   resolveSendList: vi.fn(),
   resolveSendAudience: vi.fn(),
-  safetyNetEnabled: vi.fn(),
+  safetyNetState: vi.fn(),
   createSendRecord: vi.fn(),
 }))
 
@@ -26,7 +26,7 @@ vi.mock('../utils/email/contact-lists', () => ({ inputTemplate: { ContactListNam
 vi.mock('../utils/mailing-lists/send-target', () => ({ resolveSendList: h.resolveSendList }))
 vi.mock('../utils/mailing-lists/registry-send', () => ({
   resolveSendAudience: h.resolveSendAudience,
-  safetyNetEnabled: h.safetyNetEnabled,
+  safetyNetState: h.safetyNetState,
 }))
 vi.mock('../utils/email/ecclesia-token', () => ({
   generateEcclesiaUpdateUrl: vi.fn(),
@@ -59,7 +59,7 @@ describe('emailSend — every send names a listId', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     h.sesSend.mockResolvedValue({})
-    h.safetyNetEnabled.mockResolvedValue(false)
+    h.safetyNetState.mockResolvedValue({ enabled: false })
   })
 
   it('no list given: resolves the reason default for the tenant and records its listId', async () => {
@@ -76,7 +76,7 @@ describe('emailSend — every send names a listId', () => {
     expect(h.resolveSendList).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'newsletter', test: false, list: undefined })
     )
-    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, false)
+    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, { enabled: false })
     expect(sent()).toEqual([
       { to: 'a@example.org', list: { ContactListName: 'TEEAdmin', TopicName: 'newsletter' } },
     ])
@@ -100,7 +100,7 @@ describe('emailSend — every send names a listId', () => {
   })
 
   it('safety net on: the audience is asked with safetyNet=true and its topic is named', async () => {
-    h.safetyNetEnabled.mockResolvedValue(true)
+    h.safetyNetState.mockResolvedValue({ enabled: true })
     h.resolveSendList.mockResolvedValue(NEWSLETTER)
     h.resolveSendAudience.mockResolvedValue({
       source: 'registry',
@@ -110,7 +110,7 @@ describe('emailSend — every send names a listId', () => {
       stats: {},
     })
     await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x' })
-    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, true)
+    expect(h.resolveSendAudience).toHaveBeenCalledWith(NEWSLETTER, { enabled: true })
     expect(sent()[0].list).toEqual({ ContactListName: 'TEEAdmin', TopicName: 'safetyNetDefault' })
   })
 

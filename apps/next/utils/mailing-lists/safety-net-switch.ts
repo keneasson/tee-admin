@@ -69,7 +69,7 @@ export function topicListProblems(
 }
 
 // ---------------------------------------------------------------------------
-// (e): UnsubscribeAll and letter-case duplicates
+// (e): UnsubscribeAll must survive
 // ---------------------------------------------------------------------------
 
 export interface ContactSnapshot {
@@ -81,6 +81,27 @@ export interface ContactSnapshot {
 /** Contacts that had UnsubscribeAll before the switch but not after (to re-apply). */
 export function lostUnsubscribeAll(before: ContactSnapshot[], after: Map<string, boolean>): string[] {
   return before.filter((c) => c.unsubscribeAll && after.get(c.email) !== true).map((c) => c.email)
+}
+
+// ---------------------------------------------------------------------------
+// Letter-case duplicates (scripts/ses-merge-case-duplicates.ts, a SEPARATE
+// step run only after the safety net is verified on)
+// ---------------------------------------------------------------------------
+
+/** Every reason the case-duplicate merge must not run. Empty = go. */
+export function mergeRefusals(input: {
+  safetyNet: { enabled: boolean; switching?: boolean }
+  inSendWindow: boolean
+}): string[] {
+  const out: string[] = []
+  if (input.safetyNet.switching) out.push('The safety-net switch is mid-way (switching is on). Finish it first.')
+  else if (!input.safetyNet.enabled) {
+    out.push(
+      'The safety net is not on: topic preferences still decide sends, and merging would drop them. Run scripts/ses-safety-net-topics.ts first.'
+    )
+  }
+  if (input.inSendWindow) out.push('It is Wednesday–Saturday in Toronto (the send window). Run this Sunday–Tuesday.')
+  return out
 }
 
 export interface CaseDuplicatePlan {

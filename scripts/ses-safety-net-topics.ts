@@ -26,26 +26,39 @@
  *      and the safety-net setting; each upload is verified before going on;
  *  (d) replace the topic list with ONLY the safety-net topic(s), default
  *      OPT_IN, in ONE update-contact-list call;
- *  (f) flip the stored setting so sends name the safety-net topic — done
- *      IMMEDIATELY after (d), before (e)'s per-contact work: between (d) and
- *      (f) any send names a topic that no longer exists and FAILS, so that gap
- *      is kept to one call. (b) keeps the weekly crons out of it; do not send
- *      manually while this runs;
- *  (e) re-read every contact that had UnsubscribeAll and re-apply it if the
- *      topic edit cleared it (SES documents UnsubscribeAll as contact-level,
- *      so it is expected to survive: the script asserts it and reports);
- *      then merge letter-case duplicate contacts onto the lower-case address
- *      (UnsubscribeAll kept if any variant had it) and delete the variants;
+ *  (e) UnsubscribeAll must survive: one fast ListContacts pass (100 contacts
+ *      a page, it returns UnsubscribeAll) finds every previously stopped
+ *      contact that lost it; each is re-applied with update-contact; then a
+ *      second ListContacts pass must show EVERY previously stopped contact
+ *      still stopped, or the script REFUSES to go on to (f). (SES documents
+ *      UnsubscribeAll as contact-level, so the expected result is 0 lost.)
+ *  (f) only then flip the stored setting so sends name the safety-net topic;
  *  (g) verify by reading back: the topic list is exactly the safety nets with
- *      OPT_IN defaults, the setting is on, every UnsubscribeAll survived, and
- *      no mixed-case contact remains.
+ *      OPT_IN defaults, the setting is on, every UnsubscribeAll survived.
+ *
+ *  THE GAP between (d) and (f) is FAIL-CLOSED: just before (d) the stored
+ *  setting is marked `switching`, and while it is, EVERY send refuses
+ *  (registry-send.ts; the cron marks it failed and retries later) — nobody is
+ *  mailed, not even on a list with no SES topic. A bridged-list send that read
+ *  the setting just before would name its old topic, which no longer exists,
+ *  and SES fails it. That is why (e)
+ *  runs before (f): if the topic edit had cleared UnsubscribeAll, flipping
+ *  first would let live sends reach people who chose "stop all email". (d)–(f)
+ *  run back-to-back (seconds, plus ~1s per contact that needs re-applying);
+ *  (b) keeps the weekly crons out of it. Do not send manually while this runs.
+ *  If (e) refuses, `switching` stays on and every send keeps refusing until
+ *  the owner fixes the contacts or rolls back (below).
+ *
+ *  Letter-case duplicate SES contacts (R5's "no case duplicates") are NOT
+ *  touched here: that is a separate, later step,
+ *  scripts/ses-merge-case-duplicates.ts, run once the safety net is verified.
  *
  *  Re-running after success does nothing (the setting is already on). Prints
  *  counts only — never an address.
  *
  * ROLLBACK (if something is wrong after (d)): restore the topic list from the
  * backup's ses-topic-list JSON with update-contact-list, set the setting off
- * (MAILING_LIST_SETTINGS / SAFETY_NET enabled=false), then restore contacts'
+ * (MAILING_LIST_SETTINGS / SAFETY_NET enabled=false, switching=false), then restore contacts'
  * TopicPreferences from ses-contacts JSON (update-contact per contact).
  *
  * Usage (repo root):
@@ -56,7 +69,6 @@
 import { backupJsonToS3, loadCredentials, sleep } from '../apps/next/utils/mailing-lists/script-env'
 import {
   lostUnsubscribeAll,
-  planCaseDuplicates,
   safetyNetTopicList,
   switchRefusals,
   topicListProblems,
@@ -71,8 +83,6 @@ async function main(): Promise<void> {
 
   // Imported after credentials are in the environment (the clients read them at load).
   const {
-    CreateContactCommand,
-    DeleteContactCommand,
     GetContactCommand,
     GetContactListCommand,
     ListContactsCommand,
@@ -95,6 +105,13 @@ async function main(): Promise<void> {
   if (setting.enabled) {
     console.log(`The safety net is already on (topics: ${setting.topics.join(', ')}). Nothing to do.`)
     return
+  }
+  if (setting.switching) {
+    console.error(
+      'A previous run stopped mid-switch (setting.switching is on, so every send is refused). ' +
+        'Check UnsubscribeAll against that run\'s backup and see ROLLBACK in this header. Nothing changed.'
+    )
+    process.exit(1)
   }
 
   // (a) + (b)
@@ -128,7 +145,6 @@ async function main(): Promise<void> {
     await sleep(1100)
   }
   const topicListBefore = await ses.send(new GetContactListCommand(inputTemplate))
-  const caseDuplicates = planCaseDuplicates(snapshot)
   const stopped = snapshot.filter((c) => c.unsubscribeAll)
 
   console.log(
@@ -141,8 +157,6 @@ async function main(): Promise<void> {
           (c: any) => Array.isArray(c.TopicPreferences) && c.TopicPreferences.length > 0
         ).length,
         contactsWithUnsubscribeAll: stopped.length,
-        caseDuplicateAddresses: caseDuplicates.length,
-        caseVariantContactsToDelete: caseDuplicates.reduce((n, d) => n + d.deleteVariants.length, 0),
       },
       null,
       2
@@ -182,9 +196,16 @@ async function main(): Promise<void> {
 
   // Reading took minutes: re-check the window and the setting right before acting.
   if (inSendWindow()) throw new Error('Refusing: the send window started while reading. Nothing changed.')
-  if ((await mailingListRepository.getSafetyNetSetting()).enabled) {
-    throw new Error('Refusing: the safety net was switched on by someone else meanwhile. Nothing changed.')
+  const settingNow = await mailingListRepository.getSafetyNetSetting()
+  if (settingNow.enabled || settingNow.switching) {
+    throw new Error('Refusing: someone else started the safety-net switch meanwhile. Nothing changed.')
   }
+
+  // Fail closed for the whole switch: while `switching` is on EVERY send
+  // refuses — also a list with no SES topic, which names no topic and so would
+  // not be stopped by the old topics being gone.
+  await mailingListRepository.setSafetyNetSetting({ enabled: false, switching: true, topics: [] })
+  console.log('\n(d-) Setting "switching" on: every send refuses until (f).')
 
   // (d) ONE call: the topic list becomes the safety nets only.
   await ses.send(
@@ -196,18 +217,21 @@ async function main(): Promise<void> {
   )
   console.log('\n(d) Topic list replaced.')
 
-  // (f) Immediately: sends now name the safety-net topic.
-  await mailingListRepository.setSafetyNetSetting({ enabled: true, topics: topicNames })
-  console.log('(f) Setting on: sends name the safety-net topic.')
-
-  // (e) UnsubscribeAll must survive.
-  const after = new Map<string, boolean>()
-  for (const c of stopped) {
-    const full = await ses.send(new GetContactCommand({ ...inputTemplate, EmailAddress: c.email }))
-    after.set(c.email, !!full.UnsubscribeAll)
-    await sleep(1100)
+  // Every contact's UnsubscribeAll by exact address, from ListContacts
+  // (100 a page): fast, so the fail-closed gap before (f) stays short.
+  const listUnsubscribeAll = async (): Promise<Map<string, boolean>> => {
+    const out = new Map<string, boolean>()
+    let token: string | undefined
+    do {
+      const page = await ses.send(new ListContactsCommand({ ...inputTemplate, PageSize: 100, NextToken: token }))
+      for (const c of page.Contacts ?? []) if (c.EmailAddress) out.set(c.EmailAddress, !!c.UnsubscribeAll)
+      token = page.NextToken
+    } while (token)
+    return out
   }
-  const lost = lostUnsubscribeAll(stopped, after)
+
+  // (e) UnsubscribeAll must survive — BEFORE (f), so sends stay failed-closed meanwhile.
+  const lost = lostUnsubscribeAll(stopped, await listUnsubscribeAll())
   for (const email of lost) {
     const c = stopped.find((s) => s.email === email)
     await ses.send(
@@ -220,38 +244,22 @@ async function main(): Promise<void> {
     )
     await sleep(1100)
   }
+  const stillLost = lost.length > 0 ? lostUnsubscribeAll(stopped, await listUnsubscribeAll()) : []
   console.log(
-    `(e) UnsubscribeAll: ${stopped.length - lost.length} unchanged by the topic edit, ${lost.length} re-applied.`
+    `(e) UnsubscribeAll: ${stopped.length - lost.length} unchanged by the topic edit, ${lost.length - stillLost.length} re-applied, ${stillLost.length} still missing.`
   )
-
-  // (e, continued) Letter-case duplicates → one lower-case contact.
-  for (const d of caseDuplicates) {
-    if (!d.lowerExists) {
-      await ses.send(
-        new CreateContactCommand({
-          ...inputTemplate,
-          EmailAddress: d.email,
-          UnsubscribeAll: d.unsubscribeAll,
-          ...(d.attributesData ? { AttributesData: d.attributesData } : {}),
-        })
-      )
-    } else if (d.unsubscribeAll) {
-      await ses.send(
-        new UpdateContactCommand({
-          ...inputTemplate,
-          EmailAddress: d.email,
-          UnsubscribeAll: true,
-          ...(d.attributesData ? { AttributesData: d.attributesData } : {}),
-        })
-      )
-    }
-    await sleep(1100)
-    for (const variant of d.deleteVariants) {
-      await ses.send(new DeleteContactCommand({ ...inputTemplate, EmailAddress: variant }))
-      await sleep(1100)
-    }
+  if (stillLost.length > 0) {
+    console.error(
+      `\nREFUSED to switch the setting on: ${stillLost.length} contact(s) that had UnsubscribeAll do not have it.` +
+        '\nEvery send keeps REFUSING (closed) meanwhile: the setting stays "switching".' +
+        `\nFix those contacts (backup: s3://tee-admin-backups/${prefix}/) and re-run, or roll back (header).`
+    )
+    process.exit(1)
   }
-  console.log(`(e) Merged ${caseDuplicates.length} letter-case duplicate address(es).`)
+
+  // (f) Only now: sends name the safety-net topic.
+  await mailingListRepository.setSafetyNetSetting({ enabled: true, switching: false, topics: topicNames })
+  console.log('(f) Setting on ("switching" off): sends name the safety-net topic.')
 
   // (g) Read back.
   const problems: string[] = []
@@ -259,21 +267,7 @@ async function main(): Promise<void> {
   problems.push(...topicListProblems(topicListAfter.Topics))
   const settingAfter = await mailingListRepository.getSafetyNetSetting()
   if (!settingAfter.enabled) problems.push('The safety-net setting is not on')
-  const stoppedAfter = new Set(
-    snapshot.filter((c) => c.unsubscribeAll).map((c) => c.email.trim().toLowerCase())
-  )
-  const remaining: Array<{ email: string; unsubscribeAll: boolean }> = []
-  let token: string | undefined
-  do {
-    const page = await ses.send(new ListContactsCommand({ ...inputTemplate, PageSize: 100, NextToken: token }))
-    for (const c of page.Contacts ?? []) {
-      if (c.EmailAddress) remaining.push({ email: c.EmailAddress, unsubscribeAll: !!c.UnsubscribeAll })
-    }
-    token = page.NextToken
-  } while (token)
-  const mixedCase = remaining.filter((c) => c.email !== c.email.toLowerCase()).length
-  if (mixedCase > 0) problems.push(`${mixedCase} mixed-case contact(s) remain`)
-  const lostAfter = [...stoppedAfter].filter((e) => !remaining.some((c) => c.email === e && c.unsubscribeAll))
+  const lostAfter = lostUnsubscribeAll(stopped, await listUnsubscribeAll())
   if (lostAfter.length > 0) problems.push(`${lostAfter.length} contact(s) lost UnsubscribeAll`)
 
   if (problems.length > 0) {
@@ -282,8 +276,8 @@ async function main(): Promise<void> {
     console.error(`Backup: s3://tee-admin-backups/${prefix}/ (see ROLLBACK in this script's header).`)
     process.exit(1)
   }
-  console.log(`\n(g) Verified: topics = ${topicNames.join(', ')} (OPT_IN), setting on, UnsubscribeAll intact, no case duplicates.`)
-  console.log('\n=== Done. Next: npx tsx scripts/retire-ses-topic-fields.ts (dry run). ===\n')
+  console.log(`\n(g) Verified: topics = ${topicNames.join(', ')} (OPT_IN), setting on, UnsubscribeAll intact.`)
+  console.log('\n=== Done. Next: npx tsx scripts/ses-merge-case-duplicates.ts (dry run), then scripts/retire-ses-topic-fields.ts. ===\n')
 }
 
 main().catch((err) => {

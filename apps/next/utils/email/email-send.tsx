@@ -3,7 +3,7 @@ import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
 import { inputTemplate } from './contact-lists'
-import { resolveSendAudience, safetyNetEnabled } from '../mailing-lists/registry-send'
+import { resolveSendAudience, safetyNetState } from '../mailing-lists/registry-send'
 import { resolveSendList } from '../mailing-lists/send-target'
 import { chunkArray } from '../chunkArray'
 import {
@@ -210,7 +210,7 @@ export const emailSend = async function ({
 
     // Who receives it, and which SES topic each send names as its final gate
     // (the safety net once it is switched on; see registry-send.ts).
-    const audience = await resolveSendAudience(list, await safetyNetEnabled())
+    const audience = await resolveSendAudience(list, await safetyNetState())
     const senderEmails = audience.emails
     const listTopic = audience.topicName
     console.log('[emailSend] audience', {

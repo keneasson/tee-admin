@@ -23,6 +23,12 @@ export const SAFETY_NET_SETTING_KEY = { pkey: 'MAILING_LIST_SETTINGS', skey: 'SA
  */
 export interface SafetyNetSetting {
   enabled: boolean
+  /**
+   * True only while scripts/ses-safety-net-topics.ts is between replacing the
+   * topic list and switching `enabled` on. Every send refuses meanwhile
+   * (fail-closed), so nothing goes out while UnsubscribeAll is being checked.
+   */
+  switching?: boolean
   /** The topic names that exist in SES (for the read-back check). */
   topics: string[]
   enabledAt?: string
@@ -185,6 +191,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     if (!item) return { enabled: false, topics: [] }
     return {
       enabled: item.enabled === true,
+      ...(item.switching === true ? { switching: true } : {}),
       topics: Array.isArray(item.topics) ? item.topics : [],
       ...(item.enabledAt ? { enabledAt: item.enabledAt } : {}),
     }
@@ -194,6 +201,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     await this.put({
       ...SAFETY_NET_SETTING_KEY,
       enabled: setting.enabled,
+      switching: setting.switching === true,
       topics: setting.topics,
       enabledAt: setting.enabledAt ?? new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
