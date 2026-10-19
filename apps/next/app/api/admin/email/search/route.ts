@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
+import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { listPeopleCards, peopleIndexReady } from '@my/app/provider/dynamodb/people-index'
 import { buildEmailListsOverview } from '@my/app/utils/email-lists-overview'
 import { getSubscriptionSource } from '@/utils/email/subscription-source'
@@ -16,13 +17,17 @@ export const dynamic = 'force-dynamic'
  * are read (List calls only) and compared against them; every disagreement is
  * returned as a finding.
  *
- * Owner/admin only. Writes nothing — not to DynamoDB, not to SES.
+ * Owner only: it lists every address and every SES disagreement, including
+ * addresses no member holds. Writes nothing — not to DynamoDB, not to SES.
  */
 export async function GET() {
   const session = await auth()
   const role = (session?.user as any)?.role
-  if (!session?.user || !['admin', 'owner'].includes(role)) {
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (role !== ROLES.OWNER) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   if (!(await peopleIndexReady())) {

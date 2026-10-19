@@ -71,7 +71,7 @@ export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const role = session?.user?.role
-  const allowed = role === ROLES.ADMIN || role === ROLES.OWNER
+  const allowed = role === ROLES.OWNER
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -122,7 +122,7 @@ export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
       <Wrapper>
         <Section space={'$4'}>
           <Heading size={5}>Access Denied</Heading>
-          <Paragraph>You need admin or owner permissions to view Email Lists.</Paragraph>
+          <Paragraph>Email Lists is visible to the owner only.</Paragraph>
         </Section>
       </Wrapper>
     )
