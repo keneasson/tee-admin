@@ -17,6 +17,8 @@ interface SendRecordItem {
   subReason: EmailSubReason
   subject: string
   description?: string
+  /** The mailing list the send went to (R5: every send names a listId). */
+  listId?: string
   recipientCount: number
   sentCount: number
   failedCount: number
@@ -63,6 +65,7 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
     subReason: EmailSubReason
     subject: string
     description?: string
+    listId?: string
     recipientCount: number
     sentCount: number
     failedCount: number
@@ -82,6 +85,7 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
       subReason: data.subReason,
       subject: data.subject,
       ...(data.description ? { description: data.description } : {}),
+      ...(data.listId ? { listId: data.listId } : {}),
       recipientCount: data.recipientCount,
       sentCount: data.sentCount,
       failedCount: data.failedCount,

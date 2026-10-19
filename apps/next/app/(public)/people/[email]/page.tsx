@@ -514,7 +514,7 @@ export default function MemberProfilePage() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {
-        const moved: string[] = Array.isArray(data.movedTopics) ? data.movedTopics : []
+        const moved: string[] = Array.isArray(data.movedLists) ? data.movedLists : []
         const movedText = moved.length > 0 ? ` Their subscriptions moved with it (${moved.join(', ')}).` : ''
         setEmailMessage({ type: 'success', text: `Saved: ${data.newEmail}.${movedText}` })
         setEditingEmailId(null)

@@ -1,35 +1,57 @@
 import type { MailingListRecord } from '@my/app/provider/dynamodb/types'
-import type { ResolveResult } from '../email/resolve-list-recipients'
+import type { ResolveResult, ResolvableList } from '../email/resolve-list-recipients'
+import { chooseSendTopic } from './safety-net'
+import { SendListError } from './send-target'
 
 /**
- * Registry send audience (R5, per-list cutover).
+ * The audience of one list send (R5). Every send names a list (by listId,
+ * resolved in send-target.ts); this answers who receives it and which SES
+ * topic the send names as its final gate.
  *
- * `emailSend` asks this for its recipients BEFORE its unchanged SES-topic path.
- * It answers only for a list whose `sendFromRegistry` is on; for every other
- * list, and on ANY error, it answers null and the SES path runs exactly as
- * before. That keeps the switch per list, default off, and fail-safe.
- *
- * Registry recipients = opt_in SUB# rows (LISTSUB#{listId})
+ * Recipients come ONLY from the registry:
+ *   opt_in SUB# rows (LISTSUB#{listId}) + defaultOptIn
  *   − SES account suppression list (bounces/complaints)
  *   − unverified EMAIL# rows
  *   − addresses whose SES contact has UnsubscribeAll (the global "stop all mail")
- * The send still names the list's SES topic, so SES's own per-topic check stays
- * the final safety net.
+ *
+ * There is NO fallback to an SES topic's audience. /email-preferences writes
+ * only the registry now, so an SES topic's OPT_IN contacts are stale: someone
+ * who left a list there would still be on the topic. Sending to the topic
+ * would mail them. So:
+ *  - a bridged list (it has a legacy `sesTopic`) that is NOT cut over
+ *    (`sendFromRegistry` off) while the safety net is off REFUSES to send
+ *    (SendListNotCutOverError: routes answer 400, the cron logs it). Cut it
+ *    over with mailing-list-ops.ts first;
+ *  - a bridged list cut over that resolves to NOBODY refuses too (almost
+ *    certainly a missing backfill), rather than sending to nobody silently;
+ *  - a registry read error throws (the send fails; the cron retries);
+ *  - while the safety-net switch script runs (`switching`), EVERY send refuses.
+ *
+ * The topic named on each send: the safety-net topic once it is on; before
+ * that a bridged list names its legacy topic and a list with no SES topic
+ * names none (the contact list still honours UnsubscribeAll).
  */
 
-export interface RegistryAudience {
+export interface SendAudience {
   source: 'registry'
   listId: string
-  /** SES topic named on each send as the safety-net gate. */
-  sesTopic: string
+  /** The SES topic named on each send, or undefined for none. */
+  topicName?: string
   emails: string[]
-  stats: ResolveResult['stats'] & { unsubscribedAllRemoved: number }
+  stats: Partial<ResolveResult['stats']> & { unsubscribedAllRemoved?: number }
 }
 
-export interface RegistrySendDeps {
-  findBySesTopic: (topic: string) => Promise<MailingListRecord | null>
-  resolveListRecipients: (listId: string) => Promise<ResolveResult>
+export interface SendAudienceDeps {
+  resolveListRecipients: (list: ResolvableList) => Promise<ResolveResult>
   getUnsubscribedAll: () => Promise<Set<string>>
+}
+
+/** A send refused because its list's subscriptions do not (yet) live in the registry. */
+export class SendListNotCutOverError extends SendListError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SendListNotCutOverError'
+  }
 }
 
 /** Pure: drop SES UnsubscribeAll addresses from the resolver's recipients. */
@@ -46,48 +68,66 @@ export function applyUnsubscribeAll(
   return { emails, removed }
 }
 
-/**
- * The registry audience for a send, or null to use the unchanged SES path.
- *
- * @param topic the SES topic the send uses today (`listTopic` in emailSend). The
- *              list that carries it as its bridge is the list being sent.
- */
-export async function resolveRegistryAudience(
-  topic: string,
-  deps?: RegistrySendDeps
-): Promise<RegistryAudience | null> {
-  try {
-    const d = deps ?? (await defaultRegistrySendDeps())
-    const list = await d.findBySesTopic(topic)
-    if (!list || list.status !== 'active') return null
-    if (list.sendFromRegistry !== true) return null // not cut over: SES path
+/** The stored safety-net state a send needs (see mailing-list-repository SafetyNetSetting). */
+export interface SafetyNetState {
+  enabled: boolean
+  /** The switch script is mid-way: every send refuses. */
+  switching?: boolean
+}
 
-    const [resolved, unsubscribedAll] = await Promise.all([
-      d.resolveListRecipients(list.listId),
-      d.getUnsubscribedAll(),
-    ])
-    const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)
-
-    if (emails.length === 0) {
-      // A cut-over bridged list that resolves to nobody is almost certainly a
-      // missing backfill, not an empty audience. Keep today's behaviour.
-      console.error(
-        `[registry-send] list ${list.listId} (topic ${list.sesTopic}) resolved 0 recipients — using the SES path`
-      )
-      return null
-    }
-
-    return {
-      source: 'registry',
-      listId: list.listId,
-      sesTopic: topic,
-      emails,
-      stats: { ...resolved.stats, unsubscribedAllRemoved: removed },
-    }
-  } catch (error) {
-    console.error('[registry-send] registry resolution failed — using the SES path:', error)
-    return null
+export async function resolveSendAudience(
+  list: MailingListRecord,
+  safetyNet: SafetyNetState,
+  deps?: SendAudienceDeps
+): Promise<SendAudience> {
+  if (safetyNet.switching === true) {
+    const message =
+      'SES topics are being switched to the safety net right now (scripts/ses-safety-net-topics.ts). ' +
+      'Nothing was sent; send again once the switch has finished.'
+    console.error(`[registry-send] REFUSED: ${message}`)
+    throw new SendListNotCutOverError(message)
   }
+  const safetyNetEnabled = safetyNet.enabled
+  const bridged = !safetyNetEnabled && !!list.sesTopic
+  if (bridged && list.sendFromRegistry !== true) {
+    const message =
+      `List "${list.key}" (${list.listId}) is not cut over to the registry: its SES topic "${list.sesTopic}" ` +
+      'no longer receives opt-outs from /email-preferences, so sending to it could mail people who left. ' +
+      'Run mailing-list-ops.ts parity + cutover for it, then send again.'
+    console.error(`[registry-send] REFUSED: ${message}`)
+    throw new SendListNotCutOverError(message)
+  }
+
+  const d = deps ?? (await defaultSendAudienceDeps())
+  const [resolved, unsubscribedAll] = await Promise.all([d.resolveListRecipients(list), d.getUnsubscribedAll()])
+  const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)
+
+  if (emails.length === 0 && bridged) {
+    const message =
+      `List "${list.key}" (${list.listId}) resolved 0 recipients from the registry (a missing backfill?). ` +
+      'Nothing was sent. Check its SUB# rows with mailing-list-ops.ts parity.'
+    console.error(`[registry-send] REFUSED: ${message}`)
+    throw new SendListNotCutOverError(message)
+  }
+
+  return {
+    source: 'registry',
+    listId: list.listId,
+    topicName: chooseSendTopic(list, safetyNetEnabled),
+    emails,
+    stats: { ...resolved.stats, unsubscribedAllRemoved: removed },
+  }
+}
+
+/** The SES safety-net state. Any read error → off and not switching (the legacy topics still exist then). */
+// Fails closed: if the setting can't be read the send stops, rather than going
+// out with no SES topic check (or mid-switch). Recipients need DynamoDB anyway.
+export async function safetyNetState(): Promise<SafetyNetState> {
+  const { mailingListRepository } = await import(
+    '@my/app/provider/dynamodb/repositories/mailing-list-repository'
+  )
+  const s = await mailingListRepository.getSafetyNetSetting()
+  return { enabled: s.enabled, ...(s.switching ? { switching: true } : {}) }
 }
 
 /** Every SES contact (lower-cased) whose UnsubscribeAll is set. Read-only. */
@@ -115,7 +155,7 @@ export async function getSesUnsubscribedAll(): Promise<Set<string>> {
 /**
  * The addresses today's SES-topic send path would mail for `topic`: explicit
  * OPT_IN contacts, minus UnsubscribeAll — the same filter emailSend applies.
- * Lower-cased and de-duplicated. Used by parity, never by a send.
+ * Lower-cased and de-duplicated. Used by parity only (never to send).
  */
 export async function getSesTopicRecipients(topic: string): Promise<string[]> {
   const { getContacts } = await import('../email/contact')
@@ -131,14 +171,10 @@ export async function getSesTopicRecipients(topic: string): Promise<string[]> {
   return [...out]
 }
 
-async function defaultRegistrySendDeps(): Promise<RegistrySendDeps> {
-  const [{ mailingListRepository }, { resolveListRecipients }] = await Promise.all([
-    import('@my/app/provider/dynamodb/repositories/mailing-list-repository'),
-    import('../email/resolve-list-recipients'),
-  ])
+async function defaultSendAudienceDeps(): Promise<SendAudienceDeps> {
+  const { resolveListRecipients } = await import('../email/resolve-list-recipients')
   return {
-    findBySesTopic: (t) => mailingListRepository.findBySesTopic(t),
-    resolveListRecipients: (id) => resolveListRecipients(id),
+    resolveListRecipients: (list) => resolveListRecipients(list),
     getUnsubscribedAll: () => getSesUnsubscribedAll(),
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAssurance } from '../../../../../../utils/auth-trust'
 import { checkEcclesiaEditPermission } from '../../../../../../utils/ecclesia-permissions'
-import { migrateSubscriptions } from '../../../../../../utils/email/contact'
+import { moveListSubscriptions } from '../../../../../../utils/email/contact'
 import { notifyLoginEmailChanged } from '../../../../../../utils/email/notify-login-email-changed'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
@@ -106,7 +106,7 @@ export async function POST(
         return NextResponse.json({ error: "That address isn't on this person's account." }, { status: 400 })
       }
       if (row.email.toLowerCase() === corrected) {
-        return NextResponse.json({ success: true, newEmail: corrected, movedTopics: [] })
+        return NextResponse.json({ success: true, newEmail: corrected, movedLists: [] })
       }
       const owners = await personRepository.getAllPersonsByEmail(corrected)
       if (owners.some((p) => p.personId !== targetPerson.personId)) {
@@ -119,7 +119,7 @@ export async function POST(
         // A non-login address: fix it in place. Login is untouched.
         await personRepository.correctSecondaryEmail(targetPerson.personId, row.emailId, corrected)
         invalidatePeopleCache()
-        return NextResponse.json({ success: true, newEmail: corrected, movedTopics: [] })
+        return NextResponse.json({ success: true, newEmail: corrected, movedLists: [] })
       }
       newEmail = corrected
       isCorrection = true
@@ -193,15 +193,15 @@ export async function POST(
 
     // Post-transfer side effects — best-effort so they can't fail the change that
     // already succeeded.
-    let movedTopics: string[] = []
+    let movedLists: string[] = []
     if (oldEmail && oldEmail !== newEmail) {
       try {
-        const res = await migrateSubscriptions(oldEmail, newEmail, {
+        const res = await moveListSubscriptions(oldEmail, newEmail, {
           personId: targetPerson.personId,
         })
-        movedTopics = res.movedTopics
+        movedLists = res.movedLists
       } catch (error) {
-        console.error('admin email-change: migrateSubscriptions failed (non-fatal):', error)
+        console.error('admin email-change: moveListSubscriptions failed (non-fatal):', error)
       }
 
       // Notify the OLD address so the member catches an unwanted change (best-effort
@@ -214,7 +214,7 @@ export async function POST(
 
     invalidatePeopleCache()
 
-    return NextResponse.json({ success: true, newEmail, movedTopics })
+    return NextResponse.json({ success: true, newEmail, movedLists })
   } catch (error) {
     console.error('admin email-change error:', error)
     return NextResponse.json(

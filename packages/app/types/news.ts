@@ -26,7 +26,7 @@ export interface NewsItem {
   sharingScope: EventSharingScope
   emailBlastSentAt?: Date
   /**
-   * Email audiences (EmailListTypes keys, e.g. 'newsletter', 'interEcclesia')
+   * Email audiences (mailing-list ids; blasts before R5 stored list keys, e.g. 'newsletter')
    * this item has been blasted to live. Lets the same post go to multiple
    * audiences without the one-shot guard falsely blocking a second, different
    * send. Legacy items predating this field are treated as having gone to
@@ -63,7 +63,7 @@ export function isNewsActive(item: Pick<NewsItem, 'expiresAt'>, now: Date = new 
 }
 
 /**
- * Email audiences (EmailListTypes keys) a News item has been blasted to live.
+ * Email audiences (mailing-list ids, or pre-R5 list keys) a News item has been blasted to live.
  * Treats a legacy item (only `emailBlastSentAt`, predating per-audience
  * tracking) as having gone to the newsletter, so the one-shot guard stays
  * correct after upgrade. Pure — single source of truth for both the server

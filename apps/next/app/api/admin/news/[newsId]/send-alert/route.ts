@@ -5,12 +5,12 @@ import { render } from '@react-email/render'
 import { createElement } from 'react'
 import NewsAlert from 'email-builder/emails/NewsAlert'
 import { emailSend } from '@/utils/email/email-send'
+import { resolveSendList, SendListError } from '@/utils/mailing-lists/send-target'
 import {
   getNewsItemById,
   markNewsBlastSent,
 } from '@my/app/services/news-service'
 import { isNewsActive, blastedAudiences } from '@my/app/types/news'
-import { EmailListTypes } from '@my/app/types'
 import { getPreviewImageUrl } from '@my/app/types/events'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { resolveBrandProfile } from '@/utils/email/resolve-brand-profile'
@@ -27,6 +27,8 @@ export const config = {
  * Triggers an email blast for a news item. One-shot: subsequent calls fail
  * unless ?force=true (admin/owner only override).
  * Query: ?test=true → send to test list only.
+ *        ?list=<listId> → the audience (default: the newsletter list). An old
+ *        list key ('newsletter', 'interEcclesia') is still accepted.
  */
 export async function POST(
   request: NextRequest,
@@ -44,18 +46,21 @@ export async function POST(
     const isTest = searchParams.get('test') === 'true'
     const force = searchParams.get('force') === 'true'
 
-    // Which audience to blast to. Defaults to 'newsletter' (the historical
-    // behaviour); 'interEcclesia' and the other lists are now selectable.
-    // Test sends always go to the test list regardless (enforced in emailSend).
-    const DEFAULT_AUDIENCE = EmailListTypes.newsletter
-    const requestedList = searchParams.get('list')
-    if (requestedList && !(Object.values(EmailListTypes) as string[]).includes(requestedList)) {
-      return NextResponse.json(
-        { error: `Unknown audience '${requestedList}'.` },
-        { status: 400 }
-      )
+    // Which list to blast to (R5: a registry list, by listId). Defaults to the
+    // newsletter list. Test sends always go to the test list (in emailSend).
+    const tenant = getTenantFromHeaders(request.headers) || resolveTenantFromEnv()
+    let audience: Awaited<ReturnType<typeof resolveSendList>>
+    try {
+      audience = await resolveSendList({ reason: 'news-alert', list: searchParams.get('list'), tenant })
+    } catch (error) {
+      if (error instanceof SendListError) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+      throw error
     }
-    const audienceKey = requestedList || DEFAULT_AUDIENCE
+    const audienceKey = audience.listId
+    // Blasts recorded before lists had ids stored the list's key.
+    const audienceAliases = [audience.listId, audience.key]
 
     const news = await getNewsItemById(newsId)
     if (!news) {
@@ -77,9 +82,9 @@ export async function POST(
     }
     // One-shot guard is now per-audience: a prior blast to one list never
     // blocks a fresh send to a different list.
-    if (!isTest && !force && blastedAudiences(news).includes(audienceKey)) {
+    if (!isTest && !force && blastedAudiences(news).some((a) => audienceAliases.includes(a))) {
       return NextResponse.json(
-        { error: `Alert already sent to '${audienceKey}' for this news item.` },
+        { error: `Alert already sent to '${audience.name}' for this news item.` },
         { status: 409 }
       )
     }
@@ -87,7 +92,6 @@ export async function POST(
     // Resolve the brand domain so the "click to read" link points at the
     // correct surface (tee-admin.com vs echadhub.org). Falls back to the
     // deployment's env-configured tenant when the host isn't recognized.
-    const tenant = getTenantFromHeaders(request.headers) || resolveTenantFromEnv()
     const detailsUrl = `https://www.${tenant.senderDomain}/news/${news.id}`
 
     // Brand the footer from the news item's owning ecclesia (per-org branding).
@@ -109,7 +113,7 @@ export async function POST(
       },
       // "Please share with your ecclesia" framing is driven by the selected
       // audience (not the send mode), so it also applies to test sends.
-      interEcclesia: audienceKey === EmailListTypes.interEcclesia,
+      interEcclesia: audience.category === 'ecclesial_correspondence',
       // "From {ecclesia}" — the sending ecclesia's display name (e.g. "Toronto
       // East Ecclesia"), distinct from the footer's public name.
       fromEcclesia: profile.displayName,
@@ -122,7 +126,7 @@ export async function POST(
       emailHtml,
       emailText,
       test: isTest,
-      customList: audienceKey,
+      listId: audience.listId,
       customSubject: news.title,
       subReason: 'general',
       description: `News alert: ${news.title} → ${audienceKey}`,

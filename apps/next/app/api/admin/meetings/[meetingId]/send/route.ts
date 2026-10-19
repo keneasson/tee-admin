@@ -8,6 +8,7 @@ import { render } from '@react-email/render'
 import { createElement } from 'react'
 import MeetingEmail from 'email-builder/emails/MeetingEmail'
 import { emailSend } from '@/utils/email/email-send'
+import { SendListError } from '@/utils/mailing-lists/send-target'
 import { meetingRecordToEmailProps } from '@/utils/email/meeting-email-helpers'
 import { canAuthorForEcclesia } from '@/utils/ecclesia-permissions'
 
@@ -66,12 +67,14 @@ export async function POST(
     const emailHtml = await render(emailElement)
     const emailText = await render(emailElement, { plainText: true })
 
-    // Resolve audience to contact list
-    let customList: string | undefined
-    if (meeting.audience.type === 'ses_topic') {
-      customList = meeting.audience.topic
-    } else if (meeting.audience.type === 'ecclesia_members') {
-      customList = 'members'
+    // The meeting's mailing list. A pre-R5 meeting stored a list key
+    // ('members', …), which send-target.ts resolves to the owner's list; any
+    // other audience goes to the members list (the business-meeting default).
+    let listId: string | undefined
+    if (meeting.audience.type === 'mailing_list') {
+      listId = meeting.audience.listId
+    } else if (meeting.audience.type === 'ses_topic') {
+      listId = meeting.audience.topic
     }
 
     const result = await emailSend({
@@ -79,7 +82,7 @@ export async function POST(
       emailHtml,
       emailText,
       test: isTest,
-      customList,
+      listId,
       customSubject: meeting.title,
       subReason: 'general',
       description: `Meeting: ${meeting.title}`,
@@ -103,6 +106,9 @@ export async function POST(
       skippedCount: result.skips.length,
     })
   } catch (error) {
+    if (error instanceof SendListError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 })
+    }
     console.error('Error sending meeting email:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to send meeting email' },

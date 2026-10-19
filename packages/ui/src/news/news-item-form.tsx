@@ -45,14 +45,14 @@ export type NewsItemFormProps = {
   isSaving?: boolean
   isExisting?: boolean
   /**
-   * Audiences (EmailListTypes keys) this item has already been blasted to live.
+   * Audiences (mailing-list ids) this item has already been blasted to live.
    * The "Send alert" button disables only for the currently-selected audience,
    * so the same post can still go to a different list.
    */
   sentAudiences?: string[]
-  /** Selectable send audiences ({ key, label }), e.g. Newsletter, Inter-Ecclesia Leaders. */
+  /** Selectable send audiences ({ key: listId, label }), e.g. "Toronto East Newsletter". */
   audiences?: AudienceOption[]
-  /** Default selected audience key. Falls back to 'newsletter'. */
+  /** Default selected listId. Falls back to the first audience. */
   defaultAudience?: string
   /**
    * Ecclesias the signed-in user may post for. When more than one, a picker is
@@ -91,14 +91,19 @@ export function NewsItemForm({
   isExisting = false,
   sentAudiences = [],
   audiences = [],
-  defaultAudience = 'newsletter',
+  defaultAudience,
   ecclesiaOptions,
   onSave,
   onCancel,
   onDelete,
   onSendAlert,
 }: NewsItemFormProps) {
-  const [selectedAudience, setSelectedAudience] = React.useState(defaultAudience)
+  const [selectedAudience, setSelectedAudience] = React.useState(defaultAudience ?? '')
+  // The lists load after the form can mount: pick the default once they arrive.
+  React.useEffect(() => {
+    if (audiences.length === 0 || audiences.some((a) => a.key === selectedAudience)) return
+    setSelectedAudience(defaultAudience && audiences.some((a) => a.key === defaultAudience) ? defaultAudience : audiences[0].key)
+  }, [audiences, defaultAudience, selectedAudience])
   const alertAlreadySent = sentAudiences.includes(selectedAudience)
   const { control, handleSubmit, formState } = useForm<NewsFormValues>({
     defaultValues: {

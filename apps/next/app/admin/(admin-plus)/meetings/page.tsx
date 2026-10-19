@@ -202,8 +202,10 @@ export default function AdminMeetingsPage() {
                   <XStack space="$2" alignItems="center">
                     <Users size={14} color="$gray10" />
                     <Text fontSize="$3">
-                      {meeting.audience.type === 'ses_topic'
-                        ? `Topic: ${meeting.audience.topic}`
+                      {meeting.audience.type === 'mailing_list'
+                        ? 'Mailing list'
+                        : meeting.audience.type === 'ses_topic'
+                        ? `List: ${meeting.audience.topic}`
                         : meeting.audience.type === 'ecclesia_members'
                         ? `Members of ${meeting.audience.ecclesia}`
                         : meeting.audience.type === 'organization_members'

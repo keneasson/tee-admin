@@ -51,11 +51,10 @@ describe('buildListPreferences — any number of lists, grouped by owner', () =>
     allLists,
     offeredIds: new Set(['te-news', 'te-bc', 'te-members', 'cam-recap', 'cam-old']),
     registryStatus: new Map([
-      ['te-news', 'opt_out'], // registry says out, but SES still governs this list
+      ['te-news', 'opt_out'], // the registry decides, even for a bridged list
       ['te-bc', 'opt_in'],
       ['cyc', 'opt_in'], // not offered by scope, but they already subscribe → shown
     ]),
-    sesOptIns: new Set(['newsletter']),
     ownerName: (l) => OWNERS[l.ownerId],
   })
 
@@ -69,9 +68,9 @@ describe('buildListPreferences — any number of lists, grouped by owner', () =>
     expect(groups[2].lists.map((l) => l.name)).toEqual(['Toronto East Bible Class', 'Toronto East Newsletter'])
   })
 
-  it('state = what decides delivery: SES topic until cut over, registry after', () => {
+  it('state = the registry only (no SES topic is read): no row and no default → not subscribed', () => {
     const state = Object.fromEntries(groups.flatMap((g) => g.lists.map((l) => [l.listId, l.subscribed])))
-    expect(state).toEqual({ 'te-news': true, 'te-bc': true, 'cam-recap': false, cyc: true })
+    expect(state).toEqual({ 'te-news': false, 'te-bc': true, 'cam-recap': false, cyc: true })
   })
 })
 
@@ -82,16 +81,25 @@ describe('planListSave — never trusts client list ids', () => {
     list({ listId: 'te-members', category: 'operational', sesTopic: 'members' }),
     list({ listId: 'arch', status: 'archived' }),
   ]
-  it('keeps self-serve lists, drops unknown/operational/archived/non-boolean, maps bridged topics', () => {
-    const { changes, sesTopics } = planListSave(
+  it('keeps self-serve lists, drops unknown/operational/archived/non-boolean (no SES topic is planned)', () => {
+    const plan = planListSave(
       { 'te-news': false, 'cam-recap': true, 'te-members': true, arch: true, nope: true, 'te-x': 'yes' },
       allLists
     )
-    expect(changes.map((c) => [c.list.listId, c.subscribed])).toEqual([
+    expect(plan.changes.map((c) => [c.list.listId, c.subscribed])).toEqual([
       ['te-news', false],
       ['cam-recap', true],
     ])
-    expect(sesTopics).toEqual({ newsletter: false })
+    expect(Object.keys(plan)).toEqual(['changes'])
+  })
+
+  it('with the current state, drops lists that did not change (a default is never stored by a save)', () => {
+    const { changes } = planListSave(
+      { 'te-news': true, 'cam-recap': true },
+      allLists,
+      new Map([['te-news', true], ['cam-recap', false]])
+    )
+    expect(changes.map((c) => c.list.listId)).toEqual(['cam-recap'])
   })
 })
 

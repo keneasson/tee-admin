@@ -35,6 +35,9 @@ export interface RecurrenceRule {
 // ─── Audience ────────────────────────────────────────────────────
 
 export type AudienceConfig =
+  /** A registry mailing list (R5). */
+  | { type: 'mailing_list'; listId: string }
+  /** @deprecated pre-R5: an old list key ('members', 'newsletter'); read as that owner's list. */
   | { type: 'ses_topic'; topic: string }
   | { type: 'ecclesia_members'; ecclesia: string }
   | { type: 'organization_members'; organizationName: string }

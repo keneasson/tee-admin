@@ -93,6 +93,7 @@ export async function GET(req: NextRequest) {
               scheduledDate: currentDate,
               scheduledTime: scheduleTime,
               testMode: schedule.testMode,
+              listId: schedule.listId,
             })
 
             response.processed.queued++
@@ -208,6 +209,8 @@ export async function GET(req: NextRequest) {
           emailHtml,
           emailText,
           test: queueEntry.testMode || false,
+          // R5: the schedule's list, else the email type's default list.
+          listId: queueEntry.listId,
           customSubject: generatedSubject || undefined,
         })
 

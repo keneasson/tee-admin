@@ -1,17 +1,15 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 /**
- * /api/subscribe with the mailing-list registry (R5).
- *  - flag OFF: response and writes are the existing topic flow (no listGroups;
- *    a `lists` save is refused).
- *  - flag ON: every offered list, grouped by owner; saving writes the registry
- *    AND the SES topic of a bridged list.
+ * /api/subscribe (R5): every offered list, grouped by owner, read from the
+ * registry; saving writes the registry ONLY (no SES topic, ever) plus SES
+ * UnsubscribeAll for "stop all email".
  */
 
 const h = vi.hoisted(() => ({
   auth: vi.fn(),
-  flag: vi.fn(),
   getContact: vi.fn(),
+  setUnsubscribeAll: vi.fn(),
   sesSend: vi.fn(),
   listAllLists: vi.fn(),
   getOffered: vi.fn(),
@@ -28,9 +26,8 @@ vi.mock('@aws-sdk/client-sesv2', () => ({
   SubscriptionStatus: { OPT_IN: 'OPT_IN', OPT_OUT: 'OPT_OUT' },
 }))
 vi.mock('@/utils/email/sesClient', () => ({ getSesClient: () => ({ send: h.sesSend }) }))
-vi.mock('@/utils/email/contact', () => ({ getContact: h.getContact }))
+vi.mock('@/utils/email/contact', () => ({ getContact: h.getContact, setUnsubscribeAll: h.setUnsubscribeAll }))
 vi.mock('@/utils/email/ecclesia-token', () => ({ verifyEcclesiaToken: vi.fn(async () => ({ valid: false })) }))
-vi.mock('@my/app/features/feature-flags/use-feature-flag-wrapper', () => ({ checkFeatureFlagFromDB: h.flag }))
 vi.mock('@my/app/config/tenants', () => ({
   getTenantFromHeaders: () => null,
   resolveTenantFromEnv: () => ({ id: 'tee', publicName: 'Toronto East', senderDomain: 'tee-admin.com' }),
@@ -106,41 +103,11 @@ beforeEach(() => {
   h.setListSubscription.mockResolvedValue('subscribed')
 })
 
-describe('flag OFF — unchanged', () => {
-  beforeEach(() => h.flag.mockResolvedValue(false))
-
-  it('GET has the topic toggles and no listGroups; the registry is not read', async () => {
-    const body = await (await GET(getReq())).json()
-    expect(body.subscriptions.find((s: any) => s.topic === 'newsletter').subscribed).toBe(true)
-    expect(body).not.toHaveProperty('listGroups')
-    expect(h.listAllLists).not.toHaveBeenCalled()
-  })
-
-  it('POST with lists is refused (404) and writes nothing', async () => {
-    const res = await POST(postReq({ lists: { 'L-NEW': true } }))
-    expect(res.status).toBe(404)
-    expect(h.sesSend).not.toHaveBeenCalled()
-    expect(h.setListSubscription).not.toHaveBeenCalled()
-  })
-
-  it('POST with topics still updates SES exactly as before', async () => {
-    const res = await POST(postReq({ subscriptions: { bibleClass: true } }))
-    expect(res.status).toBe(200)
-    const cmd = h.sesSend.mock.calls[0][0]
-    expect(cmd.kind).toBe('update')
-    expect(cmd.input.TopicPreferences).toEqual(
-      expect.arrayContaining([
-        { TopicName: 'newsletter', SubscriptionStatus: 'OPT_IN' },
-        { TopicName: 'bibleClass', SubscriptionStatus: 'OPT_IN' },
-      ])
+describe('/api/subscribe — registry only', () => {
+  it('GET groups every offered list by owner with derived names; state from the registry, never a topic', async () => {
+    h.getRows.mockImplementation(async (listId: string) =>
+      listId === 'L-NEW' ? [{ status: 'opt_in' }] : []
     )
-  })
-})
-
-describe('flag ON — lists', () => {
-  beforeEach(() => h.flag.mockResolvedValue(true))
-
-  it('GET groups every offered list by owner with derived names', async () => {
     const body = await (await GET(getReq())).json()
     expect(body.listGroups).toEqual([
       {
@@ -148,31 +115,41 @@ describe('flag ON — lists', () => {
         ownerId: 'toronto-east-ecclesia',
         ownerName: 'Toronto East',
         lists: [
-          { listId: 'L-NEWS', name: 'Toronto East Newsletter', description: 'Thursday', subscribed: true },
-          { listId: 'L-NEW', name: 'Toronto East Youth', description: '', subscribed: false },
+          // SES still says OPT_IN for 'newsletter': ignored, the registry has no row.
+          { listId: 'L-NEWS', name: 'Toronto East Newsletter', description: 'Thursday', subscribed: false },
+          { listId: 'L-NEW', name: 'Toronto East Youth', description: '', subscribed: true },
         ],
       },
     ])
+    expect(body).not.toHaveProperty('subscriptions')
+    expect(body.unsubscribedAll).toBe(false)
     expect(h.getOffered).toHaveBeenCalledWith({ ecclesiaId: 'toronto-east-ecclesia' }, 'canada_east')
   })
 
-  it('POST writes the registry for each list and the SES topic for a bridged one', async () => {
+  it('POST writes the registry for CHANGED lists only and never an SES topic', async () => {
     const res = await POST(postReq({ lists: { 'L-NEWS': false, 'L-NEW': true, bogus: true } }))
     expect(res.status).toBe(200)
+    // L-NEWS is already off (no row): unchanged, not written.
     expect(h.setListSubscription.mock.calls.map((c) => c[0])).toEqual([
-      { listId: 'L-NEWS', email: 'reader@example.org', subscribed: false },
-      { listId: 'L-NEW', email: 'reader@example.org', subscribed: true },
+      { listId: 'L-NEW', email: 'reader@example.org', subscribed: true, defaultOptIn: false },
     ])
-    const prefs = h.sesSend.mock.calls[0][0].input.TopicPreferences
-    expect(prefs).toEqual([{ TopicName: 'newsletter', SubscriptionStatus: 'OPT_OUT' }])
+    expect(h.sesSend).not.toHaveBeenCalled()
+    expect(h.setUnsubscribeAll).not.toHaveBeenCalled()
   })
 
-  it('POST with lists for an address no person holds changes nothing, SES included (409)', async () => {
-    h.resolveSubscriber.mockResolvedValue(null)
-    const res = await POST(postReq({ lists: { 'L-NEWS': false, 'L-NEW': true } }))
-    expect(res.status).toBe(409)
+  it('POST unsubscribeAll writes SES UnsubscribeAll (the "stop all email" that stays in SES)', async () => {
+    const res = await POST(postReq({ lists: {}, unsubscribeAll: true }))
+    expect(res.status).toBe(200)
+    expect(h.setUnsubscribeAll).toHaveBeenCalledWith('reader@example.org', true)
     expect(h.sesSend).not.toHaveBeenCalled()
+  })
+
+  it('POST with lists for an address no person holds changes nothing (409)', async () => {
+    h.resolveSubscriber.mockResolvedValue(null)
+    const res = await POST(postReq({ lists: { 'L-NEW': true }, unsubscribeAll: true }))
+    expect(res.status).toBe(409)
     expect(h.setListSubscription).not.toHaveBeenCalled()
+    expect(h.setUnsubscribeAll).not.toHaveBeenCalled()
   })
 
   it('a token-only (recognized) caller still cannot save', async () => {

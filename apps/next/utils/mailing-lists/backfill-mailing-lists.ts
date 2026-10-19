@@ -37,7 +37,7 @@
 import type { ConsentCategory, MailingListRecord } from '@my/app/provider/dynamodb/types'
 
 // ---------------------------------------------------------------------------
-// The 7 current SES topics (packages/app/types.ts EmailListTypes).
+// The 7 legacy SES topics the Toronto East lists were seeded from.
 // ---------------------------------------------------------------------------
 export type SeedTopic =
   | 'newsletter'

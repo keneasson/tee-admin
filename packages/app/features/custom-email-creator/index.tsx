@@ -19,7 +19,6 @@ import {
   Spinner,
 } from '@my/ui'
 import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2 } from '@tamagui/lucide-icons'
-import { EmailListTypeKeys } from '@my/app/types'
 import { EmailDraft } from '@my/app/types/email-draft'
 import {
   getDrafts,
@@ -34,11 +33,12 @@ interface CustomEmailCreatorProps {
   onSend: (emailData: {
     subject: string
     htmlContent: string
-    selectedList: EmailListTypeKeys
+    selectedList: string
     note: string
     draftId?: string
   }) => Promise<void>
-  availableLists: { key: EmailListTypeKeys; label: string }[]
+  /** Registry lists: `key` = listId, `listKey` = the pre-R5 key (for old drafts). */
+  availableLists: { key: string; label: string; isTest?: boolean; listKey?: string }[]
   sending: boolean
   testSending?: boolean
 }
@@ -50,7 +50,14 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
 }) => {
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
-  const [selectedList, setSelectedList] = useState<EmailListTypeKeys>('newsletter')
+  // A listId once lists load ('newsletter' until then: the server reads an old
+  // key as that owner's list, and the effect below swaps it for the listId).
+  const [selectedList, setSelectedList] = useState<string>('newsletter')
+  const findList = (ref: string) => availableLists.find((l) => l.key === ref || l.listKey === ref)
+  useEffect(() => {
+    const match = findList(selectedList)
+    if (match && match.key !== selectedList) setSelectedList(match.key)
+  }, [availableLists, selectedList])
   const [note, setNote] = useState('')
   const [showPreview, setShowPreview] = useState(false)
 
@@ -309,7 +316,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                           </Text> : null}
                       </XStack>
                       <Text fontSize="$2" color="$gray11">
-                        To: {availableLists.find((l) => l.key === draft.selectedList)?.label} •
+                        To: {findList(draft.selectedList)?.label} •
                         Updated: {new Date(draft.updatedAt).toLocaleString()}
                       </Text>
                     </YStack>
@@ -370,7 +377,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       <Card elevate bordered padding="$4" backgroundColor="$background">
         <YStack gap="$3">
           <Heading size={3}>Select Recipient List</Heading>
-          <Select value={selectedList} onValueChange={(value) => setSelectedList(value as EmailListTypeKeys)}>
+          <Select value={selectedList} onValueChange={(value) => setSelectedList(value)}>
             <Select.Trigger width="100%" iconAfter={null}>
               <Select.Value placeholder="Select a list..." />
             </Select.Trigger>
@@ -405,7 +412,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
               <Select.Viewport>
                 <Select.Group>
                   {availableLists
-                    .filter((list) => list.key !== 'testList') // Hide test list from selection
+                    .filter((list) => !list.isTest) // Hide test list from selection
                     .map((list, idx) => (
                       <Select.Item key={list.key} index={idx} value={list.key}>
                         <Select.ItemText>{list.label}</Select.ItemText>
@@ -599,7 +606,7 @@ Looking forward to seeing you!
                 Send to Production List
               </Text>
               <Text fontSize="$3" color="$gray11">
-                Sending to: <strong>{availableLists.find((l) => l.key === selectedList)?.label}</strong>
+                Sending to: <strong>{findList(selectedList)?.label}</strong>
               </Text>
               {currentDraft?.status !== 'tested' ? <Text fontSize="$2" color="$orange10" fontWeight="600">
                   ⚠️ Not tested yet - consider sending a test first
@@ -614,7 +621,7 @@ Looking forward to seeing you!
               {sendingProduction ? (
                 <XStack gap="$2" alignItems="center">
                   <Spinner size="small" />
-                  <Text>Sending to {availableLists.find((l) => l.key === selectedList)?.label}...</Text>
+                  <Text>Sending to {findList(selectedList)?.label}...</Text>
                 </XStack>
               ) : (
                 'Send Email'

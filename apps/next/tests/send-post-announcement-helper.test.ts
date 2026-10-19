@@ -51,11 +51,11 @@ describe('sendPostAnnouncement — test-by-default across the data seam', () => 
   })
 
   it('POSTs to the send route with the chosen audience, id encoded', async () => {
-    await sendPostAnnouncement('a/b', { list: 'interEcclesia' })
+    await sendPostAnnouncement('a/b', { list: '22222222-2222-4222-8222-222222222222' })
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toContain('api/admin/posts/a%2Fb/send')
     expect(init.method).toBe('POST')
-    expect(bodyOf().list).toBe('interEcclesia')
+    expect(bodyOf().listId).toBe('22222222-2222-4222-8222-222222222222')
   })
 
   it('surfaces the server error message rather than a bare status', async () => {
