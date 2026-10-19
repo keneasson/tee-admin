@@ -95,6 +95,14 @@ export function parseLegacyAddress(raw: string | null | undefined): ParsedAddres
     const last = lines[lines.length - 1]
     if (!last || !US_LOCALITY.test(last)) return null
   }
+  // A city and province alone ("Windsor, ON") is kept as a partial address; the
+  // street and postal code are added later when they're known (owner, Oct 2026).
+  if (lines.length === 1) {
+    const only = lines[0]!.match(/^([^,\d]+),\s*([A-Za-z]{2})\.?$/)
+    const province = only?.[2]!.toUpperCase()
+    if (!only || !province || !CA_PROVINCES.has(province)) return null
+    return { street1: '', city: only[1]!.trim(), province, postalCode: '', country: 'Canada' }
+  }
   if (lines.length < 2) return null
 
   const locality = lines[lines.length - 1]!
