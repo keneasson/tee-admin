@@ -129,4 +129,14 @@ describe('emailSend — every send names a listId', () => {
     expect(h.resolveSendAudience).not.toHaveBeenCalled()
     expect(h.sesSend).not.toHaveBeenCalled()
   })
+
+  it('an unreadable safety-net setting stops the send (fails closed)', async () => {
+    h.resolveSendList.mockResolvedValue(NEWSLETTER)
+    h.safetyNetState.mockRejectedValue(new Error('DynamoDB unavailable'))
+    await expect(
+      emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x' })
+    ).rejects.toThrow('DynamoDB unavailable')
+    expect(h.resolveSendAudience).not.toHaveBeenCalled()
+    expect(h.sesSend).not.toHaveBeenCalled()
+  })
 })

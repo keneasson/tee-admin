@@ -120,17 +120,14 @@ export async function resolveSendAudience(
 }
 
 /** The SES safety-net state. Any read error → off and not switching (the legacy topics still exist then). */
+// Fails closed: if the setting can't be read the send stops, rather than going
+// out with no SES topic check (or mid-switch). Recipients need DynamoDB anyway.
 export async function safetyNetState(): Promise<SafetyNetState> {
-  try {
-    const { mailingListRepository } = await import(
-      '@my/app/provider/dynamodb/repositories/mailing-list-repository'
-    )
-    const s = await mailingListRepository.getSafetyNetSetting()
-    return { enabled: s.enabled, ...(s.switching ? { switching: true } : {}) }
-  } catch (error) {
-    console.error('[registry-send] could not read the safety-net setting — treating it as off:', error)
-    return { enabled: false }
-  }
+  const { mailingListRepository } = await import(
+    '@my/app/provider/dynamodb/repositories/mailing-list-repository'
+  )
+  const s = await mailingListRepository.getSafetyNetSetting()
+  return { enabled: s.enabled, ...(s.switching ? { switching: true } : {}) }
 }
 
 /** Every SES contact (lower-cased) whose UnsubscribeAll is set. Read-only. */
