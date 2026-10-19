@@ -22,6 +22,13 @@ Changes in this file flag code modifications that require **matching manual upda
   4. Owner: `/admin/evolution/feature-flags` → `person_password_signin` → **owner**; sign in with your password (and a step-up) on your own account; then **everyone**.
 - **Status**: PENDING
 
+### Vercel — echadhub production email turned ON (`EMAILS_ENABLED=true`)
+- **Date**: 2026-10-13
+- **Branch**: `chore/echadhub-emails-enabled` (config only, no code change)
+- **What changed**: On the **echadhub** Vercel project, `EMAILS_ENABLED` was `false` for Production + Preview since 2026-04-25 (commit `476bcdb8`, a kill switch from when echadhub was a parallel test copy sharing the live DB/SES). It was never re-enabled after echadhub.org went live, so **every email from echadhub.org was silently skipped**: login codes, email verification, email-change codes, suggestion and connection notices. Found when an owner's OTP to `ken.easson+hacker@gmail.com` never arrived (log: `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=echadhub …)`).
+- **Action taken**: Production set to `EMAILS_ENABLED=true` (sensitive var) and production redeployed. **Preview stays `false`**: PR preview builds also run against the live DB and must not email real members.
+- **Why it's safe**: no scheduled job targets echadhub. Vercel crons are empty; all EventBridge API destinations (`tee-email-cron-dest`, `tee-email-queue-endpoint`, `tee-exhorter-headsup-dest`) call `https://www.tee-admin.com`, so nothing can double-send. SES identity `echadhub.org` is verified with DKIM `SUCCESS`. echadhub.org now only sends when a person there acts (asks for a code, an admin presses send).
+- **Status**: DONE (2026-10-13).
 ### Prod data — people-index backfill for #275 (run AFTER this deploys), then the sign-in flag
 - **Date**: 2026-10-17
 - **Branch**: `feat/people-access-patterns`
