@@ -645,17 +645,39 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       })
     }
 
-    // 2) Demote any OTHER row currently labelled primary → recoverable secondary
-    //    (skipped for a correction: those rows are removed after the commit).
+    // 2) Demote any OTHER row currently labelled primary, or holding the old
+    //    PROFILE primary → recoverable secondary (skipped for a correction:
+    //    those rows are removed after the commit).
+    const isOldPrimary = (row: PersonEmailRecord) =>
+      row.emailType === 'primary' || (!!oldEmail && row.email.toLowerCase() === oldEmail)
     for (const row of emails) {
       if (row.emailId === newRow.emailId) continue
-      if (row.emailType === 'primary' && !opts?.replace) {
+      if (isOldPrimary(row) && !opts?.replace) {
         await this.update(
           `PERSON#${personId}`,
           `EMAIL#${row.emailId}`,
           { emailType: 'secondary', archiveAfter } as unknown as Partial<PersonRecord>
         )
       }
+    }
+
+    // 2b) The old primary may exist ONLY on the PROFILE (no EMAIL# row). Keep it
+    //     as a recoverable secondary so the address is not lost with the move.
+    if (
+      !opts?.replace &&
+      oldEmail &&
+      oldEmail !== newEmail &&
+      !emails.some((e) => e.email.toLowerCase() === oldEmail)
+    ) {
+      await this.addEmail(personId, {
+        email: oldEmail,
+        emailType: 'secondary',
+        order: emails.length + 1,
+        verified: !!person.emailVerified,
+        sesSubscribed: false,
+        sesStatus: 'active',
+        archiveAfter,
+      })
     }
 
     // 3) COMMIT: move the login handle + lookup index to the new address.

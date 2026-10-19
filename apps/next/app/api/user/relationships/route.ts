@@ -4,6 +4,7 @@ import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/r
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
 import { invalidatePeopleCache } from '../../people/cache'
+import { describeRelatives, resolvePersonId, resolveSessionPerson } from '../../../../utils/relationships'
 
 const validRelationshipTypes: RelationshipType[] = [
   'spouse',
@@ -15,6 +16,9 @@ const validRelationshipTypes: RelationshipType[] = [
   'extended_family',
   'household_member',
 ]
+
+// Relationships are keyed by personId (PERSON#<id> / REL#<targetId>#<type>), so
+// a change of primary email never loses anyone's family.
 
 /**
  * GET /api/user/relationships - Get all family relationships for current user
@@ -30,36 +34,16 @@ export async function GET() {
       )
     }
 
-    const familyMembers = await relationshipRepository.getFamilyMembers(session.user.email)
+    const me = await resolveSessionPerson(session.user.email)
+    if (!me) {
+      return NextResponse.json({ success: true, relationships: [] })
+    }
 
-    // Look up names for each family member
-    const relationshipsWithNames = await Promise.all(
-      familyMembers.map(async (rel) => {
-        let name: string | undefined
-        let personId: string | undefined
-        try {
-          const person = await personRepository.getByEmail(rel.targetEmail)
-          if (person) {
-            name = person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim()
-            personId = person.personId
-          }
-        } catch {
-          // If lookup fails, just use email
-        }
-        return {
-          email: rel.targetEmail,
-          name,
-          personId,
-          relationshipType: rel.relationshipType,
-          status: rel.status,
-          createdAt: rel.createdAt,
-        }
-      })
-    )
+    const familyMembers = await relationshipRepository.getFamilyMembers(me.personId)
 
     return NextResponse.json({
       success: true,
-      relationships: relationshipsWithNames,
+      relationships: await describeRelatives(familyMembers),
     })
   } catch (error) {
     console.error('Get relationships error:', error)
@@ -73,8 +57,9 @@ export async function GET() {
 /**
  * POST /api/user/relationships - Create a new family relationship
  *
- * Accepts either:
- * - { targetEmail, relationshipType } - Link to existing person by email
+ * Accepts one of:
+ * - { targetPersonId, relationshipType } - Link an existing person
+ * - { targetEmail, relationshipType } - Link the person who holds that address
  * - { firstName, lastName, email?, relationshipType } - Create new person if needed
  */
 /**
@@ -144,7 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { firstName, lastName, email, targetEmail, relationshipType, sameAddressAs } = body
+    const { firstName, lastName, email, targetEmail, targetPersonId, relationshipType, sameAddressAs } = body
 
     // Validate relationship type
     if (!relationshipType || !validRelationshipTypes.includes(relationshipType)) {
@@ -154,12 +139,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Determine the target email - either provided directly or we need to find/create person
-    let familyMemberEmail: string
+    const me = await resolveSessionPerson(session.user.email)
+    if (!me) {
+      return NextResponse.json({ error: 'No profile found for your account' }, { status: 404 })
+    }
 
-    if (targetEmail) {
-      // Legacy path: direct email provided
-      familyMemberEmail = targetEmail
+    // Determine the related person - picked, addressed, or found/created by name
+    let familyMemberId: string
+
+    if (targetPersonId || targetEmail) {
+      const resolved = await resolvePersonId({ personId: targetPersonId, email: targetEmail })
+      if (!resolved) {
+        return NextResponse.json({ error: 'That person was not found' }, { status: 404 })
+      }
+      familyMemberId = resolved
     } else if (firstName) {
       // New path: name provided, find or create person
       if (email) {
@@ -167,10 +160,10 @@ export async function POST(request: NextRequest) {
         // one household address is the normal case, and `getAllPersonsByEmail`
         // exists precisely for that. The old code called the single-owner
         // `getByEmail`, found whoever happened to own the address, and linked to
-        // THEM while silently discarding the name that was typed. Adding
-        // "Brian" against his wife's shared address therefore made Georgina her
-        // own spouse — and, historically, the same email-as-identity assumption
-        // is what overwrote Brian's record when Georgina was added.
+        // THEM while silently discarding the name that was typed. Adding a
+        // husband against his wife's shared address therefore made her her own
+        // spouse — and the same email-as-identity assumption once overwrote one
+        // spouse's record when the other was added.
         const sharing = await personRepository.getAllPersonsByEmail(email)
         const wanted = `${firstName} ${lastName || ''}`.trim().toLowerCase()
         const match = sharing.find(
@@ -179,18 +172,19 @@ export async function POST(request: NextRequest) {
 
         if (match) {
           // The named person really is the one who holds this address.
-          familyMemberEmail = match.primaryEmail
+          familyMemberId = match.personId
         } else {
           // Nobody by that NAME holds this address. Whether or not somebody else
           // does, this is a NEW person who happens to share it. Give them their
           // own identity rather than borrowing someone else's.
-          const userPerson = await personRepository.getByEmail(session.user.email)
+          const userPerson = me
 
-          // Relationships are keyed by email (RelationshipRecord PK/SK), so two
-          // people sharing one address cannot both be addressed by it. The
-          // person gets a distinct key address — the same mechanism already used
-          // for family members with no email — and the SHARED address is added
-          // as a secondary so it still reaches them.
+          // A shared address must not become a second person's PRIMARY: the
+          // primary is the sign-in lookup, and two primaries on one address make
+          // sign-in choose between people. The person gets a distinct
+          // placeholder primary — the same mechanism used for family members
+          // with no email — and the SHARED address is added as a secondary so
+          // mail still reaches them.
           const keyEmail =
             sharing.length > 0
               ? `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
@@ -228,11 +222,11 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          familyMemberEmail = keyEmail
+          familyMemberId = created.personId
         }
       } else {
         // No email - create person without email (use generated placeholder)
-        const userPerson = await personRepository.getByEmail(session.user.email)
+        const userPerson = me
         const placeholderEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
 
         const createdNoEmail = await personRepository.create({
@@ -244,7 +238,7 @@ export async function POST(request: NextRequest) {
         })
         await copyHouseholdContacts(createdNoEmail.personId, sameAddressAs)
         invalidatePeopleCache()
-        familyMemberEmail = placeholderEmail
+        familyMemberId = createdNoEmail.personId
       }
     } else {
       return NextResponse.json(
@@ -254,7 +248,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Can't create relationship with yourself
-    if (familyMemberEmail === session.user.email) {
+    if (familyMemberId === me.personId) {
       return NextResponse.json(
         { error: 'Cannot create relationship with yourself' },
         { status: 400 }
@@ -263,8 +257,8 @@ export async function POST(request: NextRequest) {
 
     // Check if relationship already exists
     const exists = await relationshipRepository.hasRelationship(
-      session.user.email,
-      familyMemberEmail,
+      me.personId,
+      familyMemberId,
       relationshipType
     )
 
@@ -277,8 +271,8 @@ export async function POST(request: NextRequest) {
 
     // Create bidirectional relationship
     await relationshipRepository.createRelationship(
-      session.user.email,
-      familyMemberEmail,
+      me.personId,
+      familyMemberId,
       relationshipType
     )
 
@@ -323,12 +317,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const targetPersonIdParam = searchParams.get('targetPersonId')
     const targetEmail = searchParams.get('targetEmail')
     const relationshipType = searchParams.get('relationshipType') as RelationshipType
 
-    if (!targetEmail || !relationshipType) {
+    if ((!targetPersonIdParam && !targetEmail) || !relationshipType) {
       return NextResponse.json(
-        { error: 'Missing required parameters: targetEmail, relationshipType' },
+        { error: 'Missing required parameters: targetPersonId, relationshipType' },
         { status: 400 }
       )
     }
@@ -341,10 +336,16 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    const me = await resolveSessionPerson(session.user.email)
+    const targetPersonId = await resolvePersonId({ personId: targetPersonIdParam, email: targetEmail })
+    if (!me || !targetPersonId) {
+      return NextResponse.json({ error: 'Relationship not found' }, { status: 404 })
+    }
+
     // Check if relationship exists
     const exists = await relationshipRepository.hasRelationship(
-      session.user.email,
-      targetEmail,
+      me.personId,
+      targetPersonId,
       relationshipType
     )
 
@@ -357,8 +358,8 @@ export async function DELETE(request: NextRequest) {
 
     // Soft delete (marks as removed)
     await relationshipRepository.removeRelationship(
-      session.user.email,
-      targetEmail,
+      me.personId,
+      targetPersonId,
       relationshipType
     )
 

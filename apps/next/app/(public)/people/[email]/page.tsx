@@ -82,9 +82,8 @@ interface MemberProfile {
     isHousehold: boolean
   }>
   family?: Array<{
-    email: string
     name?: string
-    personId?: string
+    personId: string
     relationshipType: string
   }>
   privacy?: {
@@ -781,10 +780,11 @@ export default function MemberProfilePage() {
   }
 
   /** Link an existing directory member. */
-  const linkExistingFamily = async (member: { email: string }) => {
+  const linkExistingFamily = async (member: { id: string }) => {
     const ok = await addContact({
       type: 'relationship',
-      targetEmail: member.email,
+      // The picked PERSON, never their address (a household may share one).
+      targetPersonId: member.id,
       relationshipType: newRelationType,
     })
     if (ok) {
@@ -1869,11 +1869,11 @@ export default function MemberProfilePage() {
               {profile.family && profile.family.length > 0 ? (
                 profile.family.map((member, index) => (
                   <Card
-                    key={index}
+                    key={`${member.personId}-${member.relationshipType}-${index}`}
                     padding="$3"
                     backgroundColor="$backgroundHover"
                     pressStyle={{ opacity: 0.8 }}
-                    onPress={() => router.push(`/people/${encodeURIComponent(member.personId || member.email)}`)}
+                    onPress={() => router.push(`/people/${encodeURIComponent(member.personId)}`)}
                     cursor="pointer"
                   >
                     <XStack justifyContent="space-between" alignItems="center">
@@ -1891,10 +1891,10 @@ export default function MemberProfilePage() {
                           icon={Trash2}
                           chromeless
                           circular
-                          disabled={deletingId === `type=relationship&targetEmail=${encodeURIComponent(member.email)}&relationshipType=${member.relationshipType}`}
+                          disabled={deletingId === `type=relationship&targetPersonId=${encodeURIComponent(member.personId)}&relationshipType=${member.relationshipType}`}
                           onPress={(e: any) => {
                             e.stopPropagation()
-                            deleteContact(`type=relationship&targetEmail=${encodeURIComponent(member.email)}&relationshipType=${member.relationshipType}`)
+                            deleteContact(`type=relationship&targetPersonId=${encodeURIComponent(member.personId)}&relationshipType=${member.relationshipType}`)
                           }}
                         />
                       ) : null}

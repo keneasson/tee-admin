@@ -3,6 +3,8 @@ import {
   findCredentialsUserByEmail,
   createPasswordResetToken,
 } from '../../../../utils/dynamodb/credentials-users'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { personPasswordPathOn } from '../../../../utils/password-signin'
 import { sendPasswordResetEmail } from '../../../../utils/email/send-verification-email'
 
 export async function POST(request: NextRequest) {
@@ -29,9 +31,19 @@ export async function POST(request: NextRequest) {
     console.log('Forgot password request for email:', email)
     
     // Check if user exists (but don't reveal this information for security)
-    const user = await findCredentialsUserByEmail(email)
-    console.log('User found:', !!user, user ? `ID: ${user.id}, Name: ${user.name}` : 'No user')
-    
+    const legacyUser = await findCredentialsUserByEmail(email)
+    // With person_password_signin on, a person with a password can reset it
+    // even when no legacy record exists.
+    const person = await personRepository.getByEmail(email.toLowerCase().trim())
+    const personHasPassword =
+      !!person?.hashedPassword && (await personPasswordPathOn(email.toLowerCase().trim(), person))
+    const user = legacyUser
+      ? { name: legacyUser.name, firstName: legacyUser.firstName, lastName: legacyUser.lastName }
+      : personHasPassword && person
+        ? { name: person.displayName, firstName: person.firstName, lastName: person.lastName }
+        : null
+    console.log('Password reset account found:', !!user)
+
     if (user) {
       try {
         console.log('Creating password reset token...')

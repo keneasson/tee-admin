@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Card, Input, Spinner, Popover, Separator } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner, Popover } from 'tamagui'
 import { Button } from '../Button'
 import {
   Mail,
@@ -9,23 +9,22 @@ import {
   AlertCircle,
   Send,
   Pencil,
-  MoreHorizontal,
-  Star,
   Shield,
   X,
   Info,
   RotateCcw,
 } from '@tamagui/lucide-icons'
-import { moveEmailToFront } from './email-ordering'
-
-export { moveEmailToFront }
 
 export interface EmailEntry {
   id: string
   email: string
   verified: boolean
   verificationSentAt?: string
-  isPrimary?: boolean // Primary login email (cannot be removed)
+  /** The primary email (PROFILE.primaryEmail): the sign-in and account
+   *  address. Cannot be removed; another verified address can be made primary. */
+  isPrimary?: boolean
+  /** Mailing lists that send to this address (registry subscriptions). */
+  mailingLists?: string[]
   /** A role this address represents (e.g. "Recording Brother"). Rendered read-only
    *  with a badge — it's managed elsewhere (ecclesia/RB settings), not editable here. */
   roleLabel?: string
@@ -52,18 +51,17 @@ interface EmailManagerProps {
   onDeleteEmail: (emailId: string) => Promise<void> | void
   /** (Re)send the verification code for an address. */
   onSendVerification: (emailId: string) => Promise<void> | void
-  /** Make this address the preferred (first) contact — soft, in-place. */
-  onSetPreferred: (emailId: string) => Promise<void> | void
-  /** Promote an already-verified address to the login identity (secure flow). */
-  onSetLogin: (email: string) => void
+  /** Make an already-verified address the primary (sign-in and account) email.
+   *  Requires a fresh step-up on the server. */
+  onMakePrimary: (email: string) => void
   /** Change the login/primary address (secure flow). */
   onChangeLogin: () => void
   /** Restore a retired (demoted former-primary) address to a permanent secondary. */
   onUndoRetire?: (emailId: string) => void | Promise<void>
   /**
    * Whether the secure change-login flow is available to this session (the
-   * SECURE_EMAIL_CHANGE launch-dark flag). Gates the "Set as login" menu item and
-   * the login-row change pencil.
+   * SECURE_EMAIL_CHANGE launch-dark flag). Gates "Make primary" and the
+   * primary-row change pencil.
    */
   canChangeLogin: boolean
   /** View-only: render addresses + verified badges, no controls. */
@@ -90,15 +88,13 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
   onAddEmail,
   onDeleteEmail,
   onSendVerification,
-  onSetPreferred,
-  onSetLogin,
+  onMakePrimary,
   onChangeLogin,
   onUndoRetire,
   canChangeLogin,
   readOnly = false,
 }) => {
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [openInfoId, setOpenInfoId] = useState<string | null>(null)
 
   // Inline "add a new address" editor (revealed by the Add button).
@@ -178,14 +174,15 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
         </Card>
       ) : (
         <YStack gap="$2">
-          {emails.map((entry, index) => {
+          {emails.map((entry) => {
             const isLogin = !!entry.isPrimary
             const isRole = !!entry.roleLabel // e.g. Recording Brother — read-only
             const isRetired = !!entry.retired // demoted former-primary — restorable
-            const isPreferred = index === 0 && !isRole && !isRetired
             const isEditing = editingId === entry.id
             const rowBusy = busyId === entry.id
-            const showMenu = !readOnly && entry.verified && !isLogin && !isRole && !isRetired
+            const canMakePrimary =
+              !readOnly && canChangeLogin && entry.verified && !isLogin && !isRole && !isRetired
+            const lists = entry.mailingLists ?? []
             const canRename = !readOnly && !isLogin && !isRole && !isRetired
 
             return (
@@ -296,7 +293,7 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                             circular
                             chromeless
                             icon={Pencil}
-                            aria-label="Change login email"
+                            aria-label="Change primary email"
                             onPress={onChangeLogin}
                           />
                         ) : null
@@ -319,14 +316,9 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                         <Text fontSize="$4" fontWeight="500">
                           {entry.email || 'No email'}
                         </Text>
-                        {isPreferred ? (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
-                            <Text fontSize="$1" color="$blue10">Preferred</Text>
-                          </Card>
-                        ) : null}
                         {isLogin ? (
-                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
-                            <Text fontSize="$1" color="$gray11">Login</Text>
+                          <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$blue4">
+                            <Text fontSize="$1" color="$blue10" fontWeight="600">Primary</Text>
                           </Card>
                         ) : null}
                         {isRole ? (
@@ -335,6 +327,14 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                           </Card>
                         ) : null}
                       </XStack>
+                      {isLogin ? (
+                        <Text fontSize="$2" color="$color11">Sign-in and account email</Text>
+                      ) : null}
+                      {lists.length > 0 ? (
+                        <Text fontSize="$2" color="$color11">
+                          {`Mailing lists sent here: ${lists.join(', ')}`}
+                        </Text>
+                      ) : null}
                     </YStack>
 
                     {/* Right actions */}
@@ -364,63 +364,16 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                         </XStack>
                       )}
 
-                      {showMenu ? (
-                        <Popover
-                          size="$3"
-                          allowFlip
-                          open={openMenuId === entry.id}
-                          onOpenChange={(open) => setOpenMenuId(open ? entry.id : null)}
+                      {canMakePrimary ? (
+                        <Button
+                          size="$2"
+                          variant="outlined"
+                          icon={Shield}
+                          onPress={() => onMakePrimary(entry.email)}
+                          disabled={rowBusy}
                         >
-                          <Popover.Trigger asChild>
-                            <Button
-                              size="$2"
-                              circular
-                              chromeless
-                              icon={MoreHorizontal}
-                              aria-label="More actions"
-                            />
-                          </Popover.Trigger>
-                          <Popover.Content
-                            bordered
-                            elevate
-                            padding="$0"
-                            enterStyle={{ y: -6, opacity: 0 }}
-                            exitStyle={{ y: -6, opacity: 0 }}
-                            animation="quick"
-                          >
-                            <YStack minWidth={220}>
-                              {isPreferred ? null : (
-                                <Button
-                                  chromeless
-                                  justifyContent="flex-start"
-                                  borderRadius={0}
-                                  icon={Star}
-                                  onPress={() => {
-                                    setOpenMenuId(null)
-                                    void run(entry.id, () => onSetPreferred(entry.id))
-                                  }}
-                                >
-                                  Set as preferred
-                                </Button>
-                              )}
-                              {!isPreferred && canChangeLogin ? <Separator /> : null}
-                              {canChangeLogin ? (
-                                <Button
-                                  chromeless
-                                  justifyContent="flex-start"
-                                  borderRadius={0}
-                                  icon={Shield}
-                                  onPress={() => {
-                                    setOpenMenuId(null)
-                                    onSetLogin(entry.email)
-                                  }}
-                                >
-                                  Set as login
-                                </Button>
-                              ) : null}
-                            </YStack>
-                          </Popover.Content>
-                        </Popover>
+                          Make primary
+                        </Button>
                       ) : null}
 
                       {readOnly || isLogin || isRole ? null : (

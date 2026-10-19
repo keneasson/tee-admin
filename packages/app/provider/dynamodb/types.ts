@@ -266,15 +266,21 @@ export type RelationshipType =
   | 'extended_family'
   | 'household_member'
 
-// Relationship Records (bidirectional family links)
-export interface RelationshipRecord extends BaseRecord {
-  PK: string      // 'USER#{email}'
-  SK: string      // 'RELATIONSHIP#{targetEmail}#{type}'
-  sourceEmail: string
-  targetEmail: string
+// Relationship Records (bidirectional family links), keyed by PERSON, never by
+// email: an email can change or be shared by a household, a personId cannot.
+// pkey: PERSON#{sourcePersonId}, skey: REL#{targetPersonId}#{type}
+// Both directions are written together (the inverse carries the inverse type).
+export interface RelationshipRecord {
+  pkey: string    // 'PERSON#{sourcePersonId}'
+  skey: string    // 'REL#{targetPersonId}#{type}'
+  type: 'RELATIONSHIP'
+  sourcePersonId: string
+  targetPersonId: string
   relationshipType: RelationshipType
   status: 'active' | 'pending' | 'removed'
   createdAt: string
+  lastUpdated: string
+  version: number
 }
 
 // Address types
@@ -405,11 +411,6 @@ export interface EditRequestRecord extends BaseRecord {
 }
 
 // Query result types for new record types
-export type RelationshipQueryResult = {
-  items: RelationshipRecord[]
-  lastEvaluatedKey?: Record<string, any>
-}
-
 export type AddressQueryResult = {
   items: AddressRecord[]
   lastEvaluatedKey?: Record<string, any>
@@ -432,7 +433,7 @@ export type ContactRequestQueryResult = {
 
 // Type guards for new record types
 export function isRelationshipRecord(record: any): record is RelationshipRecord {
-  return record && record.PK && record.SK && record.SK.startsWith('RELATIONSHIP#')
+  return !!record && record.pkey?.startsWith('PERSON#') && record.skey?.startsWith('REL#')
 }
 
 export function isAddressRecord(record: any): record is AddressRecord {

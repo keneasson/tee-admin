@@ -8,6 +8,7 @@ export const FEATURE_FLAGS = {
   SECURE_EMAIL_CHANGE: 'secure_email_change',
   MAILING_LIST_REGISTRY: 'mailing_list_registry',
   PEOPLE_INDEX_SIGNIN: 'people_index_signin',
+  PERSON_PASSWORD_SIGNIN: 'person_password_signin',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -79,6 +80,17 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // address keeps the legacy table Scan; on → the RB-email index entry
     // (one Query). Flip only after the people-index backfill has run.
     description: 'Sign-in: Recording Brother check via the people index instead of a table Scan',
+    visibleTo: 'off',
+    users: [],
+  },
+  [FEATURE_FLAGS.PERSON_PASSWORD_SIGNIN]: {
+    // Password sign-in + step-up (R7). Evaluated for the person the typed
+    // address resolves to, so 'owner' turns it on for the owner's own account
+    // only; 'everyone' releases it. Off → the unchanged legacy USER# check.
+    // On → the PersonRecord's password, with the legacy record as a fallback
+    // only when the person has none (its hash is then copied onto the person).
+    // Password resets write the PersonRecord too while this is on.
+    description: 'Password sign-in checks the PersonRecord password (legacy USER# record as a one-time fallback)',
     visibleTo: 'off',
     users: [],
   },
