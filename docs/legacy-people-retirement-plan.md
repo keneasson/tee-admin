@@ -55,6 +55,7 @@ Not part of this work. Each is one line here, not an issue.
 - `unsubscribeContact` (bounce webhook, deceased) finds the SES contact by the address as given, not lower-cased.
 - A list's `defaultOptIn` reaches people through `listEcclesiasCached`, which today returns 35 of 39 ecclesias (§0.6), so a default list misses people of the other 4 until that Scan is fixed.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
+- Merging twin persons (R1, `scripts/merge-duplicate-persons.ts`) does not yet move a person's `REL#` relationship rows to the surviving person; the relationship migration's dry run also shows 2 people with 2 spouse rows each, left for the owner's review page.
 
 ## 0.4 Definition of done
 

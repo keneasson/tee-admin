@@ -18,7 +18,8 @@ import {
   getRoleFromLegacyUser,
   getUserFromLegacyDirectory,
 } from '@my/app/provider/auth/get-user-from-legacy'
-import { verifyCredentialsUser, findCredentialsUserByEmail } from './dynamodb/credentials-users'
+import { findCredentialsUserByEmail } from './dynamodb/credentials-users'
+import { verifyPasswordSignIn } from './password-signin'
 import { personRepository, type GoogleOAuthProfile } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { verifyEcclesiaToken } from './email/ecclesia-token'
@@ -87,7 +88,9 @@ export const authOptions: NextAuthConfig = {
           return null
         }
 
-        const user = await verifyCredentialsUser(
+        // Sign-in AND the password step-up (<Verify>) both land here. Behind the
+        // person_password_signin flag this checks the PersonRecord (R7a).
+        const user = await verifyPasswordSignIn(
           credentials.email as string,
           credentials.password as string
         )

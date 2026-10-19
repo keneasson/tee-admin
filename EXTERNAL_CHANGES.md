@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — relationships move to person keys, and the password sign-in flag (R7, run IMMEDIATELY after this deploys)
+- **Date**: 2026-10-18
+- **Branch**: `fix/r7-password-primary-relationships`
+- **Code change**: family relationships are read and written as `PERSON#<id> / REL#<targetId>#<type>` (both directions in one transaction). The legacy `USER#<email> / RELATIONSHIP#…` rows are no longer read, so **from the moment this deploys until step 2 runs, every family list is empty** (hidden, not lost: the legacy rows are untouched). Run steps 1–2 right after the prod deploy finishes. Password sign-in and the password step-up check the PersonRecord behind the new `person_password_signin` flag (default **off**).
+- **External action** (as soon as the merge to `main` has deployed to prod — families are hidden until step 2):
+  1. `npx tsx scripts/migrate-relationships-to-person.ts` (dry run; counts and person ids; per-row detail goes to a local temp file). Dry run on 2026-10-18: 23 legacy rows → 11 pairs, 0 unresolved, 1 resolved by the sign-in rule.
+  2. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy` — backs up to `s3://tee-admin-backups/backups/<date>-relationships-to-person/`, writes, verifies. Check your own Family tab. **Do not leave a gap between the deploy and this step.**
+  3. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy --delete-legacy` — deletes the legacy rows of verified pairs only.
+  4. Owner: `/admin/evolution/feature-flags` → `person_password_signin` → **owner**; sign in with your password (and a step-up) on your own account; then **everyone**.
+- **Status**: PENDING
+
 ### SES + prod data — finish R5: safety-net topics, retire topic fields (owner-run, in order)
 - **Date**: 2026-10-18
 - **Branch**: `feat/r5-finish`
@@ -23,7 +34,7 @@ Changes in this file flag code modifications that require **matching manual upda
   4. Sunday–Tuesday: `npx tsx scripts/ses-merge-case-duplicates.ts` (dry run), then `--apply` (refuses until step 3 is verified; backs up the affected contacts to `s3://tee-admin-backups/backups/<date>-ses-case-duplicates/`, merges the 8 letter-case duplicates onto the lower-case address keeping UnsubscribeAll, verifies).
   5. `npx tsx scripts/retire-ses-topic-fields.ts` (dry run), then `--apply`; re-run dry to confirm 0 remain.
   6. Vercel: no app code reads `CRON_SECRET` any more (only the deleted `cron/sync-ses-contacts` did); removing it is optional.
-- **Status**: PENDING
+- **Status**: DONE 2026-10-19 — steps 1–5 applied and verified (backups under `s3://tee-admin-backups/backups/2026-10-19-*`); step 6 optional.
 
 ### Vercel — echadhub production email turned ON (`EMAILS_ENABLED=true`)
 - **Date**: 2026-10-13

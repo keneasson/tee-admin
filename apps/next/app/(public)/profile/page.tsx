@@ -65,18 +65,18 @@ export default function ProfilePage() {
         })
         if (res.ok) {
           setReloadSignal((n) => n + 1)
-          setPromoteNotice(`${email} is now your login email.`)
+          setPromoteNotice(`${email} is now your primary email.`)
           return
         }
         if (res.status === 403) {
           const body = await res.clone().json().catch(() => ({} as any))
           if (body?.stepUpRequired) {
-            setStepUp({ retry: run, reason: 'to change your login email' })
+            setStepUp({ retry: run, reason: 'to change your primary email' })
             return
           }
         }
         const body = await res.json().catch(() => ({} as any))
-        setPromoteNotice(body?.error || 'Could not change your login email.')
+        setPromoteNotice(body?.error || 'Could not change your primary email.')
       } catch {
         setPromoteNotice('Network error — please try again.')
       }

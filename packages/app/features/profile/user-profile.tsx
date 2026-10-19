@@ -5,7 +5,7 @@ import { Section, Text, YStack, XStack, Heading, Separator, Spinner, Tabs, Card,
 import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
 import { PhoneManager, movePhoneToFront, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
-import { EmailManager, moveEmailToFront, type EmailEntry } from '@my/ui/src/profile/email-manager'
+import { EmailManager, type EmailEntry } from '@my/ui/src/profile/email-manager'
 import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/family-members'
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
@@ -29,12 +29,12 @@ interface UserProfileProps {
   /**
    * Whether the secure change-login flow (SECURE_EMAIL_CHANGE) is available to
    * this session — resolved server-side by the platform layer and threaded down.
-   * Gates the "Set as login" menu item and the login-row change pencil.
+   * Gates "Make primary" and the primary-row change pencil.
    */
   canChangeLogin?: boolean
   /** Launch the secure change-login flow (owned by the platform layer). */
   onChangeLogin?: () => void
-  /** Launch the secure change-login flow pre-filled with an already-verified address. */
+  /** Make an already-verified address the primary (sign-in and account) email. */
   onSetLogin?: (email: string) => void
   /**
    * Monotonic counter the platform layer bumps to force a re-fetch of the profile
@@ -61,9 +61,8 @@ interface Address {
 
 
 interface FamilyMember {
-  email: string
+  personId: string
   name?: string
-  personId?: string
   relationshipType: RelationshipType
   status?: string
   createdAt?: string
@@ -308,34 +307,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     await handledStepUp(res, () => { void handleDeleteEmail(emailId) })
   }
 
-  // "Set as preferred" = move the address to index 0 and PUT the whole ordered
-  // set (the replace-all model; first = preferred).
-  const handleSetPreferred = async (emailId: string) => {
-    const reordered = moveEmailToFront(emails, emailId)
-    const res = await fetch('/api/user/emails', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        // Role entries (e.g. the Recording Brother ecclesia email) are surfaced
-        // read-only from the PersonRecord — they must NOT be written back into the
-        // USER# email store, so exclude them from the replace-all payload.
-        emails: reordered
-          .filter(e => !e.roleLabel)
-          .map(e => ({
-            id: e.id,
-            email: e.email,
-            verified: e.verified,
-            isPrimary: e.isPrimary,
-          })),
-      }),
-    })
-    if (res.ok) {
-      await fetchData()
-      return
-    }
-    await handledStepUp(res, () => { void handleSetPreferred(emailId) })
-  }
-
   const handleSendVerification = async (emailId: string) => {
     const res = await fetch('/api/user/emails/verify', {
       method: 'POST',
@@ -458,8 +429,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
-  const handleRemoveFamilyMember = async (targetEmail: string, relationshipType: RelationshipType) => {
-    const res = await fetch(`/api/user/relationships?targetEmail=${encodeURIComponent(targetEmail)}&relationshipType=${relationshipType}`, {
+  const handleRemoveFamilyMember = async (targetPersonId: string, relationshipType: RelationshipType) => {
+    const res = await fetch(`/api/user/relationships?targetPersonId=${encodeURIComponent(targetPersonId)}&relationshipType=${relationshipType}`, {
       method: 'DELETE',
     })
     if (res.ok) {
@@ -914,8 +885,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onAddEmail={handleAddEmail}
                   onDeleteEmail={handleDeleteEmail}
                   onSendVerification={handleSendVerification}
-                  onSetPreferred={handleSetPreferred}
-                  onSetLogin={(email) => onSetLogin?.(email)}
+                  onMakePrimary={(email) => onSetLogin?.(email)}
                   onChangeLogin={() => onChangeLogin?.()}
                   onUndoRetire={handleUndoRetire}
                   canChangeLogin={canChangeLogin}

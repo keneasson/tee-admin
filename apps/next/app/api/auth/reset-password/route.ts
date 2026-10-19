@@ -3,7 +3,11 @@ import { validatePassword } from '../../../../utils/password'
 import {
   validatePasswordResetToken,
   resetPassword,
+  deletePasswordResetToken,
 } from '../../../../utils/dynamodb/credentials-users'
+import { hashPassword } from '../../../../utils/password'
+import { personForPasswordReset } from '../../../../utils/password-signin'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,6 +37,22 @@ export async function POST(request: NextRequest) {
         { error: 'Invalid or expired reset token' },
         { status: 400 }
       )
+    }
+
+    // With person_password_signin on, sign-in reads the PersonRecord password,
+    // so the reset must write it there (the legacy record is kept in step as
+    // the rollback path). Only when the token's address is VERIFIED on that
+    // person: a token sent to an unverified secondary address must never set
+    // the person's password (it only resets that address's own legacy record).
+    const person = await personForPasswordReset(tokenData.email)
+    if (person) {
+      await personRepository.updatePassword(person.personId, await hashPassword(password))
+      const legacyUpdated = await resetPassword(token, password)
+      if (!legacyUpdated) await deletePasswordResetToken(token)
+      return NextResponse.json({
+        success: true,
+        message: 'Password reset successfully! You can now sign in with your new password.',
+      })
     }
 
     // Reset the password
