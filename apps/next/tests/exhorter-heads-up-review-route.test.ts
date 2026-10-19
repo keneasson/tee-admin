@@ -22,6 +22,9 @@ const h = vi.hoisted(() => ({
   renderPreview: vi.fn(),
   prepareForReview: vi.fn(),
   auth: vi.fn(),
+  findReleasedFrom: vi.fn(),
+  bounceStatus: vi.fn(),
+  reopenBounced: vi.fn(),
 }))
 
 // The route imports `auth` for the no-token path; NextAuth initialises at
@@ -34,7 +37,12 @@ vi.mock('@my/app/provider/dynamodb/repositories/exhorter-headsup-repository', ()
     markReleased: h.markReleased,
     supersedePending: h.supersedePending,
     findCurrentPending: h.findCurrentPending,
+    findReleasedFrom: h.findReleasedFrom,
   },
+}))
+vi.mock('@/utils/email/exhorter-heads-up-bounce', () => ({
+  getBounceResendStatus: h.bounceStatus,
+  reopenBouncedHeadsUp: h.reopenBounced,
 }))
 vi.mock('@/utils/email/exhorter-heads-up-review', () => ({
   prepareHeadsUpForReview: h.prepareForReview,
@@ -42,6 +50,7 @@ vi.mock('@/utils/email/exhorter-heads-up-review', () => ({
 vi.mock('@/utils/email/exhorter-heads-up', () => ({
   resolveAndSendExhorterHeadsUp: h.resolveAndSend,
   renderHeadsUpPreview: h.renderPreview,
+  exhorterHeadsUpCampaignId: (d: string) => `exhorter-headsup-${d}`,
 }))
 
 const TOKEN = 'tok-abc'
@@ -69,6 +78,8 @@ beforeEach(() => {
   h.supersedePending.mockResolvedValue(1)
   h.auth.mockResolvedValue({ user: { email: 'rb@tee-admin.com', role: 'owner' } })
   h.findCurrentPending.mockResolvedValue(null)
+  h.findReleasedFrom.mockResolvedValue([])
+  h.bounceStatus.mockResolvedValue({ bounced: false, eligible: false })
   h.prepareForReview.mockResolvedValue({
     parked: true,
     reviewerEmail: 'rb@tee-admin.com',
@@ -315,5 +326,80 @@ describe('opening the page directly, with no token', () => {
 
     h.auth.mockResolvedValue(null)
     expect((await GET(bare())).status).toBe(403)
+  })
+})
+
+/**
+ * #267 — the heads-up went out and BOUNCED. The page must offer a way back: a
+ * corrected copy for his CURRENT address, redirected for QA like the first.
+ */
+describe('after a bounce', () => {
+  const RELEASED = { ...PENDING, releasedAt: '2026-09-06T10:00:00Z' }
+
+  it('an already-sent link reports whether a corrected copy can be prepared', async () => {
+    h.findPendingByToken.mockResolvedValue({ ...RELEASED })
+    h.bounceStatus.mockResolvedValue({
+      bounced: true,
+      eligible: true,
+      currentEmail: 'home@example.com',
+    })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await GET(req('GET'))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.alreadySent).toBe(true)
+    expect(body.token).toBe(TOKEN)
+    expect(body.bounceResend).toEqual({ eligible: true, currentEmail: 'home@example.com' })
+    expect(h.reopenBounced).not.toHaveBeenCalled()
+  })
+
+  it('opened with no token, finds an upcoming heads-up that bounced', async () => {
+    h.findReleasedFrom.mockResolvedValue([{ ...RELEASED }])
+    h.bounceStatus.mockResolvedValue({ bounced: true, eligible: true, currentEmail: 'home@example.com' })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const body = await (
+      await GET(new Request('http://x/api/admin/exhorter-heads-up/review', { method: 'GET' }) as never)
+    ).json()
+    expect(body.alreadySent).toBe(true)
+    expect(body.token).toBe(TOKEN)
+  })
+
+  it('does not resurface a bounce already put right', async () => {
+    h.findReleasedFrom.mockResolvedValue([{ ...RELEASED }])
+    h.bounceStatus.mockResolvedValue({ bounced: true, resolved: true, eligible: false })
+    const { GET } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const body = await (
+      await GET(new Request('http://x/api/admin/exhorter-heads-up/review', { method: 'GET' }) as never)
+    ).json()
+    expect(body.nothingWaiting).toBe(true)
+  })
+
+  it('"Prepare a corrected copy" redirects a QA copy — and sends nothing to him', async () => {
+    h.reopenBounced.mockResolvedValue({
+      ok: true,
+      redirectedTo: 'rb@tee-admin.com',
+      currentEmail: 'home@example.com',
+      date: PENDING.date,
+    })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend-after-bounce' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.redirectedTo).toBe('rb@tee-admin.com')
+    expect(h.reopenBounced).toHaveBeenCalledWith(TOKEN, 'rb@tee-admin.com')
+    expect(h.resolveAndSend).not.toHaveBeenCalled()
+    expect(h.markReleased).not.toHaveBeenCalled()
+  })
+
+  it('passes a refusal through with its reason', async () => {
+    h.reopenBounced.mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: 'His address on file is still the one that bounced.',
+    })
+    const { POST } = await import('../app/api/admin/exhorter-heads-up/review/route')
+    const res = await POST(post({ action: 'resend-after-bounce' }))
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/still the one that bounced/)
   })
 })

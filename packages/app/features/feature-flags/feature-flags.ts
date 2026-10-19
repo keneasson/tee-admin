@@ -7,6 +7,7 @@ export const FEATURE_FLAGS = {
   CONSOLIDATED_CMS: 'consolidated_cms',
   SECURE_EMAIL_CHANGE: 'secure_email_change',
   MAILING_LIST_REGISTRY: 'mailing_list_registry',
+  PEOPLE_INDEX_SIGNIN: 'people_index_signin',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -69,6 +70,15 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // so the whole in-house-lists surface stays invisible until deliberately
     // enabled.
     description: 'In-house multi-tenant mailing-list registry + subscriptions (SES becomes a suppression safety-net only)',
+    visibleTo: 'off',
+    users: [],
+  },
+  [FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN]: {
+    // Sign-in path gate (#275). Read globally with a null session, so it is ON
+    // only at 'everyone'. Off → the Recording Brother check for a brand-new
+    // address keeps the legacy table Scan; on → the RB-email index entry
+    // (one Query). Flip only after the people-index backfill has run.
+    description: 'Sign-in: Recording Brother check via the people index instead of a table Scan',
     visibleTo: 'off',
     users: [],
   },

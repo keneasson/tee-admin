@@ -3,7 +3,7 @@
 > **What this is.** The expected behaviour for seeing, editing, correcting,
 > suggesting, confirming and requesting a person's contact details (name,
 > email, phone, address). It is the reference any change in this area is
-> checked against. See [ADR-0006](../adr/0006-behavior-specs.md) for how specs
+> checked against. See [ADR-0007](../adr/0007-behavior-specs.md) for how specs
 > work.
 >
 > **Status key:** ✅ Implemented (test cited) · ⚠️ Partial · ❌ Gap (issue) ·

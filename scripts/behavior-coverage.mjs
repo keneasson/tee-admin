@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Behaviour-spec coverage (ADR-0006). Lists every scenario ID in
+ * Behaviour-spec coverage (ADR-0007). Lists every scenario ID in
  * docs/behavior/*.md and reports which ones no test file cites by its full ID
  * (e.g. `CONTACT-EDIT-05`). Report-only: always exits 0 until the specs settle.
  *
@@ -46,4 +46,4 @@ for (const file of readdirSync(specDir).filter((f) => f.endsWith('.md') && f !==
   console.log(`\n${file}: ${rows.length - missing.length}/${rows.length} scenarios cited by a test`)
   for (const id of missing) console.log(`  · ${id}`)
 }
-console.log(`\nTotal: ${cited}/${total} scenarios cited by ID. (Report-only — ADR-0006.)`)
+console.log(`\nTotal: ${cited}/${total} scenarios cited by ID. (Report-only — ADR-0007.)`)

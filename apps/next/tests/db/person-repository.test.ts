@@ -31,7 +31,7 @@ vi.mock('uuid', () => ({
 }))
 
 // Now import after mocking
-import { PersonRepository, type CreatePersonInput, type GoogleOAuthProfile, type CredentialsRegistrationData } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { PersonRepository, chooseSignInHolder, type CreatePersonInput, type GoogleOAuthProfile, type CredentialsRegistrationData } from '@my/app/provider/dynamodb/repositories/person-repository'
 
 describe('PersonRepository', () => {
   let repository: PersonRepository
@@ -39,6 +39,9 @@ describe('PersonRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     repository = new PersonRepository()
+    // These tests script the client call-by-call; projection sync (its own
+    // reads/writes after each write) is covered by people-index-sync.test.ts.
+    repository.setProjectionSync(null)
   })
 
   afterEach(() => {
@@ -140,6 +143,92 @@ describe('PersonRepository', () => {
       const result = await repository.getByEmail('secondary@example.com')
 
       expect(result).toEqual(profile)
+    })
+
+    /**
+     * #267 — a shared household address held as PRIMARY by two people. This is
+     * also the sign-in lookup, so it must never depend on the order DynamoDB
+     * returns items with identical GSI keys (it guarantees none).
+     */
+    describe('shared household address', () => {
+      const wife = { pkey: 'PERSON#b-wife', skey: 'PROFILE', personId: 'b-wife', primaryEmail: 'home@example.com' }
+      const husband = { pkey: 'PERSON#a-husband', skey: 'PROFILE', personId: 'a-husband', primaryEmail: 'home@example.com' }
+      const rows = [
+        { pkey: 'PERSON#b-wife', skey: 'EMAIL#w', email: 'home@example.com' },
+        // He joined the address: mail reaches him there, it does not sign him in.
+        { pkey: 'PERSON#a-husband', skey: 'EMAIL#h', email: 'home@example.com', loginExcluded: true },
+      ]
+
+      it.each([
+        ['wife first', [wife, husband]],
+        ['husband first', [husband, wife]],
+      ])('resolves to the sign-in holder whatever the order (%s)', async (_label, order) => {
+        mockSend
+          .mockResolvedValueOnce({ Items: order }) // primary fast-path: TWO profiles
+          .mockResolvedValueOnce({ Items: rows }) // getEmailsByEmail
+        const result = await repository.getByEmail('home@example.com')
+        expect(result?.personId).toBe('b-wife')
+      })
+
+      it('getByEmailForAuth signs in the holder, never the excluded spouse', async () => {
+        mockSend
+          .mockResolvedValueOnce({ Items: [husband, wife] })
+          .mockResolvedValueOnce({ Items: rows })
+        const auth = await repository.getByEmailForAuth('home@example.com')
+        expect(auth?.personId).toBe('b-wife')
+      })
+    })
+  })
+
+  describe('chooseSignInHolder', () => {
+    const p = (id: string) => ({ personId: id, pkey: `PERSON#${id}` }) as any
+
+    it('a single holder is returned as-is (no change for unshared addresses)', () => {
+      expect(chooseSignInHolder('x@e.com', [p('z')], [])?.personId).toBe('z')
+    })
+
+    it('with nobody marked, breaks the tie on personId — stable across calls', () => {
+      expect(chooseSignInHolder('x@e.com', [p('m'), p('c')], [])?.personId).toBe('c')
+      expect(chooseSignInHolder('x@e.com', [p('c'), p('m')], [])?.personId).toBe('c')
+    })
+
+    it('prefers a named person over a nameless orphan, whatever the ids', () => {
+      const named = { ...p('z'), firstName: 'Martin' }
+      const orphan = { ...p('a'), firstName: '' }
+      expect(chooseSignInHolder('x@e.com', [orphan, named], [])?.personId).toBe('z')
+      expect(chooseSignInHolder('x@e.com', [named, orphan], [])?.personId).toBe('z')
+    })
+
+    it('ignores a loginExcluded flag that belongs to a DIFFERENT address', () => {
+      const rows = [{ pkey: 'PERSON#c', email: 'other@e.com', loginExcluded: true }]
+      expect(chooseSignInHolder('x@e.com', [p('m'), p('c')], rows)?.personId).toBe('c')
+    })
+
+    it('never returns nobody when everyone is excluded', () => {
+      const rows = [
+        { pkey: 'PERSON#c', email: 'x@e.com', loginExcluded: true },
+        { pkey: 'PERSON#m', email: 'x@e.com', loginExcluded: true },
+      ]
+      expect(chooseSignInHolder('x@e.com', [p('m'), p('c')], rows)?.personId).toBe('c')
+    })
+  })
+
+  describe('markEmailSesStatusByAddress', () => {
+    it('marks every row holding the address, across people, and skips rows already marked', async () => {
+      mockSend
+        .mockResolvedValueOnce({
+          Items: [
+            { pkey: 'PERSON#a', skey: 'EMAIL#1', email: 'dead@e.com', sesStatus: 'active' },
+            { pkey: 'PERSON#b', skey: 'EMAIL#2', email: 'dead@e.com', sesStatus: 'bounced' },
+            { pkey: 'PERSON#a', skey: 'PROFILE', email: 'dead@e.com' },
+          ],
+        })
+        .mockResolvedValue({ Attributes: {} })
+      const n = await repository.markEmailSesStatusByAddress('dead@e.com', 'bounced')
+      expect(n).toBe(1)
+      const updates = mockSend.mock.calls.filter((c) => c[0]?.type === 'UpdateCommand')
+      expect(updates).toHaveLength(1)
+      expect(updates[0][0].params.Key).toEqual({ pkey: 'PERSON#a', skey: 'EMAIL#1' })
     })
   })
 

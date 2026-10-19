@@ -41,3 +41,58 @@ export function computeParityDiff(sesEmails: string[], inHouseEmails: string[]):
     inHouseTotal: inHouse.size,
   }
 }
+
+export interface ListParity {
+  listId: string
+  sesTopic: string
+  diff: ParityDiff
+  resolverStats: Record<string, number>
+}
+
+export interface ListParityDeps {
+  /** What today's SES-topic send would mail (explicit OPT_IN − UnsubscribeAll). */
+  sesRecipients: (topic: string) => Promise<string[]>
+  /** What the registry send would mail for this list, or null if it cannot resolve. */
+  registryRecipients: (
+    listId: string
+  ) => Promise<{ emails: string[]; stats: Record<string, number> }>
+}
+
+/**
+ * Parity for one bridged list: the SES send audience vs the registry send
+ * audience, each computed by the SAME filters its send path applies. Sends and
+ * mutates nothing.
+ */
+export async function runListParity(
+  list: { listId: string; sesTopic?: string },
+  deps?: ListParityDeps
+): Promise<ListParity> {
+  if (!list.sesTopic) throw new Error(`List ${list.listId} has no SES topic; parity needs one`)
+  const d = deps ?? (await defaultListParityDeps())
+  const [ses, registry] = await Promise.all([
+    d.sesRecipients(list.sesTopic),
+    d.registryRecipients(list.listId),
+  ])
+  return {
+    listId: list.listId,
+    sesTopic: list.sesTopic,
+    diff: computeParityDiff(ses, registry.emails),
+    resolverStats: registry.stats,
+  }
+}
+
+async function defaultListParityDeps(): Promise<ListParityDeps> {
+  const [{ getSesTopicRecipients, getSesUnsubscribedAll, applyUnsubscribeAll }, { resolveListRecipients }] =
+    await Promise.all([import('./registry-send'), import('../email/resolve-list-recipients')])
+  return {
+    sesRecipients: getSesTopicRecipients,
+    registryRecipients: async (listId) => {
+      const [resolved, unsubscribedAll] = await Promise.all([
+        resolveListRecipients(listId),
+        getSesUnsubscribedAll(),
+      ])
+      const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)
+      return { emails, stats: { ...resolved.stats, unsubscribedAllRemoved: removed } }
+    },
+  }
+}

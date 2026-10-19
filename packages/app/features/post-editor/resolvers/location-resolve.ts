@@ -14,9 +14,12 @@
 
 import type { LocationBlock } from '@my/app/types/post'
 import { genId } from '@my/ui/src/post-editor/post-reducer'
+import { slugifyEcclesia } from '@my/app/provider/dynamodb/people-index/keys'
 
 /** Directory search result shape (subset of EcclesiaData the search API returns). */
 export interface EcclesiaSuggestion {
+  /** The ecclesia's stable id (#278); absent on older items, which use the slug of their name. */
+  ecclesiaId?: string
   name: string
   city?: string
   province?: string
@@ -66,6 +69,7 @@ export function ecclesiaToLocationBlock(e: EcclesiaSuggestion, base: LocationBlo
     ...base,
     mode: 'ecclesia',
     ecclesiaRef: e.name,
+    ecclesiaId: e.ecclesiaId || slugifyEcclesia(e.name),
     venueName: e.venue || e.name,
     city: e.city,
     province: e.province,
@@ -77,7 +81,7 @@ export function ecclesiaToLocationBlock(e: EcclesiaSuggestion, base: LocationBlo
 
 /** "Use as plain text" → a resolved `mode:'plain'` block with the typed venue name. */
 export function plainLocationBlock(text: string, base: LocationBlock): LocationBlock {
-  return { ...base, mode: 'plain', ecclesiaRef: undefined, venueName: text.trim() }
+  return { ...base, mode: 'plain', ecclesiaRef: undefined, ecclesiaId: undefined, venueName: text.trim() }
 }
 
 /** A picked Google Places result → a resolved `mode:'geo'` block. */
@@ -86,6 +90,7 @@ export function externalPlaceToLocationBlock(a: ExternalPlaceAddress, base: Loca
     ...base,
     mode: 'geo',
     ecclesiaRef: undefined,
+    ecclesiaId: undefined,
     venueName: a.name || base.venueName,
     address: a.streetAddress || undefined,
     city: a.city || undefined,

@@ -3,7 +3,7 @@
 **What TEE Admin must do**, one file per capability. This is the reference a
 change is checked against: read the spec for an area before changing it, and
 update it in the same PR when behaviour changes. Why this exists and the rules:
-[ADR-0006](../adr/0006-behavior-specs.md).
+[ADR-0007](../adr/0007-behavior-specs.md).
 
 | Spec | Covers | Prefix |
 |---|---|---|

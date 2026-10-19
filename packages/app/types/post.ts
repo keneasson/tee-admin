@@ -16,6 +16,7 @@
 import type { DocumentAttachment, EventSharingScope, OnlineMeetingInfo } from './events'
 import type { RichNode } from '../features/post-editor/rich-text'
 import type { Withheld } from '../utils/viewer-pii'
+import type { SmartWithheldReason } from './smart-refs'
 
 // Re-export so the post model is a single import surface for consumers. The
 // canonical PiiClass definition lives in viewer-pii.ts (the redaction primitive);
@@ -177,7 +178,13 @@ export interface PersonBlock extends BlockBase {
 export interface LocationBlock extends BlockBase {
   kind: 'location'
   mode: 'geo' | 'plain' | 'ecclesia'
-  ecclesiaRef?: string // when mode==='ecclesia'
+  ecclesiaRef?: string // when mode==='ecclesia' — the ecclesia NAME (display + directory link)
+  /**
+   * pii:'none' — the REFERENCE (plan §0 R6): the ecclesia's stable id, set when
+   * it was picked from the directory. `POST /api/smart-refs` resolves it to the
+   * ecclesia's current location and offices for the viewer.
+   */
+  ecclesiaId?: string
   label?: string // e.g. 'Service', 'Visitation', 'Ceremony', 'Reception'
   venueName?: string // pii:'none'
   city?: string // pii:'none' (coarse — safe floor)
@@ -246,7 +253,13 @@ export interface FlyerBlock extends BlockBase {
 export interface RegistrationContact {
   firstName: string // pii:'name' — ALWAYS shown (the floor)
   lastName?: string // pii:'name' — dropped below reveal tier
-  personId?: string // pii:'none' linkage — carried only at reveal tier (like BlockPerson)
+  /**
+   * pii:'none' linkage — carried only at reveal tier (like BlockPerson). When
+   * set it is the SOURCE (plan §0 R6, ADR-0006 §7): the block stores no email
+   * or phone, and the post read fills them from the person's record for the
+   * viewer (`resolvePostReferences`). Blocks without it keep their snapshot.
+   */
+  personId?: string
 }
 
 export interface RegistrationBlock extends BlockBase {
@@ -260,6 +273,12 @@ export interface RegistrationBlock extends BlockBase {
   contactPhone?: string // pii:'contact'
   /** pii:'none' — set ONLY by the redactor: email/phone were withheld from this reader. */
   contactWithheld?: boolean
+  /**
+   * pii:'none' — set ONLY at read, for a `contactPerson.personId` contact: why
+   * it was withheld (`sign-in`, or `scope` = the person's privacy does not
+   * reach this signed-in reader). ADR-0005 rule 5.
+   */
+  contactWithheldReason?: SmartWithheldReason
   hasFee?: boolean
   fee?: number
   paymentInstructions?: string

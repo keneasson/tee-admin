@@ -11,6 +11,37 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Vercel — echadhub production email turned ON (`EMAILS_ENABLED=true`)
+- **Date**: 2026-10-13
+- **Branch**: `chore/echadhub-emails-enabled` (config only, no code change)
+- **What changed**: On the **echadhub** Vercel project, `EMAILS_ENABLED` was `false` for Production + Preview since 2026-04-25 (commit `476bcdb8`, a kill switch from when echadhub was a parallel test copy sharing the live DB/SES). It was never re-enabled after echadhub.org went live, so **every email from echadhub.org was silently skipped**: login codes, email verification, email-change codes, suggestion and connection notices. Found when an owner's OTP to `ken.easson+hacker@gmail.com` never arrived (log: `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=echadhub …)`).
+- **Action taken**: Production set to `EMAILS_ENABLED=true` (sensitive var) and production redeployed. **Preview stays `false`**: PR preview builds also run against the live DB and must not email real members.
+- **Why it's safe**: no scheduled job targets echadhub. Vercel crons are empty; all EventBridge API destinations (`tee-email-cron-dest`, `tee-email-queue-endpoint`, `tee-exhorter-headsup-dest`) call `https://www.tee-admin.com`, so nothing can double-send. SES identity `echadhub.org` is verified with DKIM `SUCCESS`. echadhub.org now only sends when a person there acts (asks for a code, an admin presses send).
+- **Status**: DONE (2026-10-13).
+### Prod data — people-index backfill for #275 (run AFTER this deploys), then the sign-in flag
+- **Date**: 2026-10-17
+- **Branch**: `feat/people-access-patterns`
+- **Code change**: new derived projection items on `tee-admin` (person `CARD`, `NAMETOK#…`; `ECCLESIA_ID#<id>` directory/alias). Also a new OFFICE source entity (`ECCLESIA_ID#<id> / OFFICE#<role>`, `officeRepository`); no office data is migrated yet. `PersonRepository` and `locations.ts` keep them in sync on every write. Readers (`/api/people`, `/api/people/guests`, the ecclesia list/picker, `/api/people/typeahead`) switch to them **only once the backfill marker `PEOPLE_INDEX#META/BUILD` exists**; before that they keep the legacy Scans.
+- **External action** (after the merge to `main` has deployed to prod):
+  1. `npx tsx scripts/rebuild-people-projections.ts` (dry run; counts only).
+  2. `npx tsx scripts/rebuild-people-projections.ts --apply --after-deploy` — backs up PERSON#/ECCLESIA/ECCLESIA_ID# to `s3://tee-admin-backups/backups/<date>-people-index-backfill/`, writes only projection items, re-verifies (0 differences), then writes the marker.
+  3. Owner, when ready: `/admin/evolution/feature-flags` → `people_index_signin` → **everyone**. Until then the sign-in Recording Brother check for a brand-new address keeps the table Scan.
+- **Kill switches** (Vercel env, no code change): `PEOPLE_INDEX_READS=off` (all readers back to legacy), `PEOPLE_INDEX_WRITES=off` (stop the projection writer; re-run the script afterwards to repair).
+- **Status**: PENDING
+
+### Prod data — household shared email for issue #267 (run AFTER this deploys)
+- **Date**: 2026-10-17
+- **Branch**: `fix/267-household-email-headsup-resend`
+- **Code change**: `getByEmail` now resolves an address held as primary by several people **deterministically** (`chooseSignInHolder`: drops `loginExcluded` rows, then lowest personId), and `scripts/join-shared-household-email.ts` makes a shared household address a person's primary, marked `loginExcluded`.
+- **Why the order matters**: before this code is live, two PROFILEs on one address make sign-in pick a person **arbitrarily**. The data step must run only after the deploy.
+- **External action** (after the merge to `main` has deployed to prod):
+  1. Backup is already taken: `s3://tee-admin-backups/backups/2026-10-17-amos-household-email-267/`.
+  2. `aws configure export-credentials --format env-no-export > /tmp/aws.env` (account 911911532459), then:
+     `npx tsx --env-file=/tmp/aws.env scripts/join-shared-household-email.ts --person 837ffa40-d7dc-4cb9-a8ae-f1ece844ec15 --address <household address> --retire <dead work address>` (dry run), then re-run with `--apply --after-deploy`. The addresses are in the #267 thread with the owner, not in the repo.
+  3. Confirm the script's last line says sign-in resolves to `4981a5c7-93df-4c02-aa46-a2849b9998dd`.
+  4. Owner: open `/admin/exhorter-heads-up` → **Prepare a corrected copy** → check the QA copy → send from its link.
+- **Status**: PENDING
+
 ### GitHub Actions — secrets for the weekly Vercel deployment-prune job
 - **Date**: 2026-09-04
 - **Branch**: `chore/vercel-deploy-prune`

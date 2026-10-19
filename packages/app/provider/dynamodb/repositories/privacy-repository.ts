@@ -1,28 +1,11 @@
 import { BaseRepository } from './base-repository'
 import type {
   PrivacySettingsRecord,
-  VisibilityLevel,
   ConnectionRecord,
 } from '../types'
 import { connectionRepository } from './connection-repository'
-import { ROLES } from '../../auth/auth-roles'
-
-/**
- * Whether a viewer is inside the community enough to read the directory.
- *
- * Deliberately an allow-list of roles rather than "not a guest", so a role
- * added later cannot silently inherit directory access. An absent role counts
- * as a guest: unknown standing is not member standing.
- */
-function viewerHasMemberStanding(viewerRole?: string): boolean {
-  return (
-    viewerRole === ROLES.MEMBER ||
-    viewerRole === ROLES.REP ||
-    viewerRole === ROLES.RECORDER ||
-    viewerRole === ROLES.ADMIN ||
-    viewerRole === ROLES.OWNER
-  )
-}
+import { decideFieldVisibility, seesPastPrivacy } from '../../../utils/privacy-visibility'
+import { batchGetItems } from '../people-index/reader'
 
 /**
  * Repository for user privacy settings
@@ -144,64 +127,47 @@ export class PrivacyRepository extends BaseRepository<PrivacySettingsRecord> {
     targetEcclesia?: string,
     viewerRole?: string
   ): Promise<boolean> {
-    // User can always view their own data
-    if (viewerEmail === targetEmail) {
-      return true
+    const ctx = { isSelf: viewerEmail === targetEmail, viewerRole, viewerEcclesia, targetEcclesia }
+    if (seesPastPrivacy(ctx)) return true
+    const decision = decideFieldVisibility((await this.getPrivacySettings(targetEmail))[field], ctx)
+    if (decision === 'if-connected') {
+      // Check if there's a connection from target to viewer
+      // (target has shared their info with viewer)
+      return await connectionRepository.isConnected(targetEmail, viewerEmail)
     }
+    return decision
+  }
 
-    // Owner sees everything
-    if (viewerRole === 'owner') {
-      return true
+  /**
+   * Privacy settings for a set of PEOPLE in one BatchGetItem — the smart
+   * reference resolver (plan §0 R6) reads every card's settings in one round
+   * trip. Keyed by personId so callers never key a person by email; the
+   * settings themselves still live at the legacy `USER#<email>` key until R7
+   * moves them under `PERSON#<id>`, and that move happens here only.
+   *
+   * A person's settings may sit under any of their addresses (the primary can
+   * change), so every address is asked for; the primary's row wins, then the
+   * most recently updated. A person with no row gets the default.
+   */
+  async getPrivacySettingsForPeople(
+    people: Array<{ personId: string; primaryEmail?: string; emails?: string[] }>
+  ): Promise<Map<string, PrivacySettingsRecord>> {
+    const addressesOf = (p: { primaryEmail?: string; emails?: string[] }) =>
+      [...new Set([p.primaryEmail, ...(p.emails || [])].filter(Boolean).map((e) => (e as string).toLowerCase()))]
+    const keys = people.flatMap((p) => addressesOf(p).map((e) => ({ pkey: `USER#${e}`, skey: 'PRIVACY_SETTINGS' })))
+    const rows = keys.length > 0 ? await batchGetItems<PrivacySettingsRecord & { pkey: string }>(keys) : []
+    const byKey = new Map(rows.map((r) => [r.pkey, r]))
+    const out = new Map<string, PrivacySettingsRecord>()
+    for (const p of people) {
+      const addresses = addressesOf(p)
+      const found = addresses.map((e) => byKey.get(`USER#${e}`)).filter(Boolean) as Array<PrivacySettingsRecord & { pkey: string }>
+      const primary = p.primaryEmail ? byKey.get(`USER#${p.primaryEmail.toLowerCase()}`) : undefined
+      const chosen =
+        primary ||
+        found.sort((a, b) => String((b as any).lastUpdated || '').localeCompare(String((a as any).lastUpdated || '')))[0]
+      out.set(p.personId, chosen || this.getDefaultPrivacySettings(addresses[0] || p.personId))
     }
-
-    // Admin, Recorder, and Rep see same-ecclesia members fully
-    if (
-      (viewerRole === 'admin' || viewerRole === 'recorder' || viewerRole === 'rep') &&
-      viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
-    ) {
-      return true
-    }
-
-    const settings = await this.getPrivacySettings(targetEmail)
-    const visibility = settings[field]
-
-    switch (visibility) {
-      case 'authenticated':
-        // Anyone logged in can see
-        return true
-
-      case 'ecclesia_and_connections':
-        // Same ecclesia OR connection exists.
-        //
-        // "Same ecclesia" means a MEMBER of it. A guest account — someone
-        // registered but not part of the community, a record created by a
-        // family-add, a login flagged as suspicious — carries an ecclesia on
-        // its profile but has no standing to read the directory. Now that this
-        // is the DEFAULT rather than an opt-in, that distinction is what stops
-        // the change handing every contact detail to any account that signs up.
-        if (
-          viewerEcclesia &&
-          targetEcclesia &&
-          viewerEcclesia === targetEcclesia &&
-          viewerHasMemberStanding(viewerRole)
-        ) {
-          return true
-        }
-        // Check if there's a connection from target to viewer
-        // (target has shared their info with viewer)
-        return await connectionRepository.isConnected(targetEmail, viewerEmail)
-
-      case 'connections_only':
-        // Only if target has connected with viewer
-        return await connectionRepository.isConnected(targetEmail, viewerEmail)
-
-      case 'private':
-        // Hidden - can only request contact
-        return false
-
-      default:
-        return false
-    }
+    return out
   }
 
   /**

@@ -24,7 +24,7 @@ merge / close. Reconcile branches ↔ issues ↔ board. Never stash/checkout/res
 uncommitted changes you did not make.
 
 **Where things live:** *expected behaviour* (what a feature must do, who can do
-what) → `docs/behavior/` (see ADR-0006); durable *decisions* (what a term means,
+what) → `docs/behavior/` (see ADR-0007); durable *decisions* (what a term means,
 how a model works) → `docs/adr/` (see `docs/adr/README.md`); *tasks & status* →
 GitHub issues; deep *designs* → `docs/*.md`.
 

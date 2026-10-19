@@ -176,9 +176,21 @@ export async function migrateSubscriptions(
 
   const movedTopics = allTopics.filter((topic) => oldPrefs[topic])
 
-  // 2. SES: copy opt-ins onto the new address, then clear the old one.
+  // 2. SES: copy opt-ins onto the new address, then clear the old one —
+  //    UNLESS somebody else still uses the old address (a shared household
+  //    inbox, #267). Clearing it then would opt the rest of the household out
+  //    of everything because one of them moved.
+  const othersOnOld = (await personRepository.getAllPersonsByEmail(oldLower)).filter(
+    (p) => p.personId !== opts.personId
+  )
   await addContact({ email: newLower, lists: oldPrefs as any })
-  await updateContact({ email: oldLower, lists: allFalse as any })
+  if (othersOnOld.length === 0) {
+    await updateContact({ email: oldLower, lists: allFalse as any })
+  } else {
+    console.log(
+      `migrateSubscriptions: old address is shared with ${othersOnOld.length} other person(s) — left subscribed`
+    )
+  }
 
   // 3. PersonRecord (canonical) — otherwise the one-way SES sync cron reverts (2).
   try {
