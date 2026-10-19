@@ -12,7 +12,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 const h = vi.hoisted(() => ({
   requireAssurance: vi.fn(),
   checkEcclesiaEditPermission: vi.fn(),
-  migrateSubscriptions: vi.fn(),
+  moveListSubscriptions: vi.fn(),
   notifyLoginEmailChanged: vi.fn(),
   invalidatePeopleCache: vi.fn(),
   p_getById: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../utils/auth-trust', () => ({ requireAssurance: h.requireAssurance }))
 vi.mock('../utils/ecclesia-permissions', () => ({
   checkEcclesiaEditPermission: h.checkEcclesiaEditPermission,
 }))
-vi.mock('../utils/email/contact', () => ({ migrateSubscriptions: h.migrateSubscriptions }))
+vi.mock('../utils/email/contact', () => ({ moveListSubscriptions: h.moveListSubscriptions }))
 vi.mock('../utils/email/notify-login-email-changed', () => ({
   notifyLoginEmailChanged: h.notifyLoginEmailChanged,
 }))
@@ -68,7 +68,7 @@ beforeEach(() => {
   h.checkEcclesiaEditPermission.mockResolvedValue(true)
   h.p_getAllPersonsByEmail.mockResolvedValue([])
   h.p_changePrimaryEmail.mockResolvedValue({ newEmailId: 'x', oldEmail: TARGET_PRIMARY })
-  h.migrateSubscriptions.mockResolvedValue({ movedTopics: ['newsletter'] })
+  h.moveListSubscriptions.mockResolvedValue({ movedLists: ['Newsletter'] })
 })
 
 describe('POST /api/admin/people/[personId]/email-change', () => {
@@ -131,17 +131,17 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
     const res = await POST(makeReq({ newEmail: 'brand-new@x.example' }), { params })
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toMatchObject({ success: true, newEmail: 'brand-new@x.example', movedTopics: ['newsletter'] })
+    expect(body).toMatchObject({ success: true, newEmail: 'brand-new@x.example', movedLists: ['Newsletter'] })
 
     expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, 'brand-new@x.example', { replace: false })
-    expect(h.migrateSubscriptions).toHaveBeenCalledWith(TARGET_PRIMARY, 'brand-new@x.example', {
+    expect(h.moveListSubscriptions).toHaveBeenCalledWith(TARGET_PRIMARY, 'brand-new@x.example', {
       personId: PID,
     })
     expect(h.notifyLoginEmailChanged).toHaveBeenCalled()
     expect(h.invalidatePeopleCache).toHaveBeenCalled()
   })
 
-  it('promote mode: promotes an existing verified secondary', async () => {
+  it('CONTACT-EDIT-09: promote mode: promotes an existing verified secondary', async () => {
     h.p_getById.mockResolvedValue({
       personId: PID,
       primaryEmail: TARGET_PRIMARY,
@@ -180,16 +180,16 @@ describe('correction mode { correctEmailId, newEmail }', () => {
   beforeEach(() => {
     h.p_getById.mockResolvedValue({ personId: PID, primaryEmail: TYPO, ecclesia: 'Cambridge Ecclesia' })
     h.p_changePrimaryEmail.mockResolvedValue({ newEmailId: 'n', oldEmail: TYPO })
-    h.migrateSubscriptions.mockResolvedValue({ movedTopics: [] })
+    h.moveListSubscriptions.mockResolvedValue({ movedLists: [] })
   })
 
-  it('sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
+  it('CONTACT-EDIT-04 / CONTACT-EDIT-05: sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
     h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: ' JaredAndrews1971@gmail.com ' }), { params })
     expect(res.status).toBe(200)
     expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, RIGHT, { replace: true })
     expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()
-    expect(h.migrateSubscriptions).toHaveBeenCalledWith(TYPO, RIGHT, { personId: PID })
+    expect(h.moveListSubscriptions).toHaveBeenCalledWith(TYPO, RIGHT, { personId: PID })
     expect(h.invalidatePeopleCache).toHaveBeenCalled()
   })
 
@@ -205,7 +205,7 @@ describe('correction mode { correctEmailId, newEmail }', () => {
     expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()
   })
 
-  it('409 when the corrected address belongs to someone else — nothing written', async () => {
+  it('CONTACT-EDIT-07: 409 when the corrected address belongs to someone else — nothing written', async () => {
     h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
     h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: 'someone-else' }])
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
@@ -220,7 +220,7 @@ describe('correction mode { correctEmailId, newEmail }', () => {
     expect(h.p_changePrimaryEmail).not.toHaveBeenCalled()
   })
 
-  it('still 403 for someone without edit rights over that ecclesia', async () => {
+  it('CONTACT-EDIT-02: still 403 for someone without edit rights over that ecclesia', async () => {
     h.checkEcclesiaEditPermission.mockResolvedValue(false)
     const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: RIGHT }), { params })
     expect(res.status).toBe(403)

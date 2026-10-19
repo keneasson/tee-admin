@@ -68,6 +68,8 @@ export type EmailFlag =
   | 'ses-case-duplicate'
   | 'unsubscribed-all'
   | 'no-explicit-preference'
+  /** Opted out of an SES safety-net topic: SES drops every list send to this address. */
+  | 'safety-net-opt-out'
 
 export interface EmailListsEmailRow {
   email: string
@@ -143,11 +145,27 @@ export function buildEmailListsOverview(input: {
   cards: OverviewCardInput[]
   sesContacts: OverviewSesContactInput[]
   suppressed: Array<{ email: string; reason?: string }>
+  /** The subscription columns: SES topics, or (registry) the lists, `name` = listId. */
   topics: EmailListsTopic[]
   subscriptionSource?: 'ses' | 'registry'
+  /**
+   * Registry source only (R5): address (lower case) → the listIds it is opted
+   * into. The columns are read from here, not from SES topics; SES contacts
+   * then only contribute UnsubscribeAll, case duplicates and safety-net opt-outs.
+   */
+  subscriptions?: Record<string, string[]>
+  /** Registry source only: the SES safety-net topic names (an OPT_OUT on one blocks every send). */
+  safetyNetTopics?: string[]
   now?: Date
 }): EmailListsOverview {
   const topicNames = input.topics.map((t) => t.name)
+  const registry = input.subscriptionSource === 'registry'
+  const listSubs = new Map<string, Set<string>>()
+  for (const [email, ids] of Object.entries(input.subscriptions || {})) listSubs.set(lower(email), new Set(ids))
+  const safetyNets = new Set(input.safetyNetTopics || [])
+  const safetyNetOptOut = (c: OverviewSesContactInput) =>
+    Object.entries(c.topics || {}).some(([t, st]) => safetyNets.has(t) && st === 'OPT_OUT')
+  const optedOutOfSafetyNet = new Set(input.sesContacts.filter(safetyNetOptOut).map((c) => lower(c.email)))
 
   // --- SES, folded by lower-cased address ---
   const sesByAddress = new Map<
@@ -199,10 +217,13 @@ export function buildEmailListsOverview(input: {
       if (suppressed) flags.push('suppressed')
       if (suppressed && (e.sesStatus === 'active' || !e.sesStatus)) flags.push('suppressed-but-marked-active')
       if (e.sesStatus === 'bounced' || e.sesStatus === 'complained') flags.push('bounced-on-person')
-      if (!ses && !archived) flags.push('not-in-ses')
+      // Registry source: an address needs no SES contact, and SES topic
+      // preferences no longer decide anything (only the safety net does).
+      if (!registry && !ses && !archived) flags.push('not-in-ses')
       if (ses && ses.variants.length > 1) flags.push('ses-case-duplicate')
       if (ses?.unsubscribeAll) flags.push('unsubscribed-all')
-      if (ses && isNoExplicit(ses)) flags.push('no-explicit-preference')
+      if (!registry && ses && isNoExplicit(ses)) flags.push('no-explicit-preference')
+      if (registry && optedOutOfSafetyNet.has(e.email)) flags.push('safety-net-opt-out')
       return {
         email: e.email,
         emailType: e.emailType,
@@ -214,9 +235,11 @@ export function buildEmailListsOverview(input: {
         ses: {
           inSes: !!ses,
           unsubscribeAll: !!ses?.unsubscribeAll,
-          topics: Object.fromEntries(topicNames.map((t) => [t, !!ses?.topics[t]])),
+          topics: Object.fromEntries(
+            topicNames.map((t) => [t, registry ? !!listSubs.get(e.email)?.has(t) : !!ses?.topics[t]])
+          ),
           sesVariants: ses?.variants.length || 0,
-          noExplicitPreference: !!ses && isNoExplicit(ses),
+          noExplicitPreference: !registry && !!ses && isNoExplicit(ses),
         },
         suppressed,
         sharedWith: (holders.get(e.email) || []).filter((id) => id !== card.personId),
@@ -252,22 +275,33 @@ export function buildEmailListsOverview(input: {
       if (markedActive.length > 0) findings.suppressedButMarkedActive.push({ email, reason, personIds: markedActive.sort() })
     }
     const notInSes = people
+      .filter(() => !registry)
       .filter((p) => ids.includes(p.personId))
       .filter((p) => p.emails.some((e) => e.email === email && e.flags.includes('not-in-ses')))
       .map((p) => p.personId)
     if (notInSes.length > 0) findings.personEmailNotInSes.push({ email, personIds: notInSes.sort() })
   }
   for (const [email, ses] of sesByAddress) {
-    if (isNoExplicit(ses)) {
+    if (!registry && isNoExplicit(ses)) {
       findings.sesNoExplicitPreference.push({ email, personIds: (holders.get(email) || []).slice().sort() })
     }
     if (ses.variants.length > 1) findings.sesCaseDuplicates.push({ email, variants: ses.variants.slice().sort() })
-    if (holders.has(email)) continue
+    if (holders.has(email) || registry) continue
     const optedIn = Object.entries(ses.topics).filter(([, v]) => v).map(([t]) => t)
     if (optedIn.length > 0 && !ses.unsubscribeAll) {
       findings.sesSubscribedNoPerson.push({ email, topics: optedIn.sort(), suppressed: suppressedBy.get(email) })
     } else {
       findings.sesUnsubscribedNoPerson++
+    }
+  }
+  // Registry source: a subscribed address no card holds (a person with no CARD
+  // projection yet). Reported under the same finding.
+  if (registry) {
+    for (const [email, ids] of listSubs) {
+      if (holders.has(email) || ids.size === 0) continue
+      if (sesByAddress.get(email)?.unsubscribeAll) continue
+      const names = [...ids].map((id) => input.topics.find((t) => t.name === id)?.displayName || id).sort()
+      findings.sesSubscribedNoPerson.push({ email, topics: names, suppressed: suppressedBy.get(email) })
     }
   }
   function isNoExplicit(ses: { explicit: boolean; unsubscribeAll: boolean }) {

@@ -28,6 +28,9 @@ export default function AdminNewsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [ecclesiaOptions, setEcclesiaOptions] = useState<string[]>([])
   const [audiences, setAudiences] = useState<Audience[]>([])
+  // listKey → listId, to read blasts recorded before lists had ids ('newsletter').
+  const [listIdByKey, setListIdByKey] = useState<Record<string, string>>({})
+  const [defaultAudience, setDefaultAudience] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (!hasAccess) return
@@ -39,13 +42,12 @@ export default function AdminNewsPage() {
     // Email audiences for the alert sender — same source as the Email Sender.
     // The test list is excluded (the "Send test alert" button covers it).
     getContactsList()
-      .then((d) =>
-        setAudiences(
-          (d.lists ?? [])
-            .filter((l) => l.key !== 'testList')
-            .map((l) => ({ key: l.key, label: l.displayName }))
-        )
-      )
+      .then((d) => {
+        const lists = (d.lists ?? []).filter((l) => !l.isTest)
+        setAudiences(lists.map((l) => ({ key: l.key, label: l.displayName })))
+        setListIdByKey(Object.fromEntries(lists.filter((l) => l.listKey).map((l) => [l.listKey as string, l.key])))
+        setDefaultAudience(d.defaultListId ?? lists[0]?.key)
+      })
       .catch(() => setAudiences([]))
   }, [hasAccess])
 
@@ -191,8 +193,11 @@ export default function AdminNewsPage() {
           initialValues={initial}
           isSaving={saving}
           isExisting={mode.kind === 'edit'}
-          sentAudiences={mode.kind === 'edit' ? blastedAudiences(mode.item) : []}
+          sentAudiences={
+            mode.kind === 'edit' ? blastedAudiences(mode.item).map((a) => listIdByKey[a] ?? a) : []
+          }
           audiences={audiences}
+          defaultAudience={defaultAudience}
           ecclesiaOptions={ecclesiaOptions}
           onSave={handleSave}
           onCancel={() => setMode({ kind: 'list' })}

@@ -7,7 +7,6 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { Section } from '@my/app/features/newsletter/Section'
 import { LogInUser } from '@my/app/provider/auth/log-in-user'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { ManageContacts } from './manage-contacts'
 import { EmailReasonType, AuthSession, AuthStatus } from '@my/app/types'
 import { Check } from '@tamagui/lucide-icons'
 import { sendEmail } from '../../provider/get-data'
@@ -135,7 +134,13 @@ export const EmailTester: React.FC<EmailTesterProps> = ({ session, status = 'aut
                 <pre>{JSON.stringify(email, null, 2).replaceAll('/n', '<br />')}</pre>
               </YStack> : null}
           </YStack>
-          <ManageContacts />
+          {/* The SES contact/topic editor that lived here is gone (R5): list
+              subscriptions live in the mailing-list registry, and editing SES
+              topics wipes every contact's preferences. */}
+          <Paragraph>
+            Subscriptions are managed per list on /admin/email/mailing-lists and by each reader on
+            /email-preferences.
+          </Paragraph>
           {/* <br />
           <Button onPress={() => handleButtonPress()}>
             <Text>Add Role for Ken Easson</Text>

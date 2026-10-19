@@ -130,3 +130,50 @@ describe('Email Lists overview (PersonRecords only)', () => {
     expect(personMatches(p, 'zzz')).toBe(false)
   })
 })
+
+describe('Email Lists overview — registry source (R5)', () => {
+  const lists = [
+    { name: 'L-NEWS', displayName: 'Toronto East Newsletter', defaultOptIn: false },
+    { name: 'L-MEM', displayName: 'Toronto East Memorial Recap', defaultOptIn: false },
+  ]
+  const buildRegistry = () =>
+    buildEmailListsOverview({
+      cards: [husband, wife, loner],
+      sesContacts: [
+        // Legacy topic prefs are ignored; the safety-net opt-out is not.
+        { email: 'home@example.org', topics: { memorial: 'OPT_IN' } },
+        { email: 'lou@example.org', topics: { safetyNetDefault: 'OPT_OUT' } },
+        { email: 'Case@Example.org', topics: {} },
+        { email: 'case@example.org', topics: {} },
+      ],
+      suppressed: [],
+      topics: lists,
+      subscriptionSource: 'registry',
+      subscriptions: { 'home@example.org': ['L-NEWS'], 'ghost@example.org': ['L-MEM'] },
+      safetyNetTopics: ['safetyNetDefault'],
+    })
+
+  it('subscription columns come from the registry, not from SES topic preferences', () => {
+    const o = buildRegistry()
+    const home = o.people.find((p) => p.personId === 'p-husband')!.emails.find((e) => e.email === 'home@example.org')!
+    expect(home.ses.topics).toEqual({ 'L-NEWS': true, 'L-MEM': false })
+    expect(home.flags).not.toContain('no-explicit-preference')
+  })
+
+  it('no "not in SES" / "no explicit preference" findings: SES topics no longer decide', () => {
+    const o = buildRegistry()
+    expect(o.findings.personEmailNotInSes).toEqual([])
+    expect(o.findings.sesNoExplicitPreference).toEqual([])
+    expect(o.people.flatMap((p) => p.emails.flatMap((e) => e.flags))).not.toContain('not-in-ses')
+  })
+
+  it('flags a safety-net opt-out, still reports case duplicates, and a subscribed address no person holds', () => {
+    const o = buildRegistry()
+    const lou = o.people.find((p) => p.personId === 'p-loner')!.emails[0]
+    expect(lou.flags).toContain('safety-net-opt-out')
+    expect(o.findings.sesCaseDuplicates.map((d) => d.email)).toEqual(['case@example.org'])
+    expect(o.findings.sesSubscribedNoPerson).toEqual([
+      { email: 'ghost@example.org', topics: ['Toronto East Memorial Recap'], suppressed: undefined },
+    ])
+  })
+})

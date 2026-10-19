@@ -64,7 +64,8 @@ export interface PostSendPanelProps {
 
 export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps) {
   const [audiences, setAudiences] = useState<Audience[]>([])
-  const [audience, setAudience] = useState<string>('newsletter')
+  // A listId (R5); set to the newsletter list once the lists load.
+  const [audience, setAudience] = useState<string>('')
   const [live, setLive] = useState(false)
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -78,12 +79,11 @@ export function PostSendPanel({ postId, ready, confirmSend }: PostSendPanelProps
       .then((d) => {
         if (cancelled) return
         const lists = (d.lists ?? [])
-          .filter((l) => l.key !== 'testList')
+          .filter((l) => !l.isTest)
           .map((l) => ({ key: l.key, label: l.displayName }))
         setAudiences(lists)
-        if (lists.length > 0 && !lists.some((l) => l.key === 'newsletter')) {
-          setAudience(lists[0].key)
-        }
+        const preferred = lists.find((l) => l.key === d.defaultListId) ?? lists[0]
+        if (preferred) setAudience((cur) => cur || preferred.key)
       })
       .catch(() => {
         if (!cancelled) setAudiences([])

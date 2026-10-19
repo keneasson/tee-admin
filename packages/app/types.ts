@@ -1,5 +1,4 @@
 import { config } from '@my/config'
-import { Contact } from '@aws-sdk/client-sesv2'
 
 export type Conf = typeof config
 
@@ -25,18 +24,10 @@ export enum Directory {
 
 export type GoogleSheetTypes = keyof typeof ProgramsTypes | keyof typeof Directory
 
-export enum EmailListTypes {
-  sundaySchool = 'sundaySchool',
-  newsletter = 'newsletter',
-  memorial = 'memorial',
-  bibleClass = 'bibleClass',
-  members = 'members',
-  testList = 'testList',
-  interEcclesia = 'interEcclesia',
-}
+// R5: the fixed `EmailListTypes` enum (newsletter, memorial, …) is gone. A send
+// names a mailing list by its listId (apps/next/utils/mailing-lists/send-target.ts).
 
 export type ProgramTypeKeys = keyof typeof ProgramsTypes
-export type EmailListTypeKeys = keyof typeof EmailListTypes
 
 /**
  * Email reason types for sending emails
@@ -106,65 +97,23 @@ export type GoogleSheetData = {
 
 export type GoogleSheets = Record<ProgramTypeKeys, GoogleSheet>
 
-export type BackendLists = {
-  listName: string
-  defaultOptIn: boolean
-  displayName: string
-}
-
 /**
- * The Type our Next JS returns describing Any Subscriber List
+ * A mailing list a send screen can target (R5). `key` is the list's `listId`
+ * (the send identifier); `listKey` is the owner's slug for it ('newsletter'),
+ * used only to match records saved before lists had ids.
  */
-export type BackendContactList = {
-  lists: BackendLists[]
-}
-
-export type ContactsEmailPreferences = { [K in EmailListTypeKeys]: boolean }
-
-export type ContactPreferences = {
-  unsubscribed: boolean
-  displayName: string
-  preferences: ContactsEmailPreferences
-  firstName?: string
-  lastName?: string
-  isMember?: boolean
-}
-
 export type ContactListMeta = {
-  key: EmailListTypeKeys
+  key: string
   defaultOptIn: boolean
   displayName: string
+  listKey?: string
+  isTest?: boolean
 }
 
 export type SimplifiedContactListType = {
   lists: ContactListMeta[]
-}
-
-export type CreateUpdateListType = {
-  oldListName?: string
-  listName: string
-  defaultOptIn: boolean
-  displayName: string
-}
-
-export type CreateContactType = {
-  email: email
-  lists: ContactsEmailPreferences
-}
-
-export type GetContactType = {
-  nextToken: string
-  contacts: Contact[]
-}
-
-/**
- * string is an email address
- */
-type email = string
-
-export type SimplifiedContacts = {
-  unsubscribed: string[]
-  subscribed: { [key: email]: ContactPreferences }
+  /** The sending owner's newsletter list, the usual default audience. */
+  defaultListId?: string
 }
 
 // Re-export per-occurrence override types so consumers can import from @my/app/types.

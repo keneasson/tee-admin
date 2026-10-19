@@ -39,6 +39,7 @@ export class SendQueueRepository {
       enabled: schedule.enabled ?? true,
       description: schedule.description,
       testMode: schedule.testMode ?? false,
+      ...(schedule.listId ? { listId: schedule.listId } : {}),
       createdAt: now,
       updatedAt: now,
     }
@@ -121,6 +122,7 @@ export class SendQueueRepository {
         enabled: update.enabled ?? existing.enabled,
         description: update.description ?? existing.description,
         testMode: update.testMode ?? existing.testMode,
+        listId: update.listId !== undefined ? update.listId || undefined : existing.listId,
       }
 
       return await this.putSchedule(newSchedule)
@@ -152,13 +154,24 @@ export class SendQueueRepository {
       expressionAttributeValues[':testMode'] = update.testMode
     }
 
+    // listId: a value sets the schedule's list; '' clears it (back to the default list).
+    const removeExpressions: string[] = []
+    if (update.listId !== undefined) {
+      if (update.listId) {
+        updateExpressions.push('listId = :listId')
+        expressionAttributeValues[':listId'] = update.listId
+      } else {
+        removeExpressions.push('listId')
+      }
+    }
+
     updateExpressions.push('updatedAt = :updatedAt')
     expressionAttributeValues[':updatedAt'] = new Date().toISOString()
 
     await docClient.send(new UpdateCommand({
       TableName: this.tableName,
       Key: { PK: 'SCHEDULE', SK: oldSK },
-      UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+      UpdateExpression: `SET ${updateExpressions.join(', ')}${removeExpressions.length > 0 ? ` REMOVE ${removeExpressions.join(', ')}` : ''}`,
       ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
       ExpressionAttributeValues: expressionAttributeValues,
     }))
@@ -233,6 +246,7 @@ export class SendQueueRepository {
       status: 'ready',
       created: now,
       testMode: entry.testMode ?? false,
+      ...(entry.listId ? { listId: entry.listId } : {}),
     }
 
     await docClient.send(new PutCommand({
@@ -523,6 +537,7 @@ export class SendQueueRepository {
       enabled: record.enabled,
       description: record.description,
       testMode: record.testMode,
+      ...(record.listId ? { listId: record.listId } : {}),
     }
   }
 
@@ -542,6 +557,7 @@ export class SendQueueRepository {
       testMode: record.testMode,
       retryCount: record.retryCount,
       lastRetry: record.lastRetry,
+      ...(record.listId ? { listId: record.listId } : {}),
     }
   }
 }

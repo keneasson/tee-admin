@@ -4,10 +4,10 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { postRepository } from '@my/app/provider/dynamodb/repositories/post-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
-import { EmailListTypes } from '@my/app/types'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { getPostAnnouncementContent } from '../../../../../../utils/email/get-post-announcement-content'
 import { emailSend } from '../../../../../../utils/email/email-send'
+import { resolveSendList, SendListError } from '../../../../../../utils/mailing-lists/send-target'
 import { isPostLive, isPostScheduled } from '@my/app/utils/post-lifecycle'
 
 export const config = {
@@ -27,13 +27,15 @@ export const config = {
  *
  * Safety:
  *   - TEST BY DEFAULT — `test` is `true` unless the body explicitly sends
- *     `test: false`. `emailSend` hard-routes test sends to `testList`, and skips
+ *     `test: false`. `emailSend` hard-routes test sends to the test list, and skips
  *     entirely when `EMAILS_ENABLED=false` (build/CI never send).
  *   - status MUST be 'ready' (422) — never sends a draft/archived post.
  *   - tenant isolation — the post's owning ecclesia must match the deployment's
  *     tenant (403 otherwise), closing the global-admin-only gap.
  *
- * Body: { test?: boolean (default true), list?: EmailListTypes key, note?: string }
+ * Body: { test?: boolean (default true), listId?: mailing-list id (default: the
+ *        newsletter list), note?: string }. `list` is the pre-R5 name of `listId`
+ *        and is still read (an old list key is resolved to that owner's list).
  */
 
 type AuthSession = NonNullable<Awaited<ReturnType<typeof auth>>>
@@ -66,6 +68,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let body: {
       test?: boolean
+      listId?: string
+      /** Pre-R5 name of listId (also accepts an old list key). */
       list?: string
       note?: string
       /** Explicit opt-in to LIVE-sending a post that is not yet live. */
@@ -81,13 +85,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // TEST BY DEFAULT — only an explicit `test: false` opts into a live send.
     const isTest = body.test !== false
 
-    // Validate the chosen audience against the known SES lists. Test sends are
-    // hard-routed to testList inside emailSend regardless of this value.
-    const requestedList = body.list
-    if (requestedList && !(Object.values(EmailListTypes) as string[]).includes(requestedList)) {
-      return NextResponse.json({ error: `Unknown audience '${requestedList}'.` }, { status: 400 })
+    // The live audience: a registry list (validated even for a test send, so a
+    // test proves the choice). Test sends go to the test list inside emailSend.
+    const tenant = getTenantFromHeaders(request.headers) || resolveTenantFromEnv()
+    let audienceListId: string
+    try {
+      const target = await resolveSendList({
+        reason: 'post-announcement',
+        list: body.listId ?? body.list,
+        tenant,
+      })
+      audienceListId = target.listId
+    } catch (error) {
+      if (error instanceof SendListError) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+      throw error
     }
-    const audienceKey = requestedList || EmailListTypes.newsletter
 
     const post = await postRepository.getPost(id)
     if (!post) {
@@ -127,7 +141,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Tenant isolation — a deployment may only send its own tenant's posts.
-    const tenant = getTenantFromHeaders(request.headers) || resolveTenantFromEnv()
     if (tenant.homeEcclesiaName && post.tenant !== tenant.homeEcclesiaName) {
       return NextResponse.json(
         { error: `This post belongs to ${post.tenant}, not ${tenant.homeEcclesiaName}.` },
@@ -148,10 +161,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       emailHtml: html,
       emailText: text,
       test: isTest,
-      customList: audienceKey,
+      listId: audienceListId,
       customSubject: subject,
       subReason: 'general',
-      description: `Post announcement: ${subject} → ${isTest ? 'testList' : audienceKey}`,
+      description: `Post announcement: ${subject} → ${isTest ? 'test list' : audienceListId}`,
       sentBy: session.user?.email ?? undefined,
       tenant,
     })
@@ -163,7 +176,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({
       success: true,
       test: isTest,
-      audience: isTest ? 'testList' : audienceKey,
+      audience: isTest ? (result.listId ?? 'test') : audienceListId,
       subject,
       campaignId: result.campaignId,
       sentCount: result.sends.length,

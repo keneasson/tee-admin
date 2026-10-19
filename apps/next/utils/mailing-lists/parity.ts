@@ -1,3 +1,5 @@
+import type { MailingListRecord } from '@my/app/provider/dynamodb/types'
+
 /**
  * Parity diff between the legacy SES recipient set and the in-house resolver
  * output for the SAME list. A pure set operation, extracted so it is unit-tested
@@ -52,26 +54,27 @@ export interface ListParity {
 export interface ListParityDeps {
   /** What today's SES-topic send would mail (explicit OPT_IN − UnsubscribeAll). */
   sesRecipients: (topic: string) => Promise<string[]>
-  /** What the registry send would mail for this list, or null if it cannot resolve. */
+  /** What the registry send would mail for this list (defaultOptIn included). */
   registryRecipients: (
-    listId: string
+    list: ParityList
   ) => Promise<{ emails: string[]; stats: Record<string, number> }>
 }
+
+export type ParityList = { listId: string; sesTopic?: string } & Partial<
+  Pick<MailingListRecord, 'defaultOptIn' | 'scope' | 'scopeValue'>
+>
 
 /**
  * Parity for one bridged list: the SES send audience vs the registry send
  * audience, each computed by the SAME filters its send path applies. Sends and
  * mutates nothing.
  */
-export async function runListParity(
-  list: { listId: string; sesTopic?: string },
-  deps?: ListParityDeps
-): Promise<ListParity> {
+export async function runListParity(list: ParityList, deps?: ListParityDeps): Promise<ListParity> {
   if (!list.sesTopic) throw new Error(`List ${list.listId} has no SES topic; parity needs one`)
   const d = deps ?? (await defaultListParityDeps())
   const [ses, registry] = await Promise.all([
     d.sesRecipients(list.sesTopic),
-    d.registryRecipients(list.listId),
+    d.registryRecipients(list),
   ])
   return {
     listId: list.listId,
@@ -86,9 +89,13 @@ async function defaultListParityDeps(): Promise<ListParityDeps> {
     await Promise.all([import('./registry-send'), import('../email/resolve-list-recipients')])
   return {
     sesRecipients: getSesTopicRecipients,
-    registryRecipients: async (listId) => {
+    registryRecipients: async (list) => {
       const [resolved, unsubscribedAll] = await Promise.all([
-        resolveListRecipients(listId),
+        resolveListRecipients(
+          list.scope
+            ? { listId: list.listId, defaultOptIn: list.defaultOptIn === true, scope: list.scope, scopeValue: list.scopeValue ?? '' }
+            : list.listId
+        ),
         getSesUnsubscribedAll(),
       ])
       const { emails, removed } = applyUnsubscribeAll(resolved, unsubscribedAll)

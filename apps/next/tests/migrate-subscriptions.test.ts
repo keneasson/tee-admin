@@ -1,184 +1,64 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * migrateSubscriptions() — writes BOTH sides of the source of truth.
- *
- * SES holds per-contact TopicPreferences, but the PersonRecord EMAIL# row is
- * CANONICAL (the sync-ses-contacts cron pushes PersonRecord → SES one-way). So
- * this helper MUST write both, or an SES-only change to a primary address is
- * reverted on the next sync. These tests prove the two SES calls AND the two
- * PersonRecord row writes happen with the right shape.
+ * moveListSubscriptions() (R5) — an admin email change moves the member's LIST
+ * subscriptions in the registry. No SES topic and no `sesTopicPreferences` is
+ * written any more.
  */
 
-const h = vi.hoisted(() => ({
-  sesSend: vi.fn(),
-  p_getEmails: vi.fn(),
-  p_update: vi.fn(),
-  p_getAllPersonsByEmail: vi.fn(),
-}))
+vi.mock('../utils/email/sesClient', () => ({ getSesClient: () => ({ send: vi.fn() }) }))
+vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({ personRepository: {} }))
 
-// Provide the SES command classes + SubscriptionStatus (the global setup mock
-// only exposes SESv2Client/SendEmailCommand, which contact.ts doesn't use here).
-vi.mock('@aws-sdk/client-sesv2', () => {
-  class GetContactCommand {
-    input: any
-    constructor(i: any) {
-      this.input = i
-    }
-  }
-  class CreateContactCommand {
-    input: any
-    constructor(i: any) {
-      this.input = i
-    }
-  }
-  class UpdateContactCommand {
-    input: any
-    constructor(i: any) {
-      this.input = i
-    }
-  }
-  class ListContactsCommand {
-    input: any
-    constructor(i: any) {
-      this.input = i
-    }
-  }
-  return {
-    GetContactCommand,
-    CreateContactCommand,
-    UpdateContactCommand,
-    ListContactsCommand,
-    SubscriptionStatus: { OPT_IN: 'OPT_IN', OPT_OUT: 'OPT_OUT' },
-  }
-})
+import { moveListSubscriptions, type MoveSubscriptionDeps } from '../utils/email/contact'
 
-vi.mock('../utils/email/sesClient', () => ({
-  getSesClient: () => ({ send: h.sesSend }),
-  sendEmail: vi.fn(),
-}))
-
-vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
-  personRepository: {
-    getEmails: h.p_getEmails,
-    update: h.p_update,
-    getAllPersonsByEmail: h.p_getAllPersonsByEmail,
-  },
-}))
-
-import { migrateSubscriptions } from '../utils/email/contact'
-
-const OLD = 'old@example.com'
-const NEW = 'new@example.com'
+const OLD = 'old@example.org'
+const NEW = 'new@example.org'
 const PID = 'person-1'
 
-/** Pull the single command of a given class name from the send() calls. */
-function sentCommand(name: string) {
-  const call = h.sesSend.mock.calls.find((c) => c[0]?.constructor?.name === name)
-  return call?.[0]
-}
+const row = (listId: string, status: 'opt_in' | 'opt_out') =>
+  ({ pkey: `PERSON#${PID}`, skey: `SUB#${listId}#e-old`, listId, status, email: OLD }) as any
 
-/** Turn a TopicPreferences array into a { topic: OPT_IN|OPT_OUT } map. */
-function prefMap(arr: Array<{ TopicName: string; SubscriptionStatus: string }>) {
-  return Object.fromEntries(arr.map((p) => [p.TopicName, p.SubscriptionStatus]))
-}
-
+let deps: MoveSubscriptionDeps
 beforeEach(() => {
-  vi.clearAllMocks()
-
-  // OLD address is opted into newsletter + memorial, opted out of bibleClass.
-  h.sesSend.mockImplementation(async (command: any) => {
-    if (command?.constructor?.name === 'GetContactCommand') {
-      return {
-        TopicPreferences: [
-          { TopicName: 'newsletter', SubscriptionStatus: 'OPT_IN' },
-          { TopicName: 'memorial', SubscriptionStatus: 'OPT_IN' },
-          { TopicName: 'bibleClass', SubscriptionStatus: 'OPT_OUT' },
-        ],
-      }
-    }
-    return {}
-  })
-
-  // Both addresses have EMAIL# rows on the target person.
-  h.p_getEmails.mockResolvedValue([
-    { pkey: `PERSON#${PID}`, skey: 'EMAIL#new-id', emailId: 'new-id', email: NEW },
-    { pkey: `PERSON#${PID}`, skey: 'EMAIL#old-id', emailId: 'old-id', email: OLD },
-  ])
-  h.p_update.mockResolvedValue({})
-  // By default nobody else uses the old address.
-  h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: PID }])
+  deps = {
+    listAllLists: vi.fn(async () => [
+      { listId: 'L-NEWS', name: 'Newsletter' },
+      { listId: 'L-MEM', name: 'Memorial Service Recap' },
+      { listId: 'L-BC', name: 'Bible Class' },
+    ]),
+    getListSubscriptionsForEmail: vi.fn(async (listId: string) =>
+      listId === 'L-NEWS' ? [row('L-NEWS', 'opt_in')] : listId === 'L-MEM' ? [row('L-MEM', 'opt_in')] : [row('L-BC', 'opt_out')]
+    ),
+    setSubscriptionStatus: vi.fn(),
+    setListSubscription: vi.fn(),
+    getAllPersonsByEmail: vi.fn(async () => [{ personId: PID }]),
+  }
 })
 
-describe('migrateSubscriptions — shared household address (#267)', () => {
-  it('leaves the OLD address subscribed when somebody else still uses it', async () => {
-    h.p_getAllPersonsByEmail.mockResolvedValue([{ personId: PID }, { personId: 'spouse' }])
-    await migrateSubscriptions(OLD, NEW, { personId: PID })
-
-    const updates = h.sesSend.mock.calls
-      .map((c) => c[0])
-      .filter((c) => c?.constructor?.name === 'UpdateContactCommand')
-    // No SES write may touch the old (shared) address.
-    expect(updates.every((u) => u.input.EmailAddress !== OLD)).toBe(true)
-  })
-})
-
-describe('migrateSubscriptions', () => {
-  it('makes BOTH SES calls: copies opt-ins onto the new address, clears the old', async () => {
-    await migrateSubscriptions(OLD, NEW, { personId: PID })
-
-    const create = sentCommand('CreateContactCommand')
-    expect(create).toBeTruthy()
-    expect(create.input.EmailAddress).toBe(NEW)
-    const created = prefMap(create.input.TopicPreferences)
-    expect(created.newsletter).toBe('OPT_IN')
-    expect(created.memorial).toBe('OPT_IN')
-    expect(created.bibleClass).toBe('OPT_OUT')
-
-    const update = sentCommand('UpdateContactCommand')
-    expect(update).toBeTruthy()
-    expect(update.input.EmailAddress).toBe(OLD)
-    // Old address cleared: every topic OPT_OUT.
-    for (const pref of update.input.TopicPreferences) {
-      expect(pref.SubscriptionStatus).toBe('OPT_OUT')
-    }
+describe('moveListSubscriptions', () => {
+  it('opts the NEW address into every list the OLD one was on, and the OLD one out', async () => {
+    const { movedLists } = await moveListSubscriptions('Old@Example.org', NEW, { personId: PID }, deps)
+    expect(movedLists).toEqual(['Newsletter', 'Memorial Service Recap'])
+    expect((deps.setListSubscription as any).mock.calls.map((c: any) => c[0])).toEqual([
+      { listId: 'L-NEWS', email: NEW, subscribed: true },
+      { listId: 'L-MEM', email: NEW, subscribed: true },
+    ])
+    expect((deps.setSubscriptionStatus as any).mock.calls.map((c: any) => [c[0].listId, c[1]])).toEqual([
+      ['L-NEWS', 'opt_out'],
+      ['L-MEM', 'opt_out'],
+    ])
+    expect(deps.getListSubscriptionsForEmail).toHaveBeenCalledWith('L-NEWS', OLD)
   })
 
-  it('writes BOTH PersonRecord rows: new row subscribed, old row unsubscribed', async () => {
-    await migrateSubscriptions(OLD, NEW, { personId: PID })
-
-    expect(h.p_update).toHaveBeenCalledTimes(2)
-
-    const newCall = h.p_update.mock.calls.find((c) => c[1] === 'EMAIL#new-id')
-    expect(newCall).toBeTruthy()
-    expect(newCall![2].sesSubscribed).toBe(true)
-    expect(newCall![2].sesTopicPreferences.newsletter).toBe(true)
-    expect(newCall![2].sesTopicPreferences.memorial).toBe(true)
-    expect(newCall![2].sesTopicPreferences.bibleClass).toBe(false)
-
-    const oldCall = h.p_update.mock.calls.find((c) => c[1] === 'EMAIL#old-id')
-    expect(oldCall).toBeTruthy()
-    expect(oldCall![2].sesSubscribed).toBe(false)
-    for (const v of Object.values(oldCall![2].sesTopicPreferences)) {
-      expect(v).toBe(false)
-    }
+  it('shared household address (#267): the OLD address stays subscribed for the others', async () => {
+    deps.getAllPersonsByEmail = vi.fn(async () => [{ personId: PID }, { personId: 'spouse' }])
+    const { movedLists } = await moveListSubscriptions(OLD, NEW, { personId: PID }, deps)
+    expect(movedLists).toHaveLength(2)
+    expect(deps.setSubscriptionStatus).not.toHaveBeenCalled()
   })
 
-  it('returns only the opted-in topics as movedTopics', async () => {
-    const { movedTopics } = await migrateSubscriptions(OLD, NEW, { personId: PID })
-    expect(movedTopics.sort()).toEqual(['memorial', 'newsletter'])
-    expect(movedTopics).not.toContain('bibleClass')
-  })
-
-  it('still completes the SES writes when a PersonRecord row is missing (best-effort)', async () => {
-    h.p_getEmails.mockResolvedValue([]) // no rows to update
-    const { movedTopics } = await migrateSubscriptions(OLD, NEW, { personId: PID })
-
-    // SES side still happened...
-    expect(sentCommand('CreateContactCommand')).toBeTruthy()
-    expect(sentCommand('UpdateContactCommand')).toBeTruthy()
-    // ...PersonRecord writes were skipped, and it didn't throw.
-    expect(h.p_update).not.toHaveBeenCalled()
-    expect(movedTopics.sort()).toEqual(['memorial', 'newsletter'])
+  it('a list the old address had opted out of is not moved', async () => {
+    const { movedLists } = await moveListSubscriptions(OLD, NEW, { personId: PID }, deps)
+    expect(movedLists).not.toContain('Bible Class')
   })
 })
