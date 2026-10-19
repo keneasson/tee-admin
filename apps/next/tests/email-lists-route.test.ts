@@ -41,10 +41,12 @@ beforeEach(() => {
 })
 
 describe('GET /api/admin/email/search', () => {
-  it('rejects anyone below admin', async () => {
-    for (const session of [null, { user: { email: 'm@x.org', role: 'member' } }]) {
-      h.auth.mockResolvedValueOnce(session)
-      expect((await GET()).status).toBe(401)
+  it('is owner only: anonymous 401, every other role 403', async () => {
+    h.auth.mockResolvedValueOnce(null)
+    expect((await GET()).status).toBe(401)
+    for (const role of ['admin', 'rep', 'member', 'guest']) {
+      h.auth.mockResolvedValueOnce({ user: { email: 'm@x.org', role } })
+      expect((await GET()).status).toBe(403)
     }
     expect(h.cards).not.toHaveBeenCalled()
     expect(h.contacts).not.toHaveBeenCalled()
@@ -58,7 +60,7 @@ describe('GET /api/admin/email/search', () => {
   })
 
   it('returns one card per person, the shared address on both', async () => {
-    h.auth.mockResolvedValue({ user: { email: 'o@x.org', role: 'admin' } })
+    h.auth.mockResolvedValue({ user: { email: 'o@x.org', role: 'owner' } })
     const res = await GET()
     expect(res.status).toBe(200)
     const body = await res.json()
