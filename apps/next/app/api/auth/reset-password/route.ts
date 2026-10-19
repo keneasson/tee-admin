@@ -6,7 +6,7 @@ import {
   deletePasswordResetToken,
 } from '../../../../utils/dynamodb/credentials-users'
 import { hashPassword } from '../../../../utils/password'
-import { personPasswordPathOn } from '../../../../utils/password-signin'
+import { personForPasswordReset } from '../../../../utils/password-signin'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
 export async function POST(request: NextRequest) {
@@ -41,9 +41,11 @@ export async function POST(request: NextRequest) {
 
     // With person_password_signin on, sign-in reads the PersonRecord password,
     // so the reset must write it there (the legacy record is kept in step as
-    // the rollback path).
-    const person = await personRepository.getByEmail(tokenData.email)
-    if (person && (await personPasswordPathOn(tokenData.email.toLowerCase(), person))) {
+    // the rollback path). Only when the token's address is VERIFIED on that
+    // person: a token sent to an unverified secondary address must never set
+    // the person's password (it only resets that address's own legacy record).
+    const person = await personForPasswordReset(tokenData.email)
+    if (person) {
       await personRepository.updatePassword(person.personId, await hashPassword(password))
       const legacyUpdated = await resetPassword(token, password)
       if (!legacyUpdated) await deletePasswordResetToken(token)

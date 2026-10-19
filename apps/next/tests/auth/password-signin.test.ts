@@ -10,6 +10,8 @@ vi.mock('../../utils/dynamodb/credentials-users', () => ({
 import {
   verifyPasswordSignIn,
   isAddressVerifiedOn,
+  personForPasswordReset,
+  type PasswordResetDeps,
   type PasswordSignInDeps,
 } from '../../utils/password-signin'
 import type { PersonEmailRecord, PersonRecord } from '@my/app/provider/dynamodb/types'
@@ -38,13 +40,20 @@ const ROWS = [
   { email: 'unverified@example.org', verified: false },
 ] as unknown as PersonEmailRecord[]
 
+/** A legacy USER# credentials record; verified unless said otherwise. */
+function legacy(hashedPassword: string, emailVerified: unknown = '2025-01-01T00:00:00.000Z') {
+  return { hashedPassword, emailVerified }
+}
+
+const NO_PASSWORD = { ...PERSON, hashedPassword: undefined } as PersonRecord
+
 function makeDeps(over: Partial<PasswordSignInDeps> = {}): PasswordSignInDeps & { [k: string]: any } {
   return {
     getPerson: vi.fn(async () => PERSON),
     getEmails: vi.fn(async () => ROWS),
     flagOn: vi.fn(async () => true),
     legacyVerify: vi.fn(async () => ({ id: 'legacy-id', email: 'x', name: 'x', role: 'member' })),
-    legacyHashes: vi.fn(async () => []),
+    legacyRecords: vi.fn(async () => []),
     copyHash: vi.fn(async () => undefined),
     // A fake hash is "hash:<password>".
     verify: vi.fn(async (password: string, hash: string) => hash === `hash:${password}`),
@@ -73,13 +82,13 @@ describe('verifyPasswordSignIn', () => {
     const user = await verifyPasswordSignIn('primary@example.org', 'new-password', deps)
     expect(user).toEqual({ id: 'person-1', email: 'primary@example.org', name: 'Test Person', role: 'owner' })
     expect(deps.legacyVerify).not.toHaveBeenCalled()
-    expect(deps.legacyHashes).not.toHaveBeenCalled()
+    expect(deps.legacyRecords).not.toHaveBeenCalled()
   })
 
   it('flag ON: a stale legacy password no longer works once the person has one', async () => {
-    const deps = makeDeps({ legacyHashes: vi.fn(async () => ['hash:old-password']) })
+    const deps = makeDeps({ legacyRecords: vi.fn(async () => [legacy('hash:old-password')]) })
     expect(await verifyPasswordSignIn('primary@example.org', 'old-password', deps)).toBeNull()
-    expect(deps.legacyHashes).not.toHaveBeenCalled()
+    expect(deps.legacyRecords).not.toHaveBeenCalled()
   })
 
   it('any VERIFIED address the person holds signs in; the session keeps the typed address', async () => {
@@ -99,8 +108,8 @@ describe('verifyPasswordSignIn', () => {
       getPerson: vi.fn(async () => ({ ...PERSON, hashedPassword: undefined }) as PersonRecord),
       // Duplicates: the first is stale, the second is the real one — and they
       // may sit under another address the person holds.
-      legacyHashes: vi.fn(async (email: string) =>
-        email === 'second@example.org' ? ['hash:stale', 'hash:legacy-password'] : []
+      legacyRecords: vi.fn(async (email: string) =>
+        email === 'second@example.org' ? [legacy('hash:stale'), legacy('hash:legacy-password')] : []
       ),
     })
     const user = await verifyPasswordSignIn('primary@example.org', 'legacy-password', deps)
@@ -111,7 +120,7 @@ describe('verifyPasswordSignIn', () => {
   it('no password on the person and no legacy match: rejected, nothing copied', async () => {
     const deps = makeDeps({
       getPerson: vi.fn(async () => ({ ...PERSON, hashedPassword: undefined }) as PersonRecord),
-      legacyHashes: vi.fn(async () => ['hash:something-else']),
+      legacyRecords: vi.fn(async () => [legacy('hash:something-else')]),
     })
     expect(await verifyPasswordSignIn('primary@example.org', 'wrong', deps)).toBeNull()
     expect(deps.copyHash).not.toHaveBeenCalled()
@@ -120,7 +129,7 @@ describe('verifyPasswordSignIn', () => {
   it('a failed copy still signs in (retried next time)', async () => {
     const deps = makeDeps({
       getPerson: vi.fn(async () => ({ ...PERSON, hashedPassword: undefined }) as PersonRecord),
-      legacyHashes: vi.fn(async () => ['hash:legacy-password']),
+      legacyRecords: vi.fn(async () => [legacy('hash:legacy-password')]),
       copyHash: vi.fn(async () => {
         throw new Error('dynamo down')
       }),
@@ -132,6 +141,56 @@ describe('verifyPasswordSignIn', () => {
     const deps = makeDeps({ getPerson: vi.fn(async () => null) })
     await verifyPasswordSignIn('nobody@example.org', 'pw', deps)
     expect(deps.legacyVerify).toHaveBeenCalled()
+  })
+
+  // Security: the legacy fallback must not let someone else's credentials in.
+  it('an UNVERIFIED legacy record never matches (register creates one for any address)', async () => {
+    const deps = makeDeps({
+      getPerson: vi.fn(async () => NO_PASSWORD),
+      legacyRecords: vi.fn(async () => [legacy('hash:attacker-password', null)]),
+    })
+    expect(await verifyPasswordSignIn('primary@example.org', 'attacker-password', deps)).toBeNull()
+    expect(deps.copyHash).not.toHaveBeenCalled()
+  })
+
+  it('an unverified duplicate is skipped while a verified one still matches', async () => {
+    const deps = makeDeps({
+      getPerson: vi.fn(async () => NO_PASSWORD),
+      legacyRecords: vi.fn(async () => [legacy('hash:attacker-password', null), legacy('hash:real-password')]),
+    })
+    expect(await verifyPasswordSignIn('primary@example.org', 'attacker-password', deps)).toBeNull()
+    expect((await verifyPasswordSignIn('primary@example.org', 'real-password', deps))?.id).toBe('person-1')
+    expect(deps.copyHash).toHaveBeenCalledTimes(1)
+    expect(deps.copyHash).toHaveBeenCalledWith('person-1', 'hash:real-password')
+  })
+
+  it('a legacy hash under an address UNVERIFIED on the person is never read or matched', async () => {
+    const deps = makeDeps({
+      getPerson: vi.fn(async () => NO_PASSWORD),
+      // A verified legacy account owned by whoever controls the unverified
+      // (e.g. mistyped) secondary address.
+      legacyRecords: vi.fn(async (email: string) =>
+        email === 'unverified@example.org' ? [legacy('hash:other-owner-password')] : []
+      ),
+    })
+    expect(await verifyPasswordSignIn('primary@example.org', 'other-owner-password', deps)).toBeNull()
+    expect(deps.legacyRecords).not.toHaveBeenCalledWith('unverified@example.org')
+    expect(deps.legacyRecords).toHaveBeenCalledWith('primary@example.org')
+    expect(deps.legacyRecords).toHaveBeenCalledWith('second@example.org')
+    expect(deps.copyHash).not.toHaveBeenCalled()
+  })
+
+  it('an unverified PROFILE primary is not a fallback address either', async () => {
+    const deps = makeDeps({
+      getPerson: vi.fn(
+        async () => ({ ...NO_PASSWORD, primaryEmail: 'stale@example.org', emailVerified: undefined }) as PersonRecord
+      ),
+      legacyRecords: vi.fn(async (email: string) =>
+        email === 'stale@example.org' ? [legacy('hash:stale-owner-password')] : []
+      ),
+    })
+    expect(await verifyPasswordSignIn('second@example.org', 'stale-owner-password', deps)).toBeNull()
+    expect(deps.legacyRecords).not.toHaveBeenCalledWith('stale@example.org')
   })
 
   it('a deceased person cannot sign in', async () => {
@@ -148,5 +207,35 @@ describe('isAddressVerifiedOn', () => {
     const p = { ...PERSON, emailVerified: undefined } as PersonRecord
     expect(isAddressVerifiedOn(p, 'primary@example.org', [])).toBe(false)
     expect(isAddressVerifiedOn(p, 'primary@example.org', ROWS)).toBe(true)
+  })
+})
+
+describe('personForPasswordReset', () => {
+  function resetDeps(over: Partial<PasswordResetDeps> = {}): PasswordResetDeps {
+    return {
+      getPerson: vi.fn(async () => PERSON),
+      getEmails: vi.fn(async () => ROWS),
+      flagOn: vi.fn(async () => true),
+      ...over,
+    }
+  }
+
+  it('a verified address resolves its person', async () => {
+    expect((await personForPasswordReset('Second@Example.org', resetDeps()))?.personId).toBe('person-1')
+  })
+
+  it('an address UNVERIFIED on the person never resolves it', async () => {
+    expect(await personForPasswordReset('unverified@example.org', resetDeps())).toBeNull()
+  })
+
+  it('flag off, no person, or deceased: null', async () => {
+    expect(await personForPasswordReset('primary@example.org', resetDeps({ flagOn: vi.fn(async () => false) }))).toBeNull()
+    expect(await personForPasswordReset('primary@example.org', resetDeps({ getPerson: vi.fn(async () => null) }))).toBeNull()
+    expect(
+      await personForPasswordReset(
+        'primary@example.org',
+        resetDeps({ getPerson: vi.fn(async () => ({ ...PERSON, role: 'deceased' }) as PersonRecord) })
+      )
+    ).toBeNull()
   })
 })

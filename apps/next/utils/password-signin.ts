@@ -22,9 +22,8 @@ import {
  *         that person holds signs in, if it is VERIFIED on them. The password
  *         is checked against `PersonRecord.hashedPassword`.
  *         Only when the person has NO password yet is the legacy record
- *         consulted (every duplicate under every address the person holds is
- *         tried); a match
- *         copies that hash onto the PersonRecord, so the next sign-in, and every
+ *         consulted: every duplicate that is itself emailVerified, under
+ *         every address VERIFIED on the person, is tried; a match copies that hash onto the PersonRecord, so the next sign-in, and every
  *         later password change, uses the person (additive, lazy, one-time).
  *         An address no person holds keeps the legacy check.
  */
@@ -36,12 +35,18 @@ export interface PasswordSignInUser {
   role: string
 }
 
+export interface LegacyCredentialsRecord {
+  hashedPassword?: string
+  emailVerified?: unknown
+}
+
 export interface PasswordSignInDeps {
   getPerson: (email: string) => Promise<PersonRecord | null>
   getEmails: (personId: string) => Promise<PersonEmailRecord[]>
   flagOn: (session: AuthSession | null) => Promise<boolean>
   legacyVerify: (email: string, password: string) => Promise<PasswordSignInUser | null>
-  legacyHashes: (email: string) => Promise<string[]>
+  /** Legacy USER# credentials records at an address (duplicates possible). */
+  legacyRecords: (email: string) => Promise<LegacyCredentialsRecord[]>
   copyHash: (personId: string, hashedPassword: string) => Promise<unknown>
   verify: (password: string, hash: string) => Promise<boolean>
 }
@@ -54,8 +59,7 @@ export const defaultPasswordSignInDeps: PasswordSignInDeps = {
     const user = await verifyCredentialsUser(email, password)
     return user ? { id: user.id, email: user.email, name: user.name, role: user.role } : null
   },
-  legacyHashes: async (email) =>
-    (await findCredentialsUsersByEmail(email)).map((u) => u.hashedPassword).filter(Boolean),
+  legacyRecords: (email) => findCredentialsUsersByEmail(email),
   copyHash: (personId, hashedPassword) => personRepository.updatePassword(personId, hashedPassword),
   verify: verifyPassword,
 }
@@ -123,13 +127,20 @@ export async function verifyPasswordSignIn(
   }
 
   // The person has no password yet: one-time fallback to the legacy record(s)
-  // under ANY address the person holds (the legacy store is keyed by address,
-  // and may hold duplicates).
+  // under any address VERIFIED on this person (the legacy store is keyed by
+  // address, and may hold duplicates). Only legacy records whose own address
+  // was verified count: /api/auth/register creates an unverified USER# record
+  // for any address, so an unverified one proves nothing about who set it.
   const addresses = [...new Set([email, person.primaryEmail, ...rows.map((r) => r.email)]
-    .filter(Boolean)
+    .filter((a): a is string => !!a)
     .map((a) => a.toLowerCase()))]
+    .filter((a) => isAddressVerifiedOn(person, a, rows))
   const hashes: string[] = []
-  for (const address of addresses) hashes.push(...(await deps.legacyHashes(address)))
+  for (const address of addresses) {
+    for (const record of await deps.legacyRecords(address)) {
+      if (record.emailVerified && record.hashedPassword) hashes.push(record.hashedPassword)
+    }
+  }
   for (const hash of hashes) {
     if (!(await deps.verify(password, hash))) continue
     try {
@@ -142,4 +153,36 @@ export async function verifyPasswordSignIn(
     return user
   }
   return null
+}
+
+export interface PasswordResetDeps {
+  getPerson: (email: string) => Promise<PersonRecord | null>
+  getEmails: (personId: string) => Promise<PersonEmailRecord[]>
+  flagOn: (session: AuthSession | null) => Promise<boolean>
+}
+
+const defaultPasswordResetDeps: PasswordResetDeps = defaultPasswordSignInDeps
+
+/**
+ * The person whose PersonRecord password a reset through `emailRaw` may touch:
+ * the flag is on for them AND the address is VERIFIED on them. Anything else
+ * returns null, so forgot-password does not offer a person reset and
+ * reset-password never writes `PersonRecord.hashedPassword` (an unverified
+ * secondary address, e.g. a mistyped one, must not unlock its person).
+ */
+export async function personForPasswordReset(
+  emailRaw: string,
+  deps: PasswordResetDeps = defaultPasswordResetDeps
+): Promise<PersonRecord | null> {
+  const email = emailRaw.toLowerCase().trim()
+  if (!email) return null
+  const person = await deps.getPerson(email)
+  if (!person || person.role === 'deceased') return null
+  if (!(await personPasswordPathOn(email, person, deps))) return null
+  const rows = await deps.getEmails(person.personId)
+  if (!isAddressVerifiedOn(person, email, rows)) {
+    console.log('password reset: address not verified on person', person.personId)
+    return null
+  }
+  return person
 }

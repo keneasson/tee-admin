@@ -11,13 +11,13 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
-### Prod data — relationships move to person keys, and the password sign-in flag (R7, run AFTER this deploys)
+### Prod data — relationships move to person keys, and the password sign-in flag (R7, run IMMEDIATELY after this deploys)
 - **Date**: 2026-10-18
 - **Branch**: `fix/r7-password-primary-relationships`
-- **Code change**: family relationships are read and written as `PERSON#<id> / REL#<targetId>#<type>` (both directions in one transaction). The legacy `USER#<email> / RELATIONSHIP#…` rows are no longer read, so until the migration runs every family list is empty. Password sign-in and the password step-up check the PersonRecord behind the new `person_password_signin` flag (default **off**).
-- **External action** (after the merge to `main` has deployed to prod):
+- **Code change**: family relationships are read and written as `PERSON#<id> / REL#<targetId>#<type>` (both directions in one transaction). The legacy `USER#<email> / RELATIONSHIP#…` rows are no longer read, so **from the moment this deploys until step 2 runs, every family list is empty** (hidden, not lost: the legacy rows are untouched). Run steps 1–2 right after the prod deploy finishes. Password sign-in and the password step-up check the PersonRecord behind the new `person_password_signin` flag (default **off**).
+- **External action** (as soon as the merge to `main` has deployed to prod — families are hidden until step 2):
   1. `npx tsx scripts/migrate-relationships-to-person.ts` (dry run; counts and person ids; per-row detail goes to a local temp file). Dry run on 2026-10-18: 23 legacy rows → 11 pairs, 0 unresolved, 1 resolved by the sign-in rule.
-  2. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy` — backs up to `s3://tee-admin-backups/backups/<date>-relationships-to-person/`, writes, verifies. Check your own Family tab.
+  2. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy` — backs up to `s3://tee-admin-backups/backups/<date>-relationships-to-person/`, writes, verifies. Check your own Family tab. **Do not leave a gap between the deploy and this step.**
   3. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy --delete-legacy` — deletes the legacy rows of verified pairs only.
   4. Owner: `/admin/evolution/feature-flags` → `person_password_signin` → **owner**; sign in with your password (and a step-up) on your own account; then **everyone**.
 - **Status**: PENDING
