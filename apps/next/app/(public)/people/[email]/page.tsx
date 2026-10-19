@@ -754,8 +754,9 @@ export default function MemberProfilePage() {
         const data = await res.json()
         if (cancelled) return
         const members = [...(data.members || []), ...(data.guests || [])]
-        // Never offer to link somebody to themselves.
-        setFamilyResults(members.filter((m: { email: string }) => m.email !== profile?.email).slice(0, 8))
+        // Never offer to link somebody to themselves — compared by PERSON, not
+        // address: a couple sharing one inbox are still two people.
+        setFamilyResults(members.filter((m: { id: string }) => m.id !== profile?.personId).slice(0, 8))
       } catch {
         if (!cancelled) setFamilyResults([])
       } finally {
@@ -766,7 +767,7 @@ export default function MemberProfilePage() {
       cancelled = true
       clearTimeout(t)
     }
-  }, [familyQuery, profile?.email])
+  }, [familyQuery, profile?.personId])
 
   const resetFamilyForm = () => {
     setFamilyQuery('')
