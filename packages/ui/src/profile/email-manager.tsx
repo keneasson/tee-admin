@@ -283,7 +283,9 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                     )}
                   </XStack>
                 ) : (
-                  <XStack gap="$2" alignItems="flex-start">
+                  // Wraps: on a phone the actions drop to their own line
+                  // instead of squeezing the address into a narrow column.
+                  <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
                     {/* Left edit gutter — consistent on every row */}
                     <XStack width={GUTTER} alignItems="center" justifyContent="flex-start">
                       {readOnly || isRole ? null : isLogin ? (
@@ -311,9 +313,9 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                     </XStack>
 
                     {/* Value + badges */}
-                    <YStack flex={1} gap="$1" minWidth={0}>
+                    <YStack flex={1} gap="$1" minWidth={200}>
                       <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Text fontSize="$4" fontWeight="500">
+                        <Text fontSize="$4" fontWeight="500" style={{ overflowWrap: 'anywhere' }}>
                           {entry.email || 'No email'}
                         </Text>
                         {isLogin ? (
@@ -338,7 +340,7 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                     </YStack>
 
                     {/* Right actions */}
-                    <XStack gap="$2" alignItems="center">
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap" justifyContent="flex-end" marginLeft="auto">
                       {entry.verified ? (
                         <XStack gap="$1" alignItems="center">
                           <Check size={15} color="$green10" />
