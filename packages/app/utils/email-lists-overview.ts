@@ -26,7 +26,6 @@ export interface OverviewCardInput {
     verified?: boolean
     sesStatus?: string
     loginExcluded?: boolean
-    archiveAfter?: string
   }>
 }
 

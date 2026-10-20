@@ -546,47 +546,13 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     return rows.filter((r) => r.sesStatus !== sesStatus).length
   }
 
-  /** Default grace before a demoted former-primary email may be archived. */
-  static readonly EMAIL_DEMOTE_GRACE_MS = 30 * 24 * 60 * 60 * 1000
-
-  /**
-   * Undo the "retire" of a demoted former-primary email: clear its `archiveAfter`
-   * so it becomes a permanent secondary again (the mistake-recovery path behind
-   * the Retired ⓘ / Undo affordance). Restorative and low-risk — callers gate on
-   * session only, no fresh step-up.
-   *
-   * NOTE on the clear mechanism: the base `update()` helper builds a SET-only
-   * expression and drops `undefined`/`null` values, so it CANNOT remove an
-   * attribute — passing `archiveAfter: undefined` would silently leave the stale
-   * timestamp in place. We therefore issue a direct UpdateCommand with a REMOVE
-   * clause (mirroring how `countByEcclesia` drops to a raw command), which is the
-   * only way to actually delete the attribute in DynamoDB.
-   */
-  async undoEmailRetire(personId: string, emailId: string): Promise<void> {
-    const row = await this.getEmailById(personId, emailId)
-    if (!row) {
-      throw new Error(`Email ${emailId} not found for person ${personId}`)
-    }
-    if (row.emailType === 'primary') {
-      throw new Error('Cannot restore the primary login email — it is not retired')
-    }
-
-    const command = new UpdateCommand({
-      TableName: this.tableName,
-      Key: { pkey: `PERSON#${personId}`, skey: `EMAIL#${emailId}` },
-      UpdateExpression: 'REMOVE archiveAfter SET #lastUpdated = :lastUpdated',
-      ExpressionAttributeNames: { '#lastUpdated': 'lastUpdated' },
-      ExpressionAttributeValues: { ':lastUpdated': new Date().toISOString() },
-    })
-    await docClient.send(command)
-    await this.afterWrite(`PERSON#${personId}`, `EMAIL#${emailId}`)
-  }
-
   /**
    * Change a person's LOGIN email (identity transfer). Re-points the single
    * source of login truth — `PROFILE.primaryEmail` and its `gsi1pk` lookup index
-   * — to `newEmail`, and demotes the former primary to a recoverable secondary
-   * for a grace window (never hard-deleted). The new address is marked verified
+   * — to `newEmail`. The former primary stays an ordinary secondary address:
+   * choosing a different primary is a preference (a test address, an
+   * out-of-office switch, a new provider), so the old one keeps working until
+   * the person deletes it. The new address is marked verified
    * and labelled `primary`.
    *
    * The caller MUST have already proven the operator controls the account (fresh
@@ -599,7 +565,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * the old address (safe) and is idempotent on retry.
    *
    * `replace: true` is a CORRECTION (the old address was wrong, e.g. a typo):
-   * the old row is removed instead of kept as a recoverable secondary — a typo
+   * the old row is removed instead of kept as a secondary — a typo
    * has nothing to recover and every send to it bounces. Removal happens AFTER
    * the PROFILE commit, so a mid-way failure still leaves a working login.
    *
@@ -609,7 +575,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   async changePrimaryEmail(
     personId: string,
     newEmailRaw: string,
-    opts?: { graceMs?: number; replace?: boolean }
+    opts?: { replace?: boolean }
   ): Promise<{ newEmailId: string; oldEmail: string | null }> {
     const newEmail = (newEmailRaw || '').trim().toLowerCase()
     if (!newEmail) throw new Error('changePrimaryEmail: newEmail is required')
@@ -620,8 +586,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
 
     const emails = await this.getEmails(personId)
     const nowIso = new Date().toISOString()
-    const graceMs = opts?.graceMs ?? PersonRepository.EMAIL_DEMOTE_GRACE_MS
-    const archiveAfter = new Date(Date.now() + graceMs).toISOString()
 
     const oldPrimaryRow = emails.find((e) => e.emailType === 'primary')
     const sesSubscribed = oldPrimaryRow?.sesSubscribed ?? false
@@ -646,7 +610,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     }
 
     // 2) Demote any OTHER row currently labelled primary, or holding the old
-    //    PROFILE primary → recoverable secondary (skipped for a correction:
+    //    PROFILE primary → an ordinary secondary (skipped for a correction:
     //    those rows are removed after the commit).
     const isOldPrimary = (row: PersonEmailRecord) =>
       row.emailType === 'primary' || (!!oldEmail && row.email.toLowerCase() === oldEmail)
@@ -656,13 +620,13 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
         await this.update(
           `PERSON#${personId}`,
           `EMAIL#${row.emailId}`,
-          { emailType: 'secondary', archiveAfter } as unknown as Partial<PersonRecord>
+          { emailType: 'secondary' } as unknown as Partial<PersonRecord>
         )
       }
     }
 
     // 2b) The old primary may exist ONLY on the PROFILE (no EMAIL# row). Keep it
-    //     as a recoverable secondary so the address is not lost with the move.
+    //     as a secondary so the address is not lost with the move.
     if (
       !opts?.replace &&
       oldEmail &&
@@ -676,7 +640,6 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
         verified: !!person.emailVerified,
         sesSubscribed: false,
         sesStatus: 'active',
-        archiveAfter,
       })
     }
 

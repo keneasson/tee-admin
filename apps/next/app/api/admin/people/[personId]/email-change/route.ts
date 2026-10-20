@@ -183,7 +183,7 @@ export async function POST(
     }
 
     // Identity transfer (PersonRecords): promote new → primary, demote old →
-    // recoverable secondary, re-point the login index. This flips the PROFILE
+    // secondary, re-point the login index. This flips the PROFILE
     // (the login handle) LAST, so a mid-failure leaves login on the OLD address.
     const { oldEmail } = await personRepository.changePrimaryEmail(
       targetPerson.personId,

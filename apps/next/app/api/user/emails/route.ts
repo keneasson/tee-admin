@@ -65,14 +65,6 @@ export async function GET() {
       mailingLists?: string[]
       /** A role this address represents (e.g. Recording Brother) — shown read-only. */
       roleLabel?: string
-      /**
-       * A former-primary that a login-email change demoted to a recoverable
-       * secondary. True only while its `archiveAfter` grace window is still in the
-       * future — the UI shows a Retired badge + Undo instead of the normal controls.
-       */
-      retired?: boolean
-      /** The instant the retired address is eligible for archiving (= archiveAfter). */
-      retiredUntil?: string
     }
 
     let emails: ClientEmail[] = []
@@ -141,17 +133,9 @@ export async function GET() {
       // resolve — never the EMAIL# `emailType` label, which can drift from it.
       const primaryAddress = (person.primaryEmail || '').toLowerCase()
       const sorted = [...personEmails].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      const now = Date.now()
       emails = await Promise.all(
         sorted.map(async (email) => {
           const isPrimary = email.email.toLowerCase() === primaryAddress
-          // "Retired" = a demoted former-primary still inside its archiveAfter grace
-          // window (a login-email change put it here). The primary itself never
-          // reads as retired.
-          const isRetired =
-            !isPrimary &&
-            !!email.archiveAfter &&
-            new Date(email.archiveAfter).getTime() > now
           return {
             id: email.emailId,
             email: email.email,
@@ -163,8 +147,6 @@ export async function GET() {
             subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
             isPrimary,
             mailingLists: listsByAddress.get(email.email.toLowerCase()) ?? [],
-            retired: isRetired,
-            retiredUntil: isRetired ? email.archiveAfter : undefined,
           }
         })
       )
@@ -216,11 +198,9 @@ export async function GET() {
       console.error('Surface RB ecclesia email failed (non-fatal):', rbErr)
     }
 
-    // Display order: primary (login) ALWAYS first, then active secondaries in their
-    // saved order, then retired (demoted former-primary) last. The array is already
-    // in `order` sequence, and Array#sort is stable, so ranking by group preserves
-    // the within-group order (a change-email tie left retired sitting first).
-    const rank = (e: ClientEmail) => (e.isPrimary ? 0 : e.retired ? 2 : 1)
+    // Display order: primary (login) ALWAYS first, then the other addresses in
+    // their saved order (Array#sort is stable, so that order is kept).
+    const rank = (e: ClientEmail) => (e.isPrimary ? 0 : 1)
     emails.sort((a, b) => rank(a) - rank(b))
 
     return NextResponse.json({ success: true, emails })
