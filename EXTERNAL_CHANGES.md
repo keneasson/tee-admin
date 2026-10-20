@@ -76,7 +76,7 @@ Changes in this file flag code modifications that require **matching manual upda
   1. `VERCEL_TOKEN` — a Vercel access token (Vercel dashboard → **Account Settings → Tokens**, scoped to the **`ken-eassons-projects`** team). Treat like a password.
   2. `VERCEL_TEAM_ID` — `team_vwApqYX2oh48OUB9tx1TTTgR`.
   3. (Optional) Verify with a manual run: **Actions → "Prune old Vercel deployments" → Run workflow** with **dry_run = true** — it logs what it *would* delete without deleting.
-- **Status**: PENDING — secrets not yet added. The workflow is merged but is a no-op (fails safely) until the two secrets exist.
+- **Status**: DONE 2026-09-04 — both secrets added; the job has run every Monday since (it prunes tee-admin and echadhub alike, e.g. 13 + 13 deleted on 2026-10-05).
 
 ### Vercel — Node.js runtime bump 22 → 24 (deprecation of Node 20)
 - **Date**: 2026-08-14
