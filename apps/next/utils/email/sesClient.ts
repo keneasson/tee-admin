@@ -35,6 +35,21 @@ export function getAwsDbConfig(): DynamoDBClientConfig {
   return CREDENTIAL
 }
 
+/**
+ * For owner-run scripts only: makes every getSesClient() in this process (the
+ * script's own calls and the shared helpers it uses) retry SES throttling
+ * ("Rate exceeded") with adaptive back-off. The contact-list APIs allow only a
+ * few calls a second, and a script that stops half-way through an SES change
+ * is worse than a slow one. The app's send path never calls this.
+ */
+export function useThrottleTolerantSesClient(): void {
+  new GlobalRef<SESv2Client>('sesConnection').value = new SESv2Client({
+    ...getAwsConfig(),
+    maxAttempts: 12,
+    retryMode: 'adaptive',
+  })
+}
+
 export function getSesClient(): SESv2Client {
   const sesConnection = new GlobalRef('sesConnection')
   if (!sesConnection.value) {
