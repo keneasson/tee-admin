@@ -2,20 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { getAllEcclesia, getEcclesiaByName } from '@/utils/dynamodb/locations'
 import { setRecordingBrother } from '@/utils/rb-service'
+import { invalidatePeopleCache } from '../../people/cache'
 import { buildRecordingBrotherRows } from '@my/app/utils/recording-brother-rows'
 
 /**
- * Owner/admin quick assignment of Recording Brothers.
+ * Owner/admin assignment of Recording Brothers.
  *
  * Everyone else uses the nomination flow (nominate → second → the nominee
  * confirms by email). Owners and admins set the designation directly, with no
  * email, through the same `setRecordingBrother` the nomination flow uses.
  *
- *   GET  → one row per ecclesia: current RB, and candidates (its inter-ecclesia
- *          contacts plus whoever holds the RB email still on the ecclesia).
- *   POST { ecclesiaName, personId } → set that person as the ecclesia's RB.
+ *   GET  → one row per ecclesia: current RB, its named people, its addresses
+ *          on file (nameless contacts are addresses, not people).
+ *   POST { ecclesiaName, personId | newPerson: {firstName, lastName, email?},
+ *          mailTo: 'own' | <an address on file> }
  */
 
 async function ownerOrAdmin() {
@@ -30,63 +33,116 @@ async function ownerOrAdmin() {
   return { email: session.user.email }
 }
 
+async function everyoneAt(ecclesia: string): Promise<PersonRecord[]> {
+  const all: PersonRecord[] = []
+  let lastEvaluatedKey: Record<string, any> | undefined
+  do {
+    const page = await personRepository.listByEcclesia(ecclesia, { lastEvaluatedKey })
+    all.push(...page.items.filter((p) => p.skey === 'PROFILE' && p.role !== 'deceased'))
+    lastEvaluatedKey = page.lastEvaluatedKey
+  } while (lastEvaluatedKey)
+  return all
+}
+
 export async function GET() {
   const gate = await ownerOrAdmin()
   if (gate.error) return gate.error
 
-  const [ecclesias, reps, rbs] = await Promise.all([
+  const [ecclesias, contacts, rbs] = await Promise.all([
     getAllEcclesia(),
     personRepository.listInterEcclesiaReps(),
     personRepository.listRecordingBrothers(),
   ])
-  const rbEmailHolders = await Promise.all(
-    ecclesias.map(async (e) =>
-      e.recordingBrotherEmail ? personRepository.getByEmail(e.recordingBrotherEmail) : null
-    )
-  )
+  const people = await Promise.all(ecclesias.map((e) => everyoneAt(e.name)))
 
-  return NextResponse.json(buildRecordingBrotherRows(ecclesias, reps, rbs, rbEmailHolders))
+  return NextResponse.json(buildRecordingBrotherRows(ecclesias, contacts, rbs, people))
+}
+
+interface PostBody {
+  ecclesiaName?: string
+  personId?: string
+  newPerson?: { firstName?: string; lastName?: string; email?: string }
+  mailTo?: string
 }
 
 export async function POST(request: NextRequest) {
   const gate = await ownerOrAdmin()
   if (gate.error) return gate.error
 
-  const { ecclesiaName, personId } = (await request.json().catch(() => ({}))) as {
-    ecclesiaName?: string
-    personId?: string
-  }
-  if (!ecclesiaName || !personId) {
-    return NextResponse.json({ error: 'ecclesiaName and personId are required' }, { status: 400 })
-  }
-
-  const person = await personRepository.getById(personId)
-  if (!person) {
-    return NextResponse.json({ error: 'That person was not found' }, { status: 404 })
-  }
-  if (person.ecclesia !== ecclesiaName) {
-    // The RB must belong to the ecclesia; fix their ecclesia on their person page first.
+  const { ecclesiaName, personId, newPerson, mailTo } = (await request.json().catch(() => ({}))) as PostBody
+  if (!ecclesiaName || (!personId && !newPerson) || !mailTo) {
     return NextResponse.json(
-      { error: `${person.displayName || 'This person'} is recorded at ${person.ecclesia || 'no ecclesia'}, not ${ecclesiaName}` },
+      { error: 'ecclesiaName, mailTo, and personId or newPerson are required' },
       { status: 400 }
     )
   }
 
-  // Keep an ecclesia mailbox (a role address such as the recording brother's
-  // ecclesia address): it belongs to the office and moves to the new RB. An
-  // address that is somebody's PRIMARY is that person's own (e.g. the previous
-  // RB's), so it is never handed to the new one.
   const ecclesia = await getEcclesiaByName(ecclesiaName)
-  const onFile = ecclesia?.recordingBrotherEmail?.toLowerCase().trim()
-  const holder = onFile ? await personRepository.getByEmail(onFile) : null
-  const roleMailbox = !!onFile && holder?.primaryEmail?.toLowerCase() !== onFile
+  if (!ecclesia) {
+    return NextResponse.json({ error: `No ecclesia named ${ecclesiaName}` }, { status: 404 })
+  }
+
+  // Ecclesia mail goes to the RB's own email, or stays at one of the
+  // ecclesia's addresses on file (e.g. its shared mailbox). A named person's
+  // own address (e.g. the previous RB's) is never an address on file.
+  const [row] = buildRecordingBrotherRows([ecclesia], [], [], [await everyoneAt(ecclesiaName)]).rows
+  const office = mailTo === 'own' ? null : mailTo.toLowerCase().trim()
+  if (office && !row.addresses.some((a) => a.email === office)) {
+    return NextResponse.json({ error: `${mailTo} is not an address on file for ${ecclesiaName}` }, { status: 400 })
+  }
+
+  let rbId = personId
+  if (personId) {
+    const person = await personRepository.getById(personId)
+    if (!person) {
+      return NextResponse.json({ error: 'That person was not found' }, { status: 404 })
+    }
+    if (person.ecclesia !== ecclesiaName) {
+      return NextResponse.json(
+        { error: `${person.displayName || 'This person'} is recorded at ${person.ecclesia || 'no ecclesia'}, not ${ecclesiaName}` },
+        { status: 400 }
+      )
+    }
+  } else {
+    const firstName = newPerson?.firstName?.trim()
+    const lastName = newPerson?.lastName?.trim()
+    const email = newPerson?.email?.toLowerCase().trim() || undefined
+    if (!firstName || !lastName) {
+      return NextResponse.json({ error: 'First and last name are required' }, { status: 400 })
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
+    }
+    if (email) {
+      const holder = await personRepository.getByEmail(email)
+      if (holder) {
+        return NextResponse.json(
+          { error: `${email} is already on ${holder.displayName || 'another person'}'s record` },
+          { status: 409 }
+        )
+      }
+    }
+    const created = await personRepository.create({
+      firstName,
+      lastName,
+      email,
+      allowNoEmail: true,
+      ecclesia: ecclesiaName,
+      memberStatus: 'member',
+      role: 'member',
+    })
+    invalidatePeopleCache()
+    rbId = created.personId
+  }
 
   await setRecordingBrother({
     ecclesiaName,
-    newPersonId: personId,
-    emailPreference: roleMailbox ? 'ecclesia' : 'personal',
-    rbEcclesiaEmail: roleMailbox ? onFile : undefined,
+    newPersonId: rbId!,
+    emailPreference: office ? 'ecclesia' : 'personal',
+    rbEcclesiaEmail: office || undefined,
+    // The address stays on its own contact record; it is not copied onto the RB.
+    attachEcclesiaEmail: false,
     callerEmail: gate.email!,
   })
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, personId: rbId })
 }
