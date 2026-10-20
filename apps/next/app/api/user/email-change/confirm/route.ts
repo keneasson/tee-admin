@@ -106,3 +106,4 @@ export async function POST(request: NextRequest) {
     console.error('email-change/confirm error:', error)
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 })
   }
+}
