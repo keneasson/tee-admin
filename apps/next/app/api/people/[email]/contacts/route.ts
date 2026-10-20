@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
+import { resolvePersonId } from '../../../../../utils/relationships'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../../cache'
@@ -310,7 +311,8 @@ export async function POST(
       }
 
       case 'relationship': {
-        const { targetEmail, relationshipType, firstName, lastName, sameAddress } = body as {
+        const { targetPersonId, targetEmail, relationshipType, firstName, lastName, sameAddress } = body as {
+          targetPersonId?: string
           targetEmail?: string
           relationshipType: RelationshipType
           firstName?: string
@@ -323,26 +325,28 @@ export async function POST(
           return NextResponse.json({ error: 'Invalid relationship type' }, { status: 400 })
         }
 
-        // Linking an EXISTING person.
-        if (targetEmail) {
-          if (!targetEmail.includes('@')) {
+        // Linking an EXISTING person (by id; an address is resolved to its holder).
+        if (targetPersonId || targetEmail) {
+          if (!targetPersonId && !targetEmail?.includes('@')) {
             return NextResponse.json({ error: 'Valid target email is required' }, { status: 400 })
           }
-          await relationshipRepository.createRelationship(
-            targetPerson.primaryEmail,
-            targetEmail.toLowerCase().trim(),
-            relationshipType
-          )
+          const relatedId = await resolvePersonId({ personId: targetPersonId, email: targetEmail })
+          if (!relatedId) {
+            return NextResponse.json({ error: 'That person was not found' }, { status: 404 })
+          }
+          if (relatedId === targetPerson.personId) {
+            return NextResponse.json({ error: 'Cannot create relationship with themselves' }, { status: 400 })
+          }
+          await relationshipRepository.createRelationship(targetPerson.personId, relatedId, relationshipType)
           return NextResponse.json({ success: true })
         }
 
         // Creating somebody NEW and linking them.
         //
         // This has to live here rather than on /api/user/relationships, which is
-        // the signed-in user's OWN family and hardcodes `session.user.email` as
-        // the source. Posting there from a profile page linked the new person to
-        // whoever was signed in instead of to the person being viewed — which is
-        // how Brian Rose ended up as the spouse of the admin who added him.
+        // the signed-in user's OWN family. Posting there from a profile page
+        // linked the new person to whoever was signed in instead of to the
+        // person being viewed (a new spouse became the admin's spouse).
         if (!firstName?.trim()) {
           return NextResponse.json(
             { error: 'Provide either targetEmail (an existing person) or firstName (a new one)' },
@@ -350,9 +354,9 @@ export async function POST(
           )
         }
 
-        // Relationships are keyed by email, so somebody with no address of their
-        // own — or who shares one — needs a distinct key address. Same mechanism
-        // already used for family members without email.
+        // Somebody new has no address of their own yet; the PROFILE needs a
+        // placeholder primary (never a mailbox). Same mechanism used for family
+        // members without email.
         const keyEmail = `pending-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@family.local`
         const createdPerson = await personRepository.create({
           email: keyEmail,
@@ -367,8 +371,8 @@ export async function POST(
         }
 
         await relationshipRepository.createRelationship(
-          targetPerson.primaryEmail,
-          keyEmail,
+          targetPerson.personId,
+          createdPerson.personId,
           relationshipType
         )
 
@@ -450,16 +454,15 @@ export async function DELETE(
       }
 
       case 'relationship': {
-        const targetEmail = url.searchParams.get('targetEmail')
         const relType = url.searchParams.get('relationshipType') as RelationshipType
-        if (!targetEmail || !relType) {
-          return NextResponse.json({ error: 'targetEmail and relationshipType are required' }, { status: 400 })
+        const relatedId = await resolvePersonId({
+          personId: url.searchParams.get('targetPersonId'),
+          email: url.searchParams.get('targetEmail'),
+        })
+        if (!relatedId || !relType) {
+          return NextResponse.json({ error: 'targetPersonId and relationshipType are required' }, { status: 400 })
         }
-        await relationshipRepository.removeRelationship(
-          targetPerson.primaryEmail,
-          targetEmail,
-          relType
-        )
+        await relationshipRepository.removeRelationship(targetPerson.personId, relatedId, relType)
         return NextResponse.json({ success: true })
       }
 

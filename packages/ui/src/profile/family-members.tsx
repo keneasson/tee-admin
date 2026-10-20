@@ -5,16 +5,18 @@ import { Plus, Trash2, Users, Heart, User, Search, X, UserPlus, Link2, Link2Off 
 import type { RelationshipType } from '@my/app/provider/dynamodb/types'
 
 interface FamilyMember {
-  email: string
+  /** The related person. Relationships are keyed by person, never by email. */
+  personId: string
   name?: string
   relationshipType: RelationshipType
-  personId?: string
 }
 
 export interface AddFamilyMemberData {
   firstName: string
   lastName: string
   email?: string
+  /** Set when an existing person was picked from search: link exactly them. */
+  targetPersonId?: string
   relationshipType: RelationshipType
 }
 
@@ -29,8 +31,8 @@ interface FamilyMembersProps {
   members: FamilyMember[]
   editable?: boolean
   onAdd?: (data: AddFamilyMemberData) => Promise<void>
-  onRemove?: (targetEmail: string, relationshipType: RelationshipType) => Promise<void>
-  onMemberClick?: (email: string) => void
+  onRemove?: (targetPersonId: string, relationshipType: RelationshipType) => Promise<void>
+  onMemberClick?: (personId: string) => void
   onSearchPeople?: (query: string) => Promise<PersonSearchResult[]>
   /** @deprecated Use onSearchPeople instead */
   onLookupEmail?: (email: string) => Promise<{ found: boolean; firstName?: string; lastName?: string } | null>
@@ -107,8 +109,8 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
     ([value]) => !(value === 'spouse' && hasSpouse)
   )
 
-  // Existing family member emails to exclude from search results
-  const existingEmails = useMemo(() => new Set(members.map(m => m.email.toLowerCase())), [members])
+  // People already in the family list, excluded from search results
+  const existingIds = useMemo(() => new Set(members.map(m => m.personId)), [members])
 
   const resetForm = () => {
     setFirstName('')
@@ -140,7 +142,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
       try {
         const results = await onSearchPeople(query)
         // Filter out people already in family list
-        const filtered = results.filter(r => !existingEmails.has(r.email.toLowerCase()))
+        const filtered = results.filter(r => !existingIds.has(r.id))
         setSearchResults(filtered)
         setShowDropdown(true)
       } catch {
@@ -149,7 +151,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
         setSearching(false)
       }
     }, 300)
-  }, [onSearchPeople, existingEmails])
+  }, [onSearchPeople, existingIds])
 
   const handleSelectPerson = (person: PersonSearchResult) => {
     setSelectedPerson(person)
@@ -177,6 +179,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
         firstName,
         lastName,
         email: selectedEmail || undefined,
+        targetPersonId: selectedPerson?.id,
         relationshipType: newType,
       })
       resetForm()
@@ -187,11 +190,11 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
 
   const canSubmit = firstName && newType && !loading
 
-  const handleRemove = async (email: string, type: RelationshipType) => {
+  const handleRemove = async (personId: string, type: RelationshipType) => {
     if (!onRemove) return
     setLoading(true)
     try {
-      await onRemove(email, type)
+      await onRemove(personId, type)
     } finally {
       setLoading(false)
     }
@@ -477,22 +480,21 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
             </Text>
           </XStack>
           {typeMembers.map((member) => {
-            const hasListing = !!member.personId
             return (
             <Card
-              key={`${member.email}-${member.relationshipType}`}
+              key={`${member.personId}-${member.relationshipType}`}
               padding="$3"
               backgroundColor="$backgroundHover"
             >
               <XStack justifyContent="space-between" alignItems="center">
                 <XStack gap="$2" alignItems="center" flex={1}>
-                  {hasListing && onMemberClick ? (
+                  {onMemberClick ? (
                     <Button
                       size="$2"
                       circular
                       chromeless
                       icon={<Link2 size={16} color="$blue10" />}
-                      onPress={() => onMemberClick(member.personId!)}
+                      onPress={() => onMemberClick(member.personId)}
                       hoverStyle={{ backgroundColor: '$blue2' }}
                     />
                   ) : (
@@ -509,7 +511,7 @@ export const FamilyMembers: React.FC<FamilyMembersProps> = ({
                     icon={Trash2}
                     theme="red"
                     onPress={() => {
-                      handleRemove(member.email, member.relationshipType)
+                      handleRemove(member.personId, member.relationshipType)
                     }}
                   />
                 ) : null}

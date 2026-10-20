@@ -11,7 +11,10 @@
  *     Flip one list's `sendFromRegistry`. Dry run unless --apply.
  *     --to registry refuses unless parity is EMPTY on both sides, and refuses
  *     Wednesday–Saturday (America/Toronto), the weekly send window.
- *     --to ses (rollback) is always allowed.
+ *     --to ses (rollback) is always allowed, but once the R5-finish code is
+ *     deployed a list set back to SES REFUSES to send (its topic no longer
+ *     receives opt-outs from /email-preferences; see registry-send.ts), so
+ *     roll back only to stop a list's sends, not to keep them going.
  *
  * Usage (repo root):
  *   npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity

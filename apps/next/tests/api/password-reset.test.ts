@@ -9,6 +9,7 @@ const mockUpdate = vi.fn()
 const mockDelete = vi.fn()
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
+  DynamoDBDocumentClient: { from: vi.fn(() => ({ send: vi.fn() })) },
   DynamoDBDocument: {
     from: vi.fn(() => ({
       query: mockQuery,
@@ -22,6 +23,7 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
 
 vi.mock('@aws-sdk/client-dynamodb', () => ({
   DynamoDB: vi.fn(),
+  DynamoDBClient: vi.fn(),
 }))
 
 vi.mock('../../utils/email/sesClient', () => ({
@@ -34,6 +36,12 @@ vi.mock('../../utils/email/send-verification-email', () => ({
 
 vi.mock('../../utils/password', () => ({
   validatePassword: vi.fn(() => ({ isValid: true, errors: [] })),
+}))
+
+// The person-level reset path (R7a) has its own tests (auth/password-reset-person);
+// here no person qualifies, so these tests exercise the legacy record path.
+vi.mock('../../utils/password-signin', () => ({
+  personForPasswordReset: vi.fn().mockResolvedValue(null),
 }))
 
 // Declare mock variables for use in tests that reference them directly

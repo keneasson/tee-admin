@@ -55,12 +55,15 @@ export async function POST(request: NextRequest) {
     }
     if (row.verified !== true) {
       return NextResponse.json(
-        { error: 'Verify this address before making it your login.' },
+        { error: 'Verify this address before making it your primary email.' },
         { status: 400 }
       )
     }
-    if (row.emailType === 'primary') {
-      return NextResponse.json({ error: "That's already your login email." }, { status: 400 })
+    // The primary is PROFILE.primaryEmail (the sign-in lookup). An EMAIL# row
+    // labelled primary that disagrees with it is exactly the drift this fixes,
+    // so the label alone never blocks the move.
+    if (row.email.toLowerCase() === (person.primaryEmail || '').toLowerCase()) {
+      return NextResponse.json({ error: "That's already your primary email." }, { status: 400 })
     }
 
     // Identity transfer (PersonRecords): promote the verified secondary → primary,

@@ -39,6 +39,21 @@ vi.mock('../utils/email/get-post-announcement-content', () => ({
   getPostAnnouncementContent: h.getPostAnnouncementContent,
 }))
 vi.mock('../utils/email/email-send', () => ({ emailSend: h.emailSend }))
+// R5: the audience is a registry list. Newsletter by default; an old key or a
+// listId resolves; anything else is a SendListError (400).
+const NEWS_ID = '11111111-1111-4111-8111-111111111111'
+const IE_ID = '22222222-2222-4222-8222-222222222222'
+vi.mock('../utils/mailing-lists/send-target', async (orig) => {
+  const real = await orig<typeof import('../utils/mailing-lists/send-target')>()
+  return {
+    ...real,
+    resolveSendList: vi.fn(async ({ list }: { list?: string }) => {
+      if (!list || list === 'newsletter' || list === NEWS_ID) return { listId: NEWS_ID, key: 'newsletter' }
+      if (list === 'interEcclesia' || list === IE_ID) return { listId: IE_ID, key: 'interEcclesia' }
+      throw new real.SendListError(`Unknown list "${list}".`)
+    }),
+  }
+})
 
 import { POST } from '../app/api/admin/posts/[id]/send/route'
 
@@ -184,20 +199,25 @@ describe('POST /api/admin/posts/[id]/send — send', () => {
     expect(args.test).toBe(true)
     // Subject is always the rendered post title (occasion-agnostic).
     expect(args.customSubject).toBe('Baptism of A. Believer')
-    // Default audience is the newsletter list.
-    expect(args.customList).toBe('newsletter')
+    // Default audience is the newsletter list (by listId); the send is a test.
+    expect(args.listId).toBe(NEWS_ID)
     const json = await res.json()
-    expect(json.audience).toBe('testList')
+    expect(json.audience).toBe('test')
   })
 
-  it('sends live only on an explicit test:false, to the chosen audience', async () => {
-    const res = await POST(req({ test: false, list: 'interEcclesia' }), ctx())
+  it('sends live only on an explicit test:false, to the chosen list (listId)', async () => {
+    const res = await POST(req({ test: false, listId: IE_ID }), ctx())
     expect(res.status).toBe(200)
     const args = h.emailSend.mock.calls[0][0]
     expect(args.test).toBe(false)
-    expect(args.customList).toBe('interEcclesia')
+    expect(args.listId).toBe(IE_ID)
     const json = await res.json()
-    expect(json.audience).toBe('interEcclesia')
+    expect(json.audience).toBe(IE_ID)
+  })
+
+  it('back-compat: the old `list` key still resolves to the owner list', async () => {
+    await POST(req({ test: false, list: 'interEcclesia' }), ctx())
+    expect(h.emailSend.mock.calls[0][0].listId).toBe(IE_ID)
   })
 
   it('forwards the rendered html/text from getPostAnnouncementContent', async () => {

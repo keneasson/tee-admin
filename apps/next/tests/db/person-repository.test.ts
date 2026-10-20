@@ -697,7 +697,7 @@ describe('PersonRepository', () => {
     })
 
     // #190: correcting a typo — the wrong address is REMOVED, after the commit.
-    it('replace: true removes the old row only AFTER the PROFILE commit, and inherits sesSubscribed', async () => {
+    it('CONTACT-EDIT-05 / CONTACT-EDIT-08: replace: true removes the old row only AFTER the PROFILE commit, and inherits sesSubscribed', async () => {
       mockSend
         .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
         .mockResolvedValueOnce({
@@ -754,6 +754,37 @@ describe('PersonRepository', () => {
       expect(calls[4].type).toBe('UpdateCommand')
       expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
       expect(setFields(calls[4]).primaryEmail).toBe('new@example.com')
+    })
+
+    // The owner's case: PROFILE.primaryEmail is an alias with NO EMAIL# row, and
+    // no row is labelled primary. Making a verified secondary primary must keep
+    // the alias as a recoverable (retired) secondary, not drop it.
+    it('keeps a PROFILE-only old primary as a retired secondary row', async () => {
+      mockSend
+        .mockResolvedValueOnce({ Item: { ...profile, primaryEmail: 'alias@example.org', emailVerified: '2026-01-01' } })
+        .mockResolvedValueOnce({
+          Items: [{ emailId: 'real-id', email: 'real@example.org', emailType: 'secondary', verified: true }],
+        }) // getEmails: no row for the alias, none labelled primary
+        .mockResolvedValueOnce({ Attributes: {} }) // promote real → primary
+        .mockResolvedValueOnce({}) // addEmail(alias) → put
+        .mockResolvedValueOnce({ Attributes: {} }) // COMMIT: update PROFILE
+
+      const result = await repository.changePrimaryEmail('p1', 'real@example.org')
+      expect(result).toEqual({ newEmailId: 'real-id', oldEmail: 'alias@example.org' })
+
+      const calls = mockSend.mock.calls.map((c) => c[0])
+      expect(calls).toHaveLength(5)
+      expect(setFields(calls[2])).toMatchObject({ emailType: 'primary', verified: true })
+      expect(calls[3].type).toBe('PutCommand')
+      expect(calls[3].params.Item).toMatchObject({
+        email: 'alias@example.org',
+        emailType: 'secondary',
+        verified: true,
+        gsi1pk: 'EMAIL#alias@example.org',
+      })
+      expect(new Date(calls[3].params.Item.archiveAfter).getTime()).toBeGreaterThan(Date.now())
+      expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
+      expect(setFields(calls[4])).toMatchObject({ primaryEmail: 'real@example.org', gsi1pk: 'EMAIL#real@example.org' })
     })
   })
 

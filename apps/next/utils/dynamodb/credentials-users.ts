@@ -167,6 +167,36 @@ export async function findCredentialsUserByEmail(email: string): Promise<Credent
 }
 
 /**
+ * Every legacy credentials record for an address. The legacy store can hold
+ * more than one (duplicates), which is why a reset could update one record
+ * while sign-in read another. Used only as the fallback in
+ * `utils/password-signin.ts` when the PersonRecord has no password yet.
+ */
+export async function findCredentialsUsersByEmail(email: string): Promise<CredentialsUser[]> {
+  const normalizedEmail = email.toLowerCase().trim()
+  try {
+    const result = await client.query({
+      TableName: TABLE_NAME,
+      IndexName: 'gsi1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': `USER#${normalizedEmail}` },
+    })
+    return ((result.Items || []) as CredentialsUser[]).filter((item) => item.provider === 'credentials')
+  } catch (error) {
+    console.error('Error finding credentials users:', error)
+    return []
+  }
+}
+
+/** Consume (delete) a password-reset token. */
+export async function deletePasswordResetToken(token: string): Promise<void> {
+  await client.delete({
+    TableName: TABLE_NAME,
+    Key: { pkey: `RESET_TOKEN#${token}`, skey: `RESET_TOKEN#${token}` },
+  })
+}
+
+/**
  * @deprecated This function uses full table SCAN which is inefficient.
  * Use personRepository.emailExists(email) instead for O(1) email existence check via GSI1.
  */

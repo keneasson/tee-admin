@@ -8,7 +8,9 @@ import type { ListSubscriptionRecord, PersonRecord } from '@my/app/provider/dyna
  * backfill wrote the row under whichever person the address resolves to. So:
  *  - unsubscribe flips EVERY row for that address on the list to opt_out;
  *  - subscribe flips existing rows back to opt_in, or, when none exists,
- *    writes one under the person the address resolves to.
+ *    writes one under the person the address resolves to;
+ *  - leaving a defaultOptIn list with no row writes an explicit opt_out row
+ *    (otherwise the default would keep the person subscribed).
  * Rows are never deleted (audit trail).
  */
 
@@ -58,13 +60,14 @@ export interface SetSubscriptionDeps extends SubscriberLookupDeps {
     email: string
     source: ListSubscriptionRecord['source']
     basis: ListSubscriptionRecord['basis']
+    status?: ListSubscriptionRecord['status']
   }) => Promise<unknown>
 }
 
 export type SetSubscriptionResult = 'subscribed' | 'unsubscribed' | 'unchanged' | 'no-person'
 
 export async function setListSubscription(
-  input: { listId: string; email: string; subscribed: boolean },
+  input: { listId: string; email: string; subscribed: boolean; defaultOptIn?: boolean },
   deps: SetSubscriptionDeps
 ): Promise<SetSubscriptionResult> {
   const email = input.email.trim().toLowerCase()
@@ -78,7 +81,8 @@ export async function setListSubscription(
     return input.subscribed ? 'subscribed' : 'unsubscribed'
   }
 
-  if (!input.subscribed) return 'unchanged' // nothing to opt out of
+  // No row: opting out matters only where the default would subscribe them.
+  if (!input.subscribed && !input.defaultOptIn) return 'unchanged'
 
   const who = await resolveSubscriber(email, deps)
   if (!who) return 'no-person'
@@ -89,8 +93,9 @@ export async function setListSubscription(
     email,
     source: 'self',
     basis: 'express',
+    ...(input.subscribed ? {} : { status: 'opt_out' as const }),
   })
-  return 'subscribed'
+  return input.subscribed ? 'subscribed' : 'unsubscribed'
 }
 
 /** Production wiring (lazy, so importing this module for its pure logic stays AWS-free). */

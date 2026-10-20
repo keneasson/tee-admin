@@ -53,9 +53,15 @@ const FLAG_LABEL: Record<EmailFlag, string> = {
   'ses-case-duplicate': 'Duplicate SES contact (letter case)',
   'unsubscribed-all': 'Unsubscribed from all',
   'no-explicit-preference': 'No explicit preference (receives nothing)',
+  'safety-net-opt-out': 'Opted out of the SES safety net (receives nothing)',
 }
 
-const WARNING_FLAGS: EmailFlag[] = ['suppressed-but-marked-active', 'not-in-ses', 'ses-case-duplicate']
+const WARNING_FLAGS: EmailFlag[] = [
+  'suppressed-but-marked-active',
+  'not-in-ses',
+  'ses-case-duplicate',
+  'safety-net-opt-out',
+]
 
 export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
   const router = useRouter()
@@ -199,6 +205,7 @@ export const EmailLists: React.FC<EmailListsProps> = ({ session }) => {
                   topics={overview.topics}
                   nameOf={nameOf}
                   onOpenPerson={openPerson}
+                  registry={overview.subscriptionSource === 'registry'}
                 />
               ))}
             </YStack>
@@ -244,11 +251,13 @@ function PersonCard({
   topics,
   nameOf,
   onOpenPerson,
+  registry,
 }: {
   person: EmailListsPersonRow
   topics: EmailListsOverview['topics']
   nameOf: Map<string, string>
   onOpenPerson: (personId: string) => void
+  registry: boolean
 }) {
   return (
     <Card bordered padding="$3" backgroundColor="$background">
@@ -274,7 +283,7 @@ function PersonCard({
             No email address on record.
           </Text>
         ) : (
-          person.emails.map((e) => <EmailRow key={e.email} row={e} topics={topics} nameOf={nameOf} />)
+          person.emails.map((e) => <EmailRow key={e.email} row={e} topics={topics} nameOf={nameOf} registry={registry} />)
         )}
       </YStack>
     </Card>
@@ -285,10 +294,12 @@ function EmailRow({
   row,
   topics,
   nameOf,
+  registry,
 }: {
   row: EmailListsEmailRow
   topics: EmailListsOverview['topics']
   nameOf: Map<string, string>
+  registry: boolean
 }) {
   const optedIn = topics.filter((t) => row.ses.topics[t.name])
   return (
@@ -308,16 +319,14 @@ function EmailRow({
         {row.suppressed ? <Badge tone="red">SES suppressed: {row.suppressed}</Badge> : null}
       </XStack>
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
-        {row.ses.inSes ? (
-          row.ses.unsubscribeAll ? (
-            <Badge tone="red">Unsubscribed from all (receives nothing)</Badge>
-          ) : row.ses.noExplicitPreference ? (
-            <Badge tone="orange">No explicit preference (receives nothing)</Badge>
-          ) : optedIn.length > 0 ? (
-            optedIn.map((t) => <Badge key={t.name}>{t.displayName}</Badge>)
-          ) : (
-            <Badge tone="orange">Unsubscribed from every topic (receives nothing)</Badge>
-          )
+        {row.ses.unsubscribeAll ? (
+          <Badge tone="red">Unsubscribed from all (receives nothing)</Badge>
+        ) : row.ses.noExplicitPreference ? (
+          <Badge tone="orange">No explicit preference (receives nothing)</Badge>
+        ) : optedIn.length > 0 ? (
+          optedIn.map((t) => <Badge key={t.name}>{t.displayName}</Badge>)
+        ) : row.ses.inSes || registry ? (
+          <Badge tone="orange">On no list (receives nothing)</Badge>
         ) : null}
         {row.flags
           .filter((f) => WARNING_FLAGS.includes(f))
@@ -358,11 +367,11 @@ function FindingsPanel({
       <YStack gap="$3">
         <Heading size="$5">Findings</Heading>
         <Paragraph fontSize="$3" color="$gray11">
-          Where SES and the member records disagree. Nothing here has been changed.
+          Where the lists, SES and the member records disagree. Nothing here has been changed.
         </Paragraph>
         <FindingGroup
-          title="Subscribed in SES, but no person holds the address"
-          note="Explicitly opted in to at least one topic, so these addresses still receive list sends."
+          title="Subscribed, but no person holds the address"
+          note="Explicitly opted in to at least one list, so these addresses still receive list sends."
           count={f.sesSubscribedNoPerson.length}
         >
           {f.sesSubscribedNoPerson.map((x) => (

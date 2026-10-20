@@ -11,6 +11,31 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — relationships move to person keys, and the password sign-in flag (R7, run IMMEDIATELY after this deploys)
+- **Date**: 2026-10-18
+- **Branch**: `fix/r7-password-primary-relationships`
+- **Code change**: family relationships are read and written as `PERSON#<id> / REL#<targetId>#<type>` (both directions in one transaction). The legacy `USER#<email> / RELATIONSHIP#…` rows are no longer read, so **from the moment this deploys until step 2 runs, every family list is empty** (hidden, not lost: the legacy rows are untouched). Run steps 1–2 right after the prod deploy finishes. Password sign-in and the password step-up check the PersonRecord behind the new `person_password_signin` flag (default **off**).
+- **External action** (as soon as the merge to `main` has deployed to prod — families are hidden until step 2):
+  1. `npx tsx scripts/migrate-relationships-to-person.ts` (dry run; counts and person ids; per-row detail goes to a local temp file). Dry run on 2026-10-18: 23 legacy rows → 11 pairs, 0 unresolved, 1 resolved by the sign-in rule.
+  2. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy` — backs up to `s3://tee-admin-backups/backups/<date>-relationships-to-person/`, writes, verifies. Check your own Family tab. **Do not leave a gap between the deploy and this step.**
+  3. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy --delete-legacy` — deletes the legacy rows of verified pairs only.
+  4. Owner: `/admin/evolution/feature-flags` → `person_password_signin` → **owner**; sign in with your password (and a step-up) on your own account; then **everyone**.
+- **Status**: PENDING
+
+### SES + prod data — finish R5: safety-net topics, retire topic fields (owner-run, in order)
+- **Date**: 2026-10-18
+- **Branch**: `feat/r5-finish`
+- **Code change**: every send names a mailing-list `listId`; `/email-preferences` writes only the registry (+ UnsubscribeAll); all SES topic writers and `cron/sync-ses-contacts` are deleted; sends name the SES safety-net topic once the stored setting `MAILING_LIST_SETTINGS / SAFETY_NET` is on (until then, each bridged list's legacy topic). Sends never fall back to an SES topic's audience: a bridged list that is not cut over REFUSES to send (400 on manual sends; the cron marks the entry failed with the reason), as does a cut-over list that resolves 0 recipients.
+- **Why the order matters**: (1) with topic writes gone, a preference change only reaches delivery for a list that sends from the registry, so all 7 lists must be cut over before this merges — otherwise that list's sends are refused (the code enforces it; nobody is mis-sent, but the send does not go out); (2) `update-contact-list` wipes every contact's TopicPreferences, so it runs only after cutover and a backup, and a send naming a deleted topic fails.
+- **External action**:
+  1. Before merge: `npx tsx apps/next/utils/mailing-lists/mailing-list-ops.ts parity`, then `cutover --topic <t> --to registry --apply` for every list still on SES (Sunday–Tuesday).
+  2. After deploy: one test-list send from the Email Sender.
+  3. Sunday–Tuesday, no manual sends running: `npx tsx scripts/ses-safety-net-topics.ts` (dry run), then `--apply` (backs up to `s3://tee-admin-backups/backups/<date>-ses-safety-net/`, marks the setting `switching` so every send refuses, replaces the topics with `safetyNetDefault`, checks and re-applies UnsubscribeAll and refuses to go on if any stop is missing, only then flips the setting on, verifies).
+  4. Sunday–Tuesday: `npx tsx scripts/ses-merge-case-duplicates.ts` (dry run), then `--apply` (refuses until step 3 is verified; backs up the affected contacts to `s3://tee-admin-backups/backups/<date>-ses-case-duplicates/`, merges the 8 letter-case duplicates onto the lower-case address keeping UnsubscribeAll, verifies).
+  5. `npx tsx scripts/retire-ses-topic-fields.ts` (dry run), then `--apply`; re-run dry to confirm 0 remain.
+  6. Vercel: no app code reads `CRON_SECRET` any more (only the deleted `cron/sync-ses-contacts` did); removing it is optional.
+- **Status**: DONE 2026-10-19 — steps 1–5 applied and verified (backups under `s3://tee-admin-backups/backups/2026-10-19-*`); step 6 optional.
+
 ### Vercel — echadhub production email turned ON (`EMAILS_ENABLED=true`)
 - **Date**: 2026-10-13
 - **Branch**: `chore/echadhub-emails-enabled` (config only, no code change)

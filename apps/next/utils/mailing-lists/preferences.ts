@@ -5,12 +5,9 @@ import { listDisplayName, shortOwnerName } from './owners'
  * Self-serve list preferences (R5): every list offered to a person, grouped by
  * owner, each with its current state, plus the save logic.
  *
- * What "subscribed" means is what decides delivery TODAY:
- *  - a bridged list not yet cut over (has sesTopic, sendFromRegistry off) →
- *    the SES topic's explicit OPT_IN (that is what its send reads);
- *  - every other list → the registry row.
- * Saving writes the registry for every list, and ALSO the SES topic for every
- * bridged list (so the SES gate a cut-over send still names agrees too).
+ * "Subscribed" is the registry: an opt_in row for this address, or, with no
+ * row at all, the list's defaultOptIn when the list is offered to the person
+ * (see default-opt-in.ts). Saving writes the registry only; no SES topic.
  */
 
 /** Categories a person may manage themselves. Office/membership lists are conferred, not chosen. */
@@ -40,8 +37,6 @@ export interface BuildPreferencesInput {
   offeredIds: Set<string>
   /** listId → this address's registry status on it, when a row exists. */
   registryStatus: Map<string, 'opt_in' | 'opt_out'>
-  /** SES topics this address has explicitly opted into. */
-  sesOptIns: Set<string>
   /** ownerType#ownerId → owner name. */
   ownerName: (list: MailingListRecord) => string
 }
@@ -61,14 +56,12 @@ export function buildListPreferences(input: BuildPreferencesInput): ListPreferen
       ownerName: shortOwnerName(owner),
       lists: [],
     }
-    const governedBySes = !!l.sesTopic && l.sendFromRegistry !== true
+    const row = input.registryStatus.get(l.listId)
     group.lists.push({
       listId: l.listId,
       name: listDisplayName(owner, l.name),
       description: l.description,
-      subscribed: governedBySes
-        ? input.sesOptIns.has(l.sesTopic as string)
-        : input.registryStatus.get(l.listId) === 'opt_in',
+      subscribed: row ? row === 'opt_in' : l.defaultOptIn === true && input.offeredIds.has(l.listId),
     })
     groups.set(key, group)
   }
@@ -79,21 +72,22 @@ export function buildListPreferences(input: BuildPreferencesInput): ListPreferen
 
 /**
  * Pure: validate a save request against the known lists. Unknown, archived or
- * non-self-serve list ids are dropped (never trusted from the client). Returns
- * the registry changes and the SES topic changes for bridged lists.
+ * non-self-serve list ids are dropped (never trusted from the client). When
+ * `current` (listId → shown state) is given, lists whose state did not change
+ * are dropped too, so a save never turns a defaultOptIn into a stored row.
  */
 export function planListSave(
   requested: Record<string, unknown>,
-  allLists: MailingListRecord[]
-): { changes: Array<{ list: MailingListRecord; subscribed: boolean }>; sesTopics: Record<string, boolean> } {
+  allLists: MailingListRecord[],
+  current?: Map<string, boolean>
+): { changes: Array<{ list: MailingListRecord; subscribed: boolean }> } {
   const byId = new Map(allLists.map((l) => [l.listId, l]))
   const changes: Array<{ list: MailingListRecord; subscribed: boolean }> = []
-  const sesTopics: Record<string, boolean> = {}
   for (const [listId, value] of Object.entries(requested ?? {})) {
     const list = byId.get(listId)
     if (!list || !isSelfServe(list) || typeof value !== 'boolean') continue
+    if (current && current.get(listId) === value) continue
     changes.push({ list, subscribed: value })
-    if (list.sesTopic) sesTopics[list.sesTopic] = value
   }
-  return { changes, sesTopics }
+  return { changes }
 }

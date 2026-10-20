@@ -1,28 +1,29 @@
 /**
  * THE seam for "who is subscribed to which list" on read-only screens (#276).
  *
- * Today the only live answer is SES, computed exactly as the list send does
- * (`utils/email/contact.ts` getContacts: explicit OPT_IN, topic defaults
- * ignored). The in-house registry (#182 LIST#/SUB#, #184
- * `resolve-list-recipients.ts`) is the intended replacement; it is DARK behind
- * `MAILING_LIST_REGISTRY` and has never been backfilled, so it is not wired
- * here yet. When it goes live, add a `registrySubscriptionSource` that returns
- * the same snapshot shape and switch `getSubscriptionSource()` — no screen
- * changes.
+ * R5: the answer is the mailing-list registry (LIST# / SUB#), the store every
+ * list send reads. SES is still read for what it still decides: each
+ * contact's UnsubscribeAll, case-duplicate contacts, opt-outs of the SES
+ * safety-net topics, and the account suppression list.
  *
- * Read-only by contract: a source may only List/Get.
+ * Read-only by contract: a source may only List/Get/Query.
  */
 import type { EmailListsTopic, OverviewSesContactInput } from '@my/app/utils/email-lists-overview'
-import { listAllSesContacts, listSesTopics, listSuppressedAddresses } from './ses-snapshot'
+import { listAllSesContacts, listSuppressedAddresses } from './ses-snapshot'
 
 export interface SubscriptionSnapshot {
   /** Where the subscriptions came from, shown on the page. */
   source: 'ses' | 'registry'
+  /** The subscription columns. Registry: the lists, `name` = listId. */
   topics: EmailListsTopic[]
-  /** One row per stored subscriber record (case variants kept apart), EXPLICIT preferences only. */
+  /** One row per SES contact (case variants kept apart), explicit preferences only. */
   subscribers: OverviewSesContactInput[]
   /** Account-level delivery suppression (bounces/complaints). Applies whatever the source. */
   suppressed: Array<{ email: string; reason?: string }>
+  /** Registry: address (lower case) → listIds it is opted into. */
+  subscriptions?: Record<string, string[]>
+  /** Registry: the SES safety-net topic names. */
+  safetyNetTopics?: string[]
 }
 
 export interface SubscriptionSource {
@@ -30,19 +31,48 @@ export interface SubscriptionSource {
   load(): Promise<SubscriptionSnapshot>
 }
 
-export const sesSubscriptionSource: SubscriptionSource = {
-  name: 'ses',
+export const registrySubscriptionSource: SubscriptionSource = {
+  name: 'registry',
   async load() {
-    const [subscribers, suppressed, topics] = await Promise.all([
+    const [{ mailingListRepository }, { ownerNamesFor, ownerNameOf, listDisplayName }, { SAFETY_NET_TOPICS }] =
+      await Promise.all([
+        import('@my/app/provider/dynamodb/repositories/mailing-list-repository'),
+        import('../mailing-lists/owners'),
+        import('../mailing-lists/safety-net'),
+      ])
+    const lists = (await mailingListRepository.listAllLists()).filter((l) => l.status === 'active')
+    const [names, rowsByList, subscribers, suppressed] = await Promise.all([
+      ownerNamesFor(lists),
+      Promise.all(lists.map((l) => mailingListRepository.listSubscribers(l.listId))),
       listAllSesContacts(),
       listSuppressedAddresses(),
-      listSesTopics(),
     ])
-    return { source: 'ses', topics, subscribers, suppressed }
+    const subscriptions: Record<string, string[]> = {}
+    lists.forEach((l, i) => {
+      for (const row of rowsByList[i] ?? []) {
+        const email = row.email.toLowerCase()
+        subscriptions[email] = [...(subscriptions[email] ?? []), l.listId]
+      }
+    })
+    const topics: EmailListsTopic[] = lists
+      .map((l) => ({
+        name: l.listId,
+        displayName: listDisplayName(ownerNameOf(names, l), l.name),
+        defaultOptIn: l.defaultOptIn === true,
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    return {
+      source: 'registry',
+      topics,
+      subscribers,
+      suppressed,
+      subscriptions,
+      safetyNetTopics: SAFETY_NET_TOPICS.map((t) => t.name),
+    }
   },
 }
 
-/** The source the send path uses today. Switch here (only) when the registry cuts over. */
+/** The source the send path uses: the registry (R5). */
 export function getSubscriptionSource(): SubscriptionSource {
-  return sesSubscriptionSource
+  return registrySubscriptionSource
 }

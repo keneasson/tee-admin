@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto'
-import { ListContactsResponse, SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
+import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
-import { getContacts } from './contact'
+import { inputTemplate } from './contact-lists'
 import { interEcclesiaRecipientsFromOffices } from './inter-ecclesia-recipients'
-import { resolveRegistryAudience } from '../mailing-lists/registry-send'
+import { resolveSendAudience, safetyNetState } from '../mailing-lists/registry-send'
+import { resolveSendList } from '../mailing-lists/send-target'
 import { chunkArray } from '../chunkArray'
 import {
   generateEcclesiaUpdateUrl,
@@ -55,62 +56,53 @@ function subjectFor(reason: emailReasons, tenant: TenantConfig): string {
 }
 
 // Reason-specific config — sender name and domain come from the
-// resolved tenant, so this no longer carries `name` or `email`.
+// resolved tenant, so this no longer carries `name` or `email`. The audience
+// is NOT here: every send resolves a mailing list (send-target.ts).
 const senders = {
   'sunday-school': {
     subject: 'Sunday School Tomorrow',
-    contactList: 'sundaySchool',
     replyTo: REPLY_TO,
   },
   newsletter: {
     subject: 'Newsletter', // branded per-tenant via subjectFor()
-    contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
   'bible-class': {
     subject: 'Bible Class Tonight!',
-    contactList: 'bibleClass',
     replyTo: REPLY_TO,
   },
   recap: {
     subject: 'Memorial Service Tomorrow',
-    contactList: 'memorial',
     replyTo: REPLY_TO,
   },
   'business-meeting': {
     subject: 'Business Meeting Details',
-    contactList: 'members',
     replyTo: REPLY_TO,
   },
   custom: {
     subject: 'Communications', // branded per-tenant via subjectFor()
-    contactList: 'testList', // Safe default - will be overridden by customList parameter
     replyTo: REPLY_TO,
   },
   'event-announcement': {
     subject: 'Event Announcement',
-    contactList: 'newsletter', // Default - will be overridden by customList parameter
     replyTo: REPLY_TO,
   },
   'inter-ecclesia': {
     subject: 'Inter-Ecclesia Announcement',
-    contactList: 'interEcclesia',
     replyTo: REPLY_TO,
   },
   'news-alert': {
     subject: 'Important News',
-    contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
   // Consolidated CMS send bridge (epic #131 §4-C). One occasion-agnostic reason
   // for sending ANY Post as an announcement — funeral/baptism/wedding/general all
   // flow through here. Subject is always the post title (passed as customSubject);
   // this static value is only the fallback. The audience is caller-chosen
-  // (customList); 'newsletter' is a safe default, and test mode still hard-routes
-  // to testList in emailSend.
+  // (listId); the newsletter list is the default, and test mode still hard-routes
+  // to the test list in emailSend.
   'post-announcement': {
     subject: 'Announcement',
-    contactList: 'newsletter',
     replyTo: REPLY_TO,
   },
 }
@@ -143,7 +135,13 @@ export type emailSendProps = {
   emailHtml: string
   emailText: string
   test?: boolean
-  customList?: string // For custom emails to specify which list to send to
+  /**
+   * The mailing list to send to, by its `listId`. Omitted → the sending
+   * owner's default list for `reason`. A test send always goes to the test
+   * list. (Back-compat: an old list KEY such as 'newsletter' is accepted and
+   * resolved to that owner's list; see send-target.ts.)
+   */
+  listId?: string
   customSubject?: string // For custom emails to specify subject
   subReason?: EmailSubReason // Categorization for per-send tracking
   description?: string // Free-text description for the send record
@@ -158,25 +156,7 @@ export type emailSendProps = {
 }
 
 type Sends = { sends: string[]; skips: string[] }
-type SendResult = Sends & { campaignId: string }
-
-async function getAllContacts({
-  listTopic,
-  nextPageToken,
-}: {
-  listTopic: string
-  nextPageToken?: string
-}): Promise<ListContactsResponse['Contacts']> {
-  const contacts = await getContacts({ listTopic, nextPageToken })
-  if (!contacts.Contacts) {
-    return []
-  }
-  if (contacts.NextToken) {
-    const next = await getAllContacts({ listTopic, nextPageToken: contacts.NextToken })
-    return next ? [...contacts.Contacts, ...next] : contacts.Contacts
-  }
-  return contacts.Contacts
-}
+type SendResult = Sends & { campaignId: string; listId?: string }
 
 // Per-recipient one-click sign-in footer. The {{loginUrl}} placeholder is
 // substituted per recipient in chunkSend; any unsubstituted token is swept
@@ -202,7 +182,7 @@ export const emailSend = async function ({
   emailHtml,
   emailText,
   test = false,
-  customList,
+  listId,
   customSubject,
   subReason = 'general',
   description,
@@ -224,40 +204,29 @@ export const emailSend = async function ({
   }
 
   try {
-    // For custom emails, use the provided list, otherwise use the default for that reason
-    const listTopic = test === true ? 'testList' : (customList || senders[reason].contactList)
+    // R5: every send names ONE registry list (a test send → the test list).
+    // An unknown or archived list throws SendListError (routes answer 400).
+    const list = await resolveSendList({ reason, test, list: listId, tenant: resolvedTenant })
     const sesClient = getSesClient()
 
-    // Inter-ecclesia (never a test send): offices decide once the flag is on and
-    // the confirmed assignments are applied (R3); otherwise null.
+    // Who receives it, and which SES topic each send names as its final gate
+    // (the safety net once it is switched on; see registry-send.ts).
+    const audience = await resolveSendAudience(list, await safetyNetState())
+    const listTopic = audience.topicName
+    // R3: mail addressed to ecclesias goes to their offices (office email, else
+    // the holder's primary) once the flag is on and the assignments are applied.
+    // Null (off, not assigned, or any error) → the registry audience, unchanged.
     const fromOffices =
-      listTopic === senders['inter-ecclesia'].contactList ? await interEcclesiaRecipientsFromOffices(sesClient) : null
-    // R5 per-list cutover: a list whose `sendFromRegistry` is on takes its
-    // recipients from the mailing-list registry. Null (not cut over, or any
-    // registry error) → the SES-topic path below, unchanged.
-    const registryAudience = fromOffices ? null : await resolveRegistryAudience(listTopic)
-
-    let senderEmails: string[]
-    if (fromOffices) {
-      senderEmails = fromOffices
-    } else if (registryAudience) {
-      senderEmails = registryAudience.emails
-      console.log('[emailSend] recipients from registry', {
-        listTopic,
-        listId: registryAudience.listId,
-        stats: registryAudience.stats,
-      })
-    } else {
-      console.log('why test=false sends test', { test, listTopic })
-      const contacts = await getAllContacts({ listTopic, nextPageToken: undefined })
-      if (!contacts) {
-        return { sends: [], skips: [], campaignId }
-      }
-
-      senderEmails = contacts
-        .filter((contact) => contact.EmailAddress !== undefined && contact.UnsubscribeAll === false)
-        .map((contact) => contact.EmailAddress as string)
-    }
+      !test && list.key === 'interEcclesia' ? await interEcclesiaRecipientsFromOffices(sesClient) : null
+    const senderEmails = fromOffices ?? audience.emails
+    console.log('[emailSend] audience', {
+      listId: list.listId,
+      test,
+      source: fromOffices ? 'offices' : audience.source,
+      topic: listTopic ?? null,
+      recipients: senderEmails.length,
+      stats: audience.stats,
+    })
 
     // Universal one-click login (feature-flagged). Read globally with a null
     // session, so it is active only when the flag is set to 'everyone'. When
@@ -315,6 +284,7 @@ export const emailSend = async function ({
         subReason,
         subject,
         description,
+        listId: list.listId,
         recipientCount: senderEmails.length,
         sentCount: 0,
         failedCount: 0,
@@ -374,7 +344,7 @@ export const emailSend = async function ({
       }
     }
 
-    return { ...allSent, campaignId }
+    return { ...allSent, campaignId, listId: list.listId }
   } catch (error) {
     console.error('SES Sending Email command', error)
     throw error
@@ -385,7 +355,8 @@ type SingleSendProps = {
   from: string
   toArray: string[]
   subject: string
-  listTopic: string
+  /** SES topic named in ListManagementOptions; undefined → the contact list alone. */
+  listTopic?: string
   emailText: string
   emailHtml: string
   reason: string
@@ -417,7 +388,7 @@ async function sendDeferred(sendToChunk: SingleSendProps): Promise<Sends> {
  * @param toArray Email[]
  * @param from Email
  * @param subject string
- * @param listTopic SES List Topic
+ * @param listTopic SES topic (the safety net), or undefined for none
  * @param emailText
  * @param emailHtml
  * @param reason - selects audience and template to send
@@ -513,8 +484,8 @@ async function chunkSend({
           ToAddresses: [recipientEmail],
         },
         ListManagementOptions: {
-          ContactListName: 'TEEAdmin',
-          TopicName: listTopic,
+          ContactListName: inputTemplate.ContactListName,
+          ...(listTopic ? { TopicName: listTopic } : {}),
         },
         ConfigurationSetName: 'tee-email-tracking',
         EmailTags: [

@@ -5,7 +5,10 @@ import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-re
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { getPublicOptInCount } from '../../../../utils/email/public-topics'
 import { requireFreshAuth } from '../../../../utils/require-fresh-auth'
+import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { mailingListsByAddress } from '../../../../utils/mailing-lists/by-address'
+import { ownerNameOf, ownerNamesFor } from '../../../../utils/mailing-lists/owners'
 
 // Simple email validation
 function isValidEmail(email: string): boolean {
@@ -53,7 +56,13 @@ export async function GET() {
       verificationSentAt?: string
       subscribed?: boolean
       subscriptionCount?: number
+      /**
+       * The primary email: PROFILE.primaryEmail, the sign-in and account
+       * address. Exactly one entry carries it.
+       */
       isPrimary?: boolean
+      /** Mailing lists (registry SUB# rows) that send to THIS address. */
+      mailingLists?: string[]
       /** A role this address represents (e.g. Recording Brother) — shown read-only. */
       roleLabel?: string
       /**
@@ -114,15 +123,33 @@ export async function GET() {
         console.error('[user/emails] deriving verificationSentAt failed (non-fatal):', tokErr)
       }
 
+      // Which lists send to which address — the registry's SUB# rows. Display
+      // only; never fails the page.
+      let listsByAddress = new Map<string, string[]>()
+      try {
+        const subs = await mailingListRepository.getPersonSubscriptions(person.personId)
+        if (subs.some((s) => s.status === 'opt_in')) {
+          const lists = await mailingListRepository.listAllLists()
+          const names = await ownerNamesFor(lists)
+          listsByAddress = mailingListsByAddress(subs, lists, (l) => ownerNameOf(names, l))
+        }
+      } catch (listErr) {
+        console.error('[user/emails] reading mailing-list subscriptions failed (non-fatal):', listErr)
+      }
+
+      // The primary is PROFILE.primaryEmail — what sign-in and the account
+      // resolve — never the EMAIL# `emailType` label, which can drift from it.
+      const primaryAddress = (person.primaryEmail || '').toLowerCase()
       const sorted = [...personEmails].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       const now = Date.now()
       emails = await Promise.all(
         sorted.map(async (email) => {
+          const isPrimary = email.email.toLowerCase() === primaryAddress
           // "Retired" = a demoted former-primary still inside its archiveAfter grace
           // window (a login-email change put it here). The primary itself never
-          // carries archiveAfter, so it can never read as retired.
+          // reads as retired.
           const isRetired =
-            email.emailType !== 'primary' &&
+            !isPrimary &&
             !!email.archiveAfter &&
             new Date(email.archiveAfter).getTime() > now
           return {
@@ -134,12 +161,25 @@ export async function GET() {
             // How many public mailing lists this address is opted into (verified
             // addresses only — no point querying SES for an unverified one).
             subscriptionCount: email.verified ? await getPublicOptInCount(email.email) : undefined,
-            isPrimary: email.emailType === 'primary',
+            isPrimary,
+            mailingLists: listsByAddress.get(email.email.toLowerCase()) ?? [],
             retired: isRetired,
             retiredUntil: isRetired ? email.archiveAfter : undefined,
           }
         })
       )
+
+      // A primary that exists only on the PROFILE (no EMAIL# row) is still the
+      // sign-in address — show it, marked, so the person can see and move it.
+      if (primaryAddress && !emails.some((e) => e.email.toLowerCase() === primaryAddress)) {
+        emails.unshift({
+          id: 'profile-primary',
+          email: primaryAddress,
+          verified: !!person.emailVerified,
+          isPrimary: true,
+          mailingLists: listsByAddress.get(primaryAddress) ?? [],
+        })
+      }
     }
 
     // If nothing is stored yet, seed with the login email.
@@ -186,66 +226,6 @@ export async function GET() {
     return NextResponse.json({ success: true, emails })
   } catch (error) {
     console.error('Get emails error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
-
-/**
- * PUT /api/user/emails - Reorder emails ("set as preferred" moves an address to
- * the front). Order is the array index. Display order only — never an identity
- * transfer, so the primary login email is untouched.
- */
-export async function PUT(request: NextRequest) {
-  try {
-    const session = await auth()
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    // Editing the email set is a sensitive account change — require fresh step-up.
-    const gate = await requireFreshAuth()
-    if (!gate.ok) return gate.response
-
-    const body = await request.json()
-    const { emails } = body as { emails: Array<{ id: string; email: string }> }
-
-    if (!Array.isArray(emails)) {
-      return NextResponse.json(
-        { error: 'emails must be an array' },
-        { status: 400 }
-      )
-    }
-
-    const person = await resolveActingPerson(session.user.email)
-    if (!person) {
-      return NextResponse.json(
-        { error: 'No profile found for your account' },
-        { status: 404 }
-      )
-    }
-
-    // Only reorder real EMAIL# rows — filter out synthetic ids (seeded 'primary',
-    // read-only 'rb-ecclesia') and anything not on this person.
-    const personEmails = await personRepository.getEmails(person.personId)
-    const validIds = new Set(personEmails.map(e => e.emailId))
-    const orderedIds = emails.map(e => e.id).filter(id => validIds.has(id))
-
-    await personRepository.setEmailOrder(person.personId, orderedIds)
-
-    return NextResponse.json({
-      success: true,
-      message: 'Email addresses updated',
-      count: orderedIds.length,
-    })
-  } catch (error) {
-    console.error('Update emails error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -380,9 +360,12 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    if (target.emailType === 'primary') {
+    if (
+      target.emailType === 'primary' ||
+      target.email.toLowerCase() === (person.primaryEmail || '').toLowerCase()
+    ) {
       return NextResponse.json(
-        { error: 'Cannot delete your primary login email' },
+        { error: 'Cannot delete your primary email. Make another address primary first.' },
         { status: 400 }
       )
     }

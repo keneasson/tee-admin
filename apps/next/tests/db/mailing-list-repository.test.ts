@@ -316,7 +316,7 @@ describe('MailingListRepository', () => {
     })
   })
 
-  describe('listAllLists / findBySesTopic', () => {
+  describe('listAllLists', () => {
     it('reads every list from the sparse gsi4 entry (no Scan)', async () => {
       mockSend.mockResolvedValueOnce({ Items: [storedList()] })
       await repo.listAllLists()
@@ -326,22 +326,60 @@ describe('MailingListRepository', () => {
       expect(q.params.ExpressionAttributeValues).toEqual({ ':pk': 'MAILING_LISTS' })
     })
 
-    it('finds the single ACTIVE list bridging a topic', async () => {
+  })
+
+  describe('findByOwnerKey (a send with no listId resolves the owner default)', () => {
+    it('queries the owner TENANT# partition and returns the one active list with that key', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [
-          storedList({ listId: 'old', sesTopic: 'bibleClass', status: 'archived' }),
-          storedList({ listId: 'bc', sesTopic: 'bibleClass' }),
-          storedList({ listId: 'nl', sesTopic: 'newsletter' }),
+          storedList({ listId: 'old', key: 'memorial', status: 'archived' }),
+          storedList({ listId: 'mem', key: 'memorial' }),
+          storedList({ listId: 'nl', key: 'newsletter' }),
         ],
       })
-      expect((await repo.findBySesTopic('bibleClass'))?.listId).toBe('bc')
+      expect((await repo.findByOwnerKey('ecclesia', 'toronto-east-ecclesia', 'memorial'))?.listId).toBe('mem')
+      expect(mockSend.mock.calls[0][0].params.ExpressionAttributeValues).toEqual({
+        ':gsi1pk': 'TENANT#ecclesia#toronto-east-ecclesia',
+      })
     })
 
-    it('returns null when two active lists claim one topic (caller keeps the SES path)', async () => {
+    it('null when two active lists share a key (never guesses)', async () => {
       mockSend.mockResolvedValueOnce({
-        Items: [storedList({ listId: 'a', sesTopic: 'newsletter' }), storedList({ listId: 'b', sesTopic: 'newsletter' })],
+        Items: [storedList({ listId: 'a', key: 'newsletter' }), storedList({ listId: 'b', key: 'newsletter' })],
       })
-      expect(await repo.findBySesTopic('newsletter')).toBeNull()
+      expect(await repo.findByOwnerKey('ecclesia', 'toronto-east-ecclesia', 'newsletter')).toBeNull()
+    })
+  })
+
+  describe('safety-net setting', () => {
+    it('reads OFF when no item exists', async () => {
+      mockSend.mockResolvedValueOnce({})
+      expect(await repo.getSafetyNetSetting()).toEqual({ enabled: false, topics: [] })
+      expect(mockSend.mock.calls[0][0].params.Key).toEqual({ pkey: 'MAILING_LIST_SETTINGS', skey: 'SAFETY_NET' })
+    })
+
+    it('writes one settings item (no list GSI keys)', async () => {
+      mockSend.mockResolvedValueOnce({})
+      await repo.setSafetyNetSetting({ enabled: true, topics: ['safetyNetDefault'] })
+      const item = mockSend.mock.calls[0][0].params.Item
+      expect(item).toMatchObject({ pkey: 'MAILING_LIST_SETTINGS', skey: 'SAFETY_NET', enabled: true, topics: ['safetyNetDefault'] })
+      expect(item.gsi4pk).toBeUndefined()
+    })
+  })
+
+  describe('subscribe with status', () => {
+    it('writes an explicit opt_out row when asked (leaving a defaultOptIn list)', async () => {
+      mockSend.mockResolvedValueOnce({})
+      await repo.subscribe({
+        personId: 'p1',
+        listId: 'l1',
+        emailId: 'e1',
+        email: 'A@Example.org',
+        source: 'self',
+        basis: 'express',
+        status: 'opt_out',
+      })
+      expect(mockSend.mock.calls[0][0].params.Item).toMatchObject({ status: 'opt_out', email: 'a@example.org' })
     })
   })
 

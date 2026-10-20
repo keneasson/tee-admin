@@ -65,6 +65,7 @@ const contentManagerPages: MainPageType[] = [
 // Admin Tools - System Management (admin/owner only)
 const systemAdminPages: MainPageType[] = [
   { path: '/admin/youtube', label: 'YouTube' },
+  { path: '/admin/community/recording-brothers', label: 'Recording Brothers' },
   { path: '/admin/schedule-overrides', label: 'Service Overrides' },
   { path: '/admin/offices', label: 'Ecclesia Offices' },
   { path: '/admin/data-sync', label: 'Data Sync' },

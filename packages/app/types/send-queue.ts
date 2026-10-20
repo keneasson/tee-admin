@@ -13,6 +13,8 @@ export interface EmailSchedule {
   enabled: boolean
   description?: string
   testMode?: boolean
+  /** The mailing list to send to (R5). Absent → the email type's default list. */
+  listId?: string
 }
 
 // Queue entry for emails to be sent
@@ -31,6 +33,8 @@ export interface QueueEntry {
   testMode?: boolean // Whether this was a test send
   retryCount?: number // Number of retry attempts
   lastRetry?: string // ISO timestamp of last retry attempt
+  /** The mailing list to send to (R5). Absent → the email type's default list. */
+  listId?: string
 }
 
 // DynamoDB record structures
@@ -44,6 +48,7 @@ export interface ScheduleRecord {
   enabled: boolean
   description?: string
   testMode?: boolean
+  listId?: string
   createdAt: string
   updatedAt: string
 }
@@ -67,6 +72,7 @@ export interface QueueRecord {
   testMode?: boolean
   retryCount?: number
   lastRetry?: string
+  listId?: string
 }
 
 // API request/response types
@@ -78,6 +84,8 @@ export interface CreateScheduleRequest {
   enabled?: boolean
   description?: string
   testMode?: boolean
+  /** The mailing list to send to (R5). Absent → the email type's default list. */
+  listId?: string
 }
 
 export interface UpdateScheduleRequest extends Partial<CreateScheduleRequest> {
@@ -89,6 +97,8 @@ export interface QueueEntryRequest {
   scheduledDate: string
   scheduledTime: string
   testMode?: boolean
+  /** The mailing list to send to (R5). Absent → the email type's default list. */
+  listId?: string
 }
 
 export interface CronJobResponse {

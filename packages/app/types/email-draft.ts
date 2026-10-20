@@ -1,10 +1,15 @@
-export type EmailListTypeKeys = 'sundaySchool' | 'newsletter' | 'memorial' | 'bibleClass' | 'members' | 'interEcclesia' | 'testList'
+/**
+ * A draft's audience: a mailing-list id (R5). Drafts saved before R5 hold an
+ * old list key ('newsletter', 'memorial', …); the server resolves those to the
+ * owner's list, and the editor swaps them for the listId when lists load.
+ */
+export type DraftListRef = string
 
 export interface EmailDraft {
   id: string // UUID for the draft
   subject: string
   htmlContent: string // The rich text content
-  selectedList: EmailListTypeKeys
+  selectedList: DraftListRef
   note?: string
   createdAt: string // ISO date string
   updatedAt: string // ISO date string
@@ -17,7 +22,7 @@ export interface EmailDraft {
 export interface CreateEmailDraftInput {
   subject: string
   htmlContent: string
-  selectedList: EmailListTypeKeys
+  selectedList: DraftListRef
   note?: string
 }
 

@@ -4,6 +4,7 @@ import { privacyRepository } from '@my/app/provider/dynamodb/repositories/privac
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { connectionRepository } from '@my/app/provider/dynamodb/repositories/connection-repository'
 import { relationshipRepository } from '@my/app/provider/dynamodb/repositories/relationship-repository'
+import { describeRelatives } from '../../../../utils/relationships'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { ContactRequestType } from '@my/app/provider/dynamodb/types'
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
@@ -80,9 +81,8 @@ interface MemberProfile {
     isHousehold: boolean
   }>
   family?: Array<{
-    email: string
     name?: string
-    personId?: string
+    personId: string
     relationshipType: string
   }>
   privacy?: {
@@ -372,28 +372,13 @@ export async function GET(
 
     // Family members (privacy gated)
     if (permissions.canViewFamily) {
-      const familyRecords = await relationshipRepository.getFamilyMembers(targetPerson.primaryEmail)
-      // Resolve names from person records — never expose raw emails
-      const familyWithNames = await Promise.all(
-        familyRecords.map(async (rel) => {
-          let name: string | undefined
-          let personId: string | undefined
-          try {
-            const person = await personRepository.getByEmail(rel.targetEmail)
-            if (person) {
-              name = person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim() || undefined
-              personId = person.personId
-            }
-          } catch { /* person not found */ }
-          return {
-            email: rel.targetEmail,
-            name,
-            personId,
-            relationshipType: rel.relationshipType,
-          }
-        })
-      )
-      profile.family = familyWithNames
+      // Keyed by personId; names come from the person records, never an email.
+      const familyRecords = await relationshipRepository.getFamilyMembers(targetPerson.personId)
+      profile.family = (await describeRelatives(familyRecords)).map((rel) => ({
+        name: rel.name,
+        personId: rel.personId,
+        relationshipType: rel.relationshipType,
+      }))
     }
 
     // Admin data for Owner/Admin viewers
@@ -409,9 +394,9 @@ export async function GET(
       profile.managedRegions = targetPerson.managedRegions
       profile.canSetRole = !isOwnProfile
       if (viewerRole === ROLES.OWNER) {
-        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       } else {
-        profile.allowedRoles = [ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       }
     }
 
@@ -426,11 +411,7 @@ export async function GET(
         profile.personId = targetPerson.personId
         profile.role = targetPerson.role || ROLES.GUEST
         profile.canSetRole = true
-        if (viewerIsRecordingBrother || viewerRole === ROLES.RECORDER) {
-          profile.allowedRoles = [ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
-        } else {
-          profile.allowedRoles = [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
-        }
+        profile.allowedRoles = [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       }
     }
 
