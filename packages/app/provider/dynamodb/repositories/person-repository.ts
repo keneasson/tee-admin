@@ -1258,6 +1258,22 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     }
   }
 
+  /** Everyone currently designated Recording Brother (one per ecclesia). */
+  async listRecordingBrothers(): Promise<PersonRecord[]> {
+    const all: PersonRecord[] = []
+    let lastKey: Record<string, any> | undefined
+    do {
+      const result = await this.scan({
+        filterExpression: 'skey = :skey AND isRecordingBrother = :isRB',
+        expressionAttributeValues: { ':skey': 'PROFILE', ':isRB': true },
+        lastEvaluatedKey: lastKey,
+      })
+      all.push(...result.items)
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
+    return all
+  }
+
   /**
    * List all inter-ecclesia representatives
    * These are the contacts who receive inter-ecclesia emails for their ecclesia
