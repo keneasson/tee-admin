@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     
     // Check if user exists (but don't reveal this information for security)
     const legacyUser = await findCredentialsUserByEmail(email)
-    // With person_password_signin on, a person with a password can reset it
+    // A person with a password can reset it
     // even when no legacy record exists — but only through an address that is
     // VERIFIED on that person (never an unverified secondary).
     const person = await personForPasswordReset(email)
