@@ -145,6 +145,8 @@ function PrivacyIndicator({ level }: { level: string }) {
   )
 }
 
+const FAMILY_RELATION_TYPES = ['spouse', 'parent', 'child', 'sibling', 'grandparent', 'grandchild', 'extended_family', 'household_member']
+
 export default function MemberProfilePage() {
   const params = useParams()
   const router = useRouter()
@@ -738,6 +740,9 @@ export default function MemberProfilePage() {
   const [newFamilyFirstName, setNewFamilyFirstName] = useState('')
   const [newFamilyLastName, setNewFamilyLastName] = useState('')
   const [newFamilySameAddress, setNewFamilySameAddress] = useState(true)
+  // The person picked from the search. Picking only selects; nothing is saved
+  // until the relationship is chosen and Add is pressed.
+  const [familyPick, setFamilyPick] = useState<{ id: string; name: string; ecclesia?: string } | null>(null)
 
   // Debounced search over name / email / phone.
   useEffect(() => {
@@ -747,8 +752,10 @@ export default function MemberProfilePage() {
       return
     }
     let cancelled = false
-    setFamilySearching(true)
+    // Previous results stay on screen until the new ones arrive, so the list
+    // doesn't collapse and re-grow on every keystroke.
     const t = setTimeout(async () => {
+      setFamilySearching(true)
       try {
         const res = await fetch(`/api/people?search=${encodeURIComponent(q)}`)
         const data = await res.json()
@@ -776,6 +783,7 @@ export default function MemberProfilePage() {
     setNewFamilyFirstName('')
     setNewFamilyLastName('')
     setNewFamilySameAddress(true)
+    setFamilyPick(null)
     setNewRelationType('spouse')
     setAddingFamily(false)
   }
@@ -1909,29 +1917,19 @@ export default function MemberProfilePage() {
               {addingFamily ? (
                 <Card padding="$3" backgroundColor="$backgroundHover">
                   <YStack gap="$2">
-                    <Select
-                      value={newRelationType}
-                      onValueChange={setNewRelationType}
-                      disablePreventBodyScroll
-                    >
-                      <Select.Trigger width={180} iconAfter={ChevronDown}>
-                        <Select.Value placeholder="Relationship" />
-                      </Select.Trigger>
-                      <Select.Content zIndex={200000}>
-                        <Select.Viewport>
-                          <Select.Group>
-                            {['spouse', 'parent', 'child', 'sibling', 'grandparent', 'grandchild', 'extended_family', 'household_member'].map((t, i) => (
-                              <Select.Item key={t} index={i} value={t}>
-                                <Select.ItemText>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</Select.ItemText>
-                              </Select.Item>
-                            ))}
-                          </Select.Group>
-                        </Select.Viewport>
-                      </Select.Content>
-                    </Select>
-                    {/* SEARCH FIRST — by name, email or phone — and only offer
-                        to create somebody once the directory has been checked. */}
-                    {familyCreating ? null : (
+                    {/* 1. WHO — search by name, email or phone; create only once
+                        the directory has been checked. Picking only selects. */}
+                    {familyPick ? (
+                      <XStack gap="$2" alignItems="center" justifyContent="space-between">
+                        <Text fontSize="$4" fontWeight="500" flexShrink={1}>
+                          {familyPick.name}
+                          {familyPick.ecclesia ? ` · ${familyPick.ecclesia}` : ''}
+                        </Text>
+                        <Button size="$2" chromeless onPress={() => setFamilyPick(null)} disabled={contactSaving}>
+                          Change
+                        </Button>
+                      </XStack>
+                    ) : familyCreating ? null : (
                       <>
                         <Input
                           placeholder="Search by name, email or phone"
@@ -1940,9 +1938,10 @@ export default function MemberProfilePage() {
                           autoFocus
                           autoCapitalize="none"
                         />
-                        {familySearching ? (
-                          <Text fontSize="$2" theme="alt2">Searching…</Text>
-                        ) : null}
+                        {/* Fixed height, so the list below never shifts. */}
+                        <Text fontSize="$2" theme="alt2" height="$1">
+                          {familySearching ? 'Searching…' : ''}
+                        </Text>
 
                         {familyResults.length > 0 ? (
                           <YStack gap="$1">
@@ -1951,8 +1950,7 @@ export default function MemberProfilePage() {
                                 key={m.id}
                                 size="$3"
                                 justifyContent="flex-start"
-                                disabled={contactSaving}
-                                onPress={() => linkExistingFamily(m)}
+                                onPress={() => setFamilyPick(m)}
                               >
                                 {m.name}
                                 {m.ecclesia ? ` · ${m.ecclesia}` : ''}
@@ -1988,11 +1986,7 @@ export default function MemberProfilePage() {
                         <XStack gap="$2">
                           <YStack flex={1} gap="$1">
                             <Text fontSize="$2" theme="alt2">First name</Text>
-                            <Input
-                              value={newFamilyFirstName}
-                              onChangeText={setNewFamilyFirstName}
-                              autoFocus
-                            />
+                            <Input value={newFamilyFirstName} onChangeText={setNewFamilyFirstName} />
                           </YStack>
                           <YStack flex={1} gap="$1">
                             <Text fontSize="$2" theme="alt2">Last name (optional)</Text>
@@ -2016,6 +2010,30 @@ export default function MemberProfilePage() {
                       </YStack>
                     ) : null}
 
+                    {/* 2. HOW RELATED — tap buttons, not a dropdown: a dropdown
+                        fights the phone keyboard and could drop the choice. */}
+                    {familyPick || familyCreating ? (
+                      <YStack gap="$1">
+                        <Text fontSize="$2" theme="alt2">
+                          {(familyPick?.name || newFamilyFirstName.trim() || 'They').split(' ')[0]} is {profile.name?.split(' ')[0] || 'this person'}'s…
+                        </Text>
+                        <XStack gap="$2" flexWrap="wrap">
+                          {FAMILY_RELATION_TYPES.map((t) => (
+                            <Button
+                              key={t}
+                              size="$2"
+                              theme={newRelationType === t ? 'blue' : undefined}
+                              icon={newRelationType === t ? Check : undefined}
+                              onPress={() => setNewRelationType(t)}
+                              disabled={contactSaving}
+                            >
+                              {t.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                            </Button>
+                          ))}
+                        </XStack>
+                      </YStack>
+                    ) : null}
+
                     {contactError ? <Text fontSize="$2" color="$red10">{contactError}</Text> : null}
                     <XStack gap="$2" justifyContent="flex-end">
                       <Button
@@ -2026,6 +2044,16 @@ export default function MemberProfilePage() {
                       >
                         Cancel
                       </Button>
+                      {familyPick ? (
+                        <Button
+                          size="$3"
+                          theme="blue"
+                          onPress={() => linkExistingFamily(familyPick)}
+                          disabled={contactSaving}
+                        >
+                          {contactSaving ? 'Adding…' : 'Add'}
+                        </Button>
+                      ) : null}
                       {familyCreating ? (
                         <Button
                           size="$3"
