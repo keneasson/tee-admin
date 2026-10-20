@@ -15,6 +15,16 @@ import {
 // Fictional data only (example.org, invented streets and numbers).
 
 describe('parseLegacyAddress', () => {
+  it('keeps a city and province alone as a partial address (street and postal code to come)', () => {
+    expect(parseLegacyAddress('Windsor, ON')).toEqual({
+      street1: '',
+      city: 'Windsor',
+      province: 'ON',
+      postalCode: '',
+      country: 'Canada',
+    })
+  })
+
   it('parses "<street>\\n<City>, <PROV> <POSTAL>"', () => {
     expect(parseLegacyAddress('12 Example Street \nBrampton, ON L6X 1A1')).toEqual({
       street1: '12 Example Street',
@@ -55,7 +65,8 @@ describe('parseLegacyAddress', () => {
   it('returns null for anything that does not parse cleanly', () => {
     expect(parseLegacyAddress('')).toBeNull()
     expect(parseLegacyAddress(null)).toBeNull()
-    expect(parseLegacyAddress('Toronto, ON')).toBeNull() // no street, no postal code
+    expect(parseLegacyAddress('Toronto, ZZ')).toBeNull() // city only, not a province
+    expect(parseLegacyAddress('12 Example St, Toronto, ON')).toBeNull() // fused street, no postal code
     expect(parseLegacyAddress('12 Example St, Unit 4 Toronto, ON M1M 1M1')).toBeNull() // city fused into one line
     expect(parseLegacyAddress('P.O. Box 1234 \nSomewhere, Elsewhere \nFar Away')).toBeNull()
     expect(parseLegacyAddress('12 Example St \nToronto, ZZ M1M 1M1')).toBeNull() // not a province
@@ -254,7 +265,7 @@ describe('planRestore', () => {
   it('lists unparseable values and unmatched rows without writing them', () => {
     const plan = planRestore(
       [
-        row({ address: 'Toronto, ON', phone: 'ask at the door' }),
+        row({ address: 'somewhere downtown', phone: 'ask at the door' }),
         row({ sk: 'USER#y#1', email: 'ghost@example.org', firstName: 'Ghost', lastName: 'Row' }),
       ],
       [person({ personId: 'p1', firstName: 'Alex', lastName: 'Sample', emails: ['alex@example.org'] })]
