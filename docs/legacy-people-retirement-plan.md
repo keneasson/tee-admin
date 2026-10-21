@@ -43,6 +43,17 @@ Owner-run steps, in order (each is a dry run first; `--apply` backs up first):
 5. `npx tsx scripts/retire-ses-topic-fields.ts`, then `--apply`: removes `sesTopicPreferences` from EMAIL# items, and (after step 3) each list's `sesTopic`.
 6. Re-run step 5 as a dry run: 0 remaining. R5 is done when these steps are complete.
 
+### R3 status (2026-10-20)
+
+Done in code (PR #282, on top of #298):
+
+- Setting a Recording Brother (nomination, or the owner/admin page Admin → Recording Brothers) writes the ecclesia's RB office: the person becomes its holder, and "ecclesia mail goes to" sets the office's own address (or none, so mail goes to the holder's primary). An office address is never added to a person's emails; it stays when the holder changes. A nameless record cannot hold an office. The stored `isRecordingBrother` is re-derived from the offices held.
+- Today's inter-ecclesia contacts: 27 of 35 are nameless records (a 2024 mailing-list import; many are ecclesia mailboxes). `scripts/propose-office-assignments.ts` drafts the assignments: a nameless record's address goes on the RB office (or a vacant Rep office), a named flagged RB holds the RB office, named people who receive inter-ecclesia mail hold Rep offices, and an RB office already set is kept. The nameless records are left alone (their list rows still send) and listed to retire in R8.
+- The recipient diff compares against today's real send path, the `interEcclesia` registry list. Sends switch to offices only with the flag and the offices marker (`email-send.tsx`).
+- UX: the profile's "Your role" section ("Recording Brother, <ecclesia>: <address> — goes with the role") replaces the role address that was listed among personal emails; the offices page and the ecclesia RB card say which address receives ecclesia mail and the fallback ("No office email — using <holder>'s primary").
+
+Owner-run steps: EXTERNAL_CHANGES.md, "ecclesia offices (R3)". R3 is done when they are applied and the flag is on.
+
 ## 0.3 Out of scope ("Not now")
 
 Not part of this work. Each is one line here, not an issue.
@@ -55,6 +66,8 @@ Not part of this work. Each is one line here, not an issue.
 - `unsubscribeContact` (bounce webhook, deceased) finds the SES contact by the address as given, not lower-cased.
 - A list's `defaultOptIn` reaches people through `listEcclesiasCached`, which today returns 35 of 39 ecclesias (§0.6), so a default list misses people of the other 4 until that Scan is fixed.
 - Snapshots outside the post registration contact: legacy event `registration.contactEmail/Phone` (`events.ts:106`) and a location block's copied ecclesia address (R6 stores `ecclesiaId` beside it); both move to references with the editor's smart widgets.
+- Signing in with an office inbox that has no PersonRecord still creates a PersonRecord for that inbox; signing in *as the office holder* belongs with R2's chooser.
+- An inter-ecclesia subscriber whose ecclesia has no record ("Montreal Ecclesia") gets no office; create the ecclesia, then re-run the R3 proposal.
 - Merging twin persons (R1, `scripts/merge-duplicate-persons.ts`) does not yet move a person's `REL#` relationship rows to the surviving person; the relationship migration's dry run also shows 2 people with 2 spouse rows each, left for the owner's review page.
 
 ## 0.4 Definition of done

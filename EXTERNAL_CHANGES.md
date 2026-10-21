@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — ecclesia offices (R3, owner-run, Sunday–Tuesday, after this deploys)
+- **Date**: 2026-10-20
+- **Branch**: `feat/office-rb-rep-slots` (PR #282)
+- **Code change**: every ecclesia gets a Recording Brother office and zero or more Rep offices (`ECCLESIA_ID#<id> / OFFICE#<role>`). Setting a Recording Brother (nomination, or Admin → Recording Brothers) writes the RB office; the "ecclesia mail goes to" choice is the office's own address, never a person's email. Inter-ecclesia sends switch to the offices only when the `inter_ecclesia_from_offices` flag is `everyone` AND the offices marker exists; until then they send from the `interEcclesia` registry list, unchanged.
+- **External action** (each step is read-only unless it says `--apply`):
+  1. `npx tsx scripts/propose-office-assignments.ts --out ~/office-proposal.json` — drafts the assignments from today's data into a private file (outside the repo). Nameless records become office addresses, never holders; they are listed to retire in R8. Review the file.
+  2. `npx tsx scripts/backfill-office-assignments.ts --input ~/office-proposal.json` — dry run: planned writes and the recipient diff against the `interEcclesia` list. Dry run 2026-10-20: 55 rows, 0 errors; 36 addresses the same; 1 only today (a subscriber at "Montreal Ecclesia", which has no ecclesia record); 4 only on offices (Brampton's RB and three Reps with no list row).
+  3. `npx tsx scripts/backfill-office-assignments.ts --input ~/office-proposal.json --apply --accept-diff` — backs up to `s3://tee-admin-backups/backups/<date>-office-assignments/`, writes through `officeRepository`, re-plans to verify, writes the offices marker.
+  4. `npx tsx scripts/diff-inter-ecclesia-recipients.ts` — confirm the same differences, then set the `inter_ecclesia_from_offices` flag to `everyone`.
+- **Status**: PENDING
+
 ### Prod data — relationships move to person keys, and the password sign-in flag (R7, run IMMEDIATELY after this deploys)
 - **Date**: 2026-10-18
 - **Branch**: `fix/r7-password-primary-relationships`
@@ -76,7 +87,7 @@ Changes in this file flag code modifications that require **matching manual upda
   1. `VERCEL_TOKEN` — a Vercel access token (Vercel dashboard → **Account Settings → Tokens**, scoped to the **`ken-eassons-projects`** team). Treat like a password.
   2. `VERCEL_TEAM_ID` — `team_vwApqYX2oh48OUB9tx1TTTgR`.
   3. (Optional) Verify with a manual run: **Actions → "Prune old Vercel deployments" → Run workflow** with **dry_run = true** — it logs what it *would* delete without deleting.
-- **Status**: PENDING — secrets not yet added. The workflow is merged but is a no-op (fails safely) until the two secrets exist.
+- **Status**: DONE 2026-09-04 — both secrets added; the job has run every Monday since (it prunes tee-admin and echadhub alike, e.g. 13 + 13 deleted on 2026-10-05).
 
 ### Vercel — Node.js runtime bump 22 → 24 (deprecation of Node 20)
 - **Date**: 2026-08-14

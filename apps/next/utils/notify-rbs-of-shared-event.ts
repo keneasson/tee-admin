@@ -12,6 +12,8 @@ import { getEffectiveSharingScope } from '@my/app/services/event-sharing-resolve
 import { notificationRepository } from '@my/app/provider/dynamodb/repositories/notification-repository'
 import { buildEventSharedNotification } from '@my/app/provider/dynamodb/repositories/notification-helpers'
 import { getAllEcclesia, type EcclesiaData } from '@/utils/dynamodb/locations'
+import { recordingBrothersOf } from '@/utils/ecclesia-offices'
+import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { haversineDistance, DEFAULT_SHARING_RADIUS_KM } from '@my/app/utils/geo'
 
 /** Event types considered "major" for rbAlertPreference filtering */
@@ -41,9 +43,6 @@ function shouldNotifyEcclesia(
   const pref = recipient.rbAlertPreference || 'all'
   if (pref === 'none') return false
   if (pref === 'major' && !isMajorEventType(event.type)) return false
-
-  // Must have an RB email to notify
-  if (!recipient.recordingBrotherEmail) return false
 
   // Sender must not be private
   if (hostingEcclesia.sharingPreference === 'private') return false
@@ -94,14 +93,14 @@ export async function notifyRBsOfSharedEvent(event: Event): Promise<void> {
     const hostingEcclesia = allEcclesias.find((e) => e.name === hostingName)
     if (!hostingEcclesia) return
 
-    const rbEmails: string[] = []
-
-    for (const ecclesia of allEcclesias) {
-      if (ecclesia.name === hostingName) continue
-      if (shouldNotifyEcclesia(ecclesia, hostingEcclesia, event, scope)) {
-        rbEmails.push(ecclesia.recordingBrotherEmail!)
-      }
-    }
+    const candidates = allEcclesias.filter(
+      (ecclesia) => ecclesia.name !== hostingName && shouldNotifyEcclesia(ecclesia, hostingEcclesia, event, scope)
+    )
+    // Each candidate's Recording Brother office (inbox, else holder's address)
+    const rbs = await recordingBrothersOf(candidates)
+    const rbEmails = [
+      ...new Set(candidates.map((e) => rbs.get(ecclesiaIdOf(e))?.email).filter((e): e is string => !!e)),
+    ]
 
     if (rbEmails.length === 0) return
 

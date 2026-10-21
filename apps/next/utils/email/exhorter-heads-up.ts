@@ -21,6 +21,7 @@ import type {
   ExhorterHeadsUpLunch,
 } from 'email-builder/emails/ExhorterHeadsUp'
 import { getEcclesiaByName, type EcclesiaData } from '../dynamodb/locations'
+import { recordingBrotherOf } from '../ecclesia-offices'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { sendEmail } from './sesClient'
 import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
@@ -47,9 +48,9 @@ import { generateEmailPreferencesUrl } from './ecclesia-token'
 // address here or the send fails auth → spam. Reply-To carries the human contact.
 const SENDER_LOCAL_PART = 'communications'
 // Reply-To = the HOST ecclesia's Recording Brother, so the exhorter's replies
-// reach whoever is coordinating that meeting. Now resolved per-ecclesia from the
-// directory (`recordingBrotherEmail`); this constant is only the fallback when
-// the record has no RB email. teerecbro@gmail.com is fine as a Reply-To (no
+// reach whoever is coordinating that meeting. Resolved per-ecclesia from its
+// Recording Brother OFFICE (`recordingBrotherOf`); this constant is only the
+// fallback when the office has no address. teerecbro@gmail.com is fine as a Reply-To (no
 // domain verification needed).
 const REPLY_TO = 'teerecbro@gmail.com'
 
@@ -296,8 +297,12 @@ export async function resolveAndSendExhorterHeadsUp(
   const ecclesia = await getEcclesiaByName(hostCanonical)
   const shortName = shortEcclesiaName(hostPublicName)
   const hallAddress = resolveHallAddress(ecclesia)
-  const signatoryName = ecclesia?.recordingBrotherName?.trim() || undefined
-  const replyTo = ecclesia?.recordingBrotherEmail?.trim() || REPLY_TO
+  const rb = await recordingBrotherOf(ecclesia).catch((error) => {
+    console.error('exhorter heads-up: Recording Brother office lookup failed; using the default reply-to', error)
+    return null
+  })
+  const signatoryName = rb?.name?.trim() || undefined
+  const replyTo = rb?.email?.trim() || REPLY_TO
   const lunchType = resolveLunchType(row.Lunch)
 
   // 7. Recipient: TEST → the requester (NEVER the real exhorter); LIVE → primaryEmail.

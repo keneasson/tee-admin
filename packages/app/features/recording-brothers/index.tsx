@@ -145,6 +145,10 @@ const RowEditor: React.FC<{
             {ownEmail ? `Their own email (${ownEmail})` : 'Their own email'}
           </Button>
         </XStack>
+        <Text fontSize="$2" theme="alt2">
+          An ecclesia address belongs to the ecclesia: it stays when the Recording Brother changes and is never
+          added to anyone&apos;s own emails. With none, ecclesia mail goes to the Recording Brother&apos;s own email.
+        </Text>
         {mailTo === 'own' && ready && !ownEmail ? (
           <Text fontSize="$2" color="$orange10">
             No email on file for them, so ecclesia mail won&apos;t reach anyone until one is added.
@@ -230,7 +234,9 @@ export const RecordingBrothers: React.FC<RecordingBrothersProps> = ({ session })
           <Heading size={5}>Recording Brothers</Heading>
           <Paragraph theme="alt2">
             Set each ecclesia&apos;s Recording Brother directly. Nobody is emailed. Everyone else uses the
-            nomination flow on the ecclesia page.
+            nomination flow on the ecclesia page. Ecclesia mail goes to the ecclesia&apos;s own address when it
+            has one (that address moves to the next Recording Brother with the role), otherwise to the Recording
+            Brother&apos;s own email.
           </Paragraph>
         </YStack>
 
@@ -260,7 +266,13 @@ export const RecordingBrothers: React.FC<RecordingBrothersProps> = ({ session })
                     {row.current ? `Recording Brother: ${row.current.name}` : 'No Recording Brother'}
                   </Text>
                   <Text fontSize="$2" theme="alt2" style={{ overflowWrap: 'anywhere' }}>
-                    {row.mailTo ? `Ecclesia mail goes to ${row.mailTo}` : 'No ecclesia mail address'}
+                    {!row.mailTo
+                      ? 'No ecclesia mail address'
+                      : row.mailToIsOffice
+                        ? `Ecclesia mail goes to ${row.mailTo} — the ecclesia's address, goes with the role`
+                        : row.current
+                          ? `No ecclesia address — using ${row.current.name}'s own email (${row.mailTo})`
+                          : `Ecclesia mail goes to ${row.mailTo}`}
                   </Text>
                   {row.addresses.length > 0 && !row.mailTo ? (
                     <Text fontSize="$2" theme="alt2" style={{ overflowWrap: 'anywhere' }}>

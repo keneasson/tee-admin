@@ -178,25 +178,9 @@ export async function GET() {
       ]
     }
 
-    // Surface the Recording Brother ECCLESIA email. It lives on the PersonRecord
-    // (`rbEcclesiaEmail`), NOT the personal email set, so it never appeared here —
-    // yet the RB genuinely receives on it. Shown read-only: it's a role address,
-    // managed via the ecclesia / RB settings, not deletable from a personal profile.
-    try {
-      const rbEmail = person?.isRecordingBrother ? person.rbEcclesiaEmail?.toLowerCase() : undefined
-      if (rbEmail && !emails.some((e) => e.email.toLowerCase() === rbEmail)) {
-        emails.push({
-          id: 'rb-ecclesia',
-          email: rbEmail,
-          verified: true,
-          isPrimary: false,
-          subscriptionCount: await getPublicOptInCount(rbEmail),
-          roleLabel: 'Recording Brother',
-        })
-      }
-    } catch (rbErr) {
-      console.error('Surface RB ecclesia email failed (non-fatal):', rbErr)
-    }
+    // An office address (e.g. a Recording Brother's ecclesia address) is not a
+    // personal email: it is shown in the profile's "Your role" section
+    // (/api/user/offices) and moves with the role (R3).
 
     // Display order: primary (login) ALWAYS first, then the other addresses in
     // their saved order (Array#sort is stable, so that order is kept).

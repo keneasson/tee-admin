@@ -25,6 +25,7 @@ import {
   listEcclesiaDirectory,
   listPeopleCards,
   listPeopleCardsByEcclesiaId,
+  refreshEcclesiaProjections,
   refreshPersonProjections,
   resetPeopleIndexReadyCache,
   searchPeopleByNamePrefix,
@@ -39,6 +40,7 @@ import {
   updateEcclesiaFields,
 } from '../utils/dynamodb/locations'
 import { loadDirectoryPeople } from '../app/api/people/load-directory'
+import { officeRepository, resetOfficesAssignedCache } from '@my/app/provider/dynamodb/repositories/office-repository'
 
 const repo = new PersonRepository()
 const projectionKeys = (pkey: string) =>
@@ -53,6 +55,7 @@ beforeEach(() => {
   uuidCounter = 0
   clearEcclesiaIdCache()
   resetPeopleIndexReadyCache()
+  resetOfficesAssignedCache()
   flagState.signin = false
   delete process.env.PEOPLE_INDEX_WRITES
   delete process.env.PEOPLE_INDEX_READS
@@ -155,10 +158,16 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect(dir).toEqual([expect.objectContaining({ ecclesiaId: 'old-name', name: 'New Name', ecclesiaSkey: 'Barrie#New Name' })])
   })
 
-  it('sign-in RB lookup: legacy unless the flag is on and the index is built; then office inbox, then legacy field', async () => {
+  it('sign-in RB lookup: legacy Scan while the flag is off; with it on, the legacy copy only until offices are assigned', async () => {
     await seedEcclesia()
-    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherEmail: 'legacy-rb@x.org' })
+    // Nothing writes the copied RB fields any more; seed the legacy data as prod holds it.
+    const key = { pkey: 'ECCLESIA#CA|ON', skey: 'Toronto#Toronto East Ecclesia' }
+    const item = fake.items().find((i) => i.pkey === key.pkey && i.skey === key.skey)!
+    fake.seed([{ ...item, recordingBrotherEmail: 'legacy-rb@x.org', recordingBrotherName: 'Legacy RB' }])
+    await refreshEcclesiaProjections(key)
     expect(fake.items().filter((i) => i.skey.startsWith('OFFICE#'))).toEqual([])
+
+    expect((await findRecordingBrotherEcclesia('Legacy-RB@x.org'))?.rbHolderName).toBe('Legacy RB')
 
     await writeIndexMarker({})
     fake.calls.length = 0
@@ -166,7 +175,7 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect((await findRecordingBrotherEcclesia('Legacy-RB@x.org'))?.name).toBe('Toronto East Ecclesia')
     expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
 
-    await updateEcclesiaFields('Toronto East Ecclesia', { recordingBrotherEmail: '' })
+    await officeRepository.writeOfficesAssignedMarker({})
     expect(await findRecordingBrotherEcclesia('legacy-rb@x.org')).toBeNull()
   })
 

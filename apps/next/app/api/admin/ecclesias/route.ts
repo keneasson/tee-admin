@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
-import { getAllEcclesia, updateEcclesiaFields } from '@/utils/dynamodb/locations'
+import { getAllEcclesia, getEcclesiaByName, updateEcclesiaFields } from '@/utils/dynamodb/locations'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { checkEcclesiaEditPermission, checkRecordingBrotherPermission } from '@/utils/ecclesia-permissions'
 import { getMemberCounts } from './cache'
+import { recordingBrothersOf } from '@/utils/ecclesia-offices'
+import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +29,8 @@ export async function GET(request: NextRequest) {
 
     // Member counts via GSI2 SELECT COUNT queries (cached 5 min)
     const memberCounts = await getMemberCounts(ecclesias.map(e => e.name))
+    // Recording Brother = the ecclesia's RB office (Query per ecclesia + one BatchGet)
+    const rbs = await recordingBrothersOf(ecclesias)
 
     // Transform to include id (using name as id for now)
     const transformedEcclesias = ecclesias.map((ecclesia) => ({
@@ -39,8 +44,8 @@ export async function GET(request: NextRequest) {
       venue: ecclesia.venue,
       phone: ecclesia.phone,
       contactEmail: ecclesia.contactEmail,
-      recordingBrotherEmail: ecclesia.recordingBrotherEmail,
-      recordingBrotherName: ecclesia.recordingBrotherName,
+      ecclesiaId: ecclesiaIdOf(ecclesia),
+      recordingBrother: rbs.get(ecclesiaIdOf(ecclesia)) || null,
       memberCount: memberCounts[ecclesia.name] || 0,
       services: ecclesia.services || [],
       hall: ecclesia.address ? {
@@ -71,9 +76,14 @@ export async function GET(request: NextRequest) {
 
 /**
  * PATCH /api/admin/ecclesias - Update ecclesia fields
- * Owner/Admin: can update any ecclesia fields including Recording Brother
- * Recorder: can update own ecclesia fields including Recording Brother
- * Rep: can update own ecclesia fields EXCEPT Recording Brother
+ * Owner/Admin: can update any ecclesia fields including the Recording Brother office
+ * Recorder: can update own ecclesia fields including the Recording Brother office
+ * Rep: can update own ecclesia fields EXCEPT the Recording Brother office
+ *
+ * The Recording Brother is an office (R3): `rbOfficeEmail` / `rbOfficePhone`
+ * set the office's OWN contact channels through `officeRepository` (null or ''
+ * clears). The holder changes only through nomination/confirmation (rb-service).
+ * The ecclesia item never stores an RB name or email.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -87,11 +97,17 @@ export async function PATCH(request: NextRequest) {
     const viewerRole = (session.user as any).role as string || ROLES.GUEST
 
     const body = await request.json()
-    const { name, recordingBrotherEmail, recordingBrotherName, ...otherFields } = body as {
+    const { name, rbOfficeEmail, rbOfficePhone, recordingBrotherEmail, recordingBrotherName, ...otherFields } = body as {
       name?: string
-      recordingBrotherEmail?: string
-      recordingBrotherName?: string
+      rbOfficeEmail?: string | null
+      rbOfficePhone?: string | null
       [key: string]: any
+    }
+    if (recordingBrotherEmail !== undefined || recordingBrotherName !== undefined) {
+      return NextResponse.json(
+        { error: 'The Recording Brother is an office: send rbOfficeEmail / rbOfficePhone, or nominate a holder' },
+        { status: 400 }
+      )
     }
 
     if (!name) {
@@ -106,8 +122,9 @@ export async function PATCH(request: NextRequest) {
 
     const updates: Record<string, any> = {}
 
-    // Recording Brother fields require elevated permission
-    if (recordingBrotherEmail !== undefined || recordingBrotherName !== undefined) {
+    // Recording Brother office channels require elevated permission
+    const rbOfficeChange = rbOfficeEmail !== undefined || rbOfficePhone !== undefined
+    if (rbOfficeChange) {
       const canSetRb = await checkRecordingBrotherPermission(userEmail, viewerRole, name)
       if (!canSetRb) {
         return NextResponse.json(
@@ -115,8 +132,10 @@ export async function PATCH(request: NextRequest) {
           { status: 403 }
         )
       }
-      if (recordingBrotherEmail !== undefined) updates.recordingBrotherEmail = recordingBrotherEmail.trim()
-      if (recordingBrotherName !== undefined) updates.recordingBrotherName = recordingBrotherName.trim()
+      const email = typeof rbOfficeEmail === 'string' ? rbOfficeEmail.trim() : rbOfficeEmail
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return NextResponse.json({ error: 'rbOfficeEmail is not an email address' }, { status: 400 })
+      }
     }
 
     // Other fields (address, venue, etc.) — allowed if canEdit
@@ -126,11 +145,26 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && !rbOfficeChange) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    const updated = await updateEcclesiaFields(name, updates)
+    const ecclesia = await getEcclesiaByName(name)
+    if (!ecclesia) {
+      return NextResponse.json({ error: 'Ecclesia not found' }, { status: 404 })
+    }
+    if (rbOfficeChange) {
+      const email = typeof rbOfficeEmail === 'string' ? rbOfficeEmail.trim() || null : rbOfficeEmail
+      const phone = typeof rbOfficePhone === 'string' ? rbOfficePhone.trim() || null : rbOfficePhone
+      await officeRepository.saveOffice({
+        ecclesiaId: ecclesiaIdOf(ecclesia),
+        role: OFFICE_ROLES.RECORDING_BROTHER,
+        ...(email !== undefined ? { email } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+      })
+    }
+
+    const updated = Object.keys(updates).length > 0 ? await updateEcclesiaFields(ecclesia.name, updates) : ecclesia
 
     return NextResponse.json({
       success: true,

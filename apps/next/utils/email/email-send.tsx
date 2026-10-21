@@ -3,6 +3,7 @@ import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
 import { inputTemplate } from './contact-lists'
+import { interEcclesiaRecipientsFromOffices } from './inter-ecclesia-recipients'
 import { resolveSendAudience, safetyNetState } from '../mailing-lists/registry-send'
 import { resolveSendList } from '../mailing-lists/send-target'
 import { chunkArray } from '../chunkArray'
@@ -211,12 +212,17 @@ export const emailSend = async function ({
     // Who receives it, and which SES topic each send names as its final gate
     // (the safety net once it is switched on; see registry-send.ts).
     const audience = await resolveSendAudience(list, await safetyNetState())
-    const senderEmails = audience.emails
     const listTopic = audience.topicName
+    // R3: mail addressed to ecclesias goes to their offices (office email, else
+    // the holder's primary) once the flag is on and the assignments are applied.
+    // Null (off, not assigned, or any error) → the registry audience, unchanged.
+    const fromOffices =
+      !test && list.key === 'interEcclesia' ? await interEcclesiaRecipientsFromOffices(sesClient) : null
+    const senderEmails = fromOffices ?? audience.emails
     console.log('[emailSend] audience', {
       listId: list.listId,
       test,
-      source: audience.source,
+      source: fromOffices ? 'offices' : audience.source,
       topic: listTopic ?? null,
       recipients: senderEmails.length,
       stats: audience.stats,

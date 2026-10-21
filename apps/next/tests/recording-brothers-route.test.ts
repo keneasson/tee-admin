@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   create: vi.fn(),
   getEcclesiaByName: vi.fn(),
   setRecordingBrother: vi.fn(),
+  listOfficeViews: vi.fn(),
 }))
 
 vi.mock('@/utils/auth', () => ({ auth: h.auth }))
@@ -26,6 +27,11 @@ vi.mock('@/utils/dynamodb/locations', () => ({
   getEcclesiaByName: h.getEcclesiaByName,
 }))
 vi.mock('@/utils/rb-service', () => ({ setRecordingBrother: h.setRecordingBrother }))
+vi.mock('@my/app/provider/dynamodb/repositories/office-repository', () => ({
+  OFFICE_ROLES: { RECORDING_BROTHER: 'rb' },
+  officeRepository: { listOfficeViews: h.listOfficeViews },
+}))
+vi.mock('@my/app/provider/dynamodb/people-index', () => ({ ecclesiaIdOf: (e: { name: string }) => e.name.toLowerCase() }))
 vi.mock('../app/api/people/cache', () => ({ invalidatePeopleCache: vi.fn() }))
 
 import { GET, POST } from '../app/api/admin/recording-brothers/route'
@@ -46,6 +52,7 @@ describe('/api/admin/recording-brothers', () => {
     h.getByEmail.mockResolvedValue(null)
     h.listByEcclesia.mockResolvedValue({ items: [BROTHER, MAILBOX] })
     h.create.mockResolvedValue({ personId: 'new1' })
+    h.listOfficeViews.mockResolvedValue(new Map())
   })
 
   it('is owner and admin only', async () => {
@@ -84,9 +91,30 @@ describe('/api/admin/recording-brothers', () => {
       expect.objectContaining({
         emailPreference: 'ecclesia',
         rbEcclesiaEmail: 'alphamailbox@example.org',
-        attachEcclesiaEmail: false,
       })
     )
+  })
+
+  it("keeps ecclesia mail at the RB office's own address when the RB changes", async () => {
+    as('owner')
+    h.listOfficeViews.mockResolvedValue(
+      new Map([['alpha', [{ office: { kind: 'rb', email: 'office@alpha.org', holderPersonId: 'old' }, holder: { personId: 'old', displayName: 'Old', primaryEmail: 'old@x.org' } }]]])
+    )
+    expect((await post({ ecclesiaName: 'Alpha', personId: 'p1', mailTo: 'office@alpha.org' })).status).toBe(200)
+    expect(h.setRecordingBrother).toHaveBeenCalledWith(
+      expect.objectContaining({ emailPreference: 'ecclesia', rbEcclesiaEmail: 'office@alpha.org' })
+    )
+    // The previous holder's own address is never an address on file.
+    h.setRecordingBrother.mockClear()
+    expect((await post({ ecclesiaName: 'Alpha', personId: 'p1', mailTo: 'old@x.org' })).status).toBe(400)
+    expect(h.setRecordingBrother).not.toHaveBeenCalled()
+  })
+
+  it('refuses a nameless record: it is an address, not a person', async () => {
+    as('owner')
+    h.getById.mockResolvedValue({ ...MAILBOX, ecclesia: 'Alpha' })
+    expect((await post({ ecclesiaName: 'Alpha', personId: 'mb', mailTo: 'own' })).status).toBe(400)
+    expect(h.setRecordingBrother).not.toHaveBeenCalled()
   })
 
   it("refuses an address that isn't on file for the ecclesia (e.g. a person's own)", async () => {

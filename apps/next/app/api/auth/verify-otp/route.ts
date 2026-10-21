@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { signInOfficeFlags } from '@/utils/dynamodb/locations'
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import {
   getRoleFromLegacyUser,
@@ -117,8 +118,9 @@ async function ensurePersonRecord(email: string): Promise<{
     // Determine role: use explicit role, derive from record, or check legacy directory
     let role = existingPerson.role
     if (!role) {
-      // Derive from memberStatus/isInterEcclesiaRep
-      if (existingPerson.memberStatus === 'member' || existingPerson.isInterEcclesiaRep) {
+      // Derive from memberStatus / the Rep office (offices decide once live; flagged)
+      const offices = await signInOfficeFlags(existingPerson, normalizedEmail)
+      if (existingPerson.memberStatus === 'member' || offices.isInterEcclesiaRep) {
         role = 'member'
       }
 

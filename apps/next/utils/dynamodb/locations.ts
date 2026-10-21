@@ -12,8 +12,14 @@ import {
   refreshEcclesiaProjections,
   removeEcclesiaProjections,
   slugifyEcclesia,
+  batchGetItems,
 } from '@my/app/provider/dynamodb/people-index'
-import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import {
+  deriveOfficeFlags,
+  isTestAccountEmail,
+  officeRepository,
+  OFFICE_ROLES,
+} from '@my/app/provider/dynamodb/repositories/office-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
@@ -108,9 +114,8 @@ export interface EcclesiaData {
   venue?: string
   phone?: string
   contactEmail?: string
-  recordingBrotherEmail?: string
-  recordingBrotherName?: string
-  recordingBrotherPersonId?: string  // Hard link to PersonRecord
+  // The Recording Brother is an OFFICE (`officeRepository`, R3), never a copied
+  // name/email on this record. Read it with `recordingBrotherOf()` (utils/ecclesia-offices).
   /** @deprecated Use scheduleConfig instead — services are derived from schedule types */
   services?: EcclesiaService[]
   website?: string
@@ -230,9 +235,6 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
     venue: item.venue,
     phone: item.phone,
     contactEmail: item.contactEmail,
-    recordingBrotherEmail: item.recordingBrotherEmail,
-    recordingBrotherName: item.recordingBrotherName,
-    recordingBrotherPersonId: item.recordingBrotherPersonId,
     services: item.services,
     website: item.website,
     externalLinks: item.externalLinks,
@@ -553,22 +555,27 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
     const indexed = await getEcclesiasFromIndex()
     if (indexed) return indexed
 
-    // Legacy: single-page Scan (pre-backfill only). It reads only the first
-    // 1 MB of the table, so it misses ecclesias stored past that point.
-    const result = await client.scan({
-      TableName: TABLE_NAME,
-      FilterExpression: '#type = :ecclesiaType',
-      ExpressionAttributeValues: {
-        ':ecclesiaType': 'ECCLESIA',
-      },
-      ExpressionAttributeNames: {
-        '#type': 'type',
-      },
-    })
+    // Legacy: paginated Scan (pre-backfill only). A single page reads only the
+    // first 1 MB of the table and missed 4 of the 39 ecclesias (§0.6).
+    const items: Record<string, any>[] = []
+    let lastKey: Record<string, any> | undefined
+    do {
+      const page = await client.scan({
+        TableName: TABLE_NAME,
+        FilterExpression: '#type = :ecclesiaType',
+        ExpressionAttributeValues: {
+          ':ecclesiaType': 'ECCLESIA',
+        },
+        ExpressionAttributeNames: {
+          '#type': 'type',
+        },
+        ExclusiveStartKey: lastKey,
+      })
+      items.push(...(page.Items || []))
+      lastKey = page.LastEvaluatedKey
+    } while (lastKey)
 
-    if (!result.Items) return []
-
-    return result.Items.map(mapItemToEcclesia)
+    return items.map(mapItemToEcclesia)
   } catch (error) {
     console.error('Error getting all ecclesia:', error)
     return []
@@ -677,9 +684,6 @@ export async function updateEcclesia(
 export async function updateEcclesiaFields(
   name: string,
   updates: {
-    recordingBrotherEmail?: string
-    recordingBrotherName?: string
-    recordingBrotherPersonId?: string
     phone?: string
     contactEmail?: string
     address?: string
@@ -714,9 +718,6 @@ export async function updateEcclesiaFields(
     const names: Record<string, string> = {}
 
     const fieldMap: Array<{ key: string; attr: string; exprName?: string }> = [
-      { key: 'recordingBrotherEmail', attr: ':rbEmail' },
-      { key: 'recordingBrotherName', attr: ':rbName' },
-      { key: 'recordingBrotherPersonId', attr: ':rbPersonId' },
       { key: 'phone', attr: ':phone' },
       { key: 'contactEmail', attr: ':contactEmail' },
       { key: 'address', attr: ':address' },
@@ -772,27 +773,101 @@ export async function updateEcclesiaFields(
 }
 
 /**
- * Look up an ecclesia by its Recording Brother email.
- * Used during sign-in to auto-assign role and ecclesia for RBs.
+ * PRE-CUTOVER ONLY: the Recording Brother name/email that older code copied
+ * onto ECCLESIA items. Nothing writes these any more; the office is the source
+ * (R3). `recordingBrotherOf()` reads this only for an ecclesia that has no
+ * Recording Brother office yet AND only before the owner-confirmed office
+ * assignments are applied (`OFFICES#META / ASSIGNED`). Deleted with the data in R8.
  */
-export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise<EcclesiaData | null> {
-  try {
-    const result = await client.scan({
+export interface LegacyRecordingBrotherCopy {
+  email?: string
+  name?: string
+  personId?: string
+}
+
+export async function legacyRecordingBrotherCopies(
+  ecclesias: EcclesiaData[]
+): Promise<Map<string, LegacyRecordingBrotherCopy>> {
+  const out = new Map<string, LegacyRecordingBrotherCopy>()
+  const keyed = ecclesias.filter((e) => e.country && e.province && e.city && e.name)
+  if (keyed.length === 0) return out
+  const items = await batchGetItems<Record<string, any>>(keyed.map((e) => ecclesiaKey(e)))
+  for (const item of items) {
+    const copy = legacyCopyOf(item)
+    if (copy) out.set(ecclesiaIdOf(item), copy)
+  }
+  return out
+}
+
+function legacyCopyOf(item: Record<string, any>): LegacyRecordingBrotherCopy | null {
+  const email = String(item.recordingBrotherEmail || '').trim().toLowerCase() || undefined
+  const name = String(item.recordingBrotherName || '').trim() || undefined
+  const personId = String(item.recordingBrotherPersonId || '').trim() || undefined
+  if (!email && !name && !personId) return null
+  if (email && isTestAccountEmail(email)) return null
+  return { email, name, personId }
+}
+
+/** Pre-cutover sign-in fallback: the copied RB email, by Scan (flag off) or by the RBEMAIL# index entry. */
+async function legacyEcclesiaByRecordingBrotherEmail(email: string, indexed: boolean): Promise<RecordingBrotherEcclesia | null> {
+  if (indexed) {
+    const entry = await findEcclesiaByRecordingBrotherEmail(email)
+    if (!entry) return null
+    const result = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
+    return result.Item ? { ...mapItemToEcclesia(result.Item), rbHolderName: legacyCopyOf(result.Item)?.name } : null
+  }
+  const items: Record<string, any>[] = []
+  let lastKey: Record<string, any> | undefined
+  do {
+    const page = await client.scan({
       TableName: TABLE_NAME,
       FilterExpression: '#type = :ecclesiaType AND recordingBrotherEmail = :email',
-      ExpressionAttributeValues: {
-        ':ecclesiaType': 'ECCLESIA',
-        ':email': email.toLowerCase(),
-      },
-      ExpressionAttributeNames: {
-        '#type': 'type',
-      },
+      ExpressionAttributeValues: { ':ecclesiaType': 'ECCLESIA', ':email': email.toLowerCase() },
+      ExpressionAttributeNames: { '#type': 'type' },
+      ExclusiveStartKey: lastKey,
     })
+    items.push(...(page.Items || []))
+    lastKey = page.LastEvaluatedKey
+  } while (lastKey && items.length === 0)
+  return items[0] ? { ...mapItemToEcclesia(items[0]), rbHolderName: legacyCopyOf(items[0])?.name } : null
+}
 
-    if (!result.Items || result.Items.length === 0) return null
+/** An ecclesia found by a Recording Brother address, plus the RB's name when one is known. */
+export type RecordingBrotherEcclesia = EcclesiaData & { rbHolderName?: string }
 
-    const item = result.Items[0]
-    return mapItemToEcclesia(item)
+/**
+ * Sign-in's Recording Brother check for an address with no PersonRecord.
+ *
+ * Launch-dark behind `people_index_signin` (released to everyone): the
+ * Recording Brother OFFICE whose own inbox is this address decides — whoever
+ * can read the inbox can sign in with it. Once the owner-confirmed assignments
+ * are applied (offices marker) the offices are the only source; before that the
+ * legacy RB-email index entry is the fallback. Flag off, or on any error: the
+ * legacy Scan, exactly as today. A wrong answer makes a Recording Brother a guest.
+ */
+export async function findRecordingBrotherEcclesia(email: string): Promise<RecordingBrotherEcclesia | null> {
+  if (isTestAccountEmail(email)) return null
+  try {
+    if (await checkFeatureFlagFromDB(FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN, null)) {
+      const offices = (await officeRepository.findOfficesByEmail(email))
+        .filter((o) => o.kind === OFFICE_ROLES.RECORDING_BROTHER)
+        .sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))
+      for (const office of offices) {
+        const entry = await getEcclesiaById(office.ecclesiaId)
+        if (!entry) continue
+        const found = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
+        if (!found.Item) continue
+        const view = await officeRepository.getOfficeWithHolder(office.ecclesiaId, office.role)
+        return { ...mapItemToEcclesia(found.Item), rbHolderName: view?.holder?.displayName?.trim() || undefined }
+      }
+      if (await officeRepository.officesAssigned()) return null
+      if (await peopleIndexReady()) return await legacyEcclesiaByRecordingBrotherEmail(email, true)
+    }
+  } catch (error) {
+    console.error('offices: sign-in RB lookup failed; using legacy scan', error)
+  }
+  try {
+    return await legacyEcclesiaByRecordingBrotherEmail(email, false)
   } catch (error) {
     console.error('Error looking up ecclesia by recording brother email:', error)
     return null
@@ -800,49 +875,38 @@ export async function getEcclesiaByRecordingBrotherEmail(email: string): Promise
 }
 
 /**
- * The same lookup through the RB-email index entry (one Query + one GetItem)
- * instead of a Scan. Only used once the index is ready.
- */
-export async function getEcclesiaByRecordingBrotherEmailIndexed(email: string): Promise<EcclesiaData | null> {
-  // 1. The Recording Brother OFFICE's own inbox (the office model, #58).
-  const offices = (await officeRepository.findOfficesByEmail(email)).filter(
-    (o) => o.role === OFFICE_ROLES.RECORDING_BROTHER
-  )
-  for (const office of offices.sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))) {
-    const entry = await getEcclesiaById(office.ecclesiaId)
-    if (!entry) continue
-    const found = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
-    if (found.Item) return mapItemToEcclesia(found.Item)
-  }
-  // 2. Until offices are migrated: the legacy copied `recordingBrotherEmail`.
-  const entry = await findEcclesiaByRecordingBrotherEmail(email)
-  if (!entry) return null
-  const result = await client.get({
-    TableName: TABLE_NAME,
-    Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey },
-  })
-  return result.Item ? mapItemToEcclesia(result.Item) : null
-}
-
-/**
- * Sign-in's Recording Brother check for an address with no PersonRecord.
+ * Sign-in's Recording Brother / Rep designation for a known person.
  *
- * Launch-dark: the indexed lookup is used only when the `people_index_signin`
- * flag is released to everyone AND the index is built. A wrong answer here
- * makes a Recording Brother a guest, so the legacy Scan stays the default.
+ * Launch-dark, like `findRecordingBrotherEcclesia`: offices decide only when
+ * the `people_index_signin` flag is on for everyone AND the owner-confirmed
+ * assignments have been applied (the offices marker). Then the flags are
+ * DERIVED from the offices the person holds plus any office whose own inbox is
+ * the address they signed in with (whoever can read the inbox can sign in with
+ * it). Otherwise — or on any error — the stored person flags are used, as today.
  */
-export async function findRecordingBrotherEcclesia(email: string): Promise<EcclesiaData | null> {
+export async function signInOfficeFlags(
+  person: { personId: string; isRecordingBrother?: boolean; isInterEcclesiaRep?: boolean },
+  signInEmail: string
+): Promise<{ isRecordingBrother: boolean; isInterEcclesiaRep: boolean }> {
+  const legacy = { isRecordingBrother: !!person.isRecordingBrother, isInterEcclesiaRep: !!person.isInterEcclesiaRep }
   try {
     if (
-      (await checkFeatureFlagFromDB(FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN, null)) &&
-      (await peopleIndexReady())
+      !(await checkFeatureFlagFromDB(FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN, null)) ||
+      !(await officeRepository.officesAssigned())
     ) {
-      return await getEcclesiaByRecordingBrotherEmailIndexed(email)
+      return legacy
     }
+    if (isTestAccountEmail(signInEmail)) return { isRecordingBrother: false, isInterEcclesiaRep: false }
+    const [held, byInbox] = await Promise.all([
+      officeRepository.listOfficesHeldBy(person.personId),
+      officeRepository.findOfficesByEmail(signInEmail),
+    ])
+    const { isRecordingBrother, isInterEcclesiaRep } = deriveOfficeFlags([...held, ...byInbox])
+    return { isRecordingBrother, isInterEcclesiaRep }
   } catch (error) {
-    console.error('people-index: indexed RB lookup failed; using legacy scan', error)
+    console.error('offices: sign-in office lookup failed; using stored person flags', error)
+    return legacy
   }
-  return getEcclesiaByRecordingBrotherEmail(email)
 }
 
 // Initialization function to populate Canadian provinces
