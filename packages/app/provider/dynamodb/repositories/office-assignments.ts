@@ -298,8 +298,13 @@ export interface OfficeProposal {
  *    office. Other named people who receive inter-ecclesia mail today (the
  *    contact flag, role 'rep', or an opt-in on the inter-ecclesia list) hold
  *    Rep offices, so the same people keep receiving it.
- *  - The RB office gets a nameless address only when no named person holds
- *    it: a named RB's mail keeps going to his own email.
+ *  - An ecclesia address wins over the RB's own email: ecclesia mail goes to
+ *    the ecclesia's address (e.g. Toronto West's mailbox, with Dev as RB), not
+ *    to the RB personally. When an ecclesia has several nameless addresses the
+ *    proposal can't tell which is the ecclesia's: none is put on the RB office
+ *    and each becomes a vacant Rep office's address, for the owner to review.
+ *  - A nameless record whose address is a named person's own primary is a
+ *    leftover duplicate of that person, not an ecclesia address.
  *  - An RB office that already has a holder (set on the Recording Brothers
  *    page or by nomination) is kept as it is; so is an office's own address.
  *  - The RB email copied onto the ecclesia item is used as the RB office's
@@ -338,7 +343,9 @@ export function proposeOfficeAssignments(input: {
     else rbHolder = at.find((p) => p.isRecordingBrother && p.named)?.personId || null
 
     // Addresses that are not people: nameless contacts and a nameless "RB".
-    const nameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))
+    const allNameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))
+    for (const p of allNameless) retire.add(p.personId)
+    const nameless = allNameless.filter((p) => !namedPrimaries.has(lower(p.primaryEmail)))
 
     // The RB office's own address (an existing one is kept).
     const legacyRbEmail = lower(e.recordingBrotherEmail)
@@ -347,7 +354,7 @@ export function proposeOfficeAssignments(input: {
       const namelessRb = nameless.find((p) => p.isRecordingBrother)
       if (namelessRb) rbInbox = { inboxFromPersonId: namelessRb.personId }
       else if (legacyRbEmail && !namedPrimaries.has(legacyRbEmail)) rbInbox = { inbox: legacyRbEmail }
-      else if (!rbHolder && nameless[0]) rbInbox = { inboxFromPersonId: nameless[0].personId }
+      else if (nameless.length === 1) rbInbox = { inboxFromPersonId: nameless[0].personId }
     }
     const rbAddress =
       lower(rbOffice?.email) ||
@@ -364,7 +371,6 @@ export function proposeOfficeAssignments(input: {
 
     // Every other nameless address becomes a vacant Rep office's own address.
     for (const p of nameless) {
-      retire.add(p.personId)
       const address = lower(p.primaryEmail)
       if (address === rbAddress || existingReps.some((o) => lower(o.email) === address)) continue
       rows.push({
