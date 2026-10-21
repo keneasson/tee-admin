@@ -20,6 +20,7 @@ import {
   withoutPlaceholderEmails,
 } from '@my/app/utils/placeholder-email'
 import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
+import { personForSessionEmail } from '@/utils/session-person'
 
 interface MemberProfile {
   email: string
@@ -153,7 +154,7 @@ export async function GET(
     }
 
     // Look up viewer's ecclesia for privacy checks (try primary, then secondary email)
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null
@@ -531,7 +532,7 @@ export async function PATCH(
 
     // Recorder/Rep/RB: enforce same-ecclesia restriction
     if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
-      const viewerPerson = await personRepository.getByEmail(session.user.email)
+      const viewerPerson = await personForSessionEmail(session.user.email)
       if (!viewerPerson || viewerPerson.ecclesia !== targetPerson.ecclesia) {
         return NextResponse.json(
           { error: 'You can only edit members of your own ecclesia' },

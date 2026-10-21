@@ -4,6 +4,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { draftMemberRepository } from '@my/app/provider/dynamodb/repositories/draft-member-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../../cache'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * PATCH /api/people/drafts/[draftId] — Approve or reject a draft
@@ -54,7 +55,7 @@ export async function PATCH(
 
     // Recorder/Rep can only approve for their own ecclesia
     if (!isAdminOrOwner) {
-      let viewerPerson = await personRepository.getByEmail(viewerEmail)
+      let viewerPerson = await personForSessionEmail(viewerEmail)
       if (!viewerPerson) {
         const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
         viewerPerson = persons[0] || null

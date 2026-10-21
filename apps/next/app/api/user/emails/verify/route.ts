@@ -5,6 +5,7 @@ import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-re
 import { userRepository } from '@my/app/provider/dynamodb/repositories/user-repository'
 import { sendEmail } from '../../../../../utils/email/sesClient'
 import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * Resolve the acting person from the session login email (primary via GSI1, then
@@ -12,7 +13,7 @@ import { requireFreshAuth } from '../../../../../utils/require-fresh-auth'
  */
 async function resolveActingPerson(loginEmail: string) {
   const email = loginEmail.toLowerCase()
-  let person = await personRepository.getByEmail(email)
+  let person = await personForSessionEmail(email)
   if (!person) {
     const persons = await personRepository.getAllPersonsByEmail(email)
     person = persons[0] || null

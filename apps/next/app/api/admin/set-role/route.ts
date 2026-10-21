@@ -5,6 +5,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { unsubscribeContact } from '../../../../utils/email/contact'
 import { invalidatePeopleCache } from '../../people/cache'
 import { invalidateGuestCache } from '../../people/guests/cache'
+import { personForSessionEmail } from '@/utils/session-person'
 
 // Note: 'recorder' is deprecated as a role — RB is set via the nomination flow (isRecordingBrother boolean).
 // Kept in VALID_ROLES for backwards compat with existing data but not in ALLOWED_ASSIGNMENTS for new assignments.
@@ -96,7 +97,7 @@ export async function PUT(request: NextRequest) {
 
     // Recorder/Rep/RB: enforce same-ecclesia restriction
     if (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP) {
-      const callerPerson = await personRepository.getByEmail(session.user.email)
+      const callerPerson = await personForSessionEmail(session.user.email)
       if (!callerPerson) {
         return NextResponse.json(
           { error: 'Caller not found' },

@@ -184,6 +184,38 @@ describe('verifyPasswordSignIn', () => {
   })
 })
 
+describe('verifyPasswordSignIn — a shared household address (R2)', () => {
+  const SPOUSE = {
+    personId: 'spouse-1',
+    primaryEmail: 'primary@example.org',
+    emailVerified: '2026-01-01T00:00:00.000Z',
+    displayName: 'Spouse Person',
+    role: 'member',
+    hashedPassword: 'hash:spouse-password',
+  } as unknown as PersonRecord
+
+  it("a household member's own password signs THEM in, not the default holder", async () => {
+    const deps = makeDeps({ getHolders: vi.fn(async () => [PERSON, SPOUSE]) })
+    const user = await verifyPasswordSignIn('primary@example.org', 'spouse-password', deps)
+    expect(user).toEqual({ id: 'spouse-1', email: 'primary@example.org', name: 'Spouse Person', role: 'member' })
+  })
+
+  it('the default holder still signs in with their own password', async () => {
+    const deps = makeDeps({ getHolders: vi.fn(async () => [PERSON, SPOUSE]) })
+    expect((await verifyPasswordSignIn('primary@example.org', 'new-password', deps))?.id).toBe('person-1')
+  })
+
+  it("a wrong password matches nobody; a holder without the address verified doesn't count", async () => {
+    const unverified = { ...SPOUSE, emailVerified: undefined } as unknown as PersonRecord
+    const deps = makeDeps({
+      getHolders: vi.fn(async () => [PERSON, unverified]),
+      getEmails: vi.fn(async (id: string) => (id === 'person-1' ? ROWS : [])),
+    })
+    expect(await verifyPasswordSignIn('primary@example.org', 'wrong', deps)).toBeNull()
+    expect(await verifyPasswordSignIn('primary@example.org', 'spouse-password', deps)).toBeNull()
+  })
+})
+
 describe('isAddressVerifiedOn', () => {
   it('a verified PROFILE primary counts even with no EMAIL# row', () => {
     expect(isAddressVerifiedOn(PERSON, 'PRIMARY@example.org', [])).toBe(true)

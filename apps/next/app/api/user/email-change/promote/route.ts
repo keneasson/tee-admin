@@ -5,6 +5,7 @@ import { notifyLoginEmailChanged } from '../../../../../utils/email/notify-login
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * POST /api/user/email-change/promote — the fast-path for making an
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Resolve the acting person the same way the sibling routes do.
     const person =
-      (await personRepository.getByEmail(currentEmail)) ??
+      (await personForSessionEmail(currentEmail)) ??
       (await personRepository.getAllPersonsByEmail(currentEmail))[0]
     if (!person) {
       return NextResponse.json({ error: 'Account not found.' }, { status: 404 })

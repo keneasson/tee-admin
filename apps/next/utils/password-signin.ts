@@ -42,6 +42,8 @@ export interface PasswordSignInDeps {
   legacyRecords: (email: string) => Promise<LegacyCredentialsRecord[]>
   copyHash: (personId: string, hashedPassword: string) => Promise<unknown>
   verify: (password: string, hash: string) => Promise<boolean>
+  /** Everyone who holds the address (a shared household inbox), R2. */
+  getHolders?: (email: string) => Promise<PersonRecord[]>
 }
 
 export const defaultPasswordSignInDeps: PasswordSignInDeps = {
@@ -54,6 +56,7 @@ export const defaultPasswordSignInDeps: PasswordSignInDeps = {
   legacyRecords: (email) => findCredentialsUsersByEmail(email),
   copyHash: (personId, hashedPassword) => personRepository.updatePassword(personId, hashedPassword),
   verify: verifyPassword,
+  getHolders: (email) => personRepository.getAllPersonsByEmail(email),
 }
 
 /** Is this address verified ON this person (primary stamp or its EMAIL# row)? */
@@ -87,20 +90,45 @@ export async function verifyPasswordSignIn(
   }
   if (person.role === 'deceased') return null
 
+  const user = await signInAs(person, email, password, deps)
+  if (user) return user
+
+  // A shared household address (R2): a household member's OWN password
+  // identifies them directly, so try everyone else who holds the address.
+  // Only their own PersonRecord password counts (no legacy fallback): a
+  // password belongs to one person.
+  for (const other of (await deps.getHolders?.(email)) ?? []) {
+    if (other.personId === person.personId || other.role === 'deceased' || !other.hashedPassword) continue
+    if (!isAddressVerifiedOn(other, email, await deps.getEmails(other.personId))) continue
+    if (await deps.verify(password, other.hashedPassword)) return userFor(other, email)
+  }
+  return null
+}
+
+function userFor(person: PersonRecord, email: string): PasswordSignInUser {
+  return {
+    id: person.personId,
+    email,
+    name: person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim() || email,
+    role: roleOf(person),
+  }
+}
+
+async function signInAs(
+  person: PersonRecord,
+  email: string,
+  password: string,
+  deps: PasswordSignInDeps
+): Promise<PasswordSignInUser | null> {
   const rows = await deps.getEmails(person.personId)
   if (!isAddressVerifiedOn(person, email, rows)) {
     console.log('password sign-in: address not verified on person', person.personId)
     return null
   }
 
-  // The session carries the address that was typed: the jwt callback resolves
-  // it back to this same person by the same sign-in rule.
-  const user: PasswordSignInUser = {
-    id: person.personId,
-    email,
-    name: person.displayName || `${person.firstName || ''} ${person.lastName || ''}`.trim() || email,
-    role: roleOf(person),
-  }
+  // The session carries the address that was typed, and this person's id
+  // (`user.id`): the password named them, so the session never asks who (R2).
+  const user = userFor(person, email)
 
   if (person.hashedPassword) {
     return (await deps.verify(password, person.hashedPassword)) ? user : null

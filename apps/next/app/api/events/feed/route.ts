@@ -3,12 +3,12 @@ import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { subscriptionRepository } from '@my/app/provider/dynamodb/repositories/subscription-repository'
 import { getFilteredEvents } from '@my/app/services/event-service'
-import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { getEcclesiaByName, getAllEcclesia } from '@/utils/dynamodb/locations'
 import { resolveEventFeed } from '@my/app/services/event-sharing-resolver'
 import type { SharingEcclesiaData } from '@my/app/services/event-sharing-resolver'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * GET /api/events/feed
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user's ecclesia
-    const person = await personRepository.getByEmail(session.user.email)
+    const person = await personForSessionEmail(session.user.email)
     const userEcclesia = person?.ecclesia
     if (!userEcclesia) {
       return NextResponse.json({ error: 'No ecclesia found for user' }, { status: 400 })

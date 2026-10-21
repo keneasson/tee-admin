@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { personForSessionEmail } from '@/utils/session-person'
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
     }
 
     // Try primary email first, then fall back to secondary email lookup
-    let person = await personRepository.getByEmail(session.user.email)
+    let person = await personForSessionEmail(session.user.email)
     if (!person) {
       const persons = await personRepository.getAllPersonsByEmail(session.user.email)
       person = persons[0] || null
@@ -119,7 +120,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Try primary email first, then fall back to secondary email lookup
-    let person = await personRepository.getByEmail(session.user.email)
+    let person = await personForSessionEmail(session.user.email)
     if (!person) {
       const persons = await personRepository.getAllPersonsByEmail(session.user.email)
       person = persons[0] || null

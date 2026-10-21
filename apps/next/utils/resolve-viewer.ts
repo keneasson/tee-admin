@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { getTrust } from './auth-trust'
 import { RECOGNITION_COOKIE } from './recognition-cookie'
-import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { personForSessionEmail } from './session-person'
 import {
   effectiveRole,
   ANONYMOUS_VIEWER,
@@ -35,7 +35,7 @@ export async function resolveViewer(opts?: {
     return ANONYMOUS_VIEWER
   }
 
-  const person = await personRepository.getByEmailForAuth(trust.email).catch(() => null)
+  const person = await personForSessionEmail(trust.email).catch(() => null)
   const actualRole = person?.role as Role | undefined
 
   return {

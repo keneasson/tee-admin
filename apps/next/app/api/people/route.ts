@@ -6,6 +6,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getCachedMembers, setCachedMembers, CACHE_TTL_MS } from './cache'
 import { loadDirectoryPeople } from './load-directory'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
+import { personForSessionEmail } from '@/utils/session-person'
 
 interface MemberListItem {
   id: string // personId (UUID) — used for routing instead of email
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     const viewerEmail = session.user.email
 
     // Look up viewer's ecclesia for default filter (try primary, then secondary email)
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

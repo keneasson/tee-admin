@@ -5,6 +5,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { isValidRegion } from '@my/app/config/regions'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * PATCH /api/admin/people/[personId]/managed-regions
@@ -36,7 +37,7 @@ export async function PATCH(
 
     // Resolve the caller's role from their PersonRecord (authoritative source).
     const callerEmail = session.user.email.toLowerCase()
-    const callerPerson = await personRepository.getByEmail(callerEmail)
+    const callerPerson = await personForSessionEmail(callerEmail)
     const callerRole = callerPerson?.role || (session.user as any).role || ROLES.GUEST
 
     if (callerRole !== ROLES.OWNER) {
