@@ -50,6 +50,23 @@ describe('buildRecordingBrotherRows', () => {
     expect(rows[0].current?.name).toBe('recorder@example.org (no name on file)')
   })
 
+  it('the RB office decides: holder, its own address (goes with the role), else the holder primary', () => {
+    const flagged = p('flagged', 'A', 'Old Flag')
+    const withAddress = buildRecordingBrotherRows([ecc('A', 'legacy@example.org')], [], [flagged], [[]], [
+      { holderPersonId: 'h1', holderName: 'Holder', officeEmail: 'Office@A.org', holderEmail: 'h1@example.org' },
+    ]).rows[0]
+    expect(withAddress.current).toEqual({ personId: 'h1', name: 'Holder' })
+    expect(withAddress.mailTo).toBe('office@a.org')
+    expect(withAddress.mailToIsOffice).toBe(true)
+    expect(withAddress.addresses).toEqual([{ email: 'office@a.org', note: "the ecclesia's address" }])
+
+    const noAddress = buildRecordingBrotherRows([ecc('A')], [], [], [[]], [
+      { holderPersonId: 'h1', holderName: 'Holder', holderEmail: 'H1@example.org' },
+    ]).rows[0]
+    expect(noAddress.mailTo).toBe('h1@example.org')
+    expect(noAddress.mailToIsOffice).toBe(false)
+  })
+
   it('lists contacts whose ecclesia matches no ecclesia record', () => {
     const { unmatched } = buildRecordingBrotherRows([ecc('A')], [p('x', 'A Ecclesia'), p('y', '')], [], [[]])
     expect(unmatched.map((u) => u.personId)).toEqual(['x', 'y'])

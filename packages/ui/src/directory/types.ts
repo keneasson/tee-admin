@@ -70,6 +70,26 @@ export interface EcclesiaExternalLinks {
   otherLinks?: Array<{ label: string; url: string }>
 }
 
+/** The Recording Brother office as the API returns it. The holder is a person reference; the office stores no name. */
+export interface RecordingBrotherSummary {
+  personId?: string
+  name?: string
+  email?: string
+}
+
+/** One office of an ecclesia (Recording Brother, Rep n, …). */
+export interface OfficeSummary {
+  officeId: string
+  kind: string
+  title: string
+  email?: string
+  phone?: string
+  emailVia?: 'office' | 'holder' | 'none'
+  holderPersonId?: string
+  holderName?: string
+  holderSince?: string
+}
+
 export interface EcclesiaListItem {
   id: string
   name: string
@@ -80,9 +100,9 @@ export interface EcclesiaListItem {
   postalCode?: string
   venue?: string
   phone?: string
-  recordingBrotherEmail?: string
-  recordingBrotherName?: string
-  recordingBrotherPersonId?: string
+  ecclesiaId?: string
+  /** The ecclesia's Recording Brother OFFICE, resolved server-side (holder name + office inbox or holder address). */
+  recordingBrother?: RecordingBrotherSummary | null
   services?: EcclesiaService[]
   hall?: {
     name?: string

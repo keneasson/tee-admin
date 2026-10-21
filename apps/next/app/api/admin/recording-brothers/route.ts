@@ -6,7 +6,14 @@ import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { getAllEcclesia, getEcclesiaByName } from '@/utils/dynamodb/locations'
 import { setRecordingBrother } from '@/utils/rb-service'
 import { invalidatePeopleCache } from '../../people/cache'
-import { buildRecordingBrotherRows } from '@my/app/utils/recording-brother-rows'
+import {
+  buildRecordingBrotherRows,
+  personName,
+  type RecordingBrotherOfficeLike,
+} from '@my/app/utils/recording-brother-rows'
+import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
+import type { EcclesiaData } from '@/utils/dynamodb/locations'
 
 /**
  * Owner/admin assignment of Recording Brothers.
@@ -19,7 +26,27 @@ import { buildRecordingBrotherRows } from '@my/app/utils/recording-brother-rows'
  *          on file (nameless contacts are addresses, not people).
  *   POST { ecclesiaName, personId | newPerson: {firstName, lastName, email?},
  *          mailTo: 'own' | <an address on file> }
+ *
+ * R3: the write is the ecclesia's Recording Brother OFFICE. The person becomes
+ * its holder; `mailTo` sets the office's own address (or none, so mail goes to
+ * the holder's primary). The address belongs to the ecclesia and stays when
+ * the Recording Brother changes; it is never added to the person's emails.
  */
+
+/** Each ecclesia's RB office (holder + addresses), aligned with `ecclesias`; null = no office yet. */
+async function rbOfficesOf(ecclesias: EcclesiaData[]): Promise<Array<RecordingBrotherOfficeLike | null>> {
+  const views = await officeRepository.listOfficeViews(ecclesias.map((e) => ecclesiaIdOf(e)))
+  return ecclesias.map((e) => {
+    const rb = (views.get(ecclesiaIdOf(e)) || []).find((v) => v.office.kind === OFFICE_ROLES.RECORDING_BROTHER)
+    if (!rb) return null
+    return {
+      holderPersonId: rb.office.holderPersonId,
+      holderName: rb.holder ? personName(rb.holder) || undefined : undefined,
+      officeEmail: rb.office.email,
+      holderEmail: rb.holder?.primaryEmail,
+    }
+  })
+}
 
 async function ownerOrAdmin() {
   const session = await auth()
@@ -53,9 +80,12 @@ export async function GET() {
     personRepository.listInterEcclesiaReps(),
     personRepository.listRecordingBrothers(),
   ])
-  const people = await Promise.all(ecclesias.map((e) => everyoneAt(e.name)))
+  const [people, offices] = await Promise.all([
+    Promise.all(ecclesias.map((e) => everyoneAt(e.name))),
+    rbOfficesOf(ecclesias),
+  ])
 
-  return NextResponse.json(buildRecordingBrotherRows(ecclesias, contacts, rbs, people))
+  return NextResponse.json(buildRecordingBrotherRows(ecclesias, contacts, rbs, people, offices))
 }
 
 interface PostBody {
@@ -85,7 +115,8 @@ export async function POST(request: NextRequest) {
   // Ecclesia mail goes to the RB's own email, or stays at one of the
   // ecclesia's addresses on file (e.g. its shared mailbox). A named person's
   // own address (e.g. the previous RB's) is never an address on file.
-  const [row] = buildRecordingBrotherRows([ecclesia], [], [], [await everyoneAt(ecclesiaName)]).rows
+  const [everyone, [rbOffice]] = await Promise.all([everyoneAt(ecclesiaName), rbOfficesOf([ecclesia])])
+  const [row] = buildRecordingBrotherRows([ecclesia], [], [], [everyone], [rbOffice]).rows
   const office = mailTo === 'own' ? null : mailTo.toLowerCase().trim()
   if (office && !row.addresses.some((a) => a.email === office)) {
     return NextResponse.json({ error: `${mailTo} is not an address on file for ${ecclesiaName}` }, { status: 400 })
@@ -100,6 +131,12 @@ export async function POST(request: NextRequest) {
     if (person.ecclesia !== ecclesiaName) {
       return NextResponse.json(
         { error: `${person.displayName || 'This person'} is recorded at ${person.ecclesia || 'no ecclesia'}, not ${ecclesiaName}` },
+        { status: 400 }
+      )
+    }
+    if (!personName(person)) {
+      return NextResponse.json(
+        { error: 'That record has no name: it is an address, not a person. Pick a named person or add one.' },
         { status: 400 }
       )
     }
@@ -140,8 +177,6 @@ export async function POST(request: NextRequest) {
     newPersonId: rbId!,
     emailPreference: office ? 'ecclesia' : 'personal',
     rbEcclesiaEmail: office || undefined,
-    // The address stays on its own contact record; it is not copied onto the RB.
-    attachEcclesiaEmail: false,
     callerEmail: gate.email!,
   })
   return NextResponse.json({ success: true, personId: rbId })

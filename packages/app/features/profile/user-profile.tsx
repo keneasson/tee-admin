@@ -6,6 +6,7 @@ import { Wrapper } from '@my/app/provider/wrapper'
 import { AddressList } from '@my/ui/src/profile/address-list'
 import { PhoneManager, movePhoneToFront, type PhoneEntry } from '@my/ui/src/profile/phone-manager'
 import { EmailManager, type EmailEntry } from '@my/ui/src/profile/email-manager'
+import { YourRole, type YourRoleEntry } from '@my/ui/src/profile/your-role'
 import { FamilyMembers, type AddFamilyMemberData } from '@my/ui/src/profile/family-members'
 import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
@@ -38,8 +39,8 @@ interface UserProfileProps {
   onSetLogin?: (email: string) => void
   /**
    * Monotonic counter the platform layer bumps to force a re-fetch of the profile
-   * lists (e.g. after a login-email promote, so the new address shows as "Login"
-   * and the old one as "Retired"). Changing the value re-runs `fetchData`; the
+   * lists (e.g. after Make primary, so the new address shows as primary and the
+   * old one as an ordinary secondary). Changing the value re-runs `fetchData`; the
    * initial 0 is ignored so it never double-fetches on mount.
    */
   reloadSignal?: number
@@ -141,12 +142,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [lastNameInput, setLastNameInput] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [nameError, setNameError] = useState('')
+  // Offices this person holds (R3): shown apart from their own emails.
+  const [roles, setRoles] = useState<YourRoleEntry[]>([])
 
   // Fetch all user data
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [addressesRes, phonesRes, emailsRes, relationshipsRes, connectionsRes, privacyRes, requestsRes, profileRes] = await Promise.all([
+      const [addressesRes, phonesRes, emailsRes, relationshipsRes, connectionsRes, privacyRes, requestsRes, profileRes, officesRes] = await Promise.all([
         fetch('/api/user/addresses'),
         fetch('/api/user/phones'),
         fetch('/api/user/emails'),
@@ -155,7 +158,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         fetch('/api/user/privacy'),
         fetch('/api/contact-requests'),
         fetch('/api/user/profile'),
+        fetch('/api/user/offices'),
       ])
+
+      if (officesRes.ok) {
+        const data = await officesRes.json()
+        setRoles(data.roles || [])
+      }
 
       if (addressesRes.ok) {
         const data = await addressesRes.json()
@@ -873,6 +882,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onChangeLogin={() => onChangeLogin?.()}
                   canChangeLogin={canChangeLogin}
                 />
+                {roles.length > 0 ? (
+                  <>
+                    <Separator />
+                    <YourRole roles={roles} />
+                  </>
+                ) : null}
                 <Separator />
                 <PhoneManager
                   phones={phones}

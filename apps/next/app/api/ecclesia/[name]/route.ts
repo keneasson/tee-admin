@@ -10,6 +10,8 @@ import { setRecordingBrother, clearRecordingBrother } from '@/utils/rb-service'
 import { sendRBConfirmationEmail } from '@/utils/email/send-rb-confirmation'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { geocodeAndUpdateEcclesia } from '@/utils/geocode-ecclesia'
+import { officesOf, recordingBrotherOf } from '@/utils/ecclesia-offices'
+import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 
 /**
  * GET /api/ecclesia/[name] - Fetch a single ecclesia by name
@@ -44,10 +46,15 @@ export async function GET(
 
     const canEdit = await checkEcclesiaEditPermission(userEmail, userRole, ecclesiaName)
     const showMultiTenant = await checkFeatureFlagFromDB(FEATURE_FLAGS.MULTI_TENANT_INIT, session as any)
+    // The Recording Brother and Reps are offices (R3), resolved per request.
+    const [recordingBrother, offices] = await Promise.all([
+      recordingBrotherOf(ecclesia),
+      officesOf([ecclesia]).then((m) => m.get(ecclesiaIdOf(ecclesia)) || []),
+    ])
 
     return NextResponse.json({
       success: true,
-      ecclesia,
+      ecclesia: { ...ecclesia, recordingBrother, offices },
       canEdit,
       showMultiTenant,
     })
@@ -92,8 +99,7 @@ export async function PATCH(
       postalCode,
       phone,
       contactEmail,
-      recordingBrotherEmail,
-      recordingBrotherName,
+      rbNomineeEmail,
       services,
       website,
       externalLinks,
@@ -109,8 +115,8 @@ export async function PATCH(
       postalCode?: string
       phone?: string
       contactEmail?: string
-      recordingBrotherEmail?: string
-      recordingBrotherName?: string
+      /** Nominate the Recording Brother office's holder by address ('' vacates the office). */
+      rbNomineeEmail?: string
       services?: EcclesiaService[]
       website?: string
       externalLinks?: EcclesiaExternalLinks
@@ -138,9 +144,9 @@ export async function PATCH(
     if (excludedEcclesias !== undefined) updates.excludedEcclesias = excludedEcclesias
     if (rbAlertPreference !== undefined) updates.rbAlertPreference = rbAlertPreference
 
-    // Recording Brother fields require elevated permission and use RB service
+    // Recording Brother office holder: elevated permission, through the RB service
     let rbTransferred = false
-    if (recordingBrotherEmail !== undefined || recordingBrotherName !== undefined) {
+    if (rbNomineeEmail !== undefined) {
       const canSetRb = await checkRecordingBrotherPermission(userEmail, userRole, ecclesiaName)
       if (!canSetRb) {
         return NextResponse.json(
@@ -149,7 +155,7 @@ export async function PATCH(
         )
       }
 
-      const newRBEmail = (recordingBrotherEmail ?? '').trim()
+      const newRBEmail = (rbNomineeEmail ?? '').trim()
 
       if (newRBEmail) {
         // Look up person by this email to get their personId
@@ -173,12 +179,6 @@ export async function PATCH(
         await clearRecordingBrother(ecclesiaName)
         rbTransferred = true
       }
-    }
-
-    // If RB was transferred, those fields were already updated
-    if (rbTransferred) {
-      delete updates.recordingBrotherEmail
-      delete updates.recordingBrotherName
     }
 
     // Apply remaining non-RB updates if any

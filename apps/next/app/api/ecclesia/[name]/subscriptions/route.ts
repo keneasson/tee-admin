@@ -9,6 +9,7 @@ import type { NotificationPreference } from '@my/app/provider/dynamodb/types'
 import { checkEcclesiaEditPermission } from '@/utils/ecclesia-permissions'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { recordingBrotherOf } from '@/utils/ecclesia-offices'
 
 /**
  * Subscriptions collection route
@@ -146,9 +147,10 @@ export async function POST(
     )
 
     // Notify publisher ecclesia's RB about the new subscriber (fire-and-forget)
-    if (publisher.recordingBrotherEmail) {
+    const publisherRb = await recordingBrotherOf(publisher).catch(() => null)
+    if (publisherRb?.email) {
       const notification = buildSystemNotification(
-        publisher.recordingBrotherEmail,
+        publisherRb.email,
         'New subscriber',
         `${subscriberEcclesia} has subscribed to your events.`,
         `/directory/ecclesias/${encodeURIComponent(publisher.name)}`

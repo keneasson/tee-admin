@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   wasSent: vi.fn(),
   getById: vi.fn(),
   getEcclesiaByName: vi.fn(),
+  recordingBrotherOf: vi.fn(),
 }))
 
 vi.mock('@/utils/email/exhorter-heads-up', async (importOriginal) => {
@@ -40,6 +41,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: { getById: h.getById },
 }))
 vi.mock('../utils/dynamodb/locations', () => ({ getEcclesiaByName: h.getEcclesiaByName }))
+vi.mock('../utils/ecclesia-offices', () => ({ recordingBrotherOf: h.recordingBrotherOf }))
 
 import { prepareHeadsUpForReview } from '../utils/email/exhorter-heads-up-review'
 
@@ -67,7 +69,8 @@ beforeEach(() => {
     primaryEmail: 'brad@example.com',
     displayName: 'Brad Stephens',
   })
-  h.getEcclesiaByName.mockResolvedValue({ recordingBrotherEmail: 'rb@tee-admin.com' })
+  h.getEcclesiaByName.mockResolvedValue({})
+  h.recordingBrotherOf.mockResolvedValue({ email: 'rb@tee-admin.com', source: 'office' })
   h.parkPending.mockResolvedValue(undefined)
   h.supersedePending.mockResolvedValue(0)
   h.wasSent.mockResolvedValue(false)
@@ -177,6 +180,7 @@ describe('when there is nothing to send', () => {
 
   it('refuses when there is no reviewer address to redirect to', async () => {
     h.getEcclesiaByName.mockResolvedValue({})
+    h.recordingBrotherOf.mockResolvedValue(null)
     delete process.env.EXHORTER_HEADSUP_REVIEWER
     const result = await prepareHeadsUpForReview({ date: '2026-09-20' })
     expect(result.parked).toBe(false)

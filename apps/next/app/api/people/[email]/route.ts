@@ -35,8 +35,6 @@ interface MemberProfile {
     country: string
     venue?: string
     address?: string
-    recordingBrotherEmail?: string
-    recordingBrotherName?: string
   }
   isInterEcclesia?: boolean
   isPrivate?: boolean

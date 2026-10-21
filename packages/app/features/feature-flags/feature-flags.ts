@@ -8,6 +8,7 @@ export const FEATURE_FLAGS = {
   SECURE_EMAIL_CHANGE: 'secure_email_change',
   MAILING_LIST_REGISTRY: 'mailing_list_registry',
   PEOPLE_INDEX_SIGNIN: 'people_index_signin',
+  INTER_ECCLESIA_FROM_OFFICES: 'inter_ecclesia_from_offices',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -79,6 +80,16 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // address keeps the legacy table Scan; on → the RB-email index entry
     // (one Query). Flip only after the people-index backfill has run.
     description: 'Sign-in: Recording Brother check via the people index instead of a table Scan',
+    visibleTo: 'off',
+    users: [],
+  },
+  [FEATURE_FLAGS.INTER_ECCLESIA_FROM_OFFICES]: {
+    // Send-path gate (R3). Read globally with a null session, so it is ON only
+    // at 'everyone'. Off → inter-ecclesia sends go to the interEcclesia
+    // registry list (its SUB# rows), exactly as today. On → recipients are
+    // the RB/Rep offices' addresses. Also needs the offices-assigned marker.
+    // Flip only after scripts/diff-inter-ecclesia-recipients.ts exits 0.
+    description: 'Inter-ecclesia sends: recipients from Recording Brother / Rep offices instead of the registry list',
     visibleTo: 'off',
     users: [],
   },

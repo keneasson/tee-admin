@@ -7,6 +7,7 @@ import { getCachedMembers, setCachedMembers, CACHE_TTL_MS } from './cache'
 import { loadDirectoryPeople } from './load-directory'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { personForSessionEmail } from '@/utils/session-person'
+import { recordingBrotherOf } from '@/utils/ecclesia-offices'
 
 interface MemberListItem {
   id: string // personId (UUID) — used for routing instead of email
@@ -192,11 +193,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // If filtering by ecclesia, check if it has a Recording Brother via EcclesiaRecord
+    // If filtering by ecclesia, check if its Recording Brother office is held / has an inbox
     let hasRecordingBrother: boolean | undefined
     if (ecclesiaFilter) {
       const ecclesiaRecord = await getEcclesiaByName(ecclesiaFilter)
-      hasRecordingBrother = !!ecclesiaRecord?.recordingBrotherEmail
+      hasRecordingBrother = !!(await recordingBrotherOf(ecclesiaRecord))
     }
 
     // If includeEmails requested, fetch all emails for each member in the response
