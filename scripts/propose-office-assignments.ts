@@ -3,9 +3,10 @@
  *
  * Writes an assignments file for `backfill-office-assignments.ts`, following
  * `proposeOfficeAssignments` (office-assignments.ts):
- *   - a nameless record's address becomes an office's own address (the RB
- *     office first, then vacant Rep offices); the record is reported to
- *     retire in R8, not touched;
+ *   - a shared ecclesia address is the ecclesia's choice (Recording Brothers
+ *     page); a named RB's mail goes to his own email unless chosen, and
+ *     other addresses keep receiving as vacant Rep offices (`toChoose`);
+ *   - a nameless record is reported to retire in R8, not touched;
  *   - a named flagged Recording Brother holds the RB office; other named
  *     people who receive inter-ecclesia mail today hold Rep offices;
  *   - an RB office already set (Recording Brothers page, nomination) is kept.
@@ -70,6 +71,7 @@ async function main() {
         repAddressOnly: rows.filter((r) => r.office === 'rep' && !r.holderPersonId).length,
         namelessToRetireInR8: proposal.namelessToRetire,
         unmatchedContacts: proposal.unmatchedContacts,
+        chooseOnRecordingBrothersPage: proposal.toChoose,
       },
       null,
       2

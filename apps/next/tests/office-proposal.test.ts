@@ -40,11 +40,33 @@ const propose = (existingOffices: any[] = []) => proposeOfficeAssignments({ eccl
 const rowsFor = (id: string, existing: any[] = []) => propose(existing).file.assignments.filter((r) => r.ecclesiaId === id)
 
 describe('proposeOfficeAssignments', () => {
-  it("the ecclesia's address wins over a named RB's own email: ecclesia mail goes to the mailbox", () => {
+  it("never assumes a shared ecclesia address for a named RB: it's the ecclesia's choice", () => {
     expect(rowsFor('west')).toEqual([
-      { ecclesiaId: 'west', office: 'rb', holderPersonId: 'west-rb', inboxFromPersonId: 'west-mailbox', confirmed: true },
+      { ecclesiaId: 'west', office: 'rb', holderPersonId: 'west-rb', confirmed: true },
+      { ecclesiaId: 'west', office: 'rep', inboxFromPersonId: 'west-mailbox', holderPersonId: null, confirmed: true },
       { ecclesiaId: 'west', office: 'rep', holderPersonId: 'west-rep', confirmed: true },
     ])
+    expect(propose().toChoose).toEqual(['west'])
+  })
+
+  it("keeps the ecclesia's choice from the Recording Brothers page: a shared address, or the RB's own email", () => {
+    const shared = [{ ecclesiaId: 'west', kind: 'rb', role: 'rb', email: 'westmailbox@example.org', holderPersonId: 'west-rb' }]
+    expect(rowsFor('west', shared).filter((r) => r.office === 'rb')).toEqual([{ ecclesiaId: 'west', office: 'rb', confirmed: true }])
+    expect(rowsFor('west', shared).some((r) => r.inboxFromPersonId === 'west-mailbox')).toBe(false)
+
+    const own = [{ ecclesiaId: 'west', kind: 'rb', role: 'rb', email: null, holderPersonId: 'west-rb' }]
+    expect(rowsFor('west', own).filter((r) => r.office === 'rb')).toEqual([{ ecclesiaId: 'west', office: 'rb', confirmed: true }])
+    expect(propose(own).toChoose).toEqual([])
+  })
+
+  it('with a named RB, the copied RB email keeps reaching the ecclesia as a vacant Rep address', () => {
+    const named = [person({ personId: 'n-rb', ecclesia: 'North Ecclesia', isRecordingBrother: true })]
+    const p = proposeOfficeAssignments({ ecclesias, persons: named, existingOffices: [] })
+    expect(p.file.assignments.filter((r) => r.ecclesiaId === 'north')).toEqual([
+      { ecclesiaId: 'north', office: 'rb', holderPersonId: 'n-rb', confirmed: true },
+      { ecclesiaId: 'north', office: 'rep', inbox: 'office@north.org', holderPersonId: null, confirmed: true },
+    ])
+    expect(p.toChoose).toEqual(['north'])
   })
 
   it("with several nameless addresses it doesn't guess: each is a vacant Rep office, the RB office has none", () => {
@@ -116,7 +138,7 @@ describe('proposeOfficeAssignments', () => {
     expect(reached).toEqual([
       'eastmailbox@example.org',
       'ghost@north.org',
-      // West's RB isn't mailed personally: ecclesia mail goes to its mailbox.
+      'west-rb@example.org',
       'west-rep@example.org',
       'westmailbox@example.org',
     ])
