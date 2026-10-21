@@ -20,8 +20,11 @@ import type {
 export interface CreatePersonInput {
   // Optional: a record may be created with NO email (visiting speakers
   // harvested from the schedule have none). Emailless creation is only allowed
-  // when memberStatus is 'visitor' — see create().
+  // when memberStatus is 'visitor', or with allowNoEmail — see create().
   email?: string
+  /** A real person named by an owner/admin whose email isn't known yet
+   *  (e.g. another ecclesia's Recording Brother). */
+  allowNoEmail?: boolean
   firstName: string
   lastName: string
   ecclesia: string
@@ -351,9 +354,9 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     // harvested from the schedule). This keeps anything fake OUT of the EMAIL#
     // GSI space and SES — the record gets a NOEMAIL#{personId} GSI1 sentinel
     // and NO EMAIL# item, so getByEmail() can never surface it.
-    if (!email && memberStatus !== 'visitor') {
+    if (!email && memberStatus !== 'visitor' && !input.allowNoEmail) {
       throw new Error(
-        'PersonRepository.create requires an email unless memberStatus is "visitor"'
+        'PersonRepository.create requires an email unless memberStatus is "visitor" or allowNoEmail is set'
       )
     }
 
@@ -1256,6 +1259,22 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       items: result.items,
       lastEvaluatedKey: result.lastEvaluatedKey,
     }
+  }
+
+  /** Everyone currently designated Recording Brother (one per ecclesia). */
+  async listRecordingBrothers(): Promise<PersonRecord[]> {
+    const all: PersonRecord[] = []
+    let lastKey: Record<string, any> | undefined
+    do {
+      const result = await this.scan({
+        filterExpression: 'skey = :skey AND isRecordingBrother = :isRB',
+        expressionAttributeValues: { ':skey': 'PROFILE', ':isRB': true },
+        lastEvaluatedKey: lastKey,
+      })
+      all.push(...result.items)
+      lastKey = result.lastEvaluatedKey
+    } while (lastKey)
+    return all
   }
 
   /**
