@@ -117,7 +117,6 @@ export interface EmailSource {
   sesStatus?: string
   sesSubscribed?: boolean
   loginExcluded?: boolean
-  archiveAfter?: string
 }
 
 export interface PhoneSource {
@@ -155,7 +154,6 @@ export interface CardEmail {
   sesStatus?: string
   sesSubscribed?: boolean
   loginExcluded?: boolean
-  archiveAfter?: string
 }
 
 export interface PersonCard {
@@ -226,7 +224,6 @@ export function derivePersonProjections(input: {
         sesStatus: e.sesStatus,
         sesSubscribed: e.sesSubscribed,
         loginExcluded: e.loginExcluded,
-        archiveAfter: e.archiveAfter,
       }) as CardEmail
     )
     .filter((e) => e.email)

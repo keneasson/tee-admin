@@ -530,11 +530,6 @@ export interface PersonEmailRecord extends BaseRecord {
   order: number
   verified: boolean
 
-  // When a former primary is demoted by an email change it becomes a recoverable
-  // secondary until this instant, after which it may be archived (grace window —
-  // we never hard-delete the address the identity transferred away from).
-  archiveAfter?: string  // ISO-8601
-
   /**
    * Shared household address (#267): this person RECEIVES mail here (it may be
    * their primary/send address) but the address does not SIGN THEM IN — when an

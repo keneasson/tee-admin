@@ -39,8 +39,8 @@ interface UserProfileProps {
   onSetLogin?: (email: string) => void
   /**
    * Monotonic counter the platform layer bumps to force a re-fetch of the profile
-   * lists (e.g. after a login-email promote, so the new address shows as "Login"
-   * and the old one as "Retired"). Changing the value re-runs `fetchData`; the
+   * lists (e.g. after Make primary, so the new address shows as primary and the
+   * old one as an ordinary secondary). Changing the value re-runs `fetchData`; the
    * initial 0 is ignored so it never double-fetches on mount.
    */
   reloadSignal?: number
@@ -327,22 +327,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return
     }
     await handledStepUp(res, () => { void handleSendVerification(emailId) })
-  }
-
-  // Restore a retired (demoted former-primary) address to a permanent secondary.
-  // Low-friction/session-gated on the server (no fresh step-up), but the 403 path
-  // is still routed for symmetry with the other mutations.
-  const handleUndoRetire = async (emailId: string) => {
-    const res = await fetch('/api/user/email-change/undo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emailId }),
-    })
-    if (res.ok) {
-      await fetchData()
-      return
-    }
-    await handledStepUp(res, () => { void handleUndoRetire(emailId) })
   }
 
   // Phone handlers for PhoneManager — each saves in place against the granular
@@ -896,7 +880,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onSendVerification={handleSendVerification}
                   onMakePrimary={(email) => onSetLogin?.(email)}
                   onChangeLogin={() => onChangeLogin?.()}
-                  onUndoRetire={handleUndoRetire}
                   canChangeLogin={canChangeLogin}
                 />
                 {roles.length > 0 ? (

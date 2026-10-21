@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NextRequest } from 'next/server'
 
 /**
- * R7a security: with person_password_signin on, a password reset may only set
+ * R7a security: a password reset may only set
  * PersonRecord.hashedPassword when the reset address is VERIFIED on that
  * person. A token sent to an unverified (e.g. mistyped) secondary address must
  * never unlock the person.
@@ -12,7 +12,6 @@ const h = vi.hoisted(() => ({
   getByEmail: vi.fn(),
   getEmails: vi.fn(),
   updatePassword: vi.fn(),
-  flag: vi.fn(),
   findLegacy: vi.fn(),
   createToken: vi.fn(),
   validateToken: vi.fn(),
@@ -24,7 +23,6 @@ const h = vi.hoisted(() => ({
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: { getByEmail: h.getByEmail, getEmails: h.getEmails, updatePassword: h.updatePassword },
 }))
-vi.mock('@my/app/features/feature-flags/use-feature-flag-wrapper', () => ({ checkFeatureFlagFromDB: h.flag }))
 vi.mock('../../utils/dynamodb/credentials-users', () => ({
   findCredentialsUserByEmail: h.findLegacy,
   findCredentialsUsersByEmail: vi.fn(async () => []),
@@ -66,13 +64,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.getByEmail.mockResolvedValue(PERSON)
   h.getEmails.mockResolvedValue(ROWS)
-  h.flag.mockResolvedValue(true)
   h.findLegacy.mockResolvedValue(null)
   h.createToken.mockResolvedValue('token-1')
   h.legacyReset.mockResolvedValue(false)
 })
 
-describe('forgot-password (flag on)', () => {
+describe('forgot-password', () => {
   it('a verified address of a person with a password gets a reset email', async () => {
     await forgotPOST(post({ email: 'primary@example.org' }))
     expect(h.createToken).toHaveBeenCalledWith('primary@example.org')
@@ -87,7 +84,7 @@ describe('forgot-password (flag on)', () => {
   })
 })
 
-describe('reset-password (flag on)', () => {
+describe('reset-password', () => {
   it('a token for a verified address sets the PersonRecord password', async () => {
     h.validateToken.mockResolvedValue({ email: 'primary@example.org' })
     const res = await resetPOST(post({ token: 'token-1', password: 'a long new passphrase' }))

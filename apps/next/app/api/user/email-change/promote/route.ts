@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Identity transfer (PersonRecords): promote the verified secondary → primary,
-    // demote the old primary → recoverable secondary (30-day grace), re-point login.
+    // the old primary stays an ordinary secondary; re-point login.
     const { oldEmail } = await personRepository.changePrimaryEmail(person.personId, row.email)
 
     // Notify the OLD address (best-effort). Skip if there was no distinct old address.

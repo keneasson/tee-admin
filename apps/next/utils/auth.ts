@@ -88,8 +88,8 @@ export const authOptions: NextAuthConfig = {
           return null
         }
 
-        // Sign-in AND the password step-up (<Verify>) both land here. Behind the
-        // person_password_signin flag this checks the PersonRecord (R7a).
+        // Sign-in AND the password step-up (<Verify>) both land here. Both check the
+        // PersonRecord password (R7a).
         const user = await verifyPasswordSignIn(
           credentials.email as string,
           credentials.password as string

@@ -654,7 +654,7 @@ describe('PersonRepository', () => {
       primaryEmail: 'old@example.com',
     }
 
-    it('promotes an existing SECONDARY to primary, demotes the old primary with an archiveAfter, and re-points PROFILE', async () => {
+    it('promotes an existing SECONDARY to primary, keeps the old primary as an ordinary secondary (no retire stamp), and re-points PROFILE', async () => {
       mockSend
         .mockResolvedValueOnce({ Item: profile }) // getById → PROFILE
         .mockResolvedValueOnce({
@@ -679,13 +679,13 @@ describe('PersonRepository', () => {
       expect(calls[2].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#new-id' })
       expect(setFields(calls[2])).toMatchObject({ emailType: 'primary', verified: true })
 
-      // 2) old primary demoted to secondary WITH an archiveAfter grace stamp
+      // 2) old primary becomes an ordinary secondary: a preference change, so
+      //    the address keeps working (no retire / archive stamp).
       expect(calls[3].type).toBe('UpdateCommand')
       expect(calls[3].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#old-id' })
       const demote = setFields(calls[3])
       expect(demote.emailType).toBe('secondary')
-      expect(typeof demote.archiveAfter).toBe('string')
-      expect(new Date(demote.archiveAfter).getTime()).toBeGreaterThan(Date.now())
+      expect(demote).not.toHaveProperty('archiveAfter')
 
       // 3) COMMIT: PROFILE now carries the new login handle + lookup index (lowercased)
       expect(calls[4].type).toBe('UpdateCommand')
@@ -758,8 +758,8 @@ describe('PersonRepository', () => {
 
     // The owner's case: PROFILE.primaryEmail is an alias with NO EMAIL# row, and
     // no row is labelled primary. Making a verified secondary primary must keep
-    // the alias as a recoverable (retired) secondary, not drop it.
-    it('keeps a PROFILE-only old primary as a retired secondary row', async () => {
+    // the alias as a secondary, not drop it.
+    it('keeps a PROFILE-only old primary as a secondary row', async () => {
       mockSend
         .mockResolvedValueOnce({ Item: { ...profile, primaryEmail: 'alias@example.org', emailVerified: '2026-01-01' } })
         .mockResolvedValueOnce({
@@ -782,56 +782,10 @@ describe('PersonRepository', () => {
         verified: true,
         gsi1pk: 'EMAIL#alias@example.org',
       })
-      expect(new Date(calls[3].params.Item.archiveAfter).getTime()).toBeGreaterThan(Date.now())
+      expect(calls[3].params.Item).not.toHaveProperty('archiveAfter')
       expect(calls[4].params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'PROFILE' })
       expect(setFields(calls[4])).toMatchObject({ primaryEmail: 'real@example.org', gsi1pk: 'EMAIL#real@example.org' })
     })
   })
 
-  describe('email retire grace + undo', () => {
-    it('EMAIL_DEMOTE_GRACE_MS is 30 days', () => {
-      expect(PersonRepository.EMAIL_DEMOTE_GRACE_MS).toBe(30 * 24 * 60 * 60 * 1000)
-    })
-
-    it('undoEmailRetire clears archiveAfter via a REMOVE expression on the secondary row', async () => {
-      mockSend
-        .mockResolvedValueOnce({
-          Item: {
-            pkey: 'PERSON#p1',
-            skey: 'EMAIL#e1',
-            emailId: 'e1',
-            email: 'old@example.com',
-            emailType: 'secondary',
-            archiveAfter: '2099-01-01T00:00:00.000Z',
-          },
-        }) // getEmailById
-        .mockResolvedValueOnce({}) // REMOVE update
-
-      await repository.undoEmailRetire('p1', 'e1')
-
-      expect(mockSend).toHaveBeenCalledTimes(2)
-      const update = mockSend.mock.calls[1][0]
-      expect(update.type).toBe('UpdateCommand')
-      expect(update.params.Key).toEqual({ pkey: 'PERSON#p1', skey: 'EMAIL#e1' })
-      // The attribute is REMOVEd (not set to null/undefined, which the base helper
-      // would silently drop — leaving the stale timestamp in place).
-      expect(update.params.UpdateExpression).toContain('REMOVE archiveAfter')
-    })
-
-    it('undoEmailRetire throws when the row is missing (no write)', async () => {
-      mockSend.mockResolvedValueOnce({ Item: null }) // getEmailById → not found
-
-      await expect(repository.undoEmailRetire('p1', 'missing')).rejects.toThrow(/not found/i)
-      expect(mockSend).toHaveBeenCalledTimes(1)
-    })
-
-    it('undoEmailRetire refuses to touch the primary login row (no write)', async () => {
-      mockSend.mockResolvedValueOnce({
-        Item: { pkey: 'PERSON#p1', skey: 'EMAIL#e1', emailId: 'e1', email: 'me@example.com', emailType: 'primary' },
-      }) // getEmailById → primary
-
-      await expect(repository.undoEmailRetire('p1', 'e1')).rejects.toThrow(/primary/i)
-      expect(mockSend).toHaveBeenCalledTimes(1)
-    })
-  })
 })

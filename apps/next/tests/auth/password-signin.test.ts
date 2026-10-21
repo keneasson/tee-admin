@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({ personRepository: {} }))
-vi.mock('@my/app/features/feature-flags/use-feature-flag-wrapper', () => ({ checkFeatureFlagFromDB: vi.fn() }))
 vi.mock('../../utils/dynamodb/credentials-users', () => ({
   findCredentialsUsersByEmail: vi.fn(),
   verifyCredentialsUser: vi.fn(),
@@ -51,7 +50,6 @@ function makeDeps(over: Partial<PasswordSignInDeps> = {}): PasswordSignInDeps & 
   return {
     getPerson: vi.fn(async () => PERSON),
     getEmails: vi.fn(async () => ROWS),
-    flagOn: vi.fn(async () => true),
     legacyVerify: vi.fn(async () => ({ id: 'legacy-id', email: 'x', name: 'x', role: 'member' })),
     legacyRecords: vi.fn(async () => []),
     copyHash: vi.fn(async () => undefined),
@@ -64,20 +62,7 @@ function makeDeps(over: Partial<PasswordSignInDeps> = {}): PasswordSignInDeps & 
 describe('verifyPasswordSignIn', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('flag OFF: the legacy check runs, unchanged', async () => {
-    const deps = makeDeps({ flagOn: vi.fn(async () => false) })
-    const user = await verifyPasswordSignIn('Primary@Example.org', 'whatever', deps)
-    expect(deps.legacyVerify).toHaveBeenCalledWith('primary@example.org', 'whatever')
-    expect(user?.id).toBe('legacy-id')
-  })
-
-  it('evaluates the flag for the resolved person (so "owner" means the owner only)', async () => {
-    const deps = makeDeps()
-    await verifyPasswordSignIn('primary@example.org', 'new-password', deps)
-    expect(deps.flagOn).toHaveBeenCalledWith({ user: { email: 'primary@example.org', role: 'owner' } })
-  })
-
-  it('flag ON: the PersonRecord password signs in, and the legacy record is never read', async () => {
+  it('the PersonRecord password signs in, and the legacy record is never read', async () => {
     const deps = makeDeps()
     const user = await verifyPasswordSignIn('primary@example.org', 'new-password', deps)
     expect(user).toEqual({ id: 'person-1', email: 'primary@example.org', name: 'Test Person', role: 'owner' })
@@ -85,7 +70,7 @@ describe('verifyPasswordSignIn', () => {
     expect(deps.legacyRecords).not.toHaveBeenCalled()
   })
 
-  it('flag ON: a stale legacy password no longer works once the person has one', async () => {
+  it('a stale legacy password no longer works once the person has one', async () => {
     const deps = makeDeps({ legacyRecords: vi.fn(async () => [legacy('hash:old-password')]) })
     expect(await verifyPasswordSignIn('primary@example.org', 'old-password', deps)).toBeNull()
     expect(deps.legacyRecords).not.toHaveBeenCalled()
@@ -215,7 +200,6 @@ describe('personForPasswordReset', () => {
     return {
       getPerson: vi.fn(async () => PERSON),
       getEmails: vi.fn(async () => ROWS),
-      flagOn: vi.fn(async () => true),
       ...over,
     }
   }
@@ -228,8 +212,7 @@ describe('personForPasswordReset', () => {
     expect(await personForPasswordReset('unverified@example.org', resetDeps())).toBeNull()
   })
 
-  it('flag off, no person, or deceased: null', async () => {
-    expect(await personForPasswordReset('primary@example.org', resetDeps({ flagOn: vi.fn(async () => false) }))).toBeNull()
+  it('no person, or deceased: null', async () => {
     expect(await personForPasswordReset('primary@example.org', resetDeps({ getPerson: vi.fn(async () => null) }))).toBeNull()
     expect(
       await personForPasswordReset(

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // With person_password_signin on, sign-in reads the PersonRecord password,
+    // Sign-in reads the PersonRecord password,
     // so the reset must write it there (the legacy record is kept in step as
     // the rollback path). Only when the token's address is VERIFIED on that
     // person: a token sent to an unverified secondary address must never set

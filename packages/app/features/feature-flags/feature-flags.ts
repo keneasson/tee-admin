@@ -9,7 +9,6 @@ export const FEATURE_FLAGS = {
   MAILING_LIST_REGISTRY: 'mailing_list_registry',
   PEOPLE_INDEX_SIGNIN: 'people_index_signin',
   INTER_ECCLESIA_FROM_OFFICES: 'inter_ecclesia_from_offices',
-  PERSON_PASSWORD_SIGNIN: 'person_password_signin',
 } as const
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS]
@@ -91,17 +90,6 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // the RB/Rep offices' addresses. Also needs the offices-assigned marker.
     // Flip only after scripts/diff-inter-ecclesia-recipients.ts exits 0.
     description: 'Inter-ecclesia sends: recipients from Recording Brother / Rep offices instead of the registry list',
-    visibleTo: 'off',
-    users: [],
-  },
-  [FEATURE_FLAGS.PERSON_PASSWORD_SIGNIN]: {
-    // Password sign-in + step-up (R7). Evaluated for the person the typed
-    // address resolves to, so 'owner' turns it on for the owner's own account
-    // only; 'everyone' releases it. Off → the unchanged legacy USER# check.
-    // On → the PersonRecord's password, with the legacy record as a fallback
-    // only when the person has none (its hash is then copied onto the person).
-    // Password resets write the PersonRecord too while this is on.
-    description: 'Password sign-in checks the PersonRecord password (legacy USER# record as a one-time fallback)',
     visibleTo: 'off',
     users: [],
   },

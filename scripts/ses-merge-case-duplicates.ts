@@ -48,7 +48,8 @@ async function main(): Promise<void> {
   const { mailingListRepository } = await import(
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
   )
-  const { getSesClient } = await import('../apps/next/utils/email/sesClient')
+  const { getSesClient, useThrottleTolerantSesClient } = await import('../apps/next/utils/email/sesClient')
+  useThrottleTolerantSesClient()
   const { inputTemplate } = await import('../apps/next/utils/email/contact-lists')
   const ses = getSesClient()
 
