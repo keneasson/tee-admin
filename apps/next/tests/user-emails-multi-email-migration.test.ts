@@ -271,7 +271,7 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
     expect(h.p_addEmail).not.toHaveBeenCalled()
   })
 
-  it('6) Recording Brother: all personal addresses remain AND the role email is injected read-only (never written back)', async () => {
+  it('6) Recording Brother: all personal addresses remain; the role address is not listed among them (R3: "Your role")', async () => {
     const RB_EMAIL = 'recorder@brampton-ecclesia.example'
     h.p_getByEmail.mockResolvedValue({
       ...GEOFF,
@@ -293,21 +293,9 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
     const emails = await getJson()
     const set = emails.map((e) => e.email.toLowerCase())
 
-    // All three personal addresses still present, alongside the injected role email.
-    expect(set).toEqual(
-      expect.arrayContaining([
-        PRIMARY,
-        'geoff.personal@gmail.example',
-        'g.mckay@work.example',
-        RB_EMAIL,
-      ])
-    )
-    expect(set).toHaveLength(4)
-
-    // The RB entry is read-only role metadata, not a personal address.
-    const rb = emails.find((e) => e.email.toLowerCase() === RB_EMAIL)!
-    expect(rb.roleLabel).toBe('Recording Brother')
-    expect(rb.isPrimary).toBeFalsy()
+    // All three personal addresses, and only those: an office address lives on
+    // the office and is shown in the profile's "Your role" section.
+    expect(set.sort()).toEqual([PRIMARY, 'geoff.personal@gmail.example', 'g.mckay@work.example'].sort())
 
     // The role email is NOT written back onto the personal EMAIL# set.
     expect(h.p_addEmail).not.toHaveBeenCalled()

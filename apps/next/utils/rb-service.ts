@@ -1,6 +1,10 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { getEcclesiaByName } from './dynamodb/locations'
-import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
+import {
+  deriveOfficeFlags,
+  officeRepository,
+  OFFICE_ROLES,
+} from '@my/app/provider/dynamodb/repositories/office-repository'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { invalidatePeopleCache } from '../app/api/people/cache'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
@@ -8,11 +12,11 @@ import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 interface SetRecordingBrotherParams {
   ecclesiaName: string
   newPersonId: string
+  /** 'ecclesia' → ecclesia mail goes to `rbEcclesiaEmail`, the OFFICE's own
+   *  address; 'personal' → the office has no address, so it goes to the
+   *  holder's primary email. */
   emailPreference: 'personal' | 'ecclesia'
   rbEcclesiaEmail?: string
-  /** Add rbEcclesiaEmail to the new RB's own record (default true). False when
-   *  the address already sits on its own contact record and stays there. */
-  attachEcclesiaEmail?: boolean
   callerEmail: string
 }
 
@@ -20,96 +24,77 @@ interface SetRecordingBrotherResult {
   success: boolean
   oldRBPersonId?: string
   newRBPersonId: string
+  /** Where ecclesia mail now goes ('' = nowhere: no office address, holder has no email). */
   rbEmail: string
 }
 
 /**
- * Central function to handle all Recording Brother transitions.
+ * Central function to handle all Recording Brother transitions (R3).
  *
- * Steps:
- * 1. Look up new person's PersonRecord
- * 2. Find current RB for this ecclesia (isRecordingBrother === true + ecclesia match)
- * 3. Clear old RB → isRecordingBrother: false, clear rbEmailPreference/rbEcclesiaEmail
- *    (their role stays unchanged — owner stays owner, admin stays admin, etc.)
- * 4. Set new RB → isRecordingBrother: true, set rbEmailPreference, set rbEcclesiaEmail if applicable
- * 5. Update the ecclesia's Recording Brother OFFICE (R3): holder = the new person
- *    (closing the previous term), inbox = the ecclesia-specific RB address when
- *    that preference is chosen. The ecclesia item stores no RB name/email.
- * 6. Invalidate caches (people + ecclesia)
+ * The ecclesia's Recording Brother OFFICE is the source:
+ * 1. Look up the new person.
+ * 2. The office's address: the ecclesia's own RB address when that preference
+ *    is chosen, else none (mail then goes to the holder's primary). An office
+ *    address belongs to the office: it is never added to a person's emails,
+ *    and it stays with the office when the holder changes.
+ * 3. The office's holder: the new person (the previous term is closed).
+ * 4. The stored person flags are a projection of the offices held:
+ *    `isRecordingBrother` (and `isInterEcclesiaRep` when set) are re-derived
+ *    for the previous and the new holder.
+ * 5. Invalidate caches.
  *
- * Replaces transferRBEmail() as the single entry point for all RB changes.
+ * The single entry point for all RB changes (nomination, owner/admin page).
  */
 export async function setRecordingBrother(params: SetRecordingBrotherParams): Promise<SetRecordingBrotherResult> {
-  const { ecclesiaName, newPersonId, emailPreference, rbEcclesiaEmail, attachEcclesiaEmail = true } = params
+  const { ecclesiaName, newPersonId, emailPreference, rbEcclesiaEmail } = params
 
-  // 1. Look up new person
   const newPerson = await personRepository.getById(newPersonId)
   if (!newPerson) {
     throw new Error(`Person ${newPersonId} not found`)
   }
+  if (!(newPerson.firstName || '').trim() && !(newPerson.lastName || '').trim()) {
+    // A nameless record is an address (often an ecclesia mailbox), not a person.
+    throw new Error(`Person ${newPersonId} has no name; an office holder must be a named person`)
+  }
 
-  // 2. Find current RB for this ecclesia
   const oldRB = await findCurrentRB(ecclesiaName)
+  const officeEmail = emailPreference === 'ecclesia' && rbEcclesiaEmail ? rbEcclesiaEmail.toLowerCase().trim() : null
 
-  // 3. Clear old RB (if exists and is different person)
-  if (oldRB && oldRB.personId !== newPersonId) {
-    await personRepository.updatePerson(oldRB.personId, {
-      isRecordingBrother: false,
-      rbEmailPreference: undefined,
-      rbEcclesiaEmail: undefined,
-    } as any)
-  }
-
-  // 4. Set new RB
-  const rbEmail = emailPreference === 'ecclesia' && rbEcclesiaEmail
-    ? rbEcclesiaEmail.toLowerCase().trim()
-    : (newPerson.primaryEmail || '').toLowerCase()
-
-  await personRepository.updatePerson(newPersonId, {
-    isRecordingBrother: true,
-    rbEmailPreference: emailPreference,
-    rbEcclesiaEmail: emailPreference === 'ecclesia' ? rbEcclesiaEmail : undefined,
-  } as any)
-
-  // If preference is 'ecclesia' and the email isn't already on the person's record,
-  // add it as a secondary email
-  if (emailPreference === 'ecclesia' && rbEcclesiaEmail && attachEcclesiaEmail) {
-    const normalizedEmail = rbEcclesiaEmail.toLowerCase().trim()
-    const existingEmails = await personRepository.getEmails(newPersonId)
-    const alreadyHasEmail = existingEmails.some(
-      (e) => e.email.toLowerCase() === normalizedEmail
-    ) || (newPerson.primaryEmail || '').toLowerCase() === normalizedEmail
-
-    if (!alreadyHasEmail) {
-      await personRepository.addEmail(newPersonId, {
-        email: normalizedEmail,
-        emailType: 'secondary',
-        order: existingEmails.length,
-        verified: true,
-        sesSubscribed: false,
-        sesStatus: 'active',
-      })
-    }
-  }
-
-  // 5. The Recording Brother office: inbox + holder (term history kept by the office)
   const ecclesiaId = await ecclesiaIdFor(ecclesiaName)
-  await officeRepository.saveOffice({
-    ecclesiaId,
-    role: OFFICE_ROLES.RECORDING_BROTHER,
-    email: emailPreference === 'ecclesia' && rbEcclesiaEmail ? rbEmail : null,
-  })
+  await officeRepository.saveOffice({ ecclesiaId, role: OFFICE_ROLES.RECORDING_BROTHER, email: officeEmail })
   await officeRepository.assignHolder(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER, newPersonId)
 
-  // 6. Invalidate caches
+  const rbOffice = { kind: OFFICE_ROLES.RECORDING_BROTHER, ecclesiaId }
+  await syncOfficeFlags(newPersonId, { holds: rbOffice })
+  if (oldRB && oldRB.personId !== newPersonId) await syncOfficeFlags(oldRB.personId, { released: rbOffice })
+
   invalidatePeopleCache()
 
   return {
     success: true,
     oldRBPersonId: oldRB?.personId,
     newRBPersonId: newPersonId,
-    rbEmail,
+    rbEmail: officeEmail || (newPerson.primaryEmail || '').toLowerCase(),
   }
+}
+
+/**
+ * Re-derive a person's stored RB flag from the offices they hold, and drop the
+ * old per-person copies of an office address (`rbEmailPreference`,
+ * `rbEcclesiaEmail`): the address lives on the office.
+ */
+type OfficeRef = { kind: string; ecclesiaId: string }
+async function syncOfficeFlags(personId: string, change: { holds?: OfficeRef; released?: OfficeRef }): Promise<void> {
+  // The holder index is eventually consistent, so apply the change just made.
+  const same = (a: OfficeRef, b?: OfficeRef) => !!b && a.kind === b.kind && a.ecclesiaId === b.ecclesiaId
+  const held = (await officeRepository.listOfficesHeldBy(personId)).filter((o) => !same(o, change.released))
+  const flags = deriveOfficeFlags(change.holds ? [...held, change.holds] : held)
+  await personRepository.updatePerson(personId, {
+    isRecordingBrother: flags.isRecordingBrother,
+    ...(flags.isInterEcclesiaRep ? { isInterEcclesiaRep: true } : {}),
+    rbEmailPreference: undefined,
+    rbEcclesiaEmail: undefined,
+  } as any)
 }
 
 /**
@@ -119,18 +104,12 @@ export async function setRecordingBrother(params: SetRecordingBrotherParams): Pr
 export async function clearRecordingBrother(ecclesiaName: string): Promise<void> {
   const currentRB = await findCurrentRB(ecclesiaName)
 
-  if (currentRB) {
-    await personRepository.updatePerson(currentRB.personId, {
-      isRecordingBrother: false,
-      rbEmailPreference: undefined,
-      rbEcclesiaEmail: undefined,
-    } as any)
-  }
-
-  // Vacate the office (closes the term) and drop its inbox; the office itself stays.
+  // Vacate the office (closes the term). Its address stays: it belongs to the
+  // ecclesia, not to the person leaving.
   const ecclesiaId = await ecclesiaIdFor(ecclesiaName)
-  await officeRepository.saveOffice({ ecclesiaId, role: OFFICE_ROLES.RECORDING_BROTHER, email: null })
+  await officeRepository.ensureRecordingBrotherOffice(ecclesiaId)
   await officeRepository.assignHolder(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER, null)
+  if (currentRB) await syncOfficeFlags(currentRB.personId, { released: { kind: OFFICE_ROLES.RECORDING_BROTHER, ecclesiaId } })
 
   invalidatePeopleCache()
 }

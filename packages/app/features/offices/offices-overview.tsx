@@ -4,8 +4,8 @@ import { YStack, XStack, Text, Card, Button, Spinner } from '@my/ui'
 /**
  * Every ecclesia and its offices (R3): the Recording Brother office and any
  * Rep offices, each with its holder (a person reference) and its address (the
- * office's own inbox, or else the holder's). Read-only. Holders change through
- * nomination; assignments come from the owner's confirmed review page.
+ * office's own address, or else the holder's primary). Read-only. Recording
+ * Brothers change through nomination or Admin → Recording Brothers.
  */
 
 interface OfficeRow {
@@ -36,8 +36,16 @@ interface OfficesResponse {
   ecclesias: EcclesiaOfficesRow[]
 }
 
-const viaLabel = (via?: OfficeRow['emailVia']) =>
-  via === 'office' ? 'office inbox' : via === 'holder' ? "holder's address" : 'no address'
+/** Which address receives this office's mail, and why. */
+function mailLine(office: OfficeRow): string {
+  if (office.emailVia === 'office') return `Mail goes to ${office.email} — the office's own address, goes with the role`
+  if (office.emailVia === 'holder') {
+    return `No office email — using ${office.holderName || 'the holder'}'s primary (${office.email})`
+  }
+  return office.holderPersonId
+    ? `No office email, and ${office.holderName || 'the holder'} has no email: mail reaches nobody`
+    : 'Vacant, no office email: mail reaches nobody'
+}
 
 function OfficeLine({ office }: { office: OfficeRow }) {
   return (
@@ -46,8 +54,8 @@ function OfficeLine({ office }: { office: OfficeRow }) {
         {office.title}
       </Text>
       <Text fontSize="$3">{office.holderName || 'Vacant'}</Text>
-      <Text fontSize="$3" color="$colorSecondary">
-        {office.email ? `${office.email} (${viaLabel(office.emailVia)})` : viaLabel(office.emailVia)}
+      <Text fontSize="$3" color={office.emailVia === 'none' ? '$orange10' : '$colorSecondary'} style={{ overflowWrap: 'anywhere' }}>
+        {mailLine(office)}
       </Text>
       {office.phone ? (
         <Text fontSize="$3" color="$colorSecondary">
@@ -144,6 +152,11 @@ export function OfficesOverview() {
         {data.totals.withRecordingBrotherOffice} of {data.totals.ecclesias} ecclesias have a Recording Brother office ·{' '}
         {data.totals.offices} offices ·{' '}
         {data.officesAssigned ? 'assignments applied' : 'assignments not applied yet (awaiting the review page)'}
+      </Text>
+      <Text fontSize="$2" color="$colorSecondary">
+        Mail to an ecclesia goes to each office&apos;s own address when it has one; that address belongs to the
+        office and moves to the next holder with the role. An office with no address uses its holder&apos;s
+        primary email.
       </Text>
       {data.ecclesias.map((row) => (
         <EcclesiaCard key={row.ecclesiaId} row={row} />

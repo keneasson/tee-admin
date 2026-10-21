@@ -121,7 +121,7 @@ describe('recordingBrotherOf: the office decides', () => {
 })
 
 describe('rb-service writes the Recording Brother office', () => {
-  it('set → holder + term; ecclesia-specific inbox on the office; clear → vacant, the office stays', async () => {
+  it('set → holder + term; the ecclesia address on the office, never on the person; clear → vacant, the address stays', async () => {
     const { tee } = await seed()
     const p = await persons.create({ email: 'hal@x.org', firstName: 'Hal', lastName: 'Der', ecclesia: tee.name })
     await setRecordingBrother({
@@ -136,13 +136,28 @@ describe('rb-service writes the Recording Brother office', () => {
     expect(office.terms).toHaveLength(1)
     const ecclesiaItem = fake.items().find((i) => i.pkey === KEY.pkey && i.skey === KEY.skey)!
     expect(Object.keys(ecclesiaItem).some((k) => k.startsWith('recordingBrother'))).toBe(false)
+    // R3: an office address is not a personal email; the flag is derived from the office.
+    expect((await persons.getEmails(p.personId)).map((e) => e.email)).toEqual(['hal@x.org'])
+    const held = (await persons.getById(p.personId))!
+    expect(held.isRecordingBrother).toBe(true)
+    expect(held.rbEcclesiaEmail).toBeUndefined()
 
     await clearRecordingBrother(tee.name)
     const vacant = (await officeRepository.getOffice(TEE, 'rb'))!
     expect(vacant.holderPersonId).toBeUndefined()
-    expect(vacant.email).toBeUndefined()
+    expect(vacant.email).toBe('recbro@x.org') // belongs to the ecclesia, not to Hal
     expect(vacant.terms[0].to).toBeDefined()
-    expect(await recordingBrotherOf(tee)).toBeNull()
+    expect((await persons.getById(p.personId))!.isRecordingBrother).toBe(false)
+    expect(await recordingBrotherOf(tee)).toMatchObject({ email: 'recbro@x.org', personId: undefined })
+  })
+
+  it('refuses a nameless record as the holder: it is an address, not a person', async () => {
+    const { tee } = await seed()
+    const mailbox = await persons.create({ email: 'box@x.org', firstName: '', lastName: '', ecclesia: tee.name })
+    await expect(
+      setRecordingBrother({ ecclesiaName: tee.name, newPersonId: mailbox.personId, emailPreference: 'personal', callerEmail: 'a@x.org' })
+    ).rejects.toThrow(/no name/)
+    expect(await officeRepository.getOffice(TEE, 'rb')).toBeNull()
   })
 })
 

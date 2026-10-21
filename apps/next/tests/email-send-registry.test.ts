@@ -12,7 +12,10 @@ const h = vi.hoisted(() => ({
   resolveSendAudience: vi.fn(),
   safetyNetState: vi.fn(),
   createSendRecord: vi.fn(),
+  fromOffices: vi.fn(),
 }))
+
+vi.mock('../utils/email/inter-ecclesia-recipients', () => ({ interEcclesiaRecipientsFromOffices: h.fromOffices }))
 
 vi.mock('@aws-sdk/client-sesv2', () => ({
   SESv2Client: vi.fn(),
@@ -60,6 +63,30 @@ describe('emailSend — every send names a listId', () => {
     vi.clearAllMocks()
     h.sesSend.mockResolvedValue({})
     h.safetyNetState.mockResolvedValue({ enabled: false })
+    h.fromOffices.mockResolvedValue(null)
+  })
+
+  it('inter-ecclesia (R3): the offices decide once switched on; otherwise the registry list, and never for other lists', async () => {
+    const INTER = { listId: '44444444-4444-4444-8444-444444444444', key: 'interEcclesia' }
+    const audience = { source: 'registry', listId: INTER.listId, topicName: undefined, emails: ['list@example.org'], stats: {} }
+    h.resolveSendList.mockResolvedValue(INTER)
+    h.resolveSendAudience.mockResolvedValue(audience)
+
+    await emailSend({ reason: 'inter-ecclesia', emailHtml: '<p>x</p>', emailText: 'x' })
+    expect(sent().map((x) => x.to)).toEqual(['list@example.org'])
+
+    h.sesSend.mockClear()
+    h.fromOffices.mockResolvedValue(['office@example.org'])
+    await emailSend({ reason: 'inter-ecclesia', emailHtml: '<p>x</p>', emailText: 'x' })
+    expect(sent().map((x) => x.to)).toEqual(['office@example.org'])
+
+    h.sesSend.mockClear()
+    h.fromOffices.mockClear()
+    h.resolveSendList.mockResolvedValue(NEWSLETTER)
+    h.resolveSendAudience.mockResolvedValue({ ...audience, listId: NEWSLETTER.listId, emails: ['a@example.org'] })
+    await emailSend({ reason: 'newsletter', emailHtml: '<p>x</p>', emailText: 'x' })
+    expect(h.fromOffices).not.toHaveBeenCalled()
+    expect(sent().map((x) => x.to)).toEqual(['a@example.org'])
   })
 
   it('no list given: resolves the reason default for the tenant and records its listId', async () => {

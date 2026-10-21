@@ -10,8 +10,8 @@
  *   - the office writes it would make (and every ecclesia lacking an RB office
  *     gets a vacant one)
  *   - row errors (unknown ecclesia/person, nameless or test-account holder, …)
- *   - the inter-ecclesia recipient diff: today's `isInterEcclesiaRep` addresses
- *     vs. what the planned offices would yield
+ *   - the inter-ecclesia recipient diff: today's send path (the `interEcclesia`
+ *     registry list's opt-in rows, R5) vs. what the planned offices would yield
  *
  * --apply refuses while any row has an error, and while the recipient diff is
  * not empty unless `--accept-diff` is passed (the owner accepted those
@@ -28,7 +28,7 @@
  */
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { TABLE, addressesToPersonIds, loadCredentials, readOfficeSnapshot, toPersonSnapshots } from './lib/office-snapshot'
+import { TABLE, loadCredentials, readOfficeSnapshot, toPersonSnapshots } from './lib/office-snapshot'
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name)
@@ -61,8 +61,9 @@ async function main() {
 
   const { snap, persons, plan } = await planFrom()
   const predicted = plans.predictInterEcclesiaContacts(plan, persons)
-  const legacy = plans.legacyInterEcclesiaRecipients(snap.profiles as any)
-  const diff = repo.diffRecipientAddresses(legacy.keys(), predicted.flatMap((c) => (c.email ? [c.email] : [])))
+  const today = plans.registryListRecipients(snap.listItems, 'interEcclesia')
+  if (!today.listId) throw new Error('No mailing list with key "interEcclesia"')
+  const diff = repo.diffRecipientAddresses(today.byAddress.keys(), predicted.flatMap((c) => (c.email ? [c.email] : [])))
   const count = (op: string) => plan.actions.filter((a) => a.op === op).length
 
   console.log(
@@ -80,7 +81,7 @@ async function main() {
         interEcclesiaDiff: {
           same: diff.same,
           onlyToday: diff.onlyLegacy.length,
-          onlyTodayPersonIds: addressesToPersonIds(diff.onlyLegacy, snap.profiles),
+          onlyTodayPersonIds: diff.onlyLegacy.flatMap((a) => today.byAddress.get(a) || []).sort(),
           onlyOffices: diff.onlyOffices.length,
           onlyOfficesOfficeIds: predicted
             .filter((c) => c.email && diff.onlyOffices.includes(c.email))

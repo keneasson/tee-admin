@@ -31,6 +31,8 @@ export interface OfficeSnapshot {
   ecclesias: Item[]
   ecclesiaIds: string[]
   offices: Item[]
+  /** Mailing-list DETAILS + SUB# rows (today's inter-ecclesia recipients, R5). */
+  listItems: Item[]
 }
 
 /** Call after `loadCredentials()` (config.ts reads the env at import). */
@@ -51,6 +53,9 @@ export async function readOfficeSnapshot(): Promise<OfficeSnapshot> {
     ecclesias,
     ecclesiaIds: [...new Set(ecclesias.map((e) => ecclesiaIdOf(e)).filter(Boolean))].sort(),
     offices: all.filter((i) => i.pkey.startsWith('ECCLESIA_ID#') && i.skey.startsWith('OFFICE#')),
+    listItems: all.filter(
+      (i) => (i.pkey.startsWith('LIST#') && i.skey === 'DETAILS') || (i.pkey.startsWith('PERSON#') && i.skey.startsWith('SUB#'))
+    ),
   }
 }
 

@@ -52,6 +52,8 @@ export function RecordingBrotherManager({
   const rbEmail = recordingBrother?.email
   const hasRb = !!(rbName || rbEmail)
   const repOffices = offices.filter((o) => o.kind === 'rep')
+  // Where ecclesia mail goes: the RB office's own address, or its holder's primary.
+  const rbVia = offices.find((o) => o.kind === 'rb')?.emailVia
   const isViewerEcclesia = authProps.viewerEcclesia === ecclesiaName
   const canEditRb = authProps.isAdminOrOwner || (authProps.isRecorderOrHigher && isViewerEcclesia)
 
@@ -255,7 +257,17 @@ export function RecordingBrotherManager({
               <Text fontSize="$3">{rbName}</Text>
             ) : null}
             {rbEmail ? (
-              <Text fontSize="$3" theme="alt2">{rbEmail}</Text>
+              <Text fontSize="$3" theme="alt2" style={{ overflowWrap: 'anywhere' }}>{rbEmail}</Text>
+            ) : null}
+            {rbVia === 'office' ? (
+              <Text fontSize="$2" theme="alt2">
+                Ecclesia mail goes here: the ecclesia&apos;s own address. It belongs to the role and moves to the
+                next Recording Brother.
+              </Text>
+            ) : rbVia === 'holder' ? (
+              <Text fontSize="$2" theme="alt2">
+                {`No office email — using ${rbName || 'the Recording Brother'}'s primary for ecclesia mail.`}
+              </Text>
             ) : null}
           </YStack>
           {repOffices.length > 0 ? (

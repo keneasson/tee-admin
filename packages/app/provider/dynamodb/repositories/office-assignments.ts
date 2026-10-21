@@ -244,3 +244,176 @@ export function legacyInterEcclesiaRecipients(
   }
   return byAddress
 }
+
+// ---------------------------------------------------------------------------
+// Proposal: a first assignments file drafted from today's data (R3)
+// ---------------------------------------------------------------------------
+
+const lower = (e?: string) => (e || '').trim().toLowerCase()
+
+/** What the proposal needs about a person (ids and flags; the address only to match an RB email on file). */
+export interface ProposalPerson {
+  personId: string
+  ecclesia?: string
+  named: boolean
+  primaryEmail: string
+  isInterEcclesiaRep?: boolean
+  isRecordingBrother?: boolean
+  /** role 'rep' (an older way of marking a Rep). */
+  isRepRole?: boolean
+  /** Opted in to the inter-ecclesia list today (receives inter-ecclesia mail). */
+  receivesInterEcclesia?: boolean
+  /** Opted OUT of the inter-ecclesia list: never given a Rep office. */
+  optedOutInterEcclesia?: boolean
+}
+
+export interface ProposalEcclesia {
+  ecclesiaId: string
+  name: string
+  /** The legacy RB email copied onto the ecclesia item, if any. */
+  recordingBrotherEmail?: string
+}
+
+export interface OfficeProposal {
+  file: OfficeAssignmentFile
+  /** Nameless person records whose address now sits on an office: retire them in R8. */
+  namelessToRetire: string[]
+  /** Contacts / inter-ecclesia recipients whose ecclesia matches no ecclesia record: fix their ecclesia, re-run. */
+  unmatchedContacts: string[]
+  /** Ecclesias whose RB office already has a holder: left as the owner set them. */
+  keptRbHolders: number
+}
+
+/**
+ * Draft the office assignments from today's data, for the owner to review and
+ * then apply with `backfill-office-assignments.ts`. Never decides a person
+ * from an address alone:
+ *
+ *  - A NAMELESS record (no first or last name) is an ADDRESS, not a person
+ *    (most came from a 2024 mailing list; many are ecclesia mailboxes). Its
+ *    address becomes an office's own address: the ecclesia's RB office first,
+ *    then Rep offices with no holder. The record itself is left alone (its
+ *    mailing-list rows still drive sends until R8) and is reported to retire.
+ *  - A NAMED record flagged as the ecclesia's Recording Brother holds its RB
+ *    office. Other named people who receive inter-ecclesia mail today (the
+ *    contact flag, role 'rep', or an opt-in on the inter-ecclesia list) hold
+ *    Rep offices, so the same people keep receiving it.
+ *  - The RB office gets a nameless address only when no named person holds
+ *    it: a named RB's mail keeps going to his own email.
+ *  - An RB office that already has a holder (set on the Recording Brothers
+ *    page or by nomination) is kept as it is; so is an office's own address.
+ *  - The RB email copied onto the ecclesia item is used as the RB office's
+ *    address only when no named person holds it as their own primary.
+ */
+export function proposeOfficeAssignments(input: {
+  ecclesias: ProposalEcclesia[]
+  persons: ProposalPerson[]
+  existingOffices: Array<Pick<OfficeRecord, 'ecclesiaId' | 'kind' | 'role' | 'email' | 'holderPersonId'>>
+}): OfficeProposal {
+  const byName = new Map(input.ecclesias.map((e) => [e.name, e]))
+  const namedPrimaries = new Set(input.persons.filter((p) => p.named).map((p) => lower(p.primaryEmail)).filter(Boolean))
+  const rows: OfficeAssignmentInput[] = []
+  const retire = new Set<string>()
+  const unmatched: string[] = []
+  let keptRbHolders = 0
+
+  const people = [...input.persons]
+    .filter((p) => !isTestAccountEmail(p.primaryEmail))
+    .sort((a, b) => a.personId.localeCompare(b.personId))
+  const receives = (p: ProposalPerson) => !!(p.isInterEcclesiaRep || p.isRecordingBrother || p.isRepRole || p.receivesInterEcclesia)
+  for (const p of people) {
+    if (receives(p) && (!p.ecclesia || !byName.has(p.ecclesia))) unmatched.push(p.personId)
+  }
+
+  for (const e of [...input.ecclesias].sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))) {
+    const at = people.filter((p) => p.ecclesia === e.name)
+    const rbOffice = input.existingOffices.find(
+      (o) => o.ecclesiaId === e.ecclesiaId && o.kind === OFFICE_ROLES.RECORDING_BROTHER
+    )
+    const existingReps = input.existingOffices.filter((o) => o.ecclesiaId === e.ecclesiaId && o.kind === OFFICE_ROLES.REP)
+
+    // Recording Brother holder: kept if the office has one, else the named flagged RB.
+    let rbHolder: string | null = rbOffice?.holderPersonId || null
+    if (rbHolder) keptRbHolders++
+    else rbHolder = at.find((p) => p.isRecordingBrother && p.named)?.personId || null
+
+    // Addresses that are not people: nameless contacts and a nameless "RB".
+    const nameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))
+
+    // The RB office's own address (an existing one is kept).
+    const legacyRbEmail = lower(e.recordingBrotherEmail)
+    let rbInbox: { inbox?: string; inboxFromPersonId?: string } = {}
+    if (!rbOffice?.email) {
+      const namelessRb = nameless.find((p) => p.isRecordingBrother)
+      if (namelessRb) rbInbox = { inboxFromPersonId: namelessRb.personId }
+      else if (legacyRbEmail && !namedPrimaries.has(legacyRbEmail)) rbInbox = { inbox: legacyRbEmail }
+      else if (!rbHolder && nameless[0]) rbInbox = { inboxFromPersonId: nameless[0].personId }
+    }
+    const rbAddress =
+      lower(rbOffice?.email) ||
+      rbInbox.inbox ||
+      lower(nameless.find((p) => p.personId === rbInbox.inboxFromPersonId)?.primaryEmail)
+
+    rows.push({
+      ecclesiaId: e.ecclesiaId,
+      office: OFFICE_ROLES.RECORDING_BROTHER,
+      ...(rbOffice?.holderPersonId ? {} : { holderPersonId: rbHolder }),
+      ...rbInbox,
+      confirmed: true,
+    })
+
+    // Every other nameless address becomes a vacant Rep office's own address.
+    for (const p of nameless) {
+      retire.add(p.personId)
+      const address = lower(p.primaryEmail)
+      if (address === rbAddress || existingReps.some((o) => lower(o.email) === address)) continue
+      rows.push({
+        ecclesiaId: e.ecclesiaId,
+        office: OFFICE_ROLES.REP,
+        inboxFromPersonId: p.personId,
+        holderPersonId: null,
+        confirmed: true,
+      })
+    }
+    // Named people who receive inter-ecclesia mail, other than the RB, hold Rep offices.
+    for (const p of at) {
+      if (!p.named || !receives(p) || p.optedOutInterEcclesia || p.personId === rbHolder) continue
+      if (existingReps.some((o) => o.holderPersonId === p.personId)) continue
+      rows.push({ ecclesiaId: e.ecclesiaId, office: OFFICE_ROLES.REP, holderPersonId: p.personId, confirmed: true })
+    }
+  }
+
+  return {
+    file: { assignments: rows },
+    namelessToRetire: [...retire].sort(),
+    unmatchedContacts: unmatched,
+    keptRbHolders,
+  }
+}
+
+/**
+ * Today's inter-ecclesia send path (R5): the registry list keyed
+ * `interEcclesia` (defaultOptIn off), so its recipients are its `opt_in`
+ * subscription rows, by address. Test accounts are excluded. `optedOut` is
+ * every person with an `opt_out` row on it.
+ */
+export function registryListRecipients(
+  items: Array<Record<string, any>>,
+  listKey: string
+): { listId: string | null; byAddress: Map<string, string[]>; optedOut: Set<string> } {
+  const list = items.find((i) => String(i.pkey).startsWith('LIST#') && i.skey === 'DETAILS' && i.key === listKey)
+  const byAddress = new Map<string, string[]>()
+  const optedOut = new Set<string>()
+  if (!list) return { listId: null, byAddress, optedOut }
+  const prefix = `SUB#${list.listId}#`
+  for (const row of items) {
+    if (!String(row.pkey).startsWith('PERSON#') || !String(row.skey).startsWith(prefix)) continue
+    const personId = String(row.pkey).slice('PERSON#'.length)
+    if (row.status === 'opt_out') optedOut.add(personId)
+    if (row.status !== 'opt_in') continue
+    const email = lower(row.email)
+    if (!email || isTestAccountEmail(email)) continue
+    byAddress.set(email, [...(byAddress.get(email) || []), personId])
+  }
+  return { listId: list.listId as string, byAddress, optedOut }
+}
