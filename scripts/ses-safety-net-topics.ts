@@ -66,7 +66,7 @@
  *   npx tsx scripts/ses-safety-net-topics.ts --apply    # back up, then switch
  */
 
-import { backupJsonToS3, loadCredentials, sleep } from '../apps/next/utils/mailing-lists/script-env'
+import { backupJsonToS3, loadCredentials } from '../apps/next/utils/mailing-lists/script-env'
 import {
   lostUnsubscribeAll,
   safetyNetTopicList,
@@ -93,8 +93,8 @@ async function main(): Promise<void> {
   const { mailingListRepository } = await import(
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
   )
-  const { getSesClient, useThrottleTolerantSesClient } = await import('../apps/next/utils/email/sesClient')
-  useThrottleTolerantSesClient()
+  const { getSesClient, usePacedSesClient } = await import('../apps/next/utils/email/sesClient')
+  usePacedSesClient()
   const { inputTemplate } = await import('../apps/next/utils/email/contact-lists')
   const { runListParity } = await import('../apps/next/utils/mailing-lists/parity')
   const ses = getSesClient()
@@ -143,7 +143,6 @@ async function main(): Promise<void> {
     const { $metadata: _m, ...raw } = full as any
     rawContacts.push(raw)
     snapshot.push({ email, unsubscribeAll: !!full.UnsubscribeAll, attributesData: full.AttributesData || undefined })
-    await sleep(1100)
   }
   const topicListBefore = await ses.send(new GetContactListCommand(inputTemplate))
   const stopped = snapshot.filter((c) => c.unsubscribeAll)
@@ -243,7 +242,6 @@ async function main(): Promise<void> {
         ...(c?.attributesData ? { AttributesData: c.attributesData } : {}),
       })
     )
-    await sleep(1100)
   }
   const stillLost = lost.length > 0 ? lostUnsubscribeAll(stopped, await listUnsubscribeAll()) : []
   console.log(

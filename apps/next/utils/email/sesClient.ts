@@ -36,18 +36,40 @@ export function getAwsDbConfig(): DynamoDBClientConfig {
 }
 
 /**
- * For owner-run scripts only: makes every getSesClient() in this process (the
- * script's own calls and the shared helpers it uses) retry SES throttling
- * ("Rate exceeded") with adaptive back-off. The contact-list APIs allow only a
- * few calls a second, and a script that stops half-way through an SES change
- * is worse than a slow one. The app's send path never calls this.
+ * Admin SES calls (contact lists, topics, suppression list) have their own
+ * request limit, separate from the 14 emails/second sending rate that
+ * `emailSend` paces itself to. AWS doesn't publish it; one call a second is
+ * what our owner-run scripts have always run at without being throttled.
  */
-export function useThrottleTolerantSesClient(): void {
-  new GlobalRef<SESv2Client>('sesConnection').value = new SESv2Client({
-    ...getAwsConfig(),
-    maxAttempts: 12,
-    retryMode: 'adaptive',
-  })
+export const SES_ADMIN_CALLS_PER_SECOND = 1
+
+/**
+ * For owner-run scripts only: every `getSesClient()` in this process (the
+ * script's own calls and the shared helpers it uses) goes through ONE queue
+ * that sends at most `callsPerSecond` requests, retries included. Scripts
+ * don't sleep between calls themselves. The app's send path never calls this.
+ */
+export function usePacedSesClient(callsPerSecond = SES_ADMIN_CALLS_PER_SECOND): SESv2Client {
+  const client = new SESv2Client(getAwsConfig())
+  const gapMs = 1000 / callsPerSecond
+  let next = Promise.resolve()
+  let lastAt = 0
+  client.middlewareStack.add(
+    (send) => async (args) => {
+      const turn = next.then(async () => {
+        const wait = lastAt + gapMs - Date.now()
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+        lastAt = Date.now()
+      })
+      next = turn
+      await turn
+      return send(args)
+    },
+    // After the retry middleware, so each attempt waits its turn too.
+    { step: 'finalizeRequest', priority: 'low', name: 'sesAdminPacing' }
+  )
+  new GlobalRef<SESv2Client>('sesConnection').value = client
+  return client
 }
 
 export function getSesClient(): SESv2Client {
