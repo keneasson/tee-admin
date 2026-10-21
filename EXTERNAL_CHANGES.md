@@ -20,7 +20,7 @@ Changes in this file flag code modifications that require **matching manual upda
   2. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy` — backs up to `s3://tee-admin-backups/backups/<date>-relationships-to-person/`, writes, verifies. Check your own Family tab. **Do not leave a gap between the deploy and this step.**
   3. `npx tsx scripts/migrate-relationships-to-person.ts --apply --after-deploy --delete-legacy` — deletes the legacy rows of verified pairs only.
   4. Owner: `/admin/evolution/feature-flags` → `person_password_signin` → **owner**; sign in with your password (and a step-up) on your own account; then **everyone**.
-- **Status**: PENDING
+- **Status**: DONE 2026-10-20 — steps 1–3 applied and verified (23 legacy rows → 11 pairs, legacy deleted; backup `2026-10-20-relationships-to-person`). Step 4: the owner signed in with a password through the PersonRecord, and the `person_password_signin` flag was then removed (person password sign-in is the default for everyone).
 
 ### SES + prod data — finish R5: safety-net topics, retire topic fields (owner-run, in order)
 - **Date**: 2026-10-18

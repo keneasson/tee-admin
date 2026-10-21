@@ -15,8 +15,8 @@ const SUPPORT_CONTACT = 'teerecbro@gmail.com'
  *
  * Gated by a fresh step-up (origin). Verifies the code sent to the new address
  * (destination), enforcing the persistent escalating lockout. On success it
- * transfers the login identity to the new address (old one demoted with a grace
- * window) and notifies the OLD address so an unwanted change is caught.
+ * transfers the login identity to the new address (old one kept as a secondary)
+ * and notifies the OLD address so an unwanted change is caught.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // The identity transfer itself (PersonRecords): promote new → primary, demote
-    // old → recoverable secondary (30-day grace), re-point the login index.
+    // old → an ordinary secondary, re-point the login index.
     const { oldEmail } = await personRepository.changePrimaryEmail(person.personId, newEmail)
 
     // Notify the OLD address — a paper trail + a path to raise the alarm (see the

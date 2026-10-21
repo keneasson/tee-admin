@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { YStack, XStack, Text, Card, Input, Spinner, Popover } from 'tamagui'
+import { YStack, XStack, Text, Card, Input, Spinner } from 'tamagui'
+import { Link } from 'solito/link'
 import { Button } from '../Button'
 import {
   Mail,
@@ -11,8 +12,6 @@ import {
   Pencil,
   Shield,
   X,
-  Info,
-  RotateCcw,
 } from '@tamagui/lucide-icons'
 
 export interface EmailEntry {
@@ -28,13 +27,6 @@ export interface EmailEntry {
   /** A role this address represents (e.g. "Recording Brother"). Rendered read-only
    *  with a badge — it's managed elsewhere (ecclesia/RB settings), not editable here. */
   roleLabel?: string
-  /** A former-primary a login-email change demoted to a recoverable secondary.
-   *  Rendered as a "Retired" badge with an Undo affordance instead of the normal
-   *  controls, restorable until `retiredUntil`. */
-  retired?: boolean
-  /** When the retired address is eligible for archiving (ISO-8601). Drives the
-   *  "restore for N more days" copy. */
-  retiredUntil?: string
   // NOTE: `subscribed`/`subscriptionCount` used to render here; subscriptions now
   // live in their own tab. Kept optional so the API payload still type-checks.
   subscribed?: boolean
@@ -56,8 +48,8 @@ interface EmailManagerProps {
   onMakePrimary: (email: string) => void
   /** Change the login/primary address (secure flow). */
   onChangeLogin: () => void
-  /** Restore a retired (demoted former-primary) address to a permanent secondary. */
-  onUndoRetire?: (emailId: string) => void | Promise<void>
+  /** Where the person manages their subscriptions (self-serve preferences). */
+  manageSubscriptionsHref?: string
   /**
    * Whether the secure change-login flow is available to this session (the
    * SECURE_EMAIL_CHANGE launch-dark flag). Gates "Make primary" and the
@@ -75,13 +67,8 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-// Whole days from now until an ISO instant, floored at 0 (for the "restore for N
-// more days" copy on a retired address).
-function daysUntil(iso?: string): number {
-  if (!iso) return 0
-  const ms = new Date(iso).getTime() - Date.now()
-  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
-}
+// Subscriptions shown before "See all".
+const LISTS_SHOWN = 3
 
 export const EmailManager: React.FC<EmailManagerProps> = ({
   emails,
@@ -90,12 +77,13 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
   onSendVerification,
   onMakePrimary,
   onChangeLogin,
-  onUndoRetire,
+  manageSubscriptionsHref = '/email-preferences',
   canChangeLogin,
   readOnly = false,
 }) => {
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [openInfoId, setOpenInfoId] = useState<string | null>(null)
+  // Rows whose full subscription list is open.
+  const [listsOpen, setListsOpen] = useState<Set<string>>(new Set())
 
   // Inline "add a new address" editor (revealed by the Add button).
   const [adding, setAdding] = useState(false)
@@ -177,13 +165,12 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
           {emails.map((entry) => {
             const isLogin = !!entry.isPrimary
             const isRole = !!entry.roleLabel // e.g. Recording Brother — read-only
-            const isRetired = !!entry.retired // demoted former-primary — restorable
             const isEditing = editingId === entry.id
             const rowBusy = busyId === entry.id
             const canMakePrimary =
-              !readOnly && canChangeLogin && entry.verified && !isLogin && !isRole && !isRetired
+              !readOnly && canChangeLogin && entry.verified && !isLogin && !isRole
             const lists = entry.mailingLists ?? []
-            const canRename = !readOnly && !isLogin && !isRole && !isRetired
+            const canRename = !readOnly && !isLogin && !isRole
 
             return (
               <Card
@@ -225,65 +212,10 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                       Save
                     </Button>
                   </XStack>
-                ) : isRetired ? (
-                  // Retired (demoted former-primary) row: a Retired badge + an ⓘ
-                  // that explains the grace window, plus Undo. None of the normal
-                  // trash / verify / preferred / menu controls apply here.
-                  <XStack gap="$2" alignItems="flex-start">
-                    <XStack width={GUTTER} />
-                    <YStack flex={1} gap="$1" minWidth={0}>
-                      <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Text fontSize="$4" fontWeight="500" color="$color11">
-                          {entry.email || 'No email'}
-                        </Text>
-                        <Card paddingHorizontal="$2" paddingVertical="$1" backgroundColor="$gray4">
-                          <Text fontSize="$1" color="$gray11">Retired</Text>
-                        </Card>
-                        <Popover
-                          size="$3"
-                          allowFlip
-                          open={openInfoId === entry.id}
-                          onOpenChange={(open) => setOpenInfoId(open ? entry.id : null)}
-                        >
-                          <Popover.Trigger asChild>
-                            <Button
-                              size="$1"
-                              circular
-                              chromeless
-                              icon={Info}
-                              aria-label="Why is this address retired?"
-                            />
-                          </Popover.Trigger>
-                          <Popover.Content
-                            bordered
-                            elevate
-                            padding="$3"
-                            maxWidth={260}
-                            enterStyle={{ y: -6, opacity: 0 }}
-                            exitStyle={{ y: -6, opacity: 0 }}
-                            animation="quick"
-                          >
-                            <Text fontSize="$2" color="$color11">
-                              {`Changed by mistake? You can restore this address for ${daysUntil(entry.retiredUntil)} more ${daysUntil(entry.retiredUntil) === 1 ? 'day' : 'days'}.`}
-                            </Text>
-                          </Popover.Content>
-                        </Popover>
-                      </XStack>
-                    </YStack>
-                    {readOnly || !onUndoRetire ? null : (
-                      <Button
-                        size="$2"
-                        variant="outlined"
-                        icon={rowBusy ? <Spinner size="small" /> : RotateCcw}
-                        onPress={() => run(entry.id, () => onUndoRetire(entry.id))}
-                        disabled={rowBusy}
-                      >
-                        Undo
-                      </Button>
-                    )}
-                  </XStack>
                 ) : (
-                  <XStack gap="$2" alignItems="flex-start">
+                  // Wraps: on a phone the actions drop to their own line
+                  // instead of squeezing the address into a narrow column.
+                  <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
                     {/* Left edit gutter — consistent on every row */}
                     <XStack width={GUTTER} alignItems="center" justifyContent="flex-start">
                       {readOnly || isRole ? null : isLogin ? (
@@ -311,9 +243,9 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                     </XStack>
 
                     {/* Value + badges */}
-                    <YStack flex={1} gap="$1" minWidth={0}>
+                    <YStack flex={1} gap="$1" minWidth={200}>
                       <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                        <Text fontSize="$4" fontWeight="500">
+                        <Text fontSize="$4" fontWeight="500" style={{ overflowWrap: 'anywhere' }}>
                           {entry.email || 'No email'}
                         </Text>
                         {isLogin ? (
@@ -330,15 +262,45 @@ export const EmailManager: React.FC<EmailManagerProps> = ({
                       {isLogin ? (
                         <Text fontSize="$2" color="$color11">Sign-in and account email</Text>
                       ) : null}
-                      {lists.length > 0 ? (
-                        <Text fontSize="$2" color="$color11">
-                          {`Mailing lists sent here: ${lists.join(', ')}`}
-                        </Text>
+                      {/* Always on the primary row, so there is a way in to subscribe. */}
+                      {lists.length > 0 || isLogin ? (
+                        <YStack gap="$1" marginTop="$1">
+                          <Text fontSize="$2" fontWeight="600" color="$color11">Subscriptions</Text>
+                          {lists.length === 0 ? <Text fontSize="$2" color="$color11">None</Text> : null}
+                          {(listsOpen.has(entry.id) ? lists : lists.slice(0, LISTS_SHOWN)).map((name) => (
+                            <Text key={name} fontSize="$2" color="$color11">{`• ${name}`}</Text>
+                          ))}
+                          <XStack gap="$3" alignItems="center">
+                            {lists.length > LISTS_SHOWN ? (
+                              <Text
+                                fontSize="$2"
+                                color="$blue10"
+                                cursor="pointer"
+                                role="button"
+                                onPress={() =>
+                                  setListsOpen((open) => {
+                                    const next = new Set(open)
+                                    if (next.has(entry.id)) next.delete(entry.id)
+                                    else next.add(entry.id)
+                                    return next
+                                  })
+                                }
+                              >
+                                {listsOpen.has(entry.id) ? 'Show fewer' : `See all ${lists.length}`}
+                              </Text>
+                            ) : null}
+                            {readOnly ? null : (
+                              <Link href={manageSubscriptionsHref}>
+                                <Text fontSize="$2" color="$blue10">Manage</Text>
+                              </Link>
+                            )}
+                          </XStack>
+                        </YStack>
                       ) : null}
                     </YStack>
 
                     {/* Right actions */}
-                    <XStack gap="$2" alignItems="center">
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap" justifyContent="flex-end" marginLeft="auto">
                       {entry.verified ? (
                         <XStack gap="$1" alignItems="center">
                           <Check size={15} color="$green10" />
