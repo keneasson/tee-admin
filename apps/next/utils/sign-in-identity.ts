@@ -41,7 +41,16 @@ export const defaultSignInIdentityDeps: SignInIdentityDeps = {
   defaultHolder: (address) => personRepository.getByEmail(address),
 }
 
-/** The people who may sign in through a proven address (deceased never). */
+const hasName = (p: PersonRecord) =>
+  !!(p.displayName || `${p.firstName || ''} ${p.lastName || ''}`.trim())
+
+/**
+ * The people who may sign in through a proven address (deceased never). A
+ * nameless record (a leftover from the 2024 mailing-list import, often an
+ * ecclesia mailbox) is not a person to be: when anyone named can use the
+ * address, nameless records are left out. Only when nobody named holds it
+ * does the nameless record sign in, as before.
+ */
 export async function peopleWhoCanUse(
   addressRaw: string | null | undefined,
   deps: SignInIdentityDeps = defaultSignInIdentityDeps
@@ -50,11 +59,13 @@ export async function peopleWhoCanUse(
   if (!address) return []
   const [holders, officeHolders] = await Promise.all([deps.holdersOf(address), deps.officeHoldersOf(address)])
   const seen = new Set<string>()
-  return [...holders, ...officeHolders].filter((p) => {
+  const people = [...holders, ...officeHolders].filter((p) => {
     if (!p?.personId || p.role === 'deceased' || seen.has(p.personId)) return false
     seen.add(p.personId)
     return true
   })
+  const named = people.filter(hasName)
+  return named.length > 0 ? named : people
 }
 
 export function nameOf(p: PersonRecord): string {
@@ -112,7 +123,13 @@ export async function identityAtSignIn(
   if (!signInEmail) return {}
   const people = await peopleWhoCanUse(signInEmail, deps)
   const named = people.find((p) => p.personId === input.userId)
-  const personId = named?.personId ?? (await deps.defaultHolder(signInEmail))?.personId
+  // The household default, unless it's a record left out above (a nameless
+  // leftover): then the only person who can use the address, or the first
+  // choice until they answer.
+  const fallback = (await deps.defaultHolder(signInEmail))?.personId
+  const personId =
+    named?.personId ??
+    (people.some((p) => p.personId === fallback) ? fallback : people[0]?.personId)
   return {
     signInEmail,
     personId,

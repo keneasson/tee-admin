@@ -50,6 +50,27 @@ describe('peopleWhoCanUse', () => {
   })
 })
 
+describe('nameless records (leftover mailbox imports)', () => {
+  const LEFTOVER = person('leftover', '')
+  const MAILBOX = 'mailbox@example.org'
+
+  it('step aside when a named person uses the address: no question, signed in as that person', async () => {
+    const d = deps({ [MAILBOX]: [LEFTOVER, ALICE] }) // the household default picks the leftover
+    expect((await peopleWhoCanUse(MAILBOX, d)).map((p) => p.personId)).toEqual(['alice'])
+    expect(await identityAtSignIn({ signInEmail: MAILBOX, identified: false, assurance: 'authenticated' }, d)).toEqual({
+      signInEmail: MAILBOX,
+      personId: 'alice',
+      chooseIdentity: false,
+    })
+    expect(await mayActAs('leftover', MAILBOX, d)).toBe(false)
+  })
+
+  it('still sign in when nobody named holds the address', async () => {
+    const d = deps({ [MAILBOX]: [LEFTOVER] })
+    expect((await identityAtSignIn({ signInEmail: MAILBOX, identified: false, assurance: 'authenticated' }, d)).personId).toBe('leftover')
+  })
+})
+
 describe('mustChooseIdentity', () => {
   it('asks only when several people use the address and nothing named one', () => {
     expect(mustChooseIdentity({ people: [ALICE, BOB], identified: false, assurance: 'authenticated' })).toBe(true)
