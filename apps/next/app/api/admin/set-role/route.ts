@@ -63,7 +63,7 @@ export async function PUT(request: NextRequest) {
 
     if (newRole === ROLES.RECORDER) {
       return NextResponse.json(
-        { error: 'Recording Brother is now a designation, not a role. Use the RB nomination flow to set a Recording Brother.' },
+        { error: 'Recording Brother is a designation, not a role. Owners and admins: Admin → Recording Brothers. Everyone else: Nominate on the ecclesia page.' },
         { status: 400 }
       )
     }

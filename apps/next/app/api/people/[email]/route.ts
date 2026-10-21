@@ -397,9 +397,9 @@ export async function GET(
       profile.managedRegions = targetPerson.managedRegions
       profile.canSetRole = !isOwnProfile
       if (viewerRole === ROLES.OWNER) {
-        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.OWNER, ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       } else {
-        profile.allowedRoles = [ROLES.ADMIN, ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
+        profile.allowedRoles = [ROLES.ADMIN, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       }
     }
 
@@ -414,11 +414,7 @@ export async function GET(
         profile.personId = targetPerson.personId
         profile.role = targetPerson.role || ROLES.GUEST
         profile.canSetRole = true
-        if (viewerIsRecordingBrother || viewerRole === ROLES.RECORDER) {
-          profile.allowedRoles = [ROLES.RECORDER, ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
-        } else {
-          profile.allowedRoles = [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
-        }
+        profile.allowedRoles = [ROLES.REP, ROLES.MEMBER, ROLES.GUEST, ROLES.DECEASED]
       }
     }
 

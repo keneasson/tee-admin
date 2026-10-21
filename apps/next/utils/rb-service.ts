@@ -8,6 +8,9 @@ interface SetRecordingBrotherParams {
   newPersonId: string
   emailPreference: 'personal' | 'ecclesia'
   rbEcclesiaEmail?: string
+  /** Add rbEcclesiaEmail to the new RB's own record (default true). False when
+   *  the address already sits on its own contact record and stays there. */
+  attachEcclesiaEmail?: boolean
   callerEmail: string
 }
 
@@ -33,7 +36,7 @@ interface SetRecordingBrotherResult {
  * Replaces transferRBEmail() as the single entry point for all RB changes.
  */
 export async function setRecordingBrother(params: SetRecordingBrotherParams): Promise<SetRecordingBrotherResult> {
-  const { ecclesiaName, newPersonId, emailPreference, rbEcclesiaEmail } = params
+  const { ecclesiaName, newPersonId, emailPreference, rbEcclesiaEmail, attachEcclesiaEmail = true } = params
 
   // 1. Look up new person
   const newPerson = await personRepository.getById(newPersonId)
@@ -56,7 +59,7 @@ export async function setRecordingBrother(params: SetRecordingBrotherParams): Pr
   // 4. Set new RB
   const rbEmail = emailPreference === 'ecclesia' && rbEcclesiaEmail
     ? rbEcclesiaEmail.toLowerCase().trim()
-    : newPerson.primaryEmail.toLowerCase()
+    : (newPerson.primaryEmail || '').toLowerCase()
 
   await personRepository.updatePerson(newPersonId, {
     isRecordingBrother: true,
@@ -66,12 +69,12 @@ export async function setRecordingBrother(params: SetRecordingBrotherParams): Pr
 
   // If preference is 'ecclesia' and the email isn't already on the person's record,
   // add it as a secondary email
-  if (emailPreference === 'ecclesia' && rbEcclesiaEmail) {
+  if (emailPreference === 'ecclesia' && rbEcclesiaEmail && attachEcclesiaEmail) {
     const normalizedEmail = rbEcclesiaEmail.toLowerCase().trim()
     const existingEmails = await personRepository.getEmails(newPersonId)
     const alreadyHasEmail = existingEmails.some(
       (e) => e.email.toLowerCase() === normalizedEmail
-    ) || newPerson.primaryEmail.toLowerCase() === normalizedEmail
+    ) || (newPerson.primaryEmail || '').toLowerCase() === normalizedEmail
 
     if (!alreadyHasEmail) {
       await personRepository.addEmail(newPersonId, {
