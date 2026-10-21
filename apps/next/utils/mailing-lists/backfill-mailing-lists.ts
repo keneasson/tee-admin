@@ -315,7 +315,7 @@ export function countByTopic(rows: Array<{ topic: string }>): Record<string, num
 // ---------------------------------------------------------------------------
 
 async function runBackfill(opts: { apply: boolean }): Promise<void> {
-  const { loadCredentials, backupJsonToS3, sleep } = await import('./script-env')
+  const { loadCredentials, backupJsonToS3 } = await import('./script-env')
   loadCredentials()
 
   // Imported after credentials are in the environment (the clients read them at load).
@@ -328,7 +328,7 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
   )
   const { personRepository } = await import('@my/app/provider/dynamodb/repositories/person-repository')
-  const { getSesClient } = await import('../email/sesClient')
+  const { usePacedSesClient } = await import('../email/sesClient')
   const { inputTemplate } = await import('../email/contact-lists')
   const { resolveSubscriber } = await import('./subscriptions')
 
@@ -361,8 +361,8 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
   for (const def of toSeed) console.log(`  · ${opts.apply ? 'will seed' : 'would seed'} "${def.name}" (topic ${def.sesTopic})`)
 
   // 3) SES: every contact, then get-contact each for its full explicit
-  //    preferences + attributes (also the backup). ~1 call/sec (SES limit).
-  const ses = getSesClient()
+  //    preferences + attributes (also the backup), paced by the client.
+  const ses = usePacedSesClient()
   const contactEmails: string[] = []
   let NextToken: string | undefined
   do {
@@ -370,7 +370,7 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
     for (const c of page.Contacts ?? []) if (c.EmailAddress) contactEmails.push(c.EmailAddress)
     NextToken = page.NextToken
   } while (NextToken)
-  console.log(`Reading ${contactEmails.length} SES contact(s) (about ${Math.ceil(contactEmails.length * 1.1)}s)…`)
+  console.log(`Reading ${contactEmails.length} SES contact(s) (about ${contactEmails.length}s)…`)
 
   const rawContacts: Record<string, unknown>[] = []
   const contacts: SesContactForBackfill[] = []
@@ -388,7 +388,6 @@ async function runBackfill(opts: { apply: boolean }): Promise<void> {
       topicDefaultPreferences: prefs(full.TopicDefaultPreferences),
       unsubscribeAll: !!full.UnsubscribeAll,
     })
-    await sleep(1100)
   }
   const { subscribers, caseDuplicateAddresses } = mergeSesContacts(contacts)
 
