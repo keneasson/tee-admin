@@ -23,6 +23,10 @@ One source of truth for **people**, **ecclesias and their offices**, and **maili
 | R7 | **Every reader moved.** Password sign-in, registration, verify and reset; email-keyed privacy, relationships and requests; RB detection; the Sheets people lookup. All read person or office records. | A CI grep gate fails on any legacy-store read. Owner-account sign-in test for each method. |
 | R8 | **Legacy deleted.** Code: legacy repositories, routes, scripts, Pages Router email/contact routes, migration tools. Data: `DIRECTORY#MEMBERS`, legacy `USER#` people items, copied ecclesia RB fields, committed subscriber files (with history purge, #78). Final backup first. | A scan shows 0 legacy items. The grep gate passes. `yarn smoke:prod` passes. |
 
+### R2 status (2026-10-20)
+
+Built (PR on `feat/r2-who-are-you`): a code or Google sign-in through an address several living people use asks "Who's signing in?" (`/auth/who`); the answer is accepted only if that person uses the address the session proved (`utils/sign-in-identity.ts`, enforced in the jwt callback). The session carries `personId`, and routes resolve "me" by it (`utils/session-person.ts`). A household member's own password signs them in directly. Office mailboxes plug in through `officeHoldersOf` once R3 lands.
+
 ### R5 status (2026-10-18)
 
 Done in code (PR #285 and the R5-finish PR):

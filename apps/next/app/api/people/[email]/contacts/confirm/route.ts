@@ -8,6 +8,7 @@ import {
   progressLabel,
 } from '@my/app/utils/contact-verification'
 import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * POST /api/people/[email]/contacts/confirm
@@ -55,7 +56,7 @@ export async function POST(
       )
     }
 
-    const voterPerson = await personRepository.getByEmail(session.user.email)
+    const voterPerson = await personForSessionEmail(session.user.email)
     if (!voterPerson) {
       return NextResponse.json({ error: 'Your record could not be found' }, { status: 403 })
     }

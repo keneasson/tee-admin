@@ -24,6 +24,7 @@ import { personRepository, type GoogleOAuthProfile } from '@my/app/provider/dyna
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { verifyEcclesiaToken } from './email/ecclesia-token'
 import { findRecordingBrotherEcclesia, signInOfficeFlags } from './dynamodb/locations'
+import { identityAtSignIn, switchIdentity } from './sign-in-identity'
 
 // Feature flag for unified people system - uses PersonRecord instead of scan-based USER# lookups
 const USE_UNIFIED_PEOPLE = process.env.UNIFIED_PEOPLE_AUTH === 'true'
@@ -104,6 +105,9 @@ export const authOptions: NextAuthConfig = {
             provider: 'credentials',
             // Password is a freshly-proven credential → full authority.
             assurance: 'authenticated',
+            // A password belongs to one person: it names who (R2).
+            identified: true,
+            signInEmail: (credentials.email as string).toLowerCase().trim(),
           }
         }
 
@@ -199,6 +203,8 @@ export const authOptions: NextAuthConfig = {
             // A completed OTP (single-use, 10-min, sent to the on-file address)
             // is a fresh proof of inbox control → full authority.
             assurance: 'authenticated',
+            // The inbox that was proven; who is using it is asked next (R2).
+            signInEmail: email,
           }
         }
 
@@ -212,7 +218,18 @@ export const authOptions: NextAuthConfig = {
     error: '/auth/signin',
   },
   callbacks: {
-    async jwt({ token, user }: { token: JWT; user?: User }) {
+    async jwt({
+      token,
+      user,
+      trigger,
+      session: update,
+    }: {
+      token: JWT
+      user?: User
+      trigger?: 'signIn' | 'signUp' | 'update'
+      session?: { personId?: string }
+    }) {
+      const t = token as JWT & { personId?: string; signInEmail?: string; chooseIdentity?: boolean }
       // On sign-in, try to get role from the user object (set by signIn callback)
       if (user) {
         const userRole = (user as User & { role?: string }).role
@@ -229,6 +246,23 @@ export const authOptions: NextAuthConfig = {
         ;(token as JWT & { assuranceLevel?: string }).assuranceLevel =
           userAssurance === 'recognized' ? 'recognized' : 'authenticated'
         ;(token as JWT & { authTime?: number }).authTime = Date.now()
+
+        // R2: who is signed in. The proven address authorizes; when more than
+        // one person can use it, the session asks "Are you A or B?" (/auth/who).
+        const ext = user as User & { signInEmail?: string; identified?: boolean }
+        try {
+          Object.assign(
+            t,
+            await identityAtSignIn({
+              signInEmail: ext.signInEmail || user.email,
+              userId: user.id,
+              identified: !!ext.identified,
+              assurance: userAssurance === 'recognized' ? 'recognized' : 'authenticated',
+            })
+          )
+        } catch (e) {
+          console.error('⚠️ JWT callback: sign-in identity lookup failed:', e)
+        }
       } else if (!(token as JWT & { assuranceLevel?: string }).assuranceLevel) {
         // Grandfather sessions minted before #80: treat as authenticated so we
         // don't lock out anyone currently signed in. Going forward, only the
@@ -236,11 +270,26 @@ export const authOptions: NextAuthConfig = {
         ;(token as JWT & { assuranceLevel?: string }).assuranceLevel = 'authenticated'
       }
 
+      // "Are you A or B?" answered (R2). The client sends only a personId; it is
+      // accepted only if that person can use the address THIS session proved.
+      if (trigger === 'update' && update?.personId) {
+        try {
+          // Sessions from before R2 carry no signInEmail: their session address.
+          const proven = { ...t, signInEmail: t.signInEmail ?? (token.email as string | undefined) }
+          Object.assign(t, await switchIdentity(proven, update.personId))
+        } catch (e) {
+          console.error('⚠️ JWT callback: identity switch failed:', e)
+        }
+      }
+
       // Always refresh name, role, and RB designation from PersonRecord.
       // This keeps the JWT in sync when admins change a user's name or role.
+      // The session's person is read by id; sessions from before R2 by email.
       if (token.email) {
         try {
-          const person = await personRepository.getByEmailForAuth(token.email as string)
+          const person =
+            (t.personId ? await personRepository.getById(t.personId) : null) ??
+            (await personRepository.getByEmailForAuth(token.email as string))
           if (person) {
             // RB / Rep designation: derived from offices once they are live (flagged)
             const offices = await signInOfficeFlags(person, token.email as string)
@@ -484,7 +533,7 @@ export const authOptions: NextAuthConfig = {
       // Safely add role and RB designation to the Session.User
       try {
         const userWithRole = user as (User & { role?: string }) | undefined
-        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean; ecclesia?: string; assuranceLevel?: string; authTime?: number }) | undefined
+        const tokenWithRole = token as (JWT & { role?: string; isRecordingBrother?: boolean; ecclesia?: string; assuranceLevel?: string; authTime?: number; personId?: string; chooseIdentity?: boolean; signInEmail?: string }) | undefined
         const finalRole = userWithRole?.role || tokenWithRole?.role || ROLES.GUEST
         console.log('📋 Session callback - Final role:', finalRole, 'for user:', session.user?.email)
         ;(session.user as User & { role: string }).role = finalRole
@@ -496,6 +545,10 @@ export const authOptions: NextAuthConfig = {
         // token; 'authenticated' = a freshly-proven credential.
         ;(session.user as any).assuranceLevel = tokenWithRole?.assuranceLevel || 'authenticated'
         ;(session.user as any).authTime = tokenWithRole?.authTime ?? null
+        // R2: the signed-in person, and whether they still need to say who.
+        ;(session.user as any).personId = tokenWithRole?.personId ?? null
+        ;(session.user as any).chooseIdentity = !!tokenWithRole?.chooseIdentity
+        ;(session.user as any).signInEmail = tokenWithRole?.signInEmail ?? null
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error

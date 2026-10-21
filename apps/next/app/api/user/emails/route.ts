@@ -9,6 +9,7 @@ import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/ma
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { mailingListsByAddress } from '../../../../utils/mailing-lists/by-address'
 import { ownerNameOf, ownerNamesFor } from '../../../../utils/mailing-lists/owners'
+import { personForSessionEmail } from '@/utils/session-person'
 
 // Simple email validation
 function isValidEmail(email: string): boolean {
@@ -22,7 +23,7 @@ function isValidEmail(email: string): boolean {
  */
 async function resolveActingPerson(loginEmail: string): Promise<PersonRecord | null> {
   const email = loginEmail.toLowerCase()
-  let person = await personRepository.getByEmail(email)
+  let person = await personForSessionEmail(email)
   if (!person) {
     const persons = await personRepository.getAllPersonsByEmail(email)
     person = persons[0] || null

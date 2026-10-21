@@ -3,6 +3,7 @@ import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { draftMemberRepository } from '@my/app/provider/dynamodb/repositories/draft-member-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * GET /api/people/drafts — List pending drafts
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     // Look up viewer's ecclesia
     const viewerEmail = session.user.email
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

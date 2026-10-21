@@ -3,6 +3,7 @@ import { auth } from '../../../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { rbNominationRepository } from '@my/app/provider/dynamodb/repositories/rb-nomination-repository'
 import { sendRBConfirmationEmail } from '../../../../../../utils/email/send-rb-confirmation'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * POST /api/people/rb-nomination/[nominationId]/second — Second a nomination
@@ -35,7 +36,7 @@ export async function POST(
     const viewerEmail = session.user.email
 
     // Verify viewer is a member of this ecclesia
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

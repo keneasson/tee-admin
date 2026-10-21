@@ -5,6 +5,7 @@ import { rbNominationRepository } from '@my/app/provider/dynamodb/repositories/r
 import { getEcclesiaByName } from '../../../../utils/dynamodb/locations'
 import { sendRBConfirmationEmail } from '../../../../utils/email/send-rb-confirmation'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { personForSessionEmail } from '@/utils/session-person'
 import { recordingBrotherOf } from '@/utils/ecclesia-offices'
 
 /**
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
 
     // Standard nomination flow
     // Verify viewer is a member of this ecclesia
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { PhoneType } from '@my/app/provider/dynamodb/types'
+import { personForSessionEmail } from '@/utils/session-person'
 
 // Valid phone types
 const validPhoneTypes: PhoneType[] = ['mobile', 'home', 'work', 'other']
@@ -11,7 +12,7 @@ const validPhoneTypes: PhoneType[] = ['mobile', 'home', 'work', 'other']
  * Returns null if no person record found.
  */
 async function resolvePersonId(email: string): Promise<string | null> {
-  const person = await personRepository.getByEmail(email)
+  const person = await personForSessionEmail(email)
   return person?.personId ?? null
 }
 

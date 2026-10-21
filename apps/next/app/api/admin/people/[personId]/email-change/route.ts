@@ -6,6 +6,7 @@ import { notifyLoginEmailChanged } from '../../../../../../utils/email/notify-lo
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { invalidatePeopleCache } from '../../../../people/cache'
+import { personForSessionEmail } from '@/utils/session-person'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -72,7 +73,7 @@ export async function POST(
     }
 
     // 4. Actor must be able to edit the TARGET's ecclesia.
-    const actorPerson = await personRepository.getByEmail(actorEmail)
+    const actorPerson = await personForSessionEmail(actorEmail)
     const actorRole = actorPerson?.role || (gate.ctx.session?.user as any)?.role || ROLES.GUEST
     const canEdit = await checkEcclesiaEditPermission(
       actorEmail,

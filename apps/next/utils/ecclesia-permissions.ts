@@ -1,7 +1,7 @@
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { getDefaultRegion } from '@my/app/config/regions'
 import { getEcclesiaByName, getAllEcclesia } from './dynamodb/locations'
+import { personForSessionEmail } from './session-person'
 
 /**
  * Check if a user can edit a given ecclesia.
@@ -25,7 +25,7 @@ export async function checkEcclesiaEditPermission(
   }
 
   // Look up the person record to check ecclesia membership and RB designation
-  const person = await personRepository.getByEmail(userEmail)
+  const person = await personForSessionEmail(userEmail)
   if (!person) {
     return false
   }
@@ -65,12 +65,12 @@ export async function checkRecordingBrotherPermission(
 
   // Legacy recorder role or RB designation — same-ecclesia only
   if (userRole === ROLES.RECORDER) {
-    const person = await personRepository.getByEmail(userEmail)
+    const person = await personForSessionEmail(userEmail)
     return !!person && person.ecclesia === ecclesiaName
   }
 
   // isRecordingBrother designation — same-ecclesia only
-  const person = await personRepository.getByEmail(userEmail)
+  const person = await personForSessionEmail(userEmail)
   if (person?.isRecordingBrother && person.ecclesia === ecclesiaName) {
     return true
   }
@@ -113,7 +113,7 @@ export async function canAuthorForEcclesia(
     return true
   }
 
-  const person = await personRepository.getByEmail(userEmail)
+  const person = await personForSessionEmail(userEmail)
   if (!person) {
     return false
   }
@@ -163,7 +163,7 @@ export async function authorizeContentEcclesia(
   let target = (requestedEcclesia || '').trim()
 
   if (!target) {
-    const person = await personRepository.getByEmail(userEmail)
+    const person = await personForSessionEmail(userEmail)
     target = (person?.ecclesia || '').trim()
   }
 
@@ -203,7 +203,7 @@ export async function listManageableEcclesias(
     return { all: true }
   }
 
-  const person = await personRepository.getByEmail(userEmail)
+  const person = await personForSessionEmail(userEmail)
   const ecclesias = new Set<string>()
   if (!person) {
     return { all: false, ecclesias }
@@ -255,7 +255,7 @@ export async function listSelectableEcclesias(
     names = Array.from(manageable.ecclesias)
   }
 
-  const person = await personRepository.getByEmail(userEmail)
+  const person = await personForSessionEmail(userEmail)
   const home = person?.ecclesia
   return names.sort((a, b) => {
     if (home) {

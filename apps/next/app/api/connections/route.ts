@@ -6,6 +6,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 import { sendConnectionRequestEmail } from '../../../utils/email/send-connection-email'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * GET /api/connections - List connections and pending requests
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     await connectionRepository.requestConnection(requesterEmail, normalizedTarget, token.tokenValue)
 
     // Get requester's name for the email
-    const requesterPerson = await personRepository.getByEmail(requesterEmail)
+    const requesterPerson = await personForSessionEmail(requesterEmail)
     const requesterName = requesterPerson?.displayName
       || [requesterPerson?.firstName, requesterPerson?.lastName].filter(Boolean).join(' ')
       || requesterEmail

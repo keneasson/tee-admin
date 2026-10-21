@@ -1,5 +1,6 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import type { PersonRecord, RelationshipRecord, RelationshipType } from '@my/app/provider/dynamodb/types'
+import { personForSessionEmail } from './session-person'
 
 /**
  * Shared helpers for the relationship routes. Relationships are keyed by
@@ -10,7 +11,7 @@ import type { PersonRecord, RelationshipRecord, RelationshipType } from '@my/app
 /** The signed-in person: any address they hold resolves them (sign-in rule). */
 export async function resolveSessionPerson(sessionEmail: string): Promise<PersonRecord | null> {
   const email = sessionEmail.toLowerCase().trim()
-  const person = await personRepository.getByEmail(email)
+  const person = await personForSessionEmail(email)
   if (person) return person
   return (await personRepository.getAllPersonsByEmail(email))[0] || null
 }

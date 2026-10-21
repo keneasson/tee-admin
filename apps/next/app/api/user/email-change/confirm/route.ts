@@ -7,6 +7,7 @@ import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-re
 import { describeLock, remainingAttempts } from '@my/app/utils/email-change'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { personForSessionEmail } from '@/utils/session-person'
 
 const SUPPORT_CONTACT = 'teerecbro@gmail.com'
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Enter the code we emailed you.' }, { status: 400 })
     }
 
-    const person = await personRepository.getByEmail(currentEmail)
+    const person = await personForSessionEmail(currentEmail)
     if (!person) {
       return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
     }

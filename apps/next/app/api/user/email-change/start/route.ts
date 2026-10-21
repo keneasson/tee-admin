@@ -9,6 +9,7 @@ import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-re
 import { codeFromBytes, EMAIL_CHANGE_CODE_LENGTH } from '@my/app/utils/email-change'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { personForSessionEmail } from '@/utils/session-person'
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const person = await personRepository.getByEmail(currentEmail)
+    const person = await personForSessionEmail(currentEmail)
     if (!person) {
       return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
     }

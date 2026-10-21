@@ -4,6 +4,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { loadDirectoryPeople } from '../load-directory'
 import { getCachedGuests, setCachedGuests, GUEST_CACHE_TTL_MS } from './cache'
+import { personForSessionEmail } from '@/utils/session-person'
 
 interface GuestListItem {
   id: string
@@ -46,7 +47,7 @@ export async function GET() {
 
     // Look up viewer's ecclesia for recorder filtering
     const viewerEmail = session.user.email
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

@@ -4,6 +4,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { draftMemberRepository } from '@my/app/provider/dynamodb/repositories/draft-member-repository'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../cache'
+import { personForSessionEmail } from '@/utils/session-person'
 
 /**
  * POST /api/people/add — Create a new member (direct or draft)
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     const viewerRole = (session.user.role as string)?.toLowerCase()
 
     // Look up viewer's ecclesia
-    let viewerPerson = await personRepository.getByEmail(viewerEmail)
+    let viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null

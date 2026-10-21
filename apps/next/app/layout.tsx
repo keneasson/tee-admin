@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { SessionProvider, useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { HeaderEcclesiaProvider } from '@my/app/provider/ecclesia/header-ecclesia-context'
 import { config } from '@my/ui'
@@ -19,6 +19,7 @@ const NOTIFICATION_POLL_INTERVAL = 60_000
 function NavigationWithAuth({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const [notificationCount, setNotificationCount] = useState<number | undefined>(undefined)
   const [featureEnabled, setFeatureEnabled] = useState(false)
 
@@ -31,6 +32,14 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
         isRecordingBrother: (session.user as any)?.isRecordingBrother,
       }
     : null
+
+  // R2: signed in through an address several people use → ask who, once.
+  const mustChoose = !!(session?.user as { chooseIdentity?: boolean } | undefined)?.chooseIdentity
+  useEffect(() => {
+    if (mustChoose && pathname && !pathname.startsWith('/auth/')) {
+      router.replace(`/auth/who?callbackUrl=${encodeURIComponent(pathname)}`)
+    }
+  }, [mustChoose, pathname, router])
 
   const handleSignOut = () => {
     signOut({ callbackUrl: '/' })
