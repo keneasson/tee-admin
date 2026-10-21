@@ -31,7 +31,7 @@
  *   npx tsx scripts/ses-merge-case-duplicates.ts --apply    # back up, then merge
  */
 
-import { backupJsonToS3, loadCredentials, sleep } from '../apps/next/utils/mailing-lists/script-env'
+import { backupJsonToS3, loadCredentials } from '../apps/next/utils/mailing-lists/script-env'
 import {
   mergeRefusals,
   planCaseDuplicates,
@@ -48,8 +48,8 @@ async function main(): Promise<void> {
   const { mailingListRepository } = await import(
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
   )
-  const { getSesClient, useThrottleTolerantSesClient } = await import('../apps/next/utils/email/sesClient')
-  useThrottleTolerantSesClient()
+  const { getSesClient, usePacedSesClient } = await import('../apps/next/utils/email/sesClient')
+  usePacedSesClient()
   const { inputTemplate } = await import('../apps/next/utils/email/contact-lists')
   const ses = getSesClient()
 
@@ -104,7 +104,6 @@ async function main(): Promise<void> {
     const { $metadata: _m, ...rest } = full as any
     raw.push(rest)
     snapshot.push({ email: c.email, unsubscribeAll: !!full.UnsubscribeAll, attributesData: full.AttributesData || undefined })
-    await sleep(1100)
   }
   const stamp = new Date().toISOString().slice(0, 10)
   const prefix = `backups/${stamp}-ses-case-duplicates`
@@ -127,7 +126,6 @@ async function main(): Promise<void> {
           ...(d.attributesData ? { AttributesData: d.attributesData } : {}),
         })
       )
-      await sleep(1100)
     } else if (d.unsubscribeAll) {
       await ses.send(
         new UpdateContactCommand({
@@ -137,10 +135,8 @@ async function main(): Promise<void> {
           ...(d.attributesData ? { AttributesData: d.attributesData } : {}),
         })
       )
-      await sleep(1100)
     }
     const check = await ses.send(new GetContactCommand({ ...inputTemplate, EmailAddress: d.email }))
-    await sleep(1100)
     if (d.unsubscribeAll && !check.UnsubscribeAll) {
       throw new Error(
         `A lower-case contact did not keep UnsubscribeAll; its variants were NOT deleted. Stopping (backup: s3://tee-admin-backups/${prefix}/).`
@@ -148,7 +144,6 @@ async function main(): Promise<void> {
     }
     for (const variant of d.deleteVariants) {
       await ses.send(new DeleteContactCommand({ ...inputTemplate, EmailAddress: variant }))
-      await sleep(1100)
     }
   }
   console.log(`(d) Merged ${plan.length} address(es).`)

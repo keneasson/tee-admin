@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   }
   const { loadCredentials } = await import('./script-env')
   loadCredentials()
-  ;(await import('../email/sesClient')).useThrottleTolerantSesClient()
+  ;(await import('../email/sesClient')).usePacedSesClient()
 
   const { mailingListRepository } = await import(
     '@my/app/provider/dynamodb/repositories/mailing-list-repository'
