@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { featureFlagRepository } from '@my/app/provider/dynamodb/repositories/feature-flag-repository'
-import type { FeatureFlagConfig } from '@my/app/features/feature-flags/feature-flags'
+import {
+  DEFAULT_FEATURE_FLAG_CONFIGS,
+  type FeatureFlagConfig,
+} from '@my/app/features/feature-flags/feature-flags'
 
 /**
  * PATCH /api/admin/feature-flags/[flag]
@@ -25,7 +28,10 @@ export async function PATCH(
 
     const { flag } = await params
     const existing = await featureFlagRepository.getByName(flag)
-    if (!existing) {
+    // A flag can live only as a code default (the admin page lists it from
+    // DEFAULT_FEATURE_FLAG_CONFIGS); its first save creates the row.
+    const codeDefault = DEFAULT_FEATURE_FLAG_CONFIGS[flag]
+    if (!existing && !codeDefault) {
       return NextResponse.json({ error: 'Flag not found' }, { status: 404 })
     }
 
@@ -40,7 +46,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const updated = await featureFlagRepository.updateFlag(flag, updates)
+    const updated = existing
+      ? await featureFlagRepository.updateFlag(flag, updates)
+      : await featureFlagRepository.createFlag(flag, { ...codeDefault, ...updates })
 
     return NextResponse.json({ success: true, flag: updated })
   } catch (error) {

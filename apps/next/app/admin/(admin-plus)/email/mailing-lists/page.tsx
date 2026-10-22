@@ -73,10 +73,6 @@ export default function MailingListsAdminPage() {
   const load = useCallback(async () => {
     setLoadError(null)
     const res = await fetch('/api/admin/mailing-lists', { cache: 'no-store' })
-    if (res.status === 404) {
-      setLoadError('Mailing lists are not turned on for your account (feature flag mailing_list_registry).')
-      return
-    }
     if (!res.ok) {
       setLoadError('Could not load the lists.')
       return
