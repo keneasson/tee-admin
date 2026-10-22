@@ -82,7 +82,7 @@ describe('office model (pure)', () => {
     expect(isTestAccountEmail(undefined)).toBe(false)
   })
 
-  it('inter-ecclesia contacts: office inbox first, else holder; test accounts and other offices never count', () => {
+  it('inter-ecclesia contacts: the RB office only, its inbox first, else holder; Reps and other offices never count', () => {
     const office = (role: string, extra: Partial<OfficeRecord> = {}): OfficeRecord =>
       withOfficeIndexes({
         pkey: `ECCLESIA_ID#${EID}`, skey: `OFFICE#${role}`, type: 'OFFICE', ecclesiaId: EID, role,
@@ -96,6 +96,8 @@ describe('office model (pure)', () => {
       resolveInterEcclesiaContacts(
         [
           office('rb', { email: 'recbro@x.org', holderPersonId: 'p1' }),
+          office('rb', { ecclesiaId: 'other', holderPersonId: 'p1' }),
+          office('rb', { ecclesiaId: 'tester', holderPersonId: 'p2' }),
           office('rep#1', { holderPersonId: 'p1' }),
           office('rep#2', { holderPersonId: 'p2' }),
           office('rep#3', { email: 'x+hacker@x.org' }),
@@ -105,9 +107,8 @@ describe('office model (pure)', () => {
       ).map((c) => [c.officeId, c.email, c.via])
     ).toEqual([
       ['rb', 'recbro@x.org', 'office'],
-      ['rep#1', 'holder@x.org', 'holder'],
-      ['rep#2', null, 'none'],
-      ['rep#3', null, 'none'],
+      ['rb', 'holder@x.org', 'holder'],
+      ['rb', null, 'none'],
     ])
   })
 
@@ -214,8 +215,6 @@ describe('officeRepository', () => {
     fake.calls.length = 0
     expect((await officeRepository.listAllInterEcclesiaContacts([EID, EID])).map((c) => [c.officeId, c.email, c.via])).toEqual([
       ['rb', 'recbro@x.org', 'office'],
-      ['rep#1', 'holder@x.org', 'holder'],
-      ['rep#2', null, 'none'],
     ])
     expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
   })

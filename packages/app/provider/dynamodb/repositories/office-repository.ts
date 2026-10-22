@@ -52,8 +52,12 @@ export const OFFICE_TITLES: Record<string, string> = {
   [OFFICE_ROLES.TREASURER]: 'Treasurer',
 }
 
-/** Kinds whose offices receive inter-ecclesia email. */
-export const INTER_ECCLESIA_KINDS: readonly string[] = [OFFICE_ROLES.RECORDING_BROTHER, OFFICE_ROLES.REP]
+/**
+ * Kinds whose offices receive inter-ecclesia email: the Recording Brother
+ * only (owner, 2026-10-21). Reps help the RB run the ecclesia; they don't
+ * receive it. Non-ecclesial offices (e.g. magazine editors) may join later.
+ */
+export const INTER_ECCLESIA_KINDS: readonly string[] = [OFFICE_ROLES.RECORDING_BROTHER]
 
 export const repOfficeId = (slot: number) => `${OFFICE_ROLES.REP}#${slot}`
 
@@ -412,8 +416,8 @@ export class OfficeRepository {
   }
 
   /**
-   * Where inter-ecclesia email for this ecclesia goes: each RB/Rep office's own
-   * inbox, else its holder's primary address. Test accounts are skipped. Not
+   * Where inter-ecclesia email for this ecclesia goes: the RB office's own
+   * inbox, else its holder's primary address (`INTER_ECCLESIA_KINDS`). Test accounts are skipped. Not
    * wired to the send path: sends keep today's `isInterEcclesiaRep` recipients
    * until the owner cuts over (prove parity with
    * `scripts/diff-inter-ecclesia-recipients.ts`).

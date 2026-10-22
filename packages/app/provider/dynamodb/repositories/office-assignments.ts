@@ -283,9 +283,10 @@ export interface OfficeProposal {
   /** Ecclesias whose RB office already has a holder: left as the owner set them. */
   keptRbHolders: number
   /**
-   * Ecclesias with a named RB and other addresses that keep receiving as
-   * vacant Rep offices: choose on the Recording Brothers page whether one is
-   * the ecclesia's shared address (moves with the role) or not.
+   * Ecclesias with addresses on file that the proposal did not put on the RB
+   * office: choose on the Recording Brothers page whether one is the
+   * ecclesia's shared address (moves with the role). Until then they
+   * receive no inter-ecclesia mail.
    */
   toChoose: string[]
 }
@@ -295,22 +296,22 @@ export interface OfficeProposal {
  * then apply with `backfill-office-assignments.ts`. Never decides a person
  * from an address alone:
  *
+ *  - Inter-ecclesia mail goes to the Recording Brother office only: its own
+ *    address, else its holder's primary email. Reps hold offices (they help
+ *    the RB run the ecclesia) but don't receive it.
  *  - A NAMELESS record (no first or last name) is an ADDRESS, not a person
- *    (most came from a 2024 mailing list; many are ecclesia mailboxes). Its
- *    address becomes an office's own address: the ecclesia's RB office first,
- *    then Rep offices with no holder. The record itself is left alone (its
- *    mailing-list rows still drive sends until R8) and is reported to retire.
+ *    (most came from a 2024 mailing list; many are ecclesia mailboxes). It
+ *    can only be the RB office's own address. The record itself is left
+ *    alone and is reported to retire in R8.
  *  - A NAMED record flagged as the ecclesia's Recording Brother holds its RB
- *    office. Other named people who receive inter-ecclesia mail today (the
- *    contact flag, role 'rep', or an opt-in on the inter-ecclesia list) hold
- *    Rep offices, so the same people keep receiving it.
+ *    office. Other named people marked as contacts (the contact flag, role
+ *    'rep', or an opt-in on the inter-ecclesia list) hold Rep offices.
  *  - A shared ecclesia address is the ecclesia's CHOICE, made on the
  *    Recording Brothers page: some ecclesias keep an address that moves with
  *    the role (Toronto West's mailbox), others use the RB's own email and
  *    change it when the RB changes. The proposal can't tell which an address
  *    is, so it never puts one on a named RB's office: his mail goes to his
- *    own email, and each other address keeps receiving as a vacant Rep
- *    office's address. Those ecclesias are listed in `toChoose`.
+ *    own email. Ecclesias with other addresses are listed in `toChoose`.
  *  - With no named RB there is nobody for mail to follow, so the ecclesia's
  *    single address (a nameless "RB", the copied RB email, or its one
  *    nameless contact) is the RB office's address. Several: none is chosen.
@@ -381,28 +382,10 @@ export function proposeOfficeAssignments(input: {
       confirmed: true,
     })
 
-    // Every other address keeps receiving as a vacant Rep office's own address.
-    const taken = (address: string) =>
-      !address || address === rbAddress || existingReps.some((o) => lower(o.email) === address)
-    let addressesLeft = 0
-    for (const p of nameless) {
-      if (taken(lower(p.primaryEmail))) continue
-      rows.push({
-        ecclesiaId: e.ecclesiaId,
-        office: OFFICE_ROLES.REP,
-        inboxFromPersonId: p.personId,
-        holderPersonId: null,
-        confirmed: true,
-      })
-      addressesLeft++
-    }
-    // With a named RB, the copied RB email (if nobody's own) keeps reaching the ecclesia.
-    if (!rbOffice && rbHolder && legacyIsAddress && !taken(legacyRbEmail) && !nameless.some((p) => lower(p.primaryEmail) === legacyRbEmail)) {
-      rows.push({ ecclesiaId: e.ecclesiaId, office: OFFICE_ROLES.REP, inbox: legacyRbEmail, holderPersonId: null, confirmed: true })
-      addressesLeft++
-    }
-    if (!rbOffice && rbHolder && addressesLeft > 0) toChoose.push(e.ecclesiaId)
-    // Named people who receive inter-ecclesia mail, other than the RB, hold Rep offices.
+    // Addresses not on the RB office: the owner chooses (they get no inter-ecclesia mail).
+    const unused = nameless.some((p) => lower(p.primaryEmail) !== rbAddress) || (legacyIsAddress && legacyRbEmail !== rbAddress)
+    if (!rbOffice && unused) toChoose.push(e.ecclesiaId)
+    // Named contacts other than the RB hold Rep offices (no inter-ecclesia mail).
     for (const p of at) {
       if (!p.named || !receives(p) || p.optedOutInterEcclesia || p.personId === rbHolder) continue
       if (existingReps.some((o) => o.holderPersonId === p.personId)) continue
