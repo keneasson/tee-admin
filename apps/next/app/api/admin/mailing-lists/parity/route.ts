@@ -3,8 +3,6 @@ import { requireAssurance } from '../../../../../utils/auth-trust'
 import { runListParity } from '../../../../../utils/mailing-lists/parity'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
-import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
-import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 /**
  * GET /api/admin/mailing-lists/parity?listId=…
@@ -20,8 +18,7 @@ import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
  * empty and every SES address appears in `inSesNotInHouse` — that is expected.
  *
  * Access: authenticated (fresh, cookie-bound — a forwardable token is NOT enough)
- * AND owner/admin. Flag-gated: 404 while MAILING_LIST_REGISTRY is off, so the
- * endpoint is invisible until the feature is deliberately enabled.
+ * AND owner/admin.
  */
 export async function GET(request: NextRequest) {
   const gate = await requireAssurance('authenticated')
@@ -30,15 +27,6 @@ export async function GET(request: NextRequest) {
   const role = (gate.ctx.session?.user as any)?.role
   if (role !== ROLES.OWNER && role !== ROLES.ADMIN) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
-
-  // Flag gate — feature is dark until deliberately enabled.
-  const flagOn = await checkFeatureFlagFromDB(
-    FEATURE_FLAGS.MAILING_LIST_REGISTRY,
-    gate.ctx.session as any
-  )
-  if (!flagOn) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   const listId = request.nextUrl.searchParams.get('listId')
