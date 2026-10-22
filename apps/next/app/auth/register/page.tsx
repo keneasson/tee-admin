@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+import { applyOtpInput, OTP_LENGTH } from '@my/app/utils/otp-input'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
@@ -73,33 +74,10 @@ function RegisterPageContent() {
   }
 
   const handleOtpChange = useCallback((index: number, value: string) => {
-    // Handle paste of full code
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, '').slice(0, 6).split('')
-      const newOtp = [...otpDigits]
-      digits.forEach((digit, i) => {
-        if (index + i < 6) {
-          newOtp[index + i] = digit
-        }
-      })
-      setOtpDigits(newOtp)
-      // Focus the next empty input or the last one
-      const nextIndex = Math.min(index + digits.length, 5)
-      inputRefs.current[nextIndex]?.focus()
-      return
-    }
-
-    // Single digit input
-    if (value && !/^\d$/.test(value)) return
-
-    const newOtp = [...otpDigits]
-    newOtp[index] = value
-    setOtpDigits(newOtp)
-
-    // Auto-advance to next input
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus()
-    }
+    const next = applyOtpInput(otpDigits, index, value)
+    if (!next) return
+    setOtpDigits(next.digits)
+    inputRefs.current[next.focus]?.focus()
   }, [otpDigits])
 
   const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
@@ -271,7 +249,7 @@ function RegisterPageContent() {
                   ref={(el) => { inputRefs.current[index] = el }}
                   type="text"
                   inputMode="numeric"
-                  maxLength={index === 0 ? 6 : 1}
+                  maxLength={OTP_LENGTH}
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}

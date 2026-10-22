@@ -124,7 +124,11 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   )
 
   // Navigation content component (shared between desktop and mobile)
-  const NavigationContent = () => (
+  // Inside the mobile Sheet the list must scroll with Sheet.ScrollView: a plain
+  // ScrollView loses the gesture to the sheet's drag and the menu is clipped.
+  const NavigationContent = ({ inSheet = false }: { inSheet?: boolean }) => {
+    const Scroll = inSheet ? Sheet.ScrollView : ScrollView
+    return (
     <YStack gap="$3" flex={1}>
       {/* Header - stays fixed at top */}
       <View flexDirection="row" alignItems="flex-start" justifyContent="space-between">
@@ -150,7 +154,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       </View>
 
       {/* Scrollable navigation content */}
-      <ScrollView flex={1} showsVerticalScrollIndicator={true}>
+      <Scroll flex={1} showsVerticalScrollIndicator={true}>
         <YStack gap="$3" paddingBottom="$4">
       {user ? <Button
           variant="chromeless"
@@ -168,7 +172,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
               {user.name}
             </Text>
             <Text fontSize="$2" color={colors.textSecondary}>
-              {user.role || 'Guest'}
+              {user.isRecordingBrother ? `${user.role || 'Guest'} · Recording Brother` : user.role || 'Guest'}
             </Text>
           </YStack>
         </Button> : <Button
@@ -437,7 +441,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             ))}
           </YStack> : null}
         </YStack>
-      </ScrollView>
+      </Scroll>
 
       {/* Sign out - stays fixed at bottom (Sign In lives at the top of the menu) */}
       {user ? (
@@ -446,7 +450,8 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
         </YStack>
       ) : null}
     </YStack>
-  )
+    )
+  }
 
   // Mobile layout (hamburger menu)
   if (media.sm) {
@@ -494,7 +499,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             backgroundColor={colors.backgroundSecondary}
             padding="$4"
           >
-            <NavigationContent />
+            <NavigationContent inSheet />
           </Sheet.Frame>
         </Sheet>
 
