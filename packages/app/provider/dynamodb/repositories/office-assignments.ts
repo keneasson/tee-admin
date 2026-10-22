@@ -261,6 +261,8 @@ export interface ProposalPerson {
   isRecordingBrother?: boolean
   /** role 'rep' (an older way of marking a Rep). */
   isRepRole?: boolean
+  /** role 'recorder' (an older way of marking the Recording Brother). */
+  isRecorderRole?: boolean
   /** Opted in to the inter-ecclesia list today (receives inter-ecclesia mail). */
   receivesInterEcclesia?: boolean
   /** Opted OUT of the inter-ecclesia list: never given a Rep office. */
@@ -272,6 +274,8 @@ export interface ProposalEcclesia {
   name: string
   /** The legacy RB email copied onto the ecclesia item, if any. */
   recordingBrotherEmail?: string
+  /** The legacy RB person id copied onto the ecclesia item, if any. */
+  recordingBrotherPersonId?: string
 }
 
 export interface OfficeProposal {
@@ -289,6 +293,25 @@ export interface OfficeProposal {
    * receive no inter-ecclesia mail.
    */
   toChoose: string[]
+}
+
+/**
+ * The named person the data records as this ecclesia's Recording Brother, in
+ * order: the person flag, the 'recorder' role, the RB person id copied onto
+ * the ecclesia, then the RB email copied onto the ecclesia when it is a named
+ * person's own primary. Older records set only some of these (Picton: the
+ * ecclesia names Rick Hill and his role is 'recorder', but the flag was never
+ * set). Null when none of them names a person at this ecclesia.
+ */
+function recordedRecordingBrother(e: ProposalEcclesia, at: ProposalPerson[]): string | null {
+  const named = at.filter((p) => p.named)
+  const legacyEmail = lower(e.recordingBrotherEmail)
+  return (
+    named.find((p) => p.isRecordingBrother) ||
+    named.find((p) => p.isRecorderRole) ||
+    named.find((p) => !!e.recordingBrotherPersonId && p.personId === e.recordingBrotherPersonId) ||
+    named.find((p) => !!legacyEmail && lower(p.primaryEmail) === legacyEmail)
+  )?.personId || null
 }
 
 /**
@@ -337,7 +360,8 @@ export function proposeOfficeAssignments(input: {
   const people = [...input.persons]
     .filter((p) => !isTestAccountEmail(p.primaryEmail))
     .sort((a, b) => a.personId.localeCompare(b.personId))
-  const receives = (p: ProposalPerson) => !!(p.isInterEcclesiaRep || p.isRecordingBrother || p.isRepRole || p.receivesInterEcclesia)
+  const receives = (p: ProposalPerson) =>
+    !!(p.isInterEcclesiaRep || p.isRecordingBrother || p.isRecorderRole || p.isRepRole || p.receivesInterEcclesia)
   for (const p of people) {
     if (receives(p) && (!p.ecclesia || !byName.has(p.ecclesia))) unmatched.push(p.personId)
   }
@@ -352,7 +376,7 @@ export function proposeOfficeAssignments(input: {
     // Recording Brother holder: kept if the office has one, else the named flagged RB.
     let rbHolder: string | null = rbOffice?.holderPersonId || null
     if (rbHolder) keptRbHolders++
-    else rbHolder = at.find((p) => p.isRecordingBrother && p.named)?.personId || null
+    else rbHolder = recordedRecordingBrother(e, at)
 
     // Addresses that are not people: nameless contacts and a nameless "RB".
     const allNameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))

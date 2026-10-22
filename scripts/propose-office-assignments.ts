@@ -40,6 +40,7 @@ async function main() {
       ecclesiaId: ecclesiaIdOf(e),
       name: e.name,
       recordingBrotherEmail: e.recordingBrotherEmail,
+      recordingBrotherPersonId: e.recordingBrotherPersonId,
     })),
     persons: snap.profiles
       .filter((p) => p.role !== 'deceased')
@@ -51,6 +52,7 @@ async function main() {
         isInterEcclesiaRep: !!p.isInterEcclesiaRep,
         isRecordingBrother: !!p.isRecordingBrother,
         isRepRole: p.role === 'rep',
+        isRecorderRole: p.role === 'recorder',
         receivesInterEcclesia: subscribed.has(p.personId),
         optedOutInterEcclesia: list.optedOut.has(p.personId),
       })),

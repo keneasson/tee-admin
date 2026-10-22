@@ -90,6 +90,29 @@ describe('proposeOfficeAssignments', () => {
     expect(p.file.assignments.some((r) => r.inboxFromPersonId === 'martin-dup')).toBe(false)
   })
 
+  it('finds the RB wherever older records put him: the recorder role, or the ecclesia\'s copied RB id or email', () => {
+    const eccl = [
+      { ecclesiaId: 'picton', name: 'Picton', recordingBrotherEmail: 'rick@x.org' },
+      { ecclesiaId: 'kw', name: 'KW', recordingBrotherEmail: 'andrew@x.org', recordingBrotherPersonId: 'andrew-dup' },
+      { ecclesiaId: 'by-id', name: 'By Id', recordingBrotherPersonId: 'sam' },
+    ]
+    const people = [
+      // Picton: role 'recorder', the flag never set.
+      person({ personId: 'rick', ecclesia: 'Picton', primaryEmail: 'rick@x.org', isRecorderRole: true, isInterEcclesiaRep: true }),
+      // KW: the copied id is a nameless duplicate; the copied email is Andrew's own.
+      person({ personId: 'andrew-dup', ecclesia: 'KW', named: false, primaryEmail: 'andrew@x.org' }),
+      person({ personId: 'andrew', ecclesia: 'KW', primaryEmail: 'andrew@x.org' }),
+      person({ personId: 'sam', ecclesia: 'By Id' }),
+    ]
+    const rb = (id: string) =>
+      proposeOfficeAssignments({ ecclesias: eccl, persons: people, existingOffices: [] }).file.assignments.find(
+        (r) => r.ecclesiaId === id && r.office === 'rb'
+      )?.holderPersonId
+    expect(rb('picton')).toBe('rick')
+    expect(rb('kw')).toBe('andrew')
+    expect(rb('by-id')).toBe('sam')
+  })
+
   it('never gives a Rep office to someone who opted out of the inter-ecclesia list', () => {
     expect(rowsFor('west').some((r) => r.holderPersonId === 'west-out')).toBe(false)
   })
