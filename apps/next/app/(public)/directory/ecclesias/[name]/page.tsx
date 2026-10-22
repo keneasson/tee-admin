@@ -83,7 +83,9 @@ export default function DirectoryEcclesiaDetailPage() {
       const res = await fetch(`/api/people?ecclesia=${encodeURIComponent(ecclesiaName)}&includeEmails=true`)
       if (res.ok) {
         const data = await res.json()
-        setMembers(data.members || [])
+        // A record with no name comes back named by its address: it's an
+        // ecclesia mailbox or a leftover from the 2024 import, not a member.
+        setMembers((data.members || []).filter((m: DirectoryMember) => m.name && m.name !== m.email))
         // Build email map for nomination panel
         const emailMap: Record<string, Array<{ email: string; emailType: string }>> = {}
         for (const m of data.members || []) {

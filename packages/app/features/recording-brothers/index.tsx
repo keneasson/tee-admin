@@ -133,7 +133,7 @@ const RowEditor: React.FC<{
               icon={mailTo === a.email ? Check : undefined}
               onPress={() => setMailTo(a.email)}
             >
-              {a.email}
+              {`${a.email} (shared, stays with the role)`}
             </Button>
           ))}
           <Button
@@ -142,12 +142,13 @@ const RowEditor: React.FC<{
             icon={mailTo === 'own' ? Check : undefined}
             onPress={() => setMailTo('own')}
           >
-            {ownEmail ? `Their own email (${ownEmail})` : 'Their own email'}
+            {ownEmail ? `Their own email (${ownEmail}), changes with the RB` : 'Their own email, changes with the RB'}
           </Button>
         </XStack>
         <Text fontSize="$2" theme="alt2">
-          An ecclesia address belongs to the ecclesia: it stays when the Recording Brother changes and is never
-          added to anyone&apos;s own emails. With none, ecclesia mail goes to the Recording Brother&apos;s own email.
+          Each ecclesia chooses. A shared address belongs to the ecclesia: it stays when the Recording Brother
+          changes and is never added to anyone&apos;s own emails. Their own email follows the person: when the
+          Recording Brother changes, ecclesia mail goes to the new one&apos;s email.
         </Text>
         {mailTo === 'own' && ready && !ownEmail ? (
           <Text fontSize="$2" color="$orange10">
@@ -234,9 +235,9 @@ export const RecordingBrothers: React.FC<RecordingBrothersProps> = ({ session })
           <Heading size={5}>Recording Brothers</Heading>
           <Paragraph theme="alt2">
             Set each ecclesia&apos;s Recording Brother directly. Nobody is emailed. Everyone else uses the
-            nomination flow on the ecclesia page. Ecclesia mail goes to the ecclesia&apos;s own address when it
-            has one (that address moves to the next Recording Brother with the role), otherwise to the Recording
-            Brother&apos;s own email.
+            nomination flow on the ecclesia page. Each ecclesia chooses where its mail goes: a shared address
+            that stays with the role, or the Recording Brother&apos;s own email, which changes when the Recording
+            Brother does.
           </Paragraph>
         </YStack>
 
@@ -268,15 +269,17 @@ export const RecordingBrothers: React.FC<RecordingBrothersProps> = ({ session })
                   <Text fontSize="$2" theme="alt2" style={{ overflowWrap: 'anywhere' }}>
                     {!row.mailTo
                       ? 'No ecclesia mail address'
-                      : row.mailToIsOffice
-                        ? `Ecclesia mail goes to ${row.mailTo} — the ecclesia's address, goes with the role`
+                      : row.mailToIsOffice && row.current
+                        ? `Ecclesia mail goes to ${row.mailTo}, the ecclesia's shared address (stays with the role)`
+                        : row.mailToIsOffice
+                          ? `Ecclesia mail goes to ${row.mailTo}. Choose shared or their own when you set a Recording Brother.`
                         : row.current
-                          ? `No ecclesia address — using ${row.current.name}'s own email (${row.mailTo})`
+                          ? `Ecclesia mail goes to ${row.current.name}'s own email (${row.mailTo}), changes with the RB`
                           : `Ecclesia mail goes to ${row.mailTo}`}
                   </Text>
-                  {row.addresses.length > 0 && !row.mailTo ? (
+                  {row.addresses.length > 0 && !row.mailToIsOffice ? (
                     <Text fontSize="$2" theme="alt2" style={{ overflowWrap: 'anywhere' }}>
-                      {`On file: ${row.addresses.map((a) => a.email).join(', ')}`}
+                      {`Also on file: ${row.addresses.map((a) => a.email).join(', ')}`}
                     </Text>
                   ) : null}
 

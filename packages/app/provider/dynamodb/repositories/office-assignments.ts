@@ -282,6 +282,12 @@ export interface OfficeProposal {
   unmatchedContacts: string[]
   /** Ecclesias whose RB office already has a holder: left as the owner set them. */
   keptRbHolders: number
+  /**
+   * Ecclesias with a named RB and other addresses that keep receiving as
+   * vacant Rep offices: choose on the Recording Brothers page whether one is
+   * the ecclesia's shared address (moves with the role) or not.
+   */
+  toChoose: string[]
 }
 
 /**
@@ -298,12 +304,21 @@ export interface OfficeProposal {
  *    office. Other named people who receive inter-ecclesia mail today (the
  *    contact flag, role 'rep', or an opt-in on the inter-ecclesia list) hold
  *    Rep offices, so the same people keep receiving it.
- *  - The RB office gets a nameless address only when no named person holds
- *    it: a named RB's mail keeps going to his own email.
- *  - An RB office that already has a holder (set on the Recording Brothers
- *    page or by nomination) is kept as it is; so is an office's own address.
- *  - The RB email copied onto the ecclesia item is used as the RB office's
- *    address only when no named person holds it as their own primary.
+ *  - A shared ecclesia address is the ecclesia's CHOICE, made on the
+ *    Recording Brothers page: some ecclesias keep an address that moves with
+ *    the role (Toronto West's mailbox), others use the RB's own email and
+ *    change it when the RB changes. The proposal can't tell which an address
+ *    is, so it never puts one on a named RB's office: his mail goes to his
+ *    own email, and each other address keeps receiving as a vacant Rep
+ *    office's address. Those ecclesias are listed in `toChoose`.
+ *  - With no named RB there is nobody for mail to follow, so the ecclesia's
+ *    single address (a nameless "RB", the copied RB email, or its one
+ *    nameless contact) is the RB office's address. Several: none is chosen.
+ *  - A nameless record whose address is a named person's own primary is a
+ *    leftover duplicate of that person, not an ecclesia address.
+ *  - An RB office already set (Recording Brothers page or nomination) is
+ *    kept exactly as set: its holder and its address, or no address when
+ *    the ecclesia chose the RB's own email.
  */
 export function proposeOfficeAssignments(input: {
   ecclesias: ProposalEcclesia[]
@@ -315,6 +330,7 @@ export function proposeOfficeAssignments(input: {
   const rows: OfficeAssignmentInput[] = []
   const retire = new Set<string>()
   const unmatched: string[] = []
+  const toChoose: string[] = []
   let keptRbHolders = 0
 
   const people = [...input.persons]
@@ -338,16 +354,19 @@ export function proposeOfficeAssignments(input: {
     else rbHolder = at.find((p) => p.isRecordingBrother && p.named)?.personId || null
 
     // Addresses that are not people: nameless contacts and a nameless "RB".
-    const nameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))
+    const allNameless = at.filter((p) => !p.named && p.primaryEmail && receives(p))
+    for (const p of allNameless) retire.add(p.personId)
+    const nameless = allNameless.filter((p) => !namedPrimaries.has(lower(p.primaryEmail)))
 
-    // The RB office's own address (an existing one is kept).
+    // The RB office's own address: only for a vacant office (see above).
     const legacyRbEmail = lower(e.recordingBrotherEmail)
+    const legacyIsAddress = !!legacyRbEmail && !namedPrimaries.has(legacyRbEmail)
     let rbInbox: { inbox?: string; inboxFromPersonId?: string } = {}
-    if (!rbOffice?.email) {
+    if (!rbOffice && !rbHolder) {
       const namelessRb = nameless.find((p) => p.isRecordingBrother)
       if (namelessRb) rbInbox = { inboxFromPersonId: namelessRb.personId }
-      else if (legacyRbEmail && !namedPrimaries.has(legacyRbEmail)) rbInbox = { inbox: legacyRbEmail }
-      else if (!rbHolder && nameless[0]) rbInbox = { inboxFromPersonId: nameless[0].personId }
+      else if (legacyIsAddress) rbInbox = { inbox: legacyRbEmail }
+      else if (nameless.length === 1) rbInbox = { inboxFromPersonId: nameless[0].personId }
     }
     const rbAddress =
       lower(rbOffice?.email) ||
@@ -362,11 +381,12 @@ export function proposeOfficeAssignments(input: {
       confirmed: true,
     })
 
-    // Every other nameless address becomes a vacant Rep office's own address.
+    // Every other address keeps receiving as a vacant Rep office's own address.
+    const taken = (address: string) =>
+      !address || address === rbAddress || existingReps.some((o) => lower(o.email) === address)
+    let addressesLeft = 0
     for (const p of nameless) {
-      retire.add(p.personId)
-      const address = lower(p.primaryEmail)
-      if (address === rbAddress || existingReps.some((o) => lower(o.email) === address)) continue
+      if (taken(lower(p.primaryEmail))) continue
       rows.push({
         ecclesiaId: e.ecclesiaId,
         office: OFFICE_ROLES.REP,
@@ -374,7 +394,14 @@ export function proposeOfficeAssignments(input: {
         holderPersonId: null,
         confirmed: true,
       })
+      addressesLeft++
     }
+    // With a named RB, the copied RB email (if nobody's own) keeps reaching the ecclesia.
+    if (!rbOffice && rbHolder && legacyIsAddress && !taken(legacyRbEmail) && !nameless.some((p) => lower(p.primaryEmail) === legacyRbEmail)) {
+      rows.push({ ecclesiaId: e.ecclesiaId, office: OFFICE_ROLES.REP, inbox: legacyRbEmail, holderPersonId: null, confirmed: true })
+      addressesLeft++
+    }
+    if (!rbOffice && rbHolder && addressesLeft > 0) toChoose.push(e.ecclesiaId)
     // Named people who receive inter-ecclesia mail, other than the RB, hold Rep offices.
     for (const p of at) {
       if (!p.named || !receives(p) || p.optedOutInterEcclesia || p.personId === rbHolder) continue
@@ -388,6 +415,7 @@ export function proposeOfficeAssignments(input: {
     namelessToRetire: [...retire].sort(),
     unmatchedContacts: unmatched,
     keptRbHolders,
+    toChoose,
   }
 }
 

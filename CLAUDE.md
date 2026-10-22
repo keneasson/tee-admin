@@ -14,6 +14,12 @@ recoverable, **every non-trivial piece gets three things, created up front:**
 3. **A card on the project board** (`github.com/users/keneasson/projects/2`) in the
    **In-flight WIP** lane.
 
+**One PR per class, never stacked.** One PR covers a *class* of work (a feature
+area or one kind of bug), not a single change: related fixes found along the way
+go into the open PR for that class. New work branches from `main`; never build a
+PR on top of an unmerged PR (squash-merges then show false conflicts, and every
+PR is another approval round).
+
 **Emergencies get the same treatment, fast** — branch + a one-line `wip` issue even
 for a 20-minute fix, so both the interruption and the interrupted work stay tracked.
 
