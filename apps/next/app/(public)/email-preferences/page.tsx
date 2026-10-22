@@ -14,12 +14,12 @@ import {
   Paragraph,
   Spinner,
   Card,
-  Checkbox,
   Input,
   Separator,
   Anchor,
-} from 'tamagui'
-import { Button } from '@my/ui'
+  Button,
+  PlainCheckbox,
+} from '@my/ui'
 import { Check, Mail } from '@tamagui/lucide-icons'
 
 // R5: every list offered to the person, grouped by owner.
@@ -322,37 +322,19 @@ export default function SubscribePage() {
             {data.listGroups.length === 0 ? (
               <Paragraph color="$textSecondary">There are no lists to choose from yet.</Paragraph>
             ) : (
-              <YStack gap="$4" opacity={data.authenticated && !stopAll ? 1 : 0.6}>
+              <YStack gap="$4">
                 {data.listGroups.map((g) => (
                   <YStack key={`${g.ownerType}#${g.ownerId}`} gap="$3">
                     <Text fontSize="$3" fontWeight="700">{g.ownerName}</Text>
                     {g.lists.map((l) => (
-                      <XStack key={l.listId} gap="$3" alignItems="flex-start">
-                        <Checkbox
-                          id={l.listId}
-                          checked={!!listSubs[l.listId]}
-                          disabled={!data.authenticated}
-                          onCheckedChange={(v) => setListSubs((cur) => ({ ...cur, [l.listId]: !!v }))}
-                          size="$5"
-                        >
-                          <Checkbox.Indicator>
-                            <Check />
-                          </Checkbox.Indicator>
-                        </Checkbox>
-                        <YStack
-                          flex={1}
-                          onPress={
-                            data.authenticated
-                              ? () => setListSubs((cur) => ({ ...cur, [l.listId]: !cur[l.listId] }))
-                              : undefined
-                          }
-                        >
-                          <Text>{l.name}</Text>
-                          {l.description ? (
-                            <Text fontSize="$2" color="$textSecondary">{l.description}</Text>
-                          ) : null}
-                        </YStack>
-                      </XStack>
+                      <PlainCheckbox
+                        key={l.listId}
+                        checked={!!listSubs[l.listId]}
+                        disabled={!data.authenticated || stopAll}
+                        onCheckedChange={(v) => setListSubs((cur) => ({ ...cur, [l.listId]: v }))}
+                        label={l.name}
+                        description={l.description || undefined}
+                      />
                     ))}
                   </YStack>
                 ))}
@@ -361,27 +343,15 @@ export default function SubscribePage() {
 
             {/* Stop all email: SES UnsubscribeAll, which every send honours
                 whatever the lists above say. */}
-            <XStack gap="$3" alignItems="flex-start" opacity={data.authenticated ? 1 : 0.6}>
-              <Checkbox
-                id="stop-all"
-                checked={stopAll}
-                disabled={!data.authenticated}
-                onCheckedChange={(v) => setStopAll(!!v)}
-                size="$5"
-              >
-                <Checkbox.Indicator>
-                  <Check />
-                </Checkbox.Indicator>
-              </Checkbox>
-              <YStack flex={1} onPress={data.authenticated ? () => setStopAll((v) => !v) : undefined}>
-                <Text>Stop all email from us</Text>
-                <Text fontSize="$2" color="$textSecondary">
-                  {stopAll
-                    ? 'No list will email this address until you untick this and save.'
-                    : 'Overrides every list above.'}
-                </Text>
-              </YStack>
-            </XStack>
+            <PlainCheckbox
+              checked={stopAll}
+              disabled={!data.authenticated}
+              onCheckedChange={setStopAll}
+              label="Stop all email from us"
+              description={
+                stopAll ? 'No list will email this address until you untick this and save.' : 'Overrides every list above.'
+              }
+            />
 
             {data.authenticated ? (
               <Button

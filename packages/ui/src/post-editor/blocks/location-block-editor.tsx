@@ -5,7 +5,7 @@ import { PLATFORM_DISPLAY_NAMES } from '@my/app/types/events'
 import type { BlockEditorProps } from '../registry'
 import { genId } from '../post-reducer'
 import { PlainSelect } from '../plain-select'
-import { PlainCheckbox } from '../plain-checkbox'
+import { PlainCheckbox } from '../../form/plain-checkbox'
 
 /**
  * LocationBlock editor — geo-aware address | plain text address | inherit

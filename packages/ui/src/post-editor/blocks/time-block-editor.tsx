@@ -3,7 +3,7 @@ import type { ReminderOffset, TimeBlock } from '@my/app/types/post'
 import type { BlockEditorProps } from '../registry'
 import { genId } from '../post-reducer'
 import { PlainSelect } from '../plain-select'
-import { PlainCheckbox } from '../plain-checkbox'
+import { PlainCheckbox } from '../../form/plain-checkbox'
 import {
   DEFAULT_TIMEZONE,
   TIMEZONE_OPTIONS,
