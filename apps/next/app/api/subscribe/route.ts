@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getContact, setUnsubscribeAll } from '@/utils/email/contact'
 import { verifyEcclesiaToken } from '@/utils/email/ecclesia-token'
 import { auth } from '@/utils/auth'
+import { personForSessionEmail } from '@/utils/session-person'
 import { maskEmail } from '@/utils/mask-email'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
@@ -46,22 +47,37 @@ async function emailForToken(token: string | null): Promise<string | null> {
 }
 
 /**
- * Resolve who this request is for. Two accepted identities, both fine for the
- * PUBLIC topics: an ecclesia token (recognized — from an email link) OR a live
- * session (authenticated — e.g. arriving from the profile page). This is why a
- * signed-in user can manage preferences without a token.
+ * Resolve which address this request is about, and whether the caller has
+ * proven it's theirs.
+ *
+ *  - An email link (`?token=`) is about the address that email was SENT to.
+ *    The caller is authenticated for it only when they're signed in as a
+ *    person who holds that address (compared by person, not by email);
+ *    otherwise it's recognized (masked, read-only), as for a forward.
+ *  - With no valid token, a signed-in caller manages their own sign-in
+ *    address (e.g. arriving from the profile page).
  */
 async function resolveIdentity(
   token: string | null
 ): Promise<{ email: string; authenticated: boolean; session: any } | null> {
-  // Session wins: a signed-in user is authenticated even if a token is still in
-  // the URL. Only fall back to the token (recognized) when there's no session.
   const session = await auth()
-  const em = session?.user?.email
-  if (em) return { email: em.toLowerCase(), authenticated: true, session } // authenticated
+  const sessionEmail = session?.user?.email?.toLowerCase() || null
   const fromToken = await emailForToken(token)
-  if (fromToken) return { email: fromToken, authenticated: false, session: null } // recognized
+  if (fromToken) {
+    const authenticated = !!sessionEmail && (await signedInPersonHolds(sessionEmail, fromToken))
+    return { email: fromToken, authenticated, session: authenticated ? session : null }
+  }
+  if (sessionEmail) return { email: sessionEmail, authenticated: true, session }
   return null
+}
+
+/** Is `address` one of the signed-in person's addresses? (A household address can have several holders.) */
+async function signedInPersonHolds(sessionEmail: string, address: string): Promise<boolean> {
+  if (address === sessionEmail) return true
+  const me = await personForSessionEmail(sessionEmail)
+  if (!me) return false
+  const holders = await personRepository.getAllPersonsByEmail(address)
+  return holders.some((p) => p.personId === me.personId)
 }
 
 /**

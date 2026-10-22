@@ -61,7 +61,7 @@ import { Button } from '../Button'
 import { validateForPublish } from './post-reducer'
 import { applyOccasionDefaults } from './occasion-defaults'
 import { PlainSelect } from './plain-select'
-import { PlainCheckbox } from './plain-checkbox'
+import { PlainCheckbox } from '../form/plain-checkbox'
 import { OCCASION_OPTIONS, VISIBILITY_OPTIONS } from './options'
 
 /**
