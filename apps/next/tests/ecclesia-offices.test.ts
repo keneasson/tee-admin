@@ -182,10 +182,12 @@ describe('inter-ecclesia sends from offices (flagged)', () => {
     const { tee } = await seed()
     const p = await persons.create({ email: 'hal@x.org', firstName: 'Hal', lastName: 'Der', ecclesia: tee.name })
     await officeRepository.saveOffice({ ecclesiaId: TEE, role: 'rb', email: 'recbro@x.org' })
-    const rep = await officeRepository.addRepOffice('barrie-ecclesia')
-    await officeRepository.assignHolder('barrie-ecclesia', rep.role, p.personId)
-    await officeRepository.addRepOffice('barrie-ecclesia', { email: 'gone@x.org' })
-    await officeRepository.addRepOffice('barrie-ecclesia', { email: 'quit@x.org' })
+    await officeRepository.ensureRecordingBrotherOffice('barrie-ecclesia')
+    await officeRepository.assignHolder('barrie-ecclesia', 'rb', p.personId)
+    // Reps never receive inter-ecclesia mail, with or without an address.
+    const rep = await officeRepository.addRepOffice(TEE)
+    await officeRepository.assignHolder(TEE, rep.role, p.personId)
+    await officeRepository.addRepOffice('barrie-ecclesia', { email: 'rep@x.org' })
     await officeRepository.saveOffice({ ecclesiaId: TEE, role: 'treasurer', email: 'treasurer@x.org' })
   }
 
@@ -196,12 +198,13 @@ describe('inter-ecclesia sends from offices (flagged)', () => {
     expect(await interEcclesiaRecipientsFromOffices(ses() as any)).toBeNull()
   })
 
-  it('flag on + assignments applied: RB/Rep addresses, minus suppressed and unsubscribed-from-all', async () => {
+  it('flag on + assignments applied: RB office addresses only, minus suppressed and unsubscribed-from-all', async () => {
     await seedOffices()
     h.flags.add(FEATURE_FLAGS.INTER_ECCLESIA_FROM_OFFICES)
     await officeRepository.writeOfficesAssignedMarker({})
-    const client = ses({ suppressed: ['gone@x.org'], unsubscribedAll: ['quit@x.org'] })
-    expect(await interEcclesiaRecipientsFromOffices(client as any)).toEqual(['hal@x.org', 'recbro@x.org'])
+    expect(await interEcclesiaRecipientsFromOffices(ses() as any)).toEqual(['hal@x.org', 'recbro@x.org'])
+    expect(await interEcclesiaRecipientsFromOffices(ses({ suppressed: ['hal@x.org'] }) as any)).toEqual(['recbro@x.org'])
+    expect(await interEcclesiaRecipientsFromOffices(ses({ unsubscribedAll: ['recbro@x.org'] }) as any)).toEqual(['hal@x.org'])
   })
 
   it('an SES error falls back to the topic rather than dropping the send', async () => {

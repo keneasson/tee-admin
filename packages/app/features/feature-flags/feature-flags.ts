@@ -87,9 +87,10 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // Send-path gate (R3). Read globally with a null session, so it is ON only
     // at 'everyone'. Off → inter-ecclesia sends go to the interEcclesia
     // registry list (its SUB# rows), exactly as today. On → recipients are
-    // the RB/Rep offices' addresses. Also needs the offices-assigned marker.
-    // Flip only after scripts/diff-inter-ecclesia-recipients.ts exits 0.
-    description: 'Inter-ecclesia sends: recipients from Recording Brother / Rep offices instead of the registry list',
+    // the Recording Brother offices' addresses (Reps don't receive it). Also
+    // needs the offices-assigned marker. Flip only after the owner has
+    // reviewed scripts/diff-inter-ecclesia-recipients.ts.
+    description: 'Inter-ecclesia sends: recipients from Recording Brother offices instead of the registry list',
     visibleTo: 'off',
     users: [],
   },

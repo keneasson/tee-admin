@@ -11,8 +11,9 @@ import { getSesClient } from './sesClient'
 /**
  * Inter-ecclesia recipients resolved from OFFICES (R3), for the send path.
  *
- * Every ecclesia's Recording Brother and Rep offices: each office's own inbox,
- * else its holder's primary address (`officeRepository.listAllInterEcclesiaContacts`).
+ * Every ecclesia's Recording Brother office (Reps don't receive it): the
+ * office's own inbox, else its holder's primary address
+ * (`officeRepository.listAllInterEcclesiaContacts`).
  * Then the two safety filters the SES topic send applies:
  *   - the SES account suppression list (bounces / complaints), and
  *   - a contact who chose "unsubscribe from all" on the TEEAdmin list.
@@ -21,9 +22,9 @@ import { getSesClient } from './sesClient'
  *   1. the `inter_ecclesia_from_offices` flag is released to everyone, and
  *   2. the owner-confirmed office assignments are applied (`OFFICES#META / ASSIGNED`).
  *      `scripts/backfill-office-assignments.ts --apply` writes that marker only
- *      when the recipient diff against today's `isInterEcclesiaRep` path is
- *      empty, and `scripts/diff-inter-ecclesia-recipients.ts` (exit 0 = same
- *      addresses) re-checks it before the flag is flipped.
+ *      when the recipient diff against today's list is empty or the owner
+ *      accepted it (`--accept-diff`); `scripts/diff-inter-ecclesia-recipients.ts`
+ *      shows it again before the flag is flipped.
  * Any error also returns null, so a failed office read never drops a send.
  */
 export async function interEcclesiaRecipientsFromOffices(

@@ -3,12 +3,14 @@
  *
  * Writes an assignments file for `backfill-office-assignments.ts`, following
  * `proposeOfficeAssignments` (office-assignments.ts):
+ *   - inter-ecclesia mail goes to the Recording Brother office only; Reps
+ *     hold offices but don't receive it;
  *   - a shared ecclesia address is the ecclesia's choice (Recording Brothers
  *     page); a named RB's mail goes to his own email unless chosen, and
- *     other addresses keep receiving as vacant Rep offices (`toChoose`);
+ *     ecclesias with other addresses on file are listed (`toChoose`);
  *   - a nameless record is reported to retire in R8, not touched;
  *   - a named flagged Recording Brother holds the RB office; other named
- *     people who receive inter-ecclesia mail today hold Rep offices;
+ *     contacts hold Rep offices;
  *   - an RB office already set (Recording Brothers page, nomination) is kept.
  *
  * The output may hold office addresses: write it OUTSIDE the repo (it is
@@ -38,6 +40,7 @@ async function main() {
       ecclesiaId: ecclesiaIdOf(e),
       name: e.name,
       recordingBrotherEmail: e.recordingBrotherEmail,
+      recordingBrotherPersonId: e.recordingBrotherPersonId,
     })),
     persons: snap.profiles
       .filter((p) => p.role !== 'deceased')
@@ -49,6 +52,7 @@ async function main() {
         isInterEcclesiaRep: !!p.isInterEcclesiaRep,
         isRecordingBrother: !!p.isRecordingBrother,
         isRepRole: p.role === 'rep',
+        isRecorderRole: p.role === 'recorder',
         receivesInterEcclesia: subscribed.has(p.personId),
         optedOutInterEcclesia: list.optedOut.has(p.personId),
       })),

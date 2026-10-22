@@ -83,6 +83,7 @@ describe('planOfficeAssignments', () => {
       { ecclesiaId: 'east', office: 'rb', holderPersonId: 'named', confirmed: true },
       { ecclesiaId: 'east', office: 'rep', inboxFromPersonId: 'mailbox', confirmed: true },
     ])
+    // Only the RB office receives: the Rep office's mailbox doesn't.
     const predicted = predictInterEcclesiaContacts(p, persons)
     const today = legacyInterEcclesiaRecipients([
       { personId: 'mailbox', primaryEmail: 'mailbox@east.org', isInterEcclesiaRep: true },
@@ -91,6 +92,6 @@ describe('planOfficeAssignments', () => {
     ])
     expect([...today.keys()]).toEqual(['mailbox@east.org'])
     const diff = diffRecipientAddresses(today.keys(), predicted.flatMap((c) => (c.email ? [c.email] : [])))
-    expect(diff).toEqual({ same: 1, onlyLegacy: [], onlyOffices: ['named@x.org'] })
+    expect(diff).toEqual({ same: 0, onlyLegacy: ['mailbox@east.org'], onlyOffices: ['named@x.org'] })
   })
 })
