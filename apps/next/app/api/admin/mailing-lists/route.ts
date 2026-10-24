@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAssurance } from '@/utils/auth-trust'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
-import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
-import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { getContinentOptions, getRegionOptions } from '@my/app/config/regions'
 import { listOwners, ownerNamesFor, ownerNameOf, listDisplayName } from '@/utils/mailing-lists/owners'
 import { validateNewList, listKeyOf } from '@/utils/mailing-lists/create-list'
@@ -13,8 +11,7 @@ import { validateNewList, listKeyOf } from '@/utils/mailing-lists/create-list'
  *      owner), subscriber counts, and the owner/region/continent choices.
  * POST /api/admin/mailing-lists → create a list for an ecclesia or organization.
  *
- * Owner/admin only, fresh sign-in, and 404 while MAILING_LIST_REGISTRY is off
- * for the caller. Creating a list sends nothing and touches no SES topic.
+ * Owner/admin only, fresh sign-in. Creating a list sends nothing and touches no SES topic.
  */
 async function gate() {
   const g = await requireAssurance('authenticated')
@@ -23,8 +20,6 @@ async function gate() {
   if (role !== ROLES.OWNER && role !== ROLES.ADMIN) {
     return { response: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
   }
-  const on = await checkFeatureFlagFromDB(FEATURE_FLAGS.MAILING_LIST_REGISTRY, g.ctx.session as any)
-  if (!on) return { response: NextResponse.json({ error: 'Not found' }, { status: 404 }) }
   return { response: null }
 }
 

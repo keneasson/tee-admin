@@ -2,11 +2,9 @@
 // Each flag gates an unreleased feature. When released, remove the flag from code.
 export const FEATURE_FLAGS = {
   MULTI_TENANT_INIT: 'multi_tenant_init',
-  IN_APP_NOTIFICATIONS: 'in_app_notifications',
   UNIVERSAL_EMAIL_LOGIN: 'universal_email_login',
   CONSOLIDATED_CMS: 'consolidated_cms',
   SECURE_EMAIL_CHANGE: 'secure_email_change',
-  MAILING_LIST_REGISTRY: 'mailing_list_registry',
   PEOPLE_INDEX_SIGNIN: 'people_index_signin',
   INTER_ECCLESIA_FROM_OFFICES: 'inter_ecclesia_from_offices',
 } as const
@@ -30,11 +28,6 @@ export interface FeatureFlagConfig {
 export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
   [FEATURE_FLAGS.MULTI_TENANT_INIT]: {
     description: 'Multi-tenant foundation: ecclesia external links and regional data model',
-    visibleTo: 'owner',
-    users: [],
-  },
-  [FEATURE_FLAGS.IN_APP_NOTIFICATIONS]: {
-    description: 'In-app notification bell and notifications page',
     visibleTo: 'owner',
     users: [],
   },
@@ -63,15 +56,6 @@ export const DEFAULT_FEATURE_FLAG_CONFIGS: Record<string, FeatureFlagConfig> = {
     // admins and members).
     description: 'Secure self-serve login-email change (fresh-auth step-up + confirmation code)',
     visibleTo: 'owner',
-    users: [],
-  },
-  [FEATURE_FLAGS.MAILING_LIST_REGISTRY]: {
-    // Launch-dark. Phase 1 only adds the model + repo + a dry-runnable backfill;
-    // nothing in the send path or UI reads mailing-list records yet. Kept 'off'
-    // so the whole in-house-lists surface stays invisible until deliberately
-    // enabled.
-    description: 'In-house multi-tenant mailing-list registry + subscriptions (SES becomes a suppression safety-net only)',
-    visibleTo: 'off',
     users: [],
   },
   [FEATURE_FLAGS.PEOPLE_INDEX_SIGNIN]: {
