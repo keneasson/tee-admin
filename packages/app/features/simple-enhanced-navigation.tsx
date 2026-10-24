@@ -124,10 +124,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
   )
 
   // Navigation content component (shared between desktop and mobile)
-  // Inside the mobile Sheet the list must scroll with Sheet.ScrollView: a plain
-  // ScrollView loses the gesture to the sheet's drag and the menu is clipped.
-  const NavigationContent = ({ inSheet = false }: { inSheet?: boolean }) => {
-    const Scroll = inSheet ? Sheet.ScrollView : ScrollView
+  const NavigationContent = () => {
     return (
     <YStack gap="$3" flex={1}>
       {/* Header - stays fixed at top */}
@@ -154,7 +151,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
       </View>
 
       {/* Scrollable navigation content */}
-      <Scroll flex={1} showsVerticalScrollIndicator={true}>
+      <ScrollView flex={1} showsVerticalScrollIndicator={true}>
         <YStack gap="$3" paddingBottom="$4">
       {user ? <Button
           variant="chromeless"
@@ -441,7 +438,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             ))}
           </YStack> : null}
         </YStack>
-      </Scroll>
+      </ScrollView>
 
       {/* Sign out - stays fixed at bottom (Sign In lives at the top of the menu) */}
       {user ? (
@@ -492,14 +489,16 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
           onOpenChange={setMobileMenuOpen}
           snapPoints={[85]}
           position={0}
-          dismissOnSnapToBottom
+          // No swipe-to-close: on a phone the sheet's drag took every finger
+          // drag, so the menu list never scrolled. The X and the overlay close it.
+          disableDrag
         >
           <Sheet.Overlay />
           <Sheet.Frame
             backgroundColor={colors.backgroundSecondary}
             padding="$4"
           >
-            <NavigationContent inSheet />
+            <NavigationContent />
           </Sheet.Frame>
         </Sheet>
 
