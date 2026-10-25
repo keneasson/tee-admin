@@ -11,6 +11,17 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Prod data — access-pattern backfill for A1 (owner-run, BEFORE or right after this deploys)
+- **Date**: 2026-10-24
+- **Branch**: `feat/access-pattern-registry`
+- **Code change**: request paths no longer Scan. Several readers now Query new sparse index entries that writers add from now on: every post (gsi4 `POSTS#ALL`), posts in a series (gsi3 `POSTSERIES#`), every meeting (gsi4 `MEETINGS`), every organization (gsi4 `ORGANIZATIONS`), an edit request by approval token (gsi4 `EDITREQTOKEN#`) and by requester (gsi1 `EDITREQBY#`), contact requests by requester (gsi1 `CONTACTREQBY#`), stored YouTube tokens (gsi4 `OAUTH#youtube`), and the active sign-in code by address (gsi1 `OTP#`, no backfill: codes live 10 minutes). Items written before the deploy are invisible to those readers until the backfill runs: the public/news post lists, the admin meetings list, approving an edit request from its email link, "my sent requests", and the YouTube sync's fallback account.
+- **Why it is safe to run first**: the script only ADDS `gsiN` attributes with new prefixes, which nothing deployed today reads. Running it before the merge means there is no gap.
+- **External action**:
+  1. `npx tsx scripts/backfill-access-patterns.ts` — dry run, counts per pattern. Dry run 2026-10-24 (9,789 items read): postsAll 2, meetingsAll 1, editRequestByToken 5, editRequestsByRequester 5, contactRequestsByRequester 1, youtubeOAuthAll 2 to write; 0 already set; 0 conflicts; organizations 0.
+  2. `npx tsx scripts/backfill-access-patterns.ts --apply` — UpdateItem SET on just those attributes, guarded so an existing different value is never overwritten. A re-run reports 0 to write.
+- **Also note**: `PEOPLE_INDEX_READS=off` no longer sends the directory (`/api/people`, guests) or the ecclesia list back to a Scan; those read the people/ecclesia index only (the index marker exists in prod; 207/207 profiles have a card, 40/40 ecclesias have a directory entry). It still gates typeahead, smart references and the admin email search (they return empty or 503, never a Scan).
+- **Status**: PENDING
+
 ### Prod data — ecclesia offices (R3, owner-run, Sunday–Tuesday, after this deploys)
 - **Date**: 2026-10-20
 - **Branch**: `feat/office-rb-rep-slots` (PR #282)

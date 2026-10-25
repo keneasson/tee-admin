@@ -1,4 +1,5 @@
 import { docClient, tableNames } from '../config'
+import { PATTERNS } from '../access-patterns'
 import { PutCommand, QueryCommand, UpdateCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import {
   EmailType,
@@ -281,10 +282,10 @@ export class SendQueueRepository {
   async getReadyEmails(): Promise<QueueEntry[]> {
     const result = await docClient.send(new QueryCommand({
       TableName: this.tableName,
-      IndexName: 'StatusIndex',
+      IndexName: PATTERNS.sendQueueByStatus.index,
       KeyConditionExpression: 'GSI1PK = :status',
       ExpressionAttributeValues: {
-        ':status': 'ready',
+        ':status': PATTERNS.sendQueueByStatus.pk({ status: 'ready' }),
       },
     }))
 

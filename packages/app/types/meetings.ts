@@ -85,12 +85,15 @@ export interface MeetingDocument {
  *   skey: DETAILS
  *   gsi1pk: OWNER#{ownerType}#{ownerName}
  *   gsi1sk: {nextOccurrence ISO date}
+ *   gsi4pk: MEETINGS, gsi4sk: {nextOccurrence ISO date}   (every meeting)
  */
 export interface MeetingRecord extends BaseRecord {
   pkey: string
   skey: string
   gsi1pk: string
   gsi1sk: string
+  gsi4pk?: string
+  gsi4sk?: string
 
   meetingId: string
   title: string

@@ -1,5 +1,6 @@
 import { PutCommand, DeleteCommand, QueryCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
+import { PATTERNS } from '../access-patterns'
 
 /**
  * Idempotency guard for the exhorter heads-up email (#124, slice A).
@@ -21,7 +22,7 @@ function idempotencyPk(date: string, personId: string): string {
 }
 
 /** Partition for the sparse "awaiting verification" index. */
-const PENDING_INDEX_PK = 'EXHORTER_HEADSUP_PENDING'
+const PENDING_INDEX_PK = PATTERNS.exhorterPending.pk({})
 
 export interface ClaimHeadsUpInput {
   date: string // ISO YYYY-MM-DD (target Sunday)
@@ -138,7 +139,7 @@ class ExhorterHeadsUpRepository {
         Item: {
           pkey: idempotencyPk(input.date, input.personId),
           skey: `PENDING#${input.token}`,
-          gsi4pk: `EXHORTER_RELEASE#${input.token}`,
+          gsi4pk: PATTERNS.exhorterReleaseToken.pk({ token: input.token }),
           gsi4sk: input.expiresAt,
           // A second, sparse index so the admin page can find "the copy
           // currently awaiting verification" WITHOUT a token. The page has to
@@ -223,7 +224,7 @@ class ExhorterHeadsUpRepository {
     const res = await docClient.send(
       new QueryCommand({
         TableName: this.tableName,
-        IndexName: 'gsi1',
+        IndexName: PATTERNS.exhorterPending.index,
         KeyConditionExpression: 'gsi1pk = :pk',
         ExpressionAttributeValues: { ':pk': PENDING_INDEX_PK },
         ScanIndexForward: true, // gsi1sk starts with the date → earliest first
@@ -245,9 +246,9 @@ class ExhorterHeadsUpRepository {
     const res = await docClient.send(
       new QueryCommand({
         TableName: this.tableName,
-        IndexName: 'gsi4',
+        IndexName: PATTERNS.exhorterReleaseToken.index,
         KeyConditionExpression: 'gsi4pk = :t',
-        ExpressionAttributeValues: { ':t': `EXHORTER_RELEASE#${token}` },
+        ExpressionAttributeValues: { ':t': PATTERNS.exhorterReleaseToken.pk({ token }) },
         Limit: 1,
       })
     )
@@ -312,7 +313,7 @@ class ExhorterHeadsUpRepository {
     const res = await docClient.send(
       new QueryCommand({
         TableName: this.tableName,
-        IndexName: 'gsi1',
+        IndexName: PATTERNS.exhorterPending.index,
         KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk >= :from',
         ExpressionAttributeValues: { ':pk': PENDING_INDEX_PK, ':from': fromDate },
         ScanIndexForward: true,

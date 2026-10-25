@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames, type TableName } from '../config'
 import type { BatchWriteResult } from '../types'
+import { patternQuery, type AccessPattern } from '../access-patterns'
 
 export abstract class BaseRepository<T extends Record<string, any>> {
   protected tableName: string
@@ -235,6 +236,46 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     }
   }
 
+  /**
+   * Query a registered access pattern and follow `LastEvaluatedKey` to the
+   * end. A single Query page stops at 1 MB, so a one-page read silently drops
+   * rows once a partition grows; this never does.
+   */
+  async queryPattern<A>(
+    pattern: AccessPattern<A>,
+    args: A,
+    options: {
+      filterExpression?: string
+      expressionAttributeValues?: Record<string, any>
+      expressionAttributeNames?: Record<string, string>
+      scanIndexForward?: boolean
+      /** Stop once this many items are collected (the result may hold a few more). */
+      limit?: number
+    } = {}
+  ): Promise<T[]> {
+    if (pattern.table !== this.tableName) {
+      throw new Error(`queryPattern: ${pattern.name} is on ${pattern.table}, not ${this.tableName}`)
+    }
+    const base = patternQuery(pattern, args)
+    const items: T[] = []
+    let lastKey: Record<string, any> | undefined
+    do {
+      const result = await docClient.send(
+        new QueryCommand({
+          ...base,
+          ExpressionAttributeValues: { ...base.ExpressionAttributeValues, ...options.expressionAttributeValues },
+          ExpressionAttributeNames: options.expressionAttributeNames,
+          FilterExpression: options.filterExpression,
+          ScanIndexForward: options.scanIndexForward,
+          ExclusiveStartKey: lastKey,
+        })
+      )
+      items.push(...((result.Items || []) as T[]))
+      lastKey = result.LastEvaluatedKey
+    } while (lastKey && !(options.limit && items.length >= options.limit))
+    return items
+  }
+
   // Batch operations
   async batchWrite(items: T[], maxRetries = 3): Promise<BatchWriteResult> {
     const BATCH_SIZE = 25 // DynamoDB limit
@@ -338,7 +379,9 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     }
   }
 
-  // Scan operation (use sparingly)
+  // Scan: NOT for request paths. Use queryPattern with a registered pattern
+  // (access-patterns.ts). Only allowlisted legacy code (R8 deletes) still scans;
+  // apps/next/tests/access-pattern-registry.test.ts enforces it.
   /**
    * Scan EVERY page, following `LastEvaluatedKey`.
    *

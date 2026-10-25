@@ -1,4 +1,5 @@
 import { BaseRepository } from './base-repository'
+import { PATTERNS } from '../access-patterns'
 import type { 
   ScheduleRecord, 
   EventData,
@@ -18,7 +19,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
 
   // Key builders for unified schedule/event table
   private buildSchedulePK(type: string): string {
-    return `SCHEDULE#${type.toUpperCase()}`
+    return PATTERNS.schedulesByType.pk({ type })
   }
 
   private buildEventPK(eventId: string): string {
@@ -124,7 +125,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
         ':endDate': `${query.endDate}#zzz`, // Include all types and times for end date
       },
       {
-        indexName: 'GSI1',
+        indexName: PATTERNS.schedulesByEcclesia.index,
         limit: query.limit,
         lastEvaluatedKey: query.lastEvaluatedKey,
         scanIndexForward: true, // Sort by date, type, time ascending
@@ -134,30 +135,17 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return result
   }
 
-  // NEWSLETTER OPTIMIZATION: Get ALL schedules/events for date range (all ecclesias)
-  async getAllSchedulesByDateRange(
-    query: DateRangeQuery
-  ): Promise<{ items: ScheduleRecord[]; lastEvaluatedKey?: Record<string, any> }> {
-    // Use scan with filter for cross-ecclesia queries
-    const result = await this.scan({
-      filterExpression: '#date BETWEEN :startDate AND :endDate',
-      expressionAttributeNames: { '#date': 'date' },
-      expressionAttributeValues: {
-        ':startDate': query.startDate,
-        ':endDate': query.endDate,
-      },
-      limit: query.limit,
-      lastEvaluatedKey: query.lastEvaluatedKey,
+  /** Standalone events (EVENT# items) dated within a range, all ecclesias, by date then time. */
+  async getEventsByDateRange(query: DateRangeQuery): Promise<ScheduleRecord[]> {
+    const items = await this.queryPattern(PATTERNS.eventsByDate, {
+      from: query.startDate,
+      to: `${query.endDate}#\uffff`,
     })
-
-    // Sort by date then time
-    result.items.sort((a, b) => {
+    return items.sort((a, b) => {
       const dateCompare = a.date.localeCompare(b.date)
       if (dateCompare !== 0) return dateCompare
       return (a.time || '09:00').localeCompare(b.time || '09:00')
     })
-
-    return result
   }
 
   // Get schedules by type and date range
@@ -173,7 +161,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
         ':endDate': `${query.endDate}#23:59`,
       },
       {
-        indexName: 'GSI2',
+        indexName: PATTERNS.schedulesByTypeGsi2.index,
         limit: query.limit,
         lastEvaluatedKey: query.lastEvaluatedKey,
         scanIndexForward: true,
@@ -189,7 +177,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       'GSI2PK = :date',
       { ':date': this.buildDateGSI2PK(date) },
       {
-        indexName: 'GSI2',
+        indexName: PATTERNS.schedulesByTypeGsi2.index,
         scanIndexForward: true, // Sort by time
       }
     )
@@ -227,37 +215,6 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   // Get specific standalone event
   async getEvent(eventId: string): Promise<ScheduleRecord | null> {
     return this.get(this.buildEventPK(eventId), 'DETAILS')
-  }
-
-  // NEWSLETTER OPTIMIZATION: Get schedules grouped by date for newsletter generation
-  async getSchedulesForNewsletter(
-    startDate: string,
-    endDate: string
-  ): Promise<Record<string, ScheduleRecord[]>> {
-    const result = await this.getAllSchedulesByDateRange({
-      startDate,
-      endDate,
-    })
-
-    // Group by date for newsletter layout
-    const grouped: Record<string, ScheduleRecord[]> = {}
-    result.items.forEach(schedule => {
-      if (!grouped[schedule.date]) {
-        grouped[schedule.date] = []
-      }
-      grouped[schedule.date].push(schedule)
-    })
-
-    // Sort each date's events by ecclesia then type
-    Object.keys(grouped).forEach(date => {
-      grouped[date].sort((a, b) => {
-        const ecclesiaCompare = a.ecclesia.localeCompare(b.ecclesia)
-        if (ecclesiaCompare !== 0) return ecclesiaCompare
-        return a.type.localeCompare(b.type)
-      })
-    })
-
-    return grouped
   }
 
   // Update schedule data
@@ -323,11 +280,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   }
 
   async getAllNews(): Promise<ScheduleRecord[]> {
-    const result = await this.scan({
-      filterExpression: 'begins_with(PK, :prefix)',
-      expressionAttributeValues: { ':prefix': 'NEWS#' },
-    })
-    return result.items
+    return this.queryPattern(PATTERNS.newsAll, undefined)
   }
 
   // Bulk operations for sheet sync - SAFE CHECKSUM-BASED APPROACH
@@ -345,23 +298,23 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     }>
   ): Promise<{ successful: number; failed: number; errors: string[] }> {
 
-    // Get existing records for this sheet
-    const existingResult = await this.scan({
-      filterExpression: 'sheetId = :sheetId',
-      expressionAttributeValues: { ':sheetId': sheetId },
-    })
-
-
     // All schedules from the same sheet will have the same type
     const sheetType = schedules[0]?.type
     if (!sheetType) {
       return { successful: 0, failed: 0, errors: [] }
     }
 
+    // Existing records for this sheet: its type's partition, every page. A
+    // one-page read here left rows from page two behind as stale duplicates.
+    const existingItems = await this.queryPattern(PATTERNS.schedulesByType, { type: sheetType }, {
+      filterExpression: 'sheetId = :sheetId',
+      expressionAttributeValues: { ':sheetId': sheetId },
+    })
+
     // Build a map of existing records by their checksum key for quick lookup
     // This allows us to preserve externally-managed fields like YouTube URLs
     const existingRecordsMap = new Map<string, ScheduleRecord>()
-    existingResult.items.forEach(existingRecord => {
+    existingItems.forEach(existingRecord => {
       const checksumKey = `${existingRecord.PK}#${existingRecord.SK}`
       existingRecordsMap.set(checksumKey, existingRecord)
     })
@@ -471,21 +424,5 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     }
 
     return { successful, failed, errors }
-  }
-
-  // Clear schedule records for a specific sheet
-  async clearSheetScheduleRecords(sheetId: string): Promise<void> {
-    // Scan for records with this sheetId
-    const result = await this.scan({
-      filterExpression: 'sheetId = :sheetId',
-      expressionAttributeValues: { ':sheetId': sheetId },
-    })
-
-    // Delete in batches
-    const deletePromises = result.items.map(record => 
-      this.delete(record.PK, record.SK)
-    )
-
-    await Promise.all(deletePromises)
   }
 }

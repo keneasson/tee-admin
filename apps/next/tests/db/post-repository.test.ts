@@ -108,10 +108,14 @@ describe('PostRepository', () => {
         gsi1sk: 'POST',
         gsi2pk: 'POSTS#Toronto East',
         gsi2sk: '2026-08-01T00:00:00.000Z#test-post-uuid',
+        gsi4pk: 'POSTS#ALL',
+        gsi4sk: '2026-08-01T00:00:00.000Z#test-post-uuid',
         id: 'test-post-uuid',
         tenant: 'Toronto East',
         status: 'published',
       })
+      // Not in a series → no series entry (sparse).
+      expect(putCall.params.Item.gsi3pk).toBeUndefined()
       // blocks embedded as a native list (not a JSON string).
       expect(Array.isArray(putCall.params.Item.blocks)).toBe(true)
       expect(putCall.params.Item.blocks[0]).toMatchObject({ id: 'b1', kind: 'text' })
@@ -259,7 +263,7 @@ describe('PostRepository', () => {
   })
 
   describe('listAllPosts', () => {
-    it('scans for POST# items and drops archived by default', async () => {
+    it('queries the gsi4 POSTS#ALL entry (no Scan) and drops archived by default', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [
           storedRecord({ id: 'p1', status: 'published' }),
@@ -270,14 +274,17 @@ describe('PostRepository', () => {
 
       const posts = await repository.listAllPosts()
 
-      const scanCall = mockSend.mock.calls[0][0]
-      expect(scanCall.type).toBe('ScanCommand')
+      const call = mockSend.mock.calls[0][0]
+      expect(call.type).toBe('QueryCommand')
+      expect(call.params.IndexName).toBe('gsi4')
+      expect(call.params.ExpressionAttributeValues).toMatchObject({ ':apPk': 'POSTS#ALL' })
       expect(posts.map((p) => p.id)).toEqual(['p1'])
+      expect(posts[0]).not.toHaveProperty('gsi4pk')
     })
   })
 
   describe('listPostsBySeries', () => {
-    it('scans filtering on seriesId + the POST# prefix', async () => {
+    it('queries the sparse gsi3 POSTSERIES# entry (no Scan)', async () => {
       mockSend.mockResolvedValueOnce({
         Items: [storedRecord({ id: 'p1', seriesId: 'series-1' })],
         LastEvaluatedKey: undefined,
@@ -285,15 +292,11 @@ describe('PostRepository', () => {
 
       const posts = await repository.listPostsBySeries('series-1')
 
-      const scanCall = mockSend.mock.calls[0][0]
-      expect(scanCall.type).toBe('ScanCommand')
-      expect(scanCall.params.FilterExpression).toBe(
-        'begins_with(pkey, :prefix) AND seriesId = :seriesId'
-      )
-      expect(scanCall.params.ExpressionAttributeValues).toMatchObject({
-        ':prefix': 'POST#',
-        ':seriesId': 'series-1',
-      })
+      const call = mockSend.mock.calls[0][0]
+      expect(call.type).toBe('QueryCommand')
+      expect(call.params.IndexName).toBe('gsi3')
+      expect(call.params.KeyConditionExpression).toBe('gsi3pk = :apPk')
+      expect(call.params.ExpressionAttributeValues).toMatchObject({ ':apPk': 'POSTSERIES#series-1' })
       expect(posts.map((p) => p.id)).toEqual(['p1'])
     })
 

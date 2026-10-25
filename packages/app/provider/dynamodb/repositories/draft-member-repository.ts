@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { BaseRepository } from './base-repository'
+import { PATTERNS } from '../access-patterns'
 import { personRepository } from './person-repository'
 import type { DraftMemberRecord, DraftStatus } from '../types'
 
@@ -71,12 +72,7 @@ export class DraftMemberRepository extends BaseRepository<DraftMemberRecord> {
    * Get all pending drafts across all ecclesias via GSI1
    */
   async getPending(): Promise<DraftMemberRecord[]> {
-    const result = await this.query(
-      'gsi1pk = :gsi1pk',
-      { ':gsi1pk': 'DRAFT_STATUS#pending' },
-      { indexName: 'gsi1' }
-    )
-    return result.items
+    return this.queryPattern(PATTERNS.draftMembersByStatus, { status: 'pending' })
   }
 
   /**

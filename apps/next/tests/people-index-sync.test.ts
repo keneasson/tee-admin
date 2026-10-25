@@ -144,11 +144,11 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
   })
 
-  it('before the backfill marker exists, reads stay on the legacy path', async () => {
+  it('ecclesia lists read the directory index, never a Scan', async () => {
     await seedEcclesia()
     fake.calls.length = 0
-    await getAllEcclesia()
-    expect(fake.calls.some((c) => c.op === 'Scan')).toBe(true)
+    expect((await getAllEcclesia()).map((e) => e.name)).toEqual(['Toronto East Ecclesia'])
+    expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
   })
 
   it('rename keeps the stable id and re-points the alias', async () => {
@@ -158,7 +158,7 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect(dir).toEqual([expect.objectContaining({ ecclesiaId: 'old-name', name: 'New Name', ecclesiaSkey: 'Barrie#New Name' })])
   })
 
-  it('sign-in RB lookup: legacy Scan while the flag is off; with it on, the legacy copy only until offices are assigned', async () => {
+  it('sign-in RB lookup: the RB-email index while the flag is off; with it on, the legacy copy only until offices are assigned', async () => {
     await seedEcclesia()
     // Nothing writes the copied RB fields any more; seed the legacy data as prod holds it.
     const key = { pkey: 'ECCLESIA#CA|ON', skey: 'Toronto#Toronto East Ecclesia' }
@@ -167,7 +167,9 @@ describe('ecclesia projections follow every ecclesia write', () => {
     await refreshEcclesiaProjections(key)
     expect(fake.items().filter((i) => i.skey.startsWith('OFFICE#'))).toEqual([])
 
+    fake.calls.length = 0
     expect((await findRecordingBrotherEcclesia('Legacy-RB@x.org'))?.rbHolderName).toBe('Legacy RB')
+    expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
 
     await writeIndexMarker({})
     fake.calls.length = 0
@@ -187,27 +189,16 @@ describe('ecclesia projections follow every ecclesia write', () => {
 })
 
 describe('directory reads (/api/people, /api/people/guests)', () => {
-  it('use one card Query once the index is built, the legacy Scans before', async () => {
+  it('use one card Query, never a Scan', async () => {
     const p = await repo.create({ email: 'f@x.org', firstName: 'Fay', lastName: 'Um', ecclesia: 'Elsewhere' })
     await repo.addPhone(p.personId, { type: 'mobile', number: '905-555-0199' })
 
     fake.calls.length = 0
-    const before = await loadDirectoryPeople({ withPhones: true })
-    expect(before.source).toBe('scan')
-    expect(fake.calls.filter((c) => c.op === 'Scan')).toHaveLength(2)
-
-    await writeIndexMarker({})
-    resetPeopleIndexReadyCache()
-    fake.calls.length = 0
-    const after = await loadDirectoryPeople({ withPhones: true })
-    expect(after.source).toBe('index')
-    expect(fake.calls.some((c) => c.op === 'Scan')).toBe(false)
-    expect(after.people).toEqual(before.people)
-  })
-
-  it('PEOPLE_INDEX_READS=off forces the legacy path', async () => {
-    await writeIndexMarker({})
-    process.env.PEOPLE_INDEX_READS = 'off'
-    expect((await loadDirectoryPeople()).source).toBe('scan')
+    const result = await loadDirectoryPeople({ withPhones: true })
+    expect(result.source).toBe('index')
+    expect(fake.calls.map((c) => c.op)).toEqual(['Query'])
+    expect(result.people).toEqual([
+      expect.objectContaining({ personId: p.personId, firstName: 'Fay', primaryEmail: 'f@x.org', phones: ['9055550199'] }),
+    ])
   })
 })

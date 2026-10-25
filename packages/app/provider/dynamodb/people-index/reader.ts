@@ -2,10 +2,10 @@
  * READERS for the people/ecclesia projections (see `keys.ts`). Every one is a
  * GetItem, Query or BatchGetItem — no Scan (ADR-0006 §8).
  *
- * Callers switch to these only when `peopleIndexReady()` is true: the
- * projections exist for every person only once the backfill has run and
- * written the build marker. Until then the legacy read stays in charge, so a
- * deploy that lands before the backfill can never show a short list.
+ * The backfill marker (`peopleIndexReady()`) exists in prod. The directory and
+ * ecclesia lists read these directly; typeahead, smart references and the
+ * admin email search still check the marker (and the `PEOPLE_INDEX_READS=off`
+ * kill switch) and answer empty when it is missing. None falls back to a Scan.
  */
 import { BatchGetCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
@@ -13,16 +13,12 @@ import {
   type PersonCard,
   CARD_SK,
   ECCLESIA_ALIAS_SK,
-  ECCLESIA_DIRECTORY_PK,
   INDEX_META_PK,
   INDEX_META_SK,
   ecclesiaIdPk,
-  ecclesiaPeoplePk,
   nameTokens,
-  namePrefixPk,
-  peopleRosterPk,
-  rbEmailPk,
 } from './keys'
+import { PATTERNS, patternQuery } from '../access-patterns'
 
 const TABLE = tableNames.admin
 
@@ -103,22 +99,12 @@ export async function batchGetItems<T = Record<string, any>>(
 
 /** Pattern 4, everyone: every person card, sorted by last then first name. */
 export async function listPeopleCards(): Promise<PersonCard[]> {
-  return queryAll<PersonCard>({
-    TableName: TABLE,
-    IndexName: 'gsi4',
-    KeyConditionExpression: 'gsi4pk = :pk',
-    ExpressionAttributeValues: { ':pk': peopleRosterPk() },
-  })
+  return queryAll<PersonCard>(patternQuery(PATTERNS.peopleCards, undefined))
 }
 
 /** Pattern 4, one ecclesia (by its stable id). */
 export async function listPeopleCardsByEcclesiaId(ecclesiaId: string): Promise<PersonCard[]> {
-  return queryAll<PersonCard>({
-    TableName: TABLE,
-    IndexName: 'gsi2',
-    KeyConditionExpression: 'gsi2pk = :pk',
-    ExpressionAttributeValues: { ':pk': ecclesiaPeoplePk(ecclesiaId) },
-  })
+  return queryAll<PersonCard>(patternQuery(PATTERNS.peopleCardsByEcclesiaId, { ecclesiaId }))
 }
 
 /** Pattern 10: the cards for a set of people (e.g. a post's smart references), one round trip per 100. */
@@ -145,12 +131,9 @@ export async function searchPeopleByNamePrefix(query: string, limit = 10): Promi
   // Query on the longest typed word (most selective) that has two letters.
   const anchor = typed.slice().sort((a, b) => b.length - a.length)[0]
   if (anchor.length < 2) return []
-  const rows = await queryAll<{ personId: string; displayName: string; ecclesia: string; role?: string; tokens?: string[] }>({
-    TableName: TABLE,
-    IndexName: 'gsi3',
-    KeyConditionExpression: 'gsi3pk = :pk AND begins_with(gsi3sk, :sk)',
-    ExpressionAttributeValues: { ':pk': namePrefixPk(anchor), ':sk': anchor },
-  })
+  const rows = await queryAll<{ personId: string; displayName: string; ecclesia: string; role?: string; tokens?: string[] }>(
+    patternQuery(PATTERNS.nameTypeahead, { token: anchor })
+  )
   const seen = new Set<string>()
   const out: NameMatch[] = []
   for (const row of rows) {
@@ -180,13 +163,7 @@ export interface EcclesiaDirectoryEntry {
 
 /** Pattern 9: every ecclesia, optionally within a country or province. */
 export async function listEcclesiaDirectory(filter: { country?: string; province?: string } = {}): Promise<EcclesiaDirectoryEntry[]> {
-  const prefix = filter.country ? `${filter.country}|${filter.province ? `${filter.province}|` : ''}` : ''
-  return queryAll<EcclesiaDirectoryEntry>({
-    TableName: TABLE,
-    IndexName: 'gsi2',
-    KeyConditionExpression: prefix ? 'gsi2pk = :pk AND begins_with(gsi2sk, :sk)' : 'gsi2pk = :pk',
-    ExpressionAttributeValues: prefix ? { ':pk': ECCLESIA_DIRECTORY_PK, ':sk': prefix } : { ':pk': ECCLESIA_DIRECTORY_PK },
-  })
+  return queryAll<EcclesiaDirectoryEntry>(patternQuery(PATTERNS.ecclesiaDirectory, filter))
 }
 
 /** Directory entries → the full ECCLESIA source items (BatchGet). */
@@ -209,14 +186,8 @@ export async function getEcclesiaById(ecclesiaId: string): Promise<EcclesiaDirec
  * Replaces the full-table Scan in `getEcclesiaByRecordingBrotherEmail`.
  */
 export async function findEcclesiaByRecordingBrotherEmail(email: string): Promise<EcclesiaDirectoryEntry | null> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: TABLE,
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk = :sk',
-      ExpressionAttributeValues: { ':pk': rbEmailPk(email), ':sk': ECCLESIA_ALIAS_SK },
-    })
+  const rows = (await queryAll<EcclesiaDirectoryEntry>(patternQuery(PATTERNS.ecclesiaByRbEmail, { email }))).sort((a, b) =>
+    a.ecclesiaId.localeCompare(b.ecclesiaId)
   )
-  const rows = ((result?.Items || []) as EcclesiaDirectoryEntry[]).sort((a, b) => a.ecclesiaId.localeCompare(b.ecclesiaId))
   return rows[0] || null
 }

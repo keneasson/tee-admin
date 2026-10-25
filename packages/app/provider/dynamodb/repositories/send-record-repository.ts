@@ -1,5 +1,6 @@
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
+import { PATTERNS } from '../access-patterns'
 import { docClient } from '../config'
 import type { EmailReasonType, EmailSubReason } from '../../../types'
 import type { EmailSendRecord } from '../../../types/analytics'
@@ -76,9 +77,9 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
     const ttl = Math.floor(Date.now() / 1000) + 180 * 24 * 60 * 60
 
     await this.update(`SEND#${data.campaignId}`, 'METADATA', {
-      gsi1pk: `SENDS#${data.reason}`,
+      gsi1pk: PATTERNS.sendsByReason.pk({ reason: data.reason }),
       gsi1sk: sentAt,
-      gsi2pk: 'SENDS#ALL',
+      gsi2pk: PATTERNS.sendsAll.pk(undefined),
       gsi2sk: sentAt,
       campaignId: data.campaignId,
       reason: data.reason,
@@ -115,14 +116,14 @@ class SendRecordRepository extends BaseRepository<SendRecordItem> {
    * Uses GSI2 (all sends) or GSI1 (by reason), sorted by date descending.
    */
   async getRecentSends(limit: number = 20, reason?: EmailReasonType): Promise<EmailSendRecord[]> {
-    const gsiPk = reason ? `SENDS#${reason}` : 'SENDS#ALL'
-    const indexName = reason ? 'gsi1' : 'gsi2'
+    const pattern = reason ? PATTERNS.sendsByReason : PATTERNS.sendsAll
+    const gsiPk = reason ? PATTERNS.sendsByReason.pk({ reason }) : PATTERNS.sendsAll.pk(undefined)
 
     const result = await this.query(
-      `${indexName === 'gsi1' ? 'gsi1pk' : 'gsi2pk'} = :pk`,
+      `${pattern.pkAttr} = :pk`,
       { ':pk': gsiPk },
       {
-        indexName,
+        indexName: pattern.index,
         limit,
         scanIndexForward: false, // newest first
       }

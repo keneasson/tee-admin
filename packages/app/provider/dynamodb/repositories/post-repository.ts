@@ -3,6 +3,7 @@ import { BaseRepository } from './base-repository'
 import type { Post } from '@my/app/types/post'
 import { normalizePost } from '../../../utils/normalize-post'
 import { storeReferences } from '../../../utils/post-references'
+import { ENTRIES, PATTERNS } from '../access-patterns'
 
 /**
  * PostRepository — native storage for the unified {@link Post} model
@@ -22,6 +23,8 @@ import { storeReferences } from '../../../utils/post-references'
  *          — chronological list by lifecycle.publishDate (falls back to createdAt),
  *            the same idea the events GSI uses ({date}#{id}). `sortDate` lets
  *            listPosts return newest-first without a scan.
+ *   gsi4   gsi4pk = POSTS#ALL      gsi4sk = {sortDate}#{postId}  — every post (listAllPosts)
+ *   gsi3   gsi3pk = POSTSERIES#{seriesId}  gsi3sk = {sortDate}#{postId}  — sparse, series only
  *
  * Cross-platform: no `next-auth` / `next/*` imports (server-only via BaseRepository).
  */
@@ -34,6 +37,10 @@ export interface PostRecord extends Post {
   gsi1sk: string
   gsi2pk: string
   gsi2sk: string
+  gsi3pk?: string
+  gsi3sk?: string
+  gsi4pk?: string
+  gsi4sk?: string
   version?: number
   lastUpdated?: string
 }
@@ -125,17 +132,15 @@ export class PostRepository extends BaseRepository<PostRecord> {
   }
 
   /** Build the overloaded-GSI attributes for a post. */
-  private static gsiKeys(post: Post): {
-    gsi1pk: string
-    gsi1sk: string
-    gsi2pk: string
-    gsi2sk: string
-  } {
+  private static gsiKeys(post: Post): Pick<PostRecord, 'gsi1pk' | 'gsi1sk' | 'gsi2pk' | 'gsi2sk'> &
+    Partial<Pick<PostRecord, 'gsi3pk' | 'gsi3sk' | 'gsi4pk' | 'gsi4sk'>> {
+    const sortKey = `${sortDate(post.lifecycle, post.createdAt)}#${post.id}`
     return {
-      gsi1pk: `POST#${post.id}`,
+      gsi1pk: PATTERNS.postById.pk({ postId: post.id }),
       gsi1sk: 'POST',
-      gsi2pk: `POSTS#${post.tenant}`,
-      gsi2sk: `${sortDate(post.lifecycle, post.createdAt)}#${post.id}`,
+      gsi2pk: PATTERNS.postsByTenant.pk({ tenant: post.tenant }),
+      gsi2sk: sortKey,
+      ...ENTRIES.post({ seriesId: post.seriesId, sortKey }),
     }
   }
 
@@ -153,6 +158,10 @@ export class PostRepository extends BaseRepository<PostRecord> {
       gsi1sk: _g1s,
       gsi2pk: _g2p,
       gsi2sk: _g2s,
+      gsi3pk: _g3p,
+      gsi3sk: _g3s,
+      gsi4pk: _g4p,
+      gsi4sk: _g4s,
       version: _version,
       lastUpdated: _lastUpdated,
       ...post
@@ -201,8 +210,8 @@ export class PostRepository extends BaseRepository<PostRecord> {
   async getPost(postId: string): Promise<Post | null> {
     const result = await this.query(
       'gsi1pk = :gsi1pk AND gsi1sk = :gsi1sk',
-      { ':gsi1pk': `POST#${postId}`, ':gsi1sk': 'POST' },
-      { indexName: 'gsi1' }
+      { ':gsi1pk': PATTERNS.postById.pk({ postId }), ':gsi1sk': 'POST' },
+      { indexName: PATTERNS.postById.index }
     )
     const record = result.items[0]
     return record ? PostRepository.toPost(record) : null
@@ -215,9 +224,9 @@ export class PostRepository extends BaseRepository<PostRecord> {
   async listPosts(options: ListPostsOptions): Promise<ListPostsResult> {
     const result = await this.query(
       'gsi2pk = :gsi2pk',
-      { ':gsi2pk': `POSTS#${options.tenant}` },
+      { ':gsi2pk': PATTERNS.postsByTenant.pk({ tenant: options.tenant }) },
       {
-        indexName: 'gsi2',
+        indexName: PATTERNS.postsByTenant.index,
         limit: options.limit,
         lastEvaluatedKey: options.lastEvaluatedKey,
         scanIndexForward: options.oldestFirst ?? false,
@@ -249,11 +258,12 @@ export class PostRepository extends BaseRepository<PostRecord> {
       updatedAt: new Date().toISOString(),
     }
 
+    const { gsi1pk: _g1p, gsi1sk: _g1s, gsi2pk: _g2p, ...sortedKeys } = PostRepository.gsiKeys(merged)
     const updates: Partial<PostRecord> = {
       ...patch,
       ...(patch.blocks ? { blocks: storeReferences(patch.blocks) } : {}),
       updatedAt: merged.updatedAt,
-      gsi2sk: `${sortDate(merged.lifecycle, merged.createdAt)}#${merged.id}`,
+      ...sortedKeys,
     }
 
     const record = await this.update(
@@ -299,54 +309,16 @@ export class PostRepository extends BaseRepository<PostRecord> {
     )
   }
 
-  /**
-   * List every native post across all tenants (scan). Used by the unified read
-   * when no tenant is scoped. The native store is small during the Phase 1
-   * transition, so a scan is acceptable here.
-   */
+  /** Every native post across all tenants (gsi4 `POSTS#ALL`). Used when no tenant is scoped. */
   async listAllPosts(options?: { includeArchived?: boolean }): Promise<Post[]> {
-    const posts: Post[] = []
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(pkey, :prefix) AND begins_with(skey, :prefix)',
-        expressionAttributeValues: { ':prefix': 'POST#' },
-        lastEvaluatedKey: lastKey,
-      })
-      for (const record of result.items) {
-        const post = PostRepository.toPost(record)
-        if (!options?.includeArchived && post.status === 'archived') continue
-        posts.push(post)
-      }
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return posts
+    const posts = (await this.queryPattern(PATTERNS.postsAll, undefined)).map(PostRepository.toPost)
+    return options?.includeArchived ? posts : posts.filter((p) => p.status !== 'archived')
   }
 
-  /**
-   * List every post sharing a `seriesId` (Connect/series, Consolidated CMS
-   * epic #131). Series are small (a handful of related posts), so — like
-   * {@link listAllPosts} — a filtered scan mirrors the existing query style
-   * instead of adding a dedicated GSI for what is, today, a rare lookup.
-   */
+  /** Every post sharing a `seriesId` (Connect/series, epic #131), via the sparse gsi3 entry. */
   async listPostsBySeries(seriesId: string): Promise<Post[]> {
     if (!seriesId) return []
-    const posts: Post[] = []
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(pkey, :prefix) AND seriesId = :seriesId',
-        expressionAttributeValues: { ':prefix': 'POST#', ':seriesId': seriesId },
-        lastEvaluatedKey: lastKey,
-      })
-      posts.push(...result.items.map(PostRepository.toPost))
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return posts
+    return (await this.queryPattern(PATTERNS.postsBySeries, { seriesId })).map(PostRepository.toPost)
   }
 
   /**

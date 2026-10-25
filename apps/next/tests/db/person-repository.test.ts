@@ -19,6 +19,7 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   DeleteCommand: vi.fn().mockImplementation((params) => ({ type: 'DeleteCommand', params })),
   ScanCommand: vi.fn().mockImplementation((params) => ({ type: 'ScanCommand', params })),
   BatchWriteCommand: vi.fn().mockImplementation((params) => ({ type: 'BatchWriteCommand', params })),
+  BatchGetCommand: vi.fn().mockImplementation((params) => ({ type: 'BatchGetCommand', params })),
 }))
 
 vi.mock('@aws-sdk/client-dynamodb', () => ({
@@ -602,18 +603,25 @@ describe('PersonRepository', () => {
 
   describe('Inter-Ecclesia Rep Methods', () => {
     describe('listInterEcclesiaReps', () => {
-      it('should list all inter-ecclesia representatives', async () => {
+      it('finds candidates on the person cards (no Scan) and returns their PROFILEs', async () => {
         const mockReps = [
           { personId: '1', isInterEcclesiaRep: true, ecclesia: 'Ecclesia A' },
           { personId: '2', isInterEcclesiaRep: true, ecclesia: 'Ecclesia B' },
         ]
 
-        mockSend.mockResolvedValueOnce({ Items: mockReps })
+        mockSend
+          .mockResolvedValueOnce({ Items: [{ personId: '1' }, { personId: '2' }] }) // card query
+          .mockResolvedValueOnce({ Responses: { 'tee-admin': [mockReps[1], mockReps[0]] } }) // BatchGet
 
         const result = await repository.listInterEcclesiaReps()
 
         expect(result).toEqual(mockReps)
-        expect(mockSend).toHaveBeenCalledTimes(1)
+        const query = mockSend.mock.calls[0][0]
+        expect(query.type).toBe('QueryCommand')
+        expect(query.params.IndexName).toBe('gsi4')
+        expect(query.params.ExpressionAttributeValues).toMatchObject({ ':apPk': 'PEOPLE#ALL', ':on': true })
+        expect(query.params.ExpressionAttributeNames).toEqual({ '#flag': 'isInterEcclesiaRep' })
+        expect(mockSend.mock.calls[1][0].type).toBe('BatchGetCommand')
       })
     })
 

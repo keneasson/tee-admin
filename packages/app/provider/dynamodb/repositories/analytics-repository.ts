@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { BaseRepository } from './base-repository'
+import { KEYS, PATTERNS } from '../access-patterns'
 import type { WebAnalyticsRecord, ReferrerSource, DeviceType } from '../../../types/analytics'
 
 class AnalyticsRepository extends BaseRepository<WebAnalyticsRecord> {
@@ -40,7 +41,7 @@ class AnalyticsRepository extends BaseRepository<WebAnalyticsRecord> {
     const record: WebAnalyticsRecord = {
       pkey: `ANALYTICS#WEB#${dateStr}`,
       skey: `${timestamp}#${hash8}`,
-      gsi1pk: 'ANALYTICS#WEB',
+      gsi1pk: KEYS.webAnalytics(),
       gsi1sk: timestamp,
       page: data.page,
       visitorHash,
@@ -68,12 +69,12 @@ class AnalyticsRepository extends BaseRepository<WebAnalyticsRecord> {
       const result = await this.query(
         'gsi1pk = :pk AND gsi1sk BETWEEN :start AND :end',
         {
-          ':pk': 'ANALYTICS#WEB',
+          ':pk': KEYS.webAnalytics(),
           ':start': `${startDate}T00:00:00`,
           ':end': `${endDate}T23:59:59`,
         },
         {
-          indexName: 'gsi1',
+          indexName: PATTERNS.webAnalytics.index,
           lastEvaluatedKey,
         }
       )

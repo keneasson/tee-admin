@@ -1,4 +1,5 @@
 import { BaseRepository } from './base-repository'
+import { ENTRIES, PATTERNS } from '../access-patterns'
 import type {
   ContactRequestRecord,
   ContactRequestType,
@@ -68,6 +69,7 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
       createdAt: now,
       lastUpdated: now,
       version: 0,
+      ...ENTRIES.contactRequest({ requesterEmail, createdAt: now, requestId }),
     }
 
     await this.put(record as any)
@@ -167,16 +169,9 @@ export class ContactRequestRepository extends BaseRepository<ContactRequestRecor
     )
   }
 
-  /**
-   * Get requests sent by a user (requires scanning)
-   * Use sparingly as this is less efficient
-   */
+  /** Requests sent by a user, newest first, via their gsi1 entry. */
   async getSentRequests(email: string): Promise<ContactRequestRecord[]> {
-    const result = await this.scan({
-      filterExpression: 'requesterEmail = :email',
-      expressionAttributeValues: { ':email': email },
-    })
-    return result.items as ContactRequestRecord[]
+    return (await this.queryPattern(PATTERNS.contactRequestsByRequester, { email }, { scanIndexForward: false })) as ContactRequestRecord[]
   }
 
   /**
