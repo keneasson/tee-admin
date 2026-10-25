@@ -29,21 +29,17 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
     return this.get(this.pk(flagName), 'CONFIG')
   }
 
-  async getAll(): Promise<FeatureFlagRecord[]> {
-    const { items } = await this.scan({
-      filterExpression: 'begins_with(pkey, :prefix) AND skey = :skey',
-      expressionAttributeValues: {
-        ':prefix': 'FEATURE_FLAG#',
-        ':skey': 'CONFIG',
-      },
-    })
-    return items
-  }
-
+  /**
+   * Each flag the code knows, read by its key. A flag only does anything when
+   * code checks it, so these are all the flags there are. (A filtered Scan
+   * returned only the table's first page: rows saved later were never seen.)
+   */
   async getAllAsConfigs(): Promise<Record<string, FeatureFlagConfig>> {
-    const records = await this.getAll()
+    const names = Object.keys(DEFAULT_FEATURE_FLAG_CONFIGS)
+    const records = await Promise.all(names.map((name) => this.getByName(name)))
     const configs: Record<string, FeatureFlagConfig> = {}
     for (const record of records) {
+      if (!record) continue
       configs[record.flagName] = {
         description: record.description || '',
         visibleTo: record.visibleTo || 'owner',
@@ -54,18 +50,8 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
   }
 
   /**
-   * Get all flag configs with in-memory caching (60s TTL).
-   *
-   * Code defaults (DEFAULT_FEATURE_FLAG_CONFIGS) are the fallback for any flag
-   * missing from DynamoDB, with DB rows overriding on a per-flag basis. This
-   * means flipping a flag's default in code Just Works: a newly added flag
-   * resolves to its code default even when the DB already holds *other* flag
-   * rows (previously only an entirely empty DB triggered seeding, so a new flag
-   * added alongside existing rows stayed absent → resolved to false for
-   * everyone until a row was hand-created).
-   *
-   * Still seeds an entirely empty DB from defaults so the admin UI has rows to
-   * edit; the merge below is what guarantees correctness regardless of seeding.
+   * Flag configs with in-memory caching (60s TTL): the code default for each
+   * flag, overridden by its DB row when one exists.
    */
   async getAllCached(): Promise<Record<string, FeatureFlagConfig>> {
     const now = Date.now()
@@ -73,17 +59,9 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
       return flagCache.data
     }
 
-    let dbConfigs = await this.getAllAsConfigs()
-
-    if (Object.keys(dbConfigs).length === 0) {
-      await this.seedFromDefaults()
-      dbConfigs = await this.getAllAsConfigs()
-    }
-
-    // Code defaults as fallback; DB rows win per flag.
     const merged: Record<string, FeatureFlagConfig> = {
       ...DEFAULT_FEATURE_FLAG_CONFIGS,
-      ...dbConfigs,
+      ...(await this.getAllAsConfigs()),
     }
 
     flagCache = { data: merged, timestamp: now }
@@ -120,15 +98,6 @@ class FeatureFlagRepository extends BaseRepository<FeatureFlagRecord> {
 
   invalidateCache(): void {
     flagCache = null
-  }
-
-  private async seedFromDefaults(): Promise<void> {
-    for (const [flagName, config] of Object.entries(DEFAULT_FEATURE_FLAG_CONFIGS)) {
-      const existing = await this.getByName(flagName)
-      if (!existing) {
-        await this.createFlag(flagName, config)
-      }
-    }
   }
 }
 

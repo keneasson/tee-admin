@@ -150,10 +150,10 @@ export function FeatureFlagManager({ userEmail, userRole }: FeatureFlagManagerPr
 
   return (
     <ScrollView>
-      <YStack padding="$4" gap="$4" maxWidth={800} marginHorizontal="auto">
+      <YStack padding="$4" gap="$4" width="100%" maxWidth={800} marginHorizontal="auto">
         {/* Header */}
         <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-          <YStack gap="$1">
+          <YStack gap="$1" flexShrink={1} minWidth={0}>
             <XStack gap="$2" alignItems="center">
               <Flag size={24} color="$blue10" />
               <H2>Feature Flags</H2>
