@@ -683,7 +683,7 @@ function CurrentUsageAnalysis() {
       area: "Navigation",
       currentColors: ["#ccaa32 (hover state)", "$gray12Dark (text)", "$borderLight"],
       needsUpdate: true,
-      files: ["packages/ui/src/nav-item.tsx", "packages/app/features/with-navigation.tsx"],
+      files: ["packages/ui/src/nav-item.tsx", "packages/app/features/simple-enhanced-navigation.tsx"],
       recommendation: "Replace #ccaa32 with new secondary hover color"
     },
     {
