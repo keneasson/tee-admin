@@ -128,14 +128,8 @@ export async function PUT(request: NextRequest) {
 
     // Prevent demoting the only owner
     if (previousRole === ROLES.OWNER && newRole !== ROLES.OWNER) {
-      const personOwners = await personRepository.scan({
-        filterExpression: '#role = :ownerRole',
-        expressionAttributeNames: { '#role': 'role' },
-        expressionAttributeValues: { ':ownerRole': ROLES.OWNER },
-      })
-      const otherOwners = personOwners.items.filter(
-        (p: any) => p.primaryEmail?.toLowerCase() !== email.toLowerCase()
-      )
+      const owners = await personRepository.listCardsByRole(ROLES.OWNER)
+      const otherOwners = owners.filter((p) => p.personId !== targetPerson.personId)
       if (otherOwners.length === 0) {
         return NextResponse.json(
           { error: 'Cannot remove the only Owner. Promote another user to Owner first.' },

@@ -7,7 +7,6 @@ import {
   getEcclesiaById,
   getEcclesiaItems,
   listEcclesiaDirectory,
-  peopleIndexReady,
   projectionWritesEnabled,
   refreshEcclesiaProjections,
   removeEcclesiaProjections,
@@ -21,6 +20,7 @@ import {
   OFFICE_ROLES,
 } from '@my/app/provider/dynamodb/repositories/office-repository'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
+import { PATTERNS, patternQuery } from '@my/app/provider/dynamodb/access-patterns'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 
 const dbClientConfig = getAwsDbConfig()
@@ -286,20 +286,11 @@ const ecclesiaKey = (e: { country: string; province: string; city: string; name:
   skey: `${e.city}#${e.name}`,
 })
 
-/**
- * Every ECCLESIA item through the directory index (Query + BatchGet), or null
- * when the index is not ready / fails — the caller then uses its legacy read.
- */
-async function getEcclesiasFromIndex(filter: { country?: string } = {}): Promise<EcclesiaData[] | null> {
-  try {
-    if (!(await peopleIndexReady())) return null
-    const entries = await listEcclesiaDirectory(filter)
-    const items = await getEcclesiaItems(entries)
-    return items.map(mapItemToEcclesia)
-  } catch (error) {
-    console.error('people-index: ecclesia directory read failed; using legacy scan', error)
-    return null
-  }
+/** Every ECCLESIA item through the directory index (Query + BatchGet). */
+async function getEcclesiasFromIndex(filter: { country?: string } = {}): Promise<EcclesiaData[]> {
+  const entries = await listEcclesiaDirectory(filter)
+  const items = await getEcclesiaItems(entries)
+  return items.map(mapItemToEcclesia)
 }
 
 // Ecclesia functions
@@ -349,7 +340,7 @@ export async function createEcclesia(data: {
         skey: `${data.city}#${data.name}`,
         type: 'ECCLESIA',
         // GSI1 for name-based lookups
-        gsi1pk: `ECCLESIA#${data.name}`,
+        gsi1pk: PATTERNS.ecclesiaByName.pk({ name: data.name }),
         gsi1sk: `${data.country}|${data.province}|${data.city}`,
         ...ecclesia,
       },
@@ -378,13 +369,8 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
   try {
     // Try exact match first
     const result = await client.query({
-      TableName: TABLE_NAME,
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `ECCLESIA#${name}`,
-      },
-      Limit: 1
+      ...patternQuery(PATTERNS.ecclesiaByName, { name }),
+      Limit: 1,
     })
 
     if (result.Items && result.Items.length > 0) {
@@ -405,7 +391,7 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
   }
 }
 
-// Server-side cache for ecclesia list (avoids full table scan on every search)
+// Server-side cache for the ecclesia list (pickers and search)
 let ecclesiaCacheData: EcclesiaData[] | null = null
 let ecclesiaCacheExpiry = 0
 const ECCLESIA_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
@@ -416,24 +402,7 @@ async function getAllEcclesiasWithCache(): Promise<EcclesiaData[]> {
     return ecclesiaCacheData
   }
 
-  const indexed = await getEcclesiasFromIndex()
-  if (indexed) {
-    ecclesiaCacheData = indexed
-    ecclesiaCacheExpiry = now + ECCLESIA_CACHE_TTL_MS
-    return ecclesiaCacheData
-  }
-
-  // Legacy: Scan (pre-backfill only).
-  const result = await client.scan({
-    TableName: TABLE_NAME,
-    IndexName: 'gsi1',
-    FilterExpression: 'begins_with(gsi1pk, :prefix)',
-    ExpressionAttributeValues: {
-      ':prefix': 'ECCLESIA#',
-    },
-  })
-
-  ecclesiaCacheData = (result.Items || []).map(mapItemToEcclesia)
+  ecclesiaCacheData = await getEcclesiasFromIndex()
   ecclesiaCacheExpiry = now + ECCLESIA_CACHE_TTL_MS
   return ecclesiaCacheData
 }
@@ -485,26 +454,7 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
 // New geographic query functions enabled by the new schema
 export async function getEcclesiaByCountry(country: string): Promise<EcclesiaData[]> {
   try {
-    const indexed = await getEcclesiasFromIndex({ country })
-    if (indexed) return indexed
-
-    // Legacy: Scan (pre-backfill only).
-    // Use scan with filter since begins_with on PK isn't supported in Query
-    const result = await client.scan({
-      TableName: TABLE_NAME,
-      FilterExpression: 'begins_with(pkey, :prefix) AND #type = :ecclesiaType',
-      ExpressionAttributeValues: {
-        ':prefix': `ECCLESIA#${country}`,
-        ':ecclesiaType': 'ECCLESIA',
-      },
-      ExpressionAttributeNames: {
-        '#type': 'type',
-      },
-    })
-
-    if (!result.Items) return []
-
-    return result.Items.map(mapItemToEcclesia)
+    return await getEcclesiasFromIndex({ country })
   } catch (error) {
     console.error('Error getting ecclesia by country:', error)
     return []
@@ -552,30 +502,7 @@ export async function getEcclesiaByCity(country: string, province: string, city:
 
 export async function getAllEcclesia(): Promise<EcclesiaData[]> {
   try {
-    const indexed = await getEcclesiasFromIndex()
-    if (indexed) return indexed
-
-    // Legacy: paginated Scan (pre-backfill only). A single page reads only the
-    // first 1 MB of the table and missed 4 of the 39 ecclesias (§0.6).
-    const items: Record<string, any>[] = []
-    let lastKey: Record<string, any> | undefined
-    do {
-      const page = await client.scan({
-        TableName: TABLE_NAME,
-        FilterExpression: '#type = :ecclesiaType',
-        ExpressionAttributeValues: {
-          ':ecclesiaType': 'ECCLESIA',
-        },
-        ExpressionAttributeNames: {
-          '#type': 'type',
-        },
-        ExclusiveStartKey: lastKey,
-      })
-      items.push(...(page.Items || []))
-      lastKey = page.LastEvaluatedKey
-    } while (lastKey)
-
-    return items.map(mapItemToEcclesia)
+    return await getEcclesiasFromIndex()
   } catch (error) {
     console.error('Error getting all ecclesia:', error)
     return []
@@ -808,28 +735,12 @@ function legacyCopyOf(item: Record<string, any>): LegacyRecordingBrotherCopy | n
   return { email, name, personId }
 }
 
-/** Pre-cutover sign-in fallback: the copied RB email, by Scan (flag off) or by the RBEMAIL# index entry. */
-async function legacyEcclesiaByRecordingBrotherEmail(email: string, indexed: boolean): Promise<RecordingBrotherEcclesia | null> {
-  if (indexed) {
-    const entry = await findEcclesiaByRecordingBrotherEmail(email)
-    if (!entry) return null
-    const result = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
-    return result.Item ? { ...mapItemToEcclesia(result.Item), rbHolderName: legacyCopyOf(result.Item)?.name } : null
-  }
-  const items: Record<string, any>[] = []
-  let lastKey: Record<string, any> | undefined
-  do {
-    const page = await client.scan({
-      TableName: TABLE_NAME,
-      FilterExpression: '#type = :ecclesiaType AND recordingBrotherEmail = :email',
-      ExpressionAttributeValues: { ':ecclesiaType': 'ECCLESIA', ':email': email.toLowerCase() },
-      ExpressionAttributeNames: { '#type': 'type' },
-      ExclusiveStartKey: lastKey,
-    })
-    items.push(...(page.Items || []))
-    lastKey = page.LastEvaluatedKey
-  } while (lastKey && items.length === 0)
-  return items[0] ? { ...mapItemToEcclesia(items[0]), rbHolderName: legacyCopyOf(items[0])?.name } : null
+/** Pre-cutover sign-in fallback: the copied RB email, by its RBEMAIL# index entry. */
+async function legacyEcclesiaByRecordingBrotherEmail(email: string): Promise<RecordingBrotherEcclesia | null> {
+  const entry = await findEcclesiaByRecordingBrotherEmail(email)
+  if (!entry) return null
+  const result = await client.get({ TableName: TABLE_NAME, Key: { pkey: entry.ecclesiaPkey, skey: entry.ecclesiaSkey } })
+  return result.Item ? { ...mapItemToEcclesia(result.Item), rbHolderName: legacyCopyOf(result.Item)?.name } : null
 }
 
 /** An ecclesia found by a Recording Brother address, plus the RB's name when one is known. */
@@ -842,8 +753,8 @@ export type RecordingBrotherEcclesia = EcclesiaData & { rbHolderName?: string }
  * Recording Brother OFFICE whose own inbox is this address decides — whoever
  * can read the inbox can sign in with it. Once the owner-confirmed assignments
  * are applied (offices marker) the offices are the only source; before that the
- * legacy RB-email index entry is the fallback. Flag off, or on any error: the
- * legacy Scan, exactly as today. A wrong answer makes a Recording Brother a guest.
+ * legacy RB-email index entry is the fallback; it is also what is used with the
+ * flag off or on any error. A wrong answer makes a Recording Brother a guest.
  */
 export async function findRecordingBrotherEcclesia(email: string): Promise<RecordingBrotherEcclesia | null> {
   if (isTestAccountEmail(email)) return null
@@ -861,13 +772,12 @@ export async function findRecordingBrotherEcclesia(email: string): Promise<Recor
         return { ...mapItemToEcclesia(found.Item), rbHolderName: view?.holder?.displayName?.trim() || undefined }
       }
       if (await officeRepository.officesAssigned()) return null
-      if (await peopleIndexReady()) return await legacyEcclesiaByRecordingBrotherEmail(email, true)
     }
   } catch (error) {
-    console.error('offices: sign-in RB lookup failed; using legacy scan', error)
+    console.error('offices: sign-in RB lookup failed; using the legacy RB-email index', error)
   }
   try {
-    return await legacyEcclesiaByRecordingBrotherEmail(email, false)
+    return await legacyEcclesiaByRecordingBrotherEmail(email)
   } catch (error) {
     console.error('Error looking up ecclesia by recording brother email:', error)
     return null

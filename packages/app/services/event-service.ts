@@ -592,16 +592,10 @@ export const getFilteredEvents = async (filters: EventFilters): Promise<EventLis
   // Use existing optimized queries from scheduleRepo
   if (filters.dateFrom && filters.dateTo) {
     // Get events by date range - primary newsletter use case
-    const result = await scheduleRepo.getAllSchedulesByDateRange({
+    scheduleRecords = await scheduleRepo.getEventsByDateRange({
       startDate: filters.dateFrom.toISOString().split('T')[0],
       endDate: filters.dateTo.toISOString().split('T')[0],
-      limit
     })
-    
-    // Filter for events only (not schedules)
-    scheduleRecords = result.items.filter(record => 
-      record.PK?.startsWith('EVENT#')
-    )
   } else if (filters.type) {
     // Get events by type
     const types = Array.isArray(filters.type) ? filters.type : [filters.type]
@@ -624,15 +618,10 @@ export const getFilteredEvents = async (filters: EventFilters): Promise<EventLis
     const today = new Date().toISOString().split('T')[0]
     const futureDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     
-    const result = await scheduleRepo.getAllSchedulesByDateRange({
+    scheduleRecords = await scheduleRepo.getEventsByDateRange({
       startDate: today,
       endDate: futureDate,
-      limit
     })
-    
-    scheduleRecords = result.items.filter(record => 
-      record.PK?.startsWith('EVENT#')
-    )
   }
 
   // Convert to Events
@@ -698,18 +687,19 @@ export const getEventsForNewsletter = async (
   startDate: string,
   endDate: string
 ): Promise<Record<string, Event[]>> => {
-  // Use the existing newsletter optimization method
-  const groupedSchedules = await scheduleRepo.getSchedulesForNewsletter(startDate, endDate)
-  
+  const records = await scheduleRepo.getEventsByDateRange({ startDate, endDate })
+
+  // Grouped by date; within a date by ecclesia then type
   const groupedEvents: Record<string, Event[]> = {}
-  
-  // Extract events from the grouped schedules
-  Object.entries(groupedSchedules).forEach(([date, records]) => {
-    const eventRecords = records.filter(record => record.PK?.startsWith('EVENT#'))
-    if (eventRecords.length > 0) {
-      groupedEvents[date] = eventRecords.map(scheduleRecordToEvent)
-    }
-  })
+  const sorted = records.slice().sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.ecclesia || '').localeCompare(b.ecclesia || '') ||
+      (a.type || '').localeCompare(b.type || '')
+  )
+  for (const record of sorted) {
+    ;(groupedEvents[record.date] ||= []).push(scheduleRecordToEvent(record))
+  }
 
   return groupedEvents
 }

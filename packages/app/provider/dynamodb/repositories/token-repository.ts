@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { BaseRepository } from './base-repository'
+import { ENTRIES, PATTERNS } from '../access-patterns'
 import type { TokenRecord, TokenType, TokenQueryResult } from '../types'
 import {
   INITIAL_LOCKOUT,
@@ -90,8 +91,9 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
     const record: TokenRecord = {
       pkey: `PERSON#${input.personId}`,
       skey: `TOKEN#${input.tokenType}#${tokenId}`,
-      gsi4pk: `TOKEN#${tokenValue}`,
+      gsi4pk: PATTERNS.tokenByValue.pk({ tokenValue }),
       gsi4sk: `${expiresAt}#${input.tokenType}`,
+      ...(input.tokenType === 'otp' ? ENTRIES.otp({ email: input.email, createdAt: now.toISOString() }) : {}),
 
       tokenId,
       tokenValue,
@@ -137,12 +139,8 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
    * This is the primary way to verify tokens
    */
   async getByValue(tokenValue: string): Promise<TokenRecord | null> {
-    const result = await this.query(
-      'gsi4pk = :gsi4pk',
-      { ':gsi4pk': `TOKEN#${tokenValue}` },
-      { indexName: 'gsi4' }
-    )
-    return result.items[0] || null
+    const [token] = await this.queryPattern(PATTERNS.tokenByValue, { tokenValue })
+    return token || null
   }
 
   /**
@@ -403,32 +401,22 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
   }
 
   /**
-   * Find the active OTP for an email address — the NEWEST live one.
-   *
-   * MUST page through the whole table (`scanAll`). A single `scan()` page reads
-   * ~1 MB of raw items before filtering, so on a 7,500-item table the code sat
-   * on page two and a valid, unexpired OTP with 0 attempts was rejected as "No
-   * verification code found" (2026-10-13). Same bug class `scanAll` was written
-   * for; this lookup was missed.
+   * Find the active OTP for an email address — the NEWEST live one — via the
+   * sparse gsi1 `OTP#<email>` entry every OTP is written with. (This was a
+   * table scan; a one-page scan once missed a valid code on page two.)
    *
    * NEWEST, not first: an address with no PersonRecord gets a fresh random
    * personId per send-otp, so createOtp's "delete my old codes" can't find the
    * earlier ones and several can be live at once. The reader is typing the code
    * from the latest email.
-   *
-   * Follow-up: an indexed lookup so sign-in isn't a table scan.
    */
   async findActiveOtpByEmail(email: string): Promise<TokenRecord | null> {
     const now = new Date().toISOString()
     const normalizedEmail = email.toLowerCase()
 
-    const items = await this.scanAll({
-      filterExpression: 'begins_with(skey, :skPrefix) AND email = :email AND attribute_not_exists(usedAt) AND expiresAt > :now',
-      expressionAttributeValues: {
-        ':skPrefix': 'TOKEN#otp#',
-        ':email': normalizedEmail,
-        ':now': now,
-      },
+    const items = await this.queryPattern(PATTERNS.otpByEmail, { email: normalizedEmail }, {
+      filterExpression: 'attribute_not_exists(usedAt) AND expiresAt > :now',
+      expressionAttributeValues: { ':now': now },
     })
 
     if (items.length === 0) return null
@@ -630,65 +618,6 @@ export class TokenRepository extends BaseRepository<TokenRecord> {
     }
     await this.clearEmailChangeLockout(personId)
     return { valid: true, newEmail: token.newEmail }
-  }
-
-  // ===== CLEANUP OPERATIONS =====
-
-  /**
-   * Clean up expired tokens
-   * This should be run periodically via a cron job
-   * Uses scan, so should not be called frequently
-   */
-  async cleanupExpired(): Promise<number> {
-    const now = new Date().toISOString()
-    let deletedCount = 0
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(skey, :tokenPrefix) AND expiresAt < :now',
-        expressionAttributeValues: {
-          ':tokenPrefix': 'TOKEN#',
-          ':now': now,
-        },
-        lastEvaluatedKey: lastKey,
-      })
-
-      for (const token of result.items) {
-        await this.delete(token.pkey, token.skey)
-        deletedCount++
-      }
-
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return deletedCount
-  }
-
-  /**
-   * List all pending (unused, unexpired) invitations
-   * Useful for admin dashboard
-   */
-  async listPendingInvitations(): Promise<TokenRecord[]> {
-    const now = new Date().toISOString()
-    const invitations: TokenRecord[] = []
-    let lastKey: Record<string, any> | undefined
-
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(skey, :skPrefix) AND attribute_not_exists(usedAt) AND expiresAt > :now',
-        expressionAttributeValues: {
-          ':skPrefix': 'TOKEN#invitation#',
-          ':now': now,
-        },
-        lastEvaluatedKey: lastKey,
-      })
-
-      invitations.push(...result.items)
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-
-    return invitations
   }
 }
 

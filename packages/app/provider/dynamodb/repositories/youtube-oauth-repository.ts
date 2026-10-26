@@ -1,4 +1,5 @@
 import { BaseRepository } from './base-repository'
+import { ENTRIES, PATTERNS } from '../access-patterns'
 
 export interface YouTubeOAuthToken {
   pkey: string // USER#email
@@ -12,6 +13,8 @@ export interface YouTubeOAuthToken {
   channelTitle?: string // Selected YouTube channel title
   createdAt: string
   updatedAt: string
+  gsi4pk?: string // OAUTH#youtube — every stored token (listAllTokens)
+  gsi4sk?: string // USER#email
 }
 
 export class YouTubeOAuthRepository extends BaseRepository<YouTubeOAuthToken> {
@@ -64,6 +67,7 @@ export class YouTubeOAuthRepository extends BaseRepository<YouTubeOAuthToken> {
       tokenType: tokens.token_type,
       createdAt: now,
       updatedAt: now,
+      ...ENTRIES.youtubeOAuth({ pkey: this.buildPK(userEmail) }),
     }
 
     await this.put(record)
@@ -150,14 +154,9 @@ export class YouTubeOAuthRepository extends BaseRepository<YouTubeOAuthToken> {
    * Used for automated sync when no specific admin email is configured
    */
   async listAllTokens(): Promise<Array<{ userEmail: string; hasRefreshToken: boolean }>> {
-    const result = await this.scan({
-      filterExpression: 'skey = :skey',
-      expressionAttributeValues: {
-        ':skey': 'OAUTH#youtube',
-      },
-    })
+    const items = await this.queryPattern(PATTERNS.youtubeOAuthAll, undefined)
 
-    return result.items
+    return items
       .filter((item) => item.refreshToken) // Only include users with refresh tokens
       .map((item) => ({
         userEmail: item.pkey.replace('USER#', ''),

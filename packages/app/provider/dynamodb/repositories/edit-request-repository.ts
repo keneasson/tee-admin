@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import { BaseRepository } from './base-repository'
+import { ENTRIES, PATTERNS } from '../access-patterns'
 import type {
   EditRequestRecord,
   EditRequestField,
@@ -77,6 +78,7 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
       createdAt: now,
       lastUpdated: now,
       version: 0,
+      ...ENTRIES.editRequest({ approvalToken, requesterEmail, createdAt: now, requestId }),
     }
 
     await this.put(record as any)
@@ -120,24 +122,10 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
     return this.get(pk, sk)
   }
 
-  /**
-   * Get an edit request by approval token (for email-based approval).
-   *
-   * MUST scan every page. `scan()` returns ONE page, and DynamoDB reads up to
-   * 1MB of RAW items before applying the filter — so on this table a single
-   * page read 4,048 items and matched none, making a token that was valid and
-   * five days from expiry report "Invalid or expired token" to the member
-   * trying to approve their own address change.
-   */
+  /** Get an edit request by approval token (for email-based approval), via its gsi4 entry. */
   async getRequestByToken(token: string): Promise<EditRequestRecord | null> {
-    const items = await this.scanAll({
-      filterExpression: 'approvalToken = :token AND begins_with(#skey, :skPrefix)',
-      expressionAttributeValues: {
-        ':token': token,
-        ':skPrefix': 'EDIT_REQUEST#'
-      },
-      expressionAttributeNames: { '#skey': 'skey' },
-    })
+    if (!token) return null
+    const items = await this.queryPattern(PATTERNS.editRequestByToken, { token })
 
     if (items.length === 0) {
       return null
@@ -220,50 +208,9 @@ export class EditRequestRepository extends BaseRepository<EditRequestRecord> {
     )
   }
 
-  /**
-   * Get requests sent by a user (requires scanning)
-   * Use sparingly as this is less efficient
-   */
+  /** Requests sent by a user, newest first, via their gsi1 entry. */
   async getSentRequests(email: string): Promise<EditRequestRecord[]> {
-    // Paginated: a single page silently returned a PARTIAL list, so a user's
-    // own suggestions could simply not appear.
-    return (await this.scanAll({
-      filterExpression: 'requesterEmail = :email AND begins_with(#skey, :skPrefix)',
-      expressionAttributeValues: {
-        ':email': email,
-        ':skPrefix': 'EDIT_REQUEST#'
-      },
-      expressionAttributeNames: { '#skey': 'skey' },
-    })) as EditRequestRecord[]
-  }
-
-  /**
-   * Clean up expired requests (can be called periodically)
-   */
-  async cleanupExpiredRequests(): Promise<number> {
-    const now = new Date().toISOString()
-    // Paginated: a single page cleaned only whatever happened to fall in the
-    // first 1MB, leaving the rest expired-but-pending forever.
-    const expired = await this.scanAll({
-      filterExpression: 'begins_with(#skey, :skPrefix) AND #status = :pending AND tokenExpiry < :now',
-      expressionAttributeValues: {
-        ':skPrefix': 'EDIT_REQUEST#',
-        ':pending': 'pending',
-        ':now': now,
-      },
-      expressionAttributeNames: {
-        '#skey': 'skey',
-        '#status': 'status',
-      },
-    })
-
-    let cleaned = 0
-    for (const request of expired as EditRequestRecord[]) {
-      await this.updateRequestStatus(request.targetEmail, request.requestId, 'expired')
-      cleaned++
-    }
-
-    return cleaned
+    return (await this.queryPattern(PATTERNS.editRequestsByRequester, { email }, { scanIndexForward: false })) as EditRequestRecord[]
   }
 }
 

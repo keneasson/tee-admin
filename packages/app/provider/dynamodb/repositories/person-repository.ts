@@ -3,6 +3,9 @@ import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient, tableNames } from '../config'
 import { projectionWritesEnabled, refreshPersonProjections } from '../people-index/projections'
+import { batchGetItems } from '../people-index/reader'
+import { PATTERNS } from '../access-patterns'
+import type { PersonCard } from '../people-index/keys'
 import type {
   ContactVoteRecord,
   PersonRecord,
@@ -243,8 +246,8 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     // Fast path: the address is a PRIMARY (on a PROFILE item).
     const primary = await this.query(
       'gsi1pk = :gsi1pk AND gsi1sk = :gsi1sk',
-      { ':gsi1pk': `EMAIL#${lower}`, ':gsi1sk': 'PERSON' },
-      { indexName: 'gsi1' }
+      { ':gsi1pk': PATTERNS.personByEmail.pk({ email: lower }), ':gsi1sk': 'PERSON' },
+      { indexName: PATTERNS.personByEmail.index }
     )
     if (primary.items.length === 1) return primary.items[0]
     if (primary.items.length > 1) {
@@ -267,8 +270,8 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   async getAllPersonsByEmail(email: string): Promise<PersonRecord[]> {
     const result = await this.query(
       'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :prefix)',
-      { ':gsi1pk': `EMAIL#${email.toLowerCase()}`, ':prefix': 'PERSON' },
-      { indexName: 'gsi1' }
+      { ':gsi1pk': PATTERNS.personByEmail.pk({ email }), ':prefix': 'PERSON' },
+      { indexName: PATTERNS.personByEmail.index }
     )
 
     // Deduplicate: each item is either a PROFILE or an EMAIL# record.
@@ -309,7 +312,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       'gsi2pk = :gsi2pk',
       { ':gsi2pk': `ECCLESIA#${ecclesia}` },
       {
-        indexName: 'gsi2',
+        indexName: PATTERNS.personsByEcclesiaName.index,
         limit: options?.limit,
         lastEvaluatedKey: options?.lastEvaluatedKey,
         scanIndexForward: true, // Sort by lastName#firstName
@@ -326,14 +329,14 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    */
   async searchByName(lastName: string, firstName?: string): Promise<PersonQueryResult> {
     let keyCondition = 'gsi3pk = :gsi3pk'
-    const values: Record<string, any> = { ':gsi3pk': `NAME#${lastName.toLowerCase()}` }
+    const values: Record<string, any> = { ':gsi3pk': PATTERNS.personsByLastName.pk({ lastName }) }
 
     if (firstName) {
       keyCondition += ' AND begins_with(gsi3sk, :gsi3sk)'
       values[':gsi3sk'] = firstName.toLowerCase()
     }
 
-    const result = await this.query(keyCondition, values, { indexName: 'gsi3' })
+    const result = await this.query(keyCondition, values, { indexName: PATTERNS.personsByLastName.index })
     return {
       items: result.items,
       lastEvaluatedKey: result.lastEvaluatedKey,
@@ -458,8 +461,8 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   async getEmailsByEmail(email: string): Promise<PersonEmailRecord[]> {
     const result = await this.query(
       'gsi1pk = :gsi1pk AND begins_with(gsi1sk, :prefix)',
-      { ':gsi1pk': `EMAIL#${email.toLowerCase()}`, ':prefix': 'PERSON' },
-      { indexName: 'gsi1' }
+      { ':gsi1pk': PATTERNS.personByEmail.pk({ email }), ':prefix': 'PERSON' },
+      { indexName: PATTERNS.personByEmail.index }
     )
 
     // Filter to only EMAIL# records (not PROFILE records which have skey='PROFILE')
@@ -1157,9 +1160,9 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     do {
       const command = new QueryCommand({
         TableName: tableNames.admin,
-        IndexName: 'gsi2',
+        IndexName: PATTERNS.personsByEcclesiaName.index,
         KeyConditionExpression: 'gsi2pk = :gsi2pk',
-        ExpressionAttributeValues: { ':gsi2pk': `ECCLESIA#${ecclesia}` },
+        ExpressionAttributeValues: { ':gsi2pk': PATTERNS.personsByEcclesiaName.pk({ ecclesia }) },
         Select: 'COUNT',
         ExclusiveStartKey: lastKey,
       })
@@ -1173,71 +1176,33 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
   }
 
   /**
-   * List all persons (paginated)
+   * Everyone, one page at a time: a page of person CARDs (gsi4 `PEOPLE#ALL`,
+   * sorted by name), then their PROFILEs by BatchGet. Pass `lastEvaluatedKey`
+   * back to get the next page.
    */
-  /**
-   * Every phone number in the directory, as `personId -> numbers`.
-   *
-   * `PersonPhoneRecord` has no index on the number, so finding somebody by
-   * phone means a scan. This does it ONCE so a caller can build a lookup, which
-   * is what the member list does behind its 5-minute cache — rather than a scan
-   * per keystroke.
-   *
-   * Digits only in the values: people type "905-797-3415" and the stored value
-   * may be "9057973415", and a search that fails on punctuation is not a search.
-   */
-  async getAllPhonesByPerson(): Promise<Map<string, string[]>> {
-    const byPerson = new Map<string, string[]>()
-    let lastKey: Record<string, any> | undefined
-    do {
-      const result = await this.scan({
-        filterExpression: 'begins_with(pkey, :prefix) AND begins_with(skey, :skey)',
-        expressionAttributeValues: { ':prefix': 'PERSON#', ':skey': 'PHONE#' },
-        lastEvaluatedKey: lastKey,
-      })
-      for (const item of result.items as unknown as Array<{ pkey: string; number?: string }>) {
-        const personId = item.pkey?.replace('PERSON#', '')
-        const digits = (item.number || '').replace(/\D/g, '')
-        if (!personId || !digits) continue
-        const list = byPerson.get(personId) || []
-        list.push(digits)
-        byPerson.set(personId, list)
-      }
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-    return byPerson
-  }
-
   async listAll(options?: {
     limit?: number
     lastEvaluatedKey?: Record<string, any>
   }): Promise<PersonQueryResult> {
-    const result = await this.scan({
-      filterExpression: 'begins_with(pkey, :prefix) AND skey = :skey',
-      expressionAttributeValues: { ':prefix': 'PERSON#', ':skey': 'PROFILE' },
-      limit: options?.limit,
-      lastEvaluatedKey: options?.lastEvaluatedKey,
-    })
+    const page = await this.query(
+      `${PATTERNS.peopleCards.pkAttr} = :pk`,
+      { ':pk': PATTERNS.peopleCards.pk() },
+      {
+        indexName: PATTERNS.peopleCards.index,
+        limit: options?.limit,
+        lastEvaluatedKey: options?.lastEvaluatedKey,
+      }
+    )
+    const cards = page.items as unknown as PersonCard[]
     return {
-      items: result.items,
-      lastEvaluatedKey: result.lastEvaluatedKey,
+      items: await this.profilesInOrder(cards.map((c) => c.personId)),
+      lastEvaluatedKey: page.lastEvaluatedKey,
     }
   }
 
   /** Everyone currently designated Recording Brother (one per ecclesia). */
   async listRecordingBrothers(): Promise<PersonRecord[]> {
-    const all: PersonRecord[] = []
-    let lastKey: Record<string, any> | undefined
-    do {
-      const result = await this.scan({
-        filterExpression: 'skey = :skey AND isRecordingBrother = :isRB',
-        expressionAttributeValues: { ':skey': 'PROFILE', ':isRB': true },
-        lastEvaluatedKey: lastKey,
-      })
-      all.push(...result.items)
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
-    return all
+    return this.listFlagged('isRecordingBrother')
   }
 
   /**
@@ -1245,20 +1210,37 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
    * These are the contacts who receive inter-ecclesia emails for their ecclesia
    */
   async listInterEcclesiaReps(): Promise<PersonRecord[]> {
-    const allReps: PersonRecord[] = []
-    let lastKey: Record<string, any> | undefined
+    return this.listFlagged('isInterEcclesiaRep')
+  }
 
-    do {
-      const result = await this.scan({
-        filterExpression: 'skey = :skey AND isInterEcclesiaRep = :isRep',
-        expressionAttributeValues: { ':skey': 'PROFILE', ':isRep': true },
-        lastEvaluatedKey: lastKey,
-      })
-      allReps.push(...result.items)
-      lastKey = result.lastEvaluatedKey
-    } while (lastKey)
+  /** The person CARDs of everyone holding a role (e.g. the owners). */
+  async listCardsByRole(role: string): Promise<PersonCard[]> {
+    return (await this.queryPattern(PATTERNS.peopleCards, undefined, {
+      filterExpression: '#role = :role',
+      expressionAttributeNames: { '#role': 'role' },
+      expressionAttributeValues: { ':role': role },
+    })) as unknown as PersonCard[]
+  }
 
-    return allReps
+  /** People whose CARD carries a designation flag, as full PROFILEs. */
+  private async listFlagged(flag: 'isRecordingBrother' | 'isInterEcclesiaRep'): Promise<PersonRecord[]> {
+    const cards = (await this.queryPattern(PATTERNS.peopleCards, undefined, {
+      filterExpression: '#flag = :on',
+      expressionAttributeNames: { '#flag': flag },
+      expressionAttributeValues: { ':on': true },
+    })) as unknown as PersonCard[]
+    // The PROFILE is the source; the card only finds the candidates.
+    return (await this.profilesInOrder(cards.map((c) => c.personId))).filter((p) => p[flag] === true)
+  }
+
+  /** PROFILE items for these ids, in the given order (missing ones dropped). */
+  private async profilesInOrder(personIds: string[]): Promise<PersonRecord[]> {
+    if (personIds.length === 0) return []
+    const items = await batchGetItems<PersonRecord>(
+      personIds.map((id) => ({ pkey: `PERSON#${id}`, skey: 'PROFILE' }))
+    )
+    const byId = new Map(items.map((p) => [p.personId, p]))
+    return personIds.map((id) => byId.get(id)).filter((p): p is PersonRecord => !!p)
   }
 
   /**

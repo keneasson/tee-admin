@@ -25,8 +25,6 @@ export const DynamoDataLayer = {
   // Schedule operations (consolidated schedules + events)
   schedules: {
     getByEcclesiaAndDateRange: scheduleRepo.getSchedulesByEcclesiaAndDateRange.bind(scheduleRepo),
-    getAllByDateRange: scheduleRepo.getAllSchedulesByDateRange.bind(scheduleRepo),
-    getForNewsletter: scheduleRepo.getSchedulesForNewsletter.bind(scheduleRepo), // NEWSLETTER OPTIMIZATION
     getLatest: scheduleRepo.getLatestSchedules.bind(scheduleRepo),
     getByType: scheduleRepo.getSchedulesByTypeAndDateRange.bind(scheduleRepo),
     replaceSheet: scheduleRepo.replaceSheetSchedules.bind(scheduleRepo),

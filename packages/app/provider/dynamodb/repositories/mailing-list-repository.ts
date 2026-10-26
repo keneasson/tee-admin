@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { BaseRepository } from './base-repository'
+import { PATTERNS } from '../access-patterns'
 import { getContinent, isValidRegion, type Region } from '@my/app/config/regions'
 import type {
   MailingListRecord,
@@ -10,7 +11,7 @@ import type {
 } from '../types'
 
 /** gsi4 partition holding one sparse entry per list (the admin listing). */
-export const MAILING_LISTS_GSI4PK = 'MAILING_LISTS'
+export const MAILING_LISTS_GSI4PK = PATTERNS.listsAll.pk()
 
 /** The one settings item for list sends (not a list: no gsi entries). */
 export const SAFETY_NET_SETTING_KEY = { pkey: 'MAILING_LIST_SETTINGS', skey: 'SAFETY_NET' } as const
@@ -64,11 +65,11 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
   }
 
   private tenantGsi1Pk(ownerType: MailingListOwnerType, ownerId: string): string {
-    return `TENANT#${ownerType}#${ownerId}`
+    return PATTERNS.listsByTenant.pk({ ownerType, ownerId })
   }
 
   private scopeGsi2Pk(scope: MailingListScope, scopeValue: string): string {
-    return `SCOPE#${scope}#${scopeValue}`
+    return PATTERNS.listsByScope.pk({ scope, scopeValue })
   }
 
   private subSk(listId: string, emailId: string): string {
@@ -148,7 +149,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
 
   /** All lists owned by a tenant (active + archived), via GSI1. */
   async listByTenant(ownerType: MailingListOwnerType, ownerId: string): Promise<MailingListRecord[]> {
-    return this.queryAll('gsi1pk = :gsi1pk', { ':gsi1pk': this.tenantGsi1Pk(ownerType, ownerId) }, 'gsi1')
+    return this.queryAll('gsi1pk = :gsi1pk', { ':gsi1pk': this.tenantGsi1Pk(ownerType, ownerId) }, PATTERNS.listsByTenant.index)
   }
 
   /** Active lists offered at a given scope, via GSI2. */
@@ -156,14 +157,14 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     const items = await this.queryAll(
       'gsi2pk = :gsi2pk',
       { ':gsi2pk': this.scopeGsi2Pk(scope, scopeValue) },
-      'gsi2'
+      PATTERNS.listsByScope.index
     )
     return items.filter((l) => l.status === 'active')
   }
 
   /** Every list (active + archived), via the sparse gsi4 entry. No Scan. */
   async listAllLists(): Promise<MailingListRecord[]> {
-    return this.queryAll('gsi4pk = :pk', { ':pk': MAILING_LISTS_GSI4PK }, 'gsi4')
+    return this.queryAll('gsi4pk = :pk', { ':pk': MAILING_LISTS_GSI4PK }, PATTERNS.listsAll.index)
   }
 
   /** The active list an owner holds under a slug key (e.g. Toronto East's 'newsletter'), or null. */
@@ -283,7 +284,7 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     const record: ListSubscriptionRecord = {
       pkey: `PERSON#${input.personId}`,
       skey: this.subSk(input.listId, input.emailId),
-      gsi1pk: `LISTSUB#${input.listId}`,
+      gsi1pk: PATTERNS.listSubscriptions.pk({ listId: input.listId }),
       gsi1sk: email,
       listId: input.listId,
       emailId: input.emailId,
@@ -340,15 +341,19 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
   async getListSubscriptionsForEmail(listId: string, email: string): Promise<ListSubscriptionRecord[]> {
     const items = await this.queryAll(
       'gsi1pk = :gsi1pk AND gsi1sk = :email',
-      { ':gsi1pk': `LISTSUB#${listId}`, ':email': email.toLowerCase() },
-      'gsi1'
+      { ':gsi1pk': PATTERNS.listSubscriptions.pk({ listId }), ':email': email.toLowerCase() },
+      PATTERNS.listSubscriptions.index
     )
     return items as unknown as ListSubscriptionRecord[]
   }
 
   /** Every row for a list (opt_in + opt_out), via GSI1. Used by backfill idempotency. */
   async listAllSubscriptionRows(listId: string): Promise<ListSubscriptionRecord[]> {
-    const items = await this.queryAll('gsi1pk = :gsi1pk', { ':gsi1pk': `LISTSUB#${listId}` }, 'gsi1')
+    const items = await this.queryAll(
+      'gsi1pk = :gsi1pk',
+      { ':gsi1pk': PATTERNS.listSubscriptions.pk({ listId }) },
+      PATTERNS.listSubscriptions.index
+    )
     return items as unknown as ListSubscriptionRecord[]
   }
 

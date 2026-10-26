@@ -17,6 +17,7 @@
  */
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
+import { PATTERNS, patternQuery } from '../access-patterns'
 import {
   type EcclesiaSource,
   type EmailSource,
@@ -111,14 +112,7 @@ export async function resolveEcclesiaId(name: string | undefined | null): Promis
   if (!key) return slugifyEcclesia('')
   const hit = idCache.get(key)
   if (hit && hit.expires > Date.now()) return hit.id
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: TABLE,
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `ECCLESIA#${key}` },
-    })
-  )
+  const result = await docClient.send(new QueryCommand(patternQuery(PATTERNS.ecclesiaByName, { name: key })))
   const item = (result?.Items || []).find((i: any) => i.type === 'ECCLESIA') as
     | { ecclesiaId?: string; name?: string }
     | undefined

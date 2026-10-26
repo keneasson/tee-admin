@@ -460,40 +460,4 @@ describe('TokenRepository', () => {
       expect(mockSend).toHaveBeenCalledTimes(3)
     })
   })
-
-  describe('cleanupExpired', () => {
-    it('should delete all expired tokens', async () => {
-      const mockExpiredTokens = [
-        { pkey: 'PERSON#person-1', skey: 'TOKEN#email_verification#token-1' },
-        { pkey: 'PERSON#person-2', skey: 'TOKEN#password_reset#token-2' },
-      ]
-
-      mockSend
-        .mockResolvedValueOnce({ Items: mockExpiredTokens }) // scan
-        .mockResolvedValueOnce({}) // delete 1
-        .mockResolvedValueOnce({}) // delete 2
-
-      const result = await repository.cleanupExpired()
-
-      expect(result).toBe(2)
-    })
-  })
-
-  describe('listPendingInvitations', () => {
-    it('should list all pending (unused, unexpired) invitations', async () => {
-      const mockInvitations = [
-        {
-          tokenType: 'invitation',
-          expiresAt: new Date(Date.now() + 86400000).toISOString(),
-          invitedBy: 'admin-1',
-        },
-      ]
-
-      mockSend.mockResolvedValueOnce({ Items: mockInvitations })
-
-      const result = await repository.listPendingInvitations()
-
-      expect(result).toEqual(mockInvitations)
-    })
-  })
 })

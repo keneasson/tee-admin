@@ -1,4 +1,5 @@
-import { GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { PATTERNS } from './access-patterns'
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { GoogleSheetTypes, GoogleSheetData, ProgramTypeKeys } from '@my/app/types'
 import { tableNames, docClient } from './config'
@@ -123,7 +124,7 @@ export class ScheduleService {
       // Try efficient per-ecclesia query via GSI1
       let response = await this.client.send(new QueryCommand({
         TableName: tableNames.schedules,
-        IndexName: 'GSI1',
+        IndexName: PATTERNS.schedulesByEcclesia.index,
         KeyConditionExpression: 'GSI1PK = :ecclesia',
         FilterExpression: '#t = :sheetType',
         ExpressionAttributeValues: {

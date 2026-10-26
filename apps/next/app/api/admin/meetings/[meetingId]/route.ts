@@ -97,6 +97,8 @@ export async function PATCH(
       skey: _skey,
       gsi1pk: _gsi1pk,
       gsi1sk: _gsi1sk,
+      gsi4pk: _gsi4pk,
+      gsi4sk: _gsi4sk,
       createdAt: _createdAt,
       createdBy: _createdBy,
       ...updateFields

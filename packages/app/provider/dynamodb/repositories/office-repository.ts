@@ -33,6 +33,7 @@ import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
 import { batchGetItems } from '../people-index/reader'
 import { ecclesiaIdPk, foldName } from '../people-index/keys'
+import { KEYS, PATTERNS, patternQuery } from '../access-patterns'
 
 const TABLE = tableNames.admin
 export const OFFICE_SK_PREFIX = 'OFFICE#'
@@ -209,11 +210,11 @@ export function withOfficeIndexes(office: Omit<OfficeRecord, 'gsi1pk' | 'gsi1sk'
   const sk = `${OFFICE_SK_PREFIX}${office.ecclesiaId}#${office.role}`
   const out: OfficeRecord = { ...office }
   if (office.holderPersonId) {
-    out.gsi1pk = `OFFICEHOLDER#${office.holderPersonId}`
+    out.gsi1pk = KEYS.officeHolder(office.holderPersonId)
     out.gsi1sk = sk
   }
   if (office.email) {
-    out.gsi3pk = `OFFICEMAIL#${office.email}`
+    out.gsi3pk = KEYS.officeMail(office.email)
     out.gsi3sk = sk
   }
   return out
@@ -337,38 +338,20 @@ export class OfficeRepository {
 
   /** Pattern 8: every office of an ecclesia. */
   async listOffices(ecclesiaId: string): Promise<OfficeRecord[]> {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: TABLE,
-        KeyConditionExpression: 'pkey = :pk AND begins_with(skey, :sk)',
-        ExpressionAttributeValues: { ':pk': ecclesiaIdPk(ecclesiaId), ':sk': OFFICE_SK_PREFIX },
-      })
-    )
+    const result = await docClient.send(new QueryCommand(patternQuery(PATTERNS.officesOfEcclesia, { ecclesiaId })))
     return (result?.Items || []) as OfficeRecord[]
   }
 
   /** Pattern 11: the offices a person holds now (sign-in RB check, permissions). */
   async listOfficesHeldBy(personId: string): Promise<OfficeRecord[]> {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'gsi1',
-        KeyConditionExpression: 'gsi1pk = :pk',
-        ExpressionAttributeValues: { ':pk': `OFFICEHOLDER#${personId}` },
-      })
-    )
+    const result = await docClient.send(new QueryCommand(patternQuery(PATTERNS.officesHeldByPerson, { personId })))
     return (result?.Items || []) as OfficeRecord[]
   }
 
   /** An office inbox → its office(s). Lets a role address reach its holder without a nameless person. */
   async findOfficesByEmail(email: string): Promise<OfficeRecord[]> {
     const result = await docClient.send(
-      new QueryCommand({
-        TableName: TABLE,
-        IndexName: 'gsi3',
-        KeyConditionExpression: 'gsi3pk = :pk',
-        ExpressionAttributeValues: { ':pk': `OFFICEMAIL#${email.trim().toLowerCase()}` },
-      })
+      new QueryCommand(patternQuery(PATTERNS.officesByEmail, { email: email.trim().toLowerCase() }))
     )
     return (result?.Items || []) as OfficeRecord[]
   }

@@ -2,6 +2,7 @@ import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { getAwsDbConfig } from '../email/sesClient'
 import type { OrganizationRecord, OrganizationType } from '@my/app/provider/dynamodb/types'
+import { ENTRIES, PATTERNS, patternQuery } from '@my/app/provider/dynamodb/access-patterns'
 
 const dbClientConfig = getAwsDbConfig()
 const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
@@ -83,8 +84,9 @@ export async function createOrganization(data: {
     Item: {
       pkey: `ORGANIZATION#${data.country}|${data.province}`,
       skey: `${data.city}#${data.name}`,
-      gsi1pk: `ORGANIZATION#${data.name}`,
+      gsi1pk: PATTERNS.organizationByName.pk({ name: data.name }),
       gsi1sk: `${data.country}|${data.province}|${data.city}`,
+      ...ENTRIES.organization(data),
       ...org,
     },
     ConditionExpression: 'attribute_not_exists(gsi1pk)',
@@ -97,12 +99,7 @@ export async function createOrganization(data: {
 export async function getOrganizationByName(name: string): Promise<OrganizationData | null> {
   try {
     const result = await client.query({
-      TableName: TABLE_NAME,
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `ORGANIZATION#${name}`,
-      },
+      ...patternQuery(PATTERNS.organizationByName, { name }),
       Limit: 1,
     })
 
@@ -133,17 +130,18 @@ export async function getAllOrganizations(): Promise<OrganizationData[]> {
   }
 
   try {
-    const result = await client.scan({
-      TableName: TABLE_NAME,
-      IndexName: 'gsi1',
-      FilterExpression: 'begins_with(gsi1pk, :prefix)',
-      ExpressionAttributeValues: {
-        ':prefix': 'ORGANIZATION#',
-      },
-    })
+    const items: Record<string, any>[] = []
+    let lastKey: Record<string, any> | undefined
+    do {
+      const page = await client.query({
+        ...patternQuery(PATTERNS.organizationsAll, undefined),
+        ExclusiveStartKey: lastKey,
+      })
+      items.push(...(page.Items || []))
+      lastKey = page.LastEvaluatedKey
+    } while (lastKey)
 
-    const orgs = (result.Items || []).map(mapItemToOrganization)
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const orgs = items.map(mapItemToOrganization).sort((a, b) => a.name.localeCompare(b.name))
 
     orgCacheData = orgs
     orgCacheExpiry = now + ORG_CACHE_TTL_MS

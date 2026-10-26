@@ -33,9 +33,6 @@ export const nextAuthDynamoDb = {
   tableName: 'tee-admin',
   partitionKey: 'pkey',
   sortKey: 'skey',
-  indexName: 'gsi1',
-  indexPartitionKey: 'gsi1pk',
-  indexSortKey: 'gsi1sk',
 }
 
 const dbClientConfig = getAwsDbConfig()

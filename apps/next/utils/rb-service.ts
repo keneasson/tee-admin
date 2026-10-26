@@ -6,6 +6,7 @@ import {
   OFFICE_ROLES,
 } from '@my/app/provider/dynamodb/repositories/office-repository'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
+import { PATTERNS } from '@my/app/provider/dynamodb/access-patterns'
 import { invalidatePeopleCache } from '../app/api/people/cache'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 
@@ -127,14 +128,9 @@ async function ecclesiaIdFor(ecclesiaName: string): Promise<string> {
 async function findCurrentRB(ecclesiaName: string): Promise<PersonRecord | null> {
   const office = await officeRepository.getOffice(await ecclesiaIdFor(ecclesiaName), OFFICE_ROLES.RECORDING_BROTHER)
   if (office) return office.holderPersonId ? personRepository.getById(office.holderPersonId) : null
-  const result = await personRepository.scan({
-    filterExpression: 'isRecordingBrother = :isRB AND ecclesia = :ecclesia AND skey = :profile',
-    expressionAttributeValues: {
-      ':isRB': true,
-      ':ecclesia': ecclesiaName,
-      ':profile': 'PROFILE',
-    },
+  const people = await personRepository.queryPattern(PATTERNS.personsByEcclesiaName, { ecclesia: ecclesiaName }, {
+    filterExpression: 'isRecordingBrother = :isRB AND skey = :profile',
+    expressionAttributeValues: { ':isRB': true, ':profile': 'PROFILE' },
   })
-
-  return result.items[0] || null
+  return people[0] || null
 }

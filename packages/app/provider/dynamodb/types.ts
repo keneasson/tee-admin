@@ -701,6 +701,8 @@ export interface TokenRecord extends BaseRecord {
   skey: string           // TOKEN#{tokenType}#{tokenId}
   gsi4pk: string         // TOKEN#{tokenValue} - for O(1) token lookup
   gsi4sk: string         // {expiresAt}#{tokenType} - for expiry queries
+  gsi1pk?: string        // OTP only: OTP#{email} - newest live code by address
+  gsi1sk?: string        // OTP only: {createdAt}
 
   tokenId: string        // UUID
   tokenValue: string     // The actual token string (for verification)

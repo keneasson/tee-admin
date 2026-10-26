@@ -1,5 +1,6 @@
 import { CreateTableCommand, CreateTableInput } from '@aws-sdk/client-dynamodb'
 import { dynamoClient, tableNames } from './config'
+import { PATTERNS } from './access-patterns'
 
 // Common table configuration
 const commonTableConfig = {
@@ -31,7 +32,7 @@ export const schedulesTableDef: CreateTableInput = {
   ],
   GlobalSecondaryIndexes: [
     {
-      IndexName: 'GSI1', // Primary access pattern: Ecclesia + Date Range
+      IndexName: PATTERNS.schedulesByEcclesia.index, // Primary access pattern: Ecclesia + Date Range
       KeySchema: [
         { AttributeName: 'GSI1PK', KeyType: 'HASH' }, // ECCLESIA#{ecclesia}
         { AttributeName: 'GSI1SK', KeyType: 'RANGE' }, // {date}#{type}#{time}
@@ -39,7 +40,7 @@ export const schedulesTableDef: CreateTableInput = {
       Projection: { ProjectionType: 'ALL' },
     },
     {
-      IndexName: 'GSI2', // Secondary access pattern: Type + Date Range OR Date + Type
+      IndexName: PATTERNS.schedulesByTypeGsi2.index, // Secondary access pattern: Type + Date Range OR Date + Type
       KeySchema: [
         { AttributeName: 'GSI2PK', KeyType: 'HASH' }, // TYPE#{type} OR DATE#{date}
         { AttributeName: 'GSI2SK', KeyType: 'RANGE' }, // {date}#{time} OR {type}
@@ -84,7 +85,7 @@ export const sendQueueTableDef: CreateTableInput = {
   ],
   GlobalSecondaryIndexes: [
     {
-      IndexName: 'StatusIndex', // For efficient queue status queries
+      IndexName: PATTERNS.sendQueueByStatus.index, // For efficient queue status queries
       KeySchema: [
         { AttributeName: 'GSI1PK', KeyType: 'HASH' }, // {status} (ready/complete/failed)
         { AttributeName: 'GSI1SK', KeyType: 'RANGE' }, // {YYYY-MM-DD}#{HH:MM}
