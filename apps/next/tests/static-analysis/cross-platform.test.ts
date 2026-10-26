@@ -113,7 +113,6 @@ describe('Cross-Platform Import Rules', () => {
     //        with-navigation.tsx, feature-gated-navigation.tsx
     const knownViolations = new Set([
       'packages/app/features/email-sender/index.tsx',
-      'packages/app/features/email-tester/index.tsx',
       'packages/app/features/enhanced-with-navigation.tsx',
       'packages/app/features/feature-flags/use-feature-flag-wrapper.tsx',
       'packages/app/features/profile/index.tsx',
