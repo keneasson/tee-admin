@@ -394,6 +394,11 @@ export default function DirectoryEcclesiaDetailPage() {
         members={members}
         membersLoading={membersLoading}
         onMemberClick={(id) => router.push(`/people/${id}`)}
+        onAddMember={(name) =>
+          router.push(
+            `/directory/people/add?${new URLSearchParams({ ecclesia: ecclesiaName, ...(name ? { name } : {}) })}`
+          )
+        }
         nominations={nominations}
         authProps={authProps}
         ecclesiaMembers={ecclesiaMembers}

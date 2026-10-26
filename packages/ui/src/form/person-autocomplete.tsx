@@ -1,4 +1,4 @@
-import { Search, X } from '@tamagui/lucide-icons'
+import { Search, UserPlus, X } from '@tamagui/lucide-icons'
 import { useRef, useState, useMemo } from 'react'
 import { Input, Label, Text, XStack, YStack, Spinner } from 'tamagui'
 import { Button } from '../Button'
@@ -21,6 +21,8 @@ interface PersonAutocompleteProps {
   size?: '$3' | '$4'
   /** When true, fetches all emails per member and shows each as a selectable option */
   showAllEmails?: boolean
+  /** Offered when the typed name matches no one: add them to this ecclesia */
+  onAddNew?: (typedName: string) => void
 }
 
 // Cache member lists per ecclesia to avoid refetching
@@ -37,6 +39,7 @@ export function PersonAutocomplete({
   disabled = false,
   size = '$4',
   showAllEmails = false,
+  onAddNew,
 }: PersonAutocompleteProps) {
   const [members, setMembers] = useState<PersonSuggestion[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -260,6 +263,17 @@ export function PersonAutocomplete({
           </YStack>
         ) : null}
       </YStack>
+
+      {onAddNew && hasFetched && !isLoading && value.trim().length >= 2 && filtered.length === 0 ? (
+        <Button size="$2" icon={UserPlus} alignSelf="flex-start" onPress={() => {
+            // The person added will be searched for next: don't serve the old list.
+            memberCache.delete(ecclesia.toLowerCase())
+            memberEmailCache.delete(`${ecclesia.toLowerCase()}:emails`)
+            onAddNew(value.trim())
+          }}>
+          {`No one named "${value.trim()}" here. Add them to ${ecclesia}`}
+        </Button>
+      ) : null}
     </YStack>
   )
 }

@@ -1,6 +1,6 @@
 import { YStack, XStack, Text, Card, Heading, View, ScrollView, Spinner, Separator } from 'tamagui'
 import { Button } from '../Button'
-import { Church, ArrowLeft, Trash } from '@tamagui/lucide-icons'
+import { Church, ArrowLeft, Trash, UserPlus } from '@tamagui/lucide-icons'
 import { brandColors } from '../branding/brand-colors'
 import { EcclesiaDetailView } from '../ecclesia/ecclesia-detail-view'
 import type { EcclesiaDetailData } from '../ecclesia/ecclesia-detail-view'
@@ -29,6 +29,8 @@ interface EcclesiaDetailProps {
   members: DirectoryMember[]
   membersLoading?: boolean
   onMemberClick: (id: string) => void
+  /** Opens the add-member form for this ecclesia (with a typed name, if any); omitted, no button */
+  onAddMember?: (name?: string) => void
   /** RB nomination data */
   nominations: Nomination[]
   authProps: DirectoryAuthProps
@@ -59,6 +61,7 @@ export function EcclesiaDetail({
   members,
   membersLoading = false,
   onMemberClick,
+  onAddMember,
   nominations,
   authProps,
   ecclesiaMembers = [],
@@ -105,6 +108,7 @@ export function EcclesiaDetail({
         {/* Recording Brother Manager (replaces the simple RB card in EcclesiaDetailView) */}
         <RecordingBrotherManager
           ecclesiaName={ecclesia.name}
+          onAddMember={onAddMember}
           recordingBrother={ecclesia.recordingBrother}
           offices={ecclesia.offices}
           nominations={nominations}
@@ -124,6 +128,11 @@ export function EcclesiaDetail({
               <Church size={16} color="$blue10" />
               <Text fontSize="$5" fontWeight="600">Members</Text>
               <Text fontSize="$3" theme="alt2">({members.length})</Text>
+              {onAddMember ? (
+                <Button size="$2" icon={UserPlus} marginLeft="auto" onPress={() => onAddMember()}>
+                  Add member
+                </Button>
+              ) : null}
             </XStack>
 
             {membersLoading ? (

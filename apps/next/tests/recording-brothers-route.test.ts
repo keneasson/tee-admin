@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   getByEmail: vi.fn(),
   listByEcclesia: vi.fn(),
   create: vi.fn(),
+  updatePerson: vi.fn(),
   getEcclesiaByName: vi.fn(),
   setRecordingBrother: vi.fn(),
   listOfficeViews: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
     getByEmail: h.getByEmail,
     listByEcclesia: h.listByEcclesia,
     create: h.create,
+    updatePerson: h.updatePerson,
     listInterEcclesiaReps: vi.fn(async () => []),
     listRecordingBrothers: vi.fn(async () => []),
   },
@@ -148,6 +150,33 @@ describe('/api/admin/recording-brothers', () => {
       mailTo: 'own',
     })
     expect(res.status).toBe(409)
+    expect(h.create).not.toHaveBeenCalled()
+  })
+
+  it('names the nameless record when its address is typed as the new person\'s email', async () => {
+    as('owner')
+    h.getByEmail.mockResolvedValue(MAILBOX)
+    const res = await post({
+      ecclesiaName: 'Alpha',
+      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'AlphaMailbox@example.org' },
+      mailTo: 'own',
+    })
+    expect(res.status).toBe(200)
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.updatePerson).toHaveBeenCalledWith('mb', { firstName: 'Rob', lastName: 'Huc' })
+    expect(h.setRecordingBrother).toHaveBeenCalledWith(expect.objectContaining({ newPersonId: 'mb' }))
+  })
+
+  it("won't name a nameless record at another ecclesia", async () => {
+    as('owner')
+    h.getByEmail.mockResolvedValue({ ...MAILBOX, ecclesia: 'Beta' })
+    const res = await post({
+      ecclesiaName: 'Alpha',
+      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'alphamailbox@example.org' },
+      mailTo: 'own',
+    })
+    expect(res.status).toBe(409)
+    expect(h.updatePerson).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
   })
 })

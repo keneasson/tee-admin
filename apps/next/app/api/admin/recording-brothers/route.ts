@@ -150,26 +150,31 @@ export async function POST(request: NextRequest) {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
     }
-    if (email) {
-      const holder = await personRepository.getByEmail(email)
-      if (holder) {
-        return NextResponse.json(
-          { error: `${email} is already on ${holder.displayName || 'another person'}'s record` },
-          { status: 409 }
-        )
-      }
+    const holder = email ? await personRepository.getByEmail(email) : null
+    if (holder && !(personName(holder) === '' && holder.ecclesia === ecclesiaName)) {
+      return NextResponse.json(
+        { error: `${email} is already on ${personName(holder) || 'another record'}'s record` },
+        { status: 409 }
+      )
     }
-    const created = await personRepository.create({
-      firstName,
-      lastName,
-      email,
-      allowNoEmail: true,
-      ecclesia: ecclesiaName,
-      memberStatus: 'member',
-      role: 'member',
-    })
+    if (holder) {
+      // The address is on file here with no name: typing it as this person's
+      // own email says whose it is. Name that record instead of adding a twin.
+      await personRepository.updatePerson(holder.personId, { firstName, lastName })
+      rbId = holder.personId
+    } else {
+      const created = await personRepository.create({
+        firstName,
+        lastName,
+        email,
+        allowNoEmail: true,
+        ecclesia: ecclesiaName,
+        memberStatus: 'member',
+        role: 'member',
+      })
+      rbId = created.personId
+    }
     invalidatePeopleCache()
-    rbId = created.personId
   }
 
   await setRecordingBrother({
