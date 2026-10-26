@@ -32,6 +32,9 @@ export default auth((req: NextAuthRequest) => {
   if (tenant) {
     forwardedHeaders.set('x-tenant-id', tenant.id)
   }
+  // The admin page guards (utils/admin-page-guard.ts) run in a layout, which
+  // can't see the URL; this lets them send a signed-out visitor back here.
+  forwardedHeaders.set('x-pathname', `${pathname}${req.nextUrl.search}`)
   const passthrough = () => NextResponse.next({ request: { headers: forwardedHeaders } })
 
   // Email-link recognition (#252): `?rt=` is a per-recipient token our bulk send
