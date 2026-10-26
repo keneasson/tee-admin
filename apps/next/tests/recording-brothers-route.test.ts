@@ -131,12 +131,12 @@ describe('/api/admin/recording-brothers', () => {
     as('owner')
     const res = await post({
       ecclesiaName: 'Alpha',
-      newPerson: { firstName: 'Peter', lastName: 'Biswas' },
+      newPerson: { firstName: 'Peter', lastName: 'Nofile' },
       mailTo: 'own',
     })
     expect(res.status).toBe(200)
     expect(h.create).toHaveBeenCalledWith(
-      expect.objectContaining({ firstName: 'Peter', lastName: 'Biswas', email: undefined, allowNoEmail: true, ecclesia: 'Alpha' })
+      expect.objectContaining({ firstName: 'Peter', lastName: 'Nofile', email: undefined, allowNoEmail: true, ecclesia: 'Alpha' })
     )
     expect(h.setRecordingBrother).toHaveBeenCalledWith(expect.objectContaining({ newPersonId: 'new1' }))
   })
@@ -158,12 +158,12 @@ describe('/api/admin/recording-brothers', () => {
     h.getByEmail.mockResolvedValue(MAILBOX)
     const res = await post({
       ecclesiaName: 'Alpha',
-      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'AlphaMailbox@example.org' },
+      newPerson: { firstName: 'Rob', lastName: 'Holder', email: 'AlphaMailbox@example.org' },
       mailTo: 'own',
     })
     expect(res.status).toBe(200)
     expect(h.create).not.toHaveBeenCalled()
-    expect(h.updatePerson).toHaveBeenCalledWith('mb', { firstName: 'Rob', lastName: 'Huc' })
+    expect(h.updatePerson).toHaveBeenCalledWith('mb', { firstName: 'Rob', lastName: 'Holder' })
     expect(h.setRecordingBrother).toHaveBeenCalledWith(expect.objectContaining({ newPersonId: 'mb' }))
   })
 
@@ -172,7 +172,7 @@ describe('/api/admin/recording-brothers', () => {
     h.getByEmail.mockResolvedValue({ ...MAILBOX, ecclesia: 'Beta' })
     const res = await post({
       ecclesiaName: 'Alpha',
-      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'alphamailbox@example.org' },
+      newPerson: { firstName: 'Rob', lastName: 'Holder', email: 'alphamailbox@example.org' },
       mailTo: 'own',
     })
     expect(res.status).toBe(409)

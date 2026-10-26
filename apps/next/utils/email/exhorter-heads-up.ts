@@ -50,7 +50,7 @@ const SENDER_LOCAL_PART = 'communications'
 // Reply-To = the HOST ecclesia's Recording Brother, so the exhorter's replies
 // reach whoever is coordinating that meeting. Resolved per-ecclesia from its
 // Recording Brother OFFICE (`recordingBrotherOf`); this constant is only the
-// fallback when the office has no address. teerecbro@gmail.com is fine as a Reply-To (no
+// fallback when the office has no address. A role mailbox is fine as a Reply-To (no
 // domain verification needed).
 const REPLY_TO = 'teerecbro@gmail.com'
 

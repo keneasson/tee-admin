@@ -43,11 +43,11 @@ const postWithPerson = (block: PersonBlock): Post =>
 
 describe('person → Contact List linkage', () => {
   it('keeps the directory id when picked from the Contact List', () => {
-    const person = suggestionToPerson({ id: 'uuid-123', name: 'Gordon Easson' })
+    const person = suggestionToPerson({ id: 'uuid-123', name: 'Benjamin Example' })
     expect(person.personId).toBe('uuid-123')
     // still a snapshot
-    expect(person.firstName).toBe('Gordon')
-    expect(person.lastName).toBe('Easson')
+    expect(person.firstName).toBe('Benjamin')
+    expect(person.lastName).toBe('Example')
   })
 
   it('a free-typed name has no linkage — a visiting speaker is not in the directory', () => {
@@ -59,7 +59,7 @@ describe('person → Contact List linkage', () => {
       id: 'b1',
       kind: 'person',
       role: 'speaker',
-      people: [{ id: 'x', personId: 'uuid-123', firstName: 'Gordon', lastName: 'Easson' }],
+      people: [{ id: 'x', personId: 'uuid-123', firstName: 'Benjamin', lastName: 'Example' }],
     }
     const forAnon = redactPost(postWithPerson(block), anon)!
     const anonPerson = (forAnon.blocks[0] as PersonBlock).people[0]

@@ -175,17 +175,17 @@ describe('POST /api/admin/people/[personId]/email-change', () => {
 
 // #190: the member page's pencil — correct an address in one step.
 describe('correction mode { correctEmailId, newEmail }', () => {
-  const TYPO = 'jaredandrews1921@gmail.com'
-  const RIGHT = 'jaredandrews1971@gmail.com'
+  const TYPO = 'member3@gmail.com'
+  const RIGHT = 'member2@gmail.com'
   beforeEach(() => {
     h.p_getById.mockResolvedValue({ personId: PID, primaryEmail: TYPO, ecclesia: 'Cambridge Ecclesia' })
     h.p_changePrimaryEmail.mockResolvedValue({ newEmailId: 'n', oldEmail: TYPO })
     h.moveListSubscriptions.mockResolvedValue({ movedLists: [] })
   })
 
-  it('CONTACT-EDIT-04 / CONTACT-EDIT-05: sign-in row (the Jared case): moves login, REMOVES the typo, never emails it', async () => {
+  it('CONTACT-EDIT-04 / CONTACT-EDIT-05: sign-in row (the typo case): moves login, REMOVES the typo, never emails it', async () => {
     h.p_getEmails.mockResolvedValue([{ emailId: 'e1', email: TYPO, emailType: 'primary', verified: true }])
-    const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: ' JaredAndrews1971@gmail.com ' }), { params })
+    const res = await POST(makeReq({ correctEmailId: 'e1', newEmail: ' Member2@gmail.com ' }), { params })
     expect(res.status).toBe(200)
     expect(h.p_changePrimaryEmail).toHaveBeenCalledWith(PID, RIGHT, { replace: true })
     expect(h.notifyLoginEmailChanged).not.toHaveBeenCalled()

@@ -15,7 +15,7 @@ import {
   type LocationLike,
 } from '@my/app/utils/viewer-pii'
 
-const peter = { firstName: 'Peter', lastName: 'Skariah', ecclesia: 'Toronto East' }
+const peter = { firstName: 'Peter', lastName: 'Stub', ecclesia: 'Toronto East' }
 const viewer = (assurance: Assurance, role: Role, tenant: string | null = 'Toronto East'): Viewer => ({
   assurance,
   role,
@@ -88,15 +88,15 @@ describe('renderName / shapePersonName — server-side redaction', () => {
     expect(shapePersonName(peter, ANONYMOUS_VIEWER)).toEqual({ firstName: 'Peter' })
   })
   it('full name for a recognized (email-link) reader (#252)', () => {
-    expect(renderName(peter, viewer('recognized', 'member'))).toBe('Peter Skariah')
+    expect(renderName(peter, viewer('recognized', 'member'))).toBe('Peter Stub')
   })
   it('NEVER carries lastName in a redacted shape (no ship-then-hide)', () => {
     expect(shapePersonName(peter, ANONYMOUS_VIEWER)).not.toHaveProperty('lastName')
   })
   it('full name for an authenticated member', () => {
     const v = viewer('authenticated', 'member')
-    expect(renderName(peter, v)).toBe('Peter Skariah')
-    expect(shapePersonName(peter, v)).toEqual({ firstName: 'Peter', lastName: 'Skariah' })
+    expect(renderName(peter, v)).toBe('Peter Stub')
+    expect(shapePersonName(peter, v)).toEqual({ firstName: 'Peter', lastName: 'Stub' })
   })
   it('two Peters stay indistinguishable in the public view (no initial)', () => {
     const peter2 = { firstName: 'Peter', lastName: 'Thomas' }
@@ -122,8 +122,8 @@ describe('canRevealPii — channel-aware (design §8.2)', () => {
 describe('name/bio via the newsletter-email channel show full', () => {
   it('full name in the newsletter even for a recognized recipient', () => {
     const v = viewer('recognized', 'member')
-    expect(renderName(peter, v, 'newsletter-email')).toBe('Peter Skariah')
-    expect(shapePersonName(peter, v, 'newsletter-email')).toEqual({ firstName: 'Peter', lastName: 'Skariah' })
+    expect(renderName(peter, v, 'newsletter-email')).toBe('Peter Stub')
+    expect(shapePersonName(peter, v, 'newsletter-email')).toEqual({ firstName: 'Peter', lastName: 'Stub' })
   })
   it('bio shown in newsletter, hidden on public web for anon only', () => {
     const v = viewer('recognized', 'member')

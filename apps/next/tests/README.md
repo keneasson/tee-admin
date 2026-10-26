@@ -110,7 +110,7 @@ yarn test:e2e:ui
 ## Test Data
 
 The tests use the following test data:
-- **Test Email**: `ken.easson@gmail.com` (existing user)
+- **Test Email**: `owner@example.org` (existing user)
 - **Test Passwords**: Various valid/invalid password combinations
 - **Mock Tokens**: 64-character hex strings for testing
 

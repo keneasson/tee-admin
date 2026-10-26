@@ -23,7 +23,7 @@ vi.mock('@aws-sdk/client-dynamodb', () => ({ DynamoDBClient: vi.fn() }))
 
 import { TokenRepository } from '@my/app/provider/dynamodb/repositories/token-repository'
 
-const EMAIL = 'ken.easson+hacker@gmail.com'
+const EMAIL = 'owner+hacker@example.org'
 const otp = (id: string, createdAt: string) => ({
   pkey: `PERSON#${id}`,
   skey: `TOKEN#otp#${id}`,

@@ -44,7 +44,7 @@ beforeEach(() => {
   h.getEmailContent.mockResolvedValue(['<html>news</html>', 'news text'])
   h.buildEmailEnvelope.mockReturnValue({
     from: '"Toronto East" <communications@tee-admin.com>',
-    replyTo: 'teerecbro@gmail.com',
+    replyTo: 'recbro@example.org',
     subject: 'Toronto East Christadelphians Newsletter 2026-07-30',
   })
   h.sendEmail.mockResolvedValue(undefined)
@@ -98,7 +98,7 @@ describe('POST /api/email/send-one — guards', () => {
 describe('POST /api/email/send-one — sends', () => {
   it('sends 1:1 with the canonical envelope and does NOT clear the pending note', async () => {
     const res = await POST(
-      req({ reason: 'newsletter', to: 'Donna@Example.com', recipientName: 'Donna Webb', permission: true })
+      req({ reason: 'newsletter', to: 'Donna@Example.com', recipientName: 'Donna Recipient', permission: true })
     )
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -109,7 +109,7 @@ describe('POST /api/email/send-one — sends', () => {
     const arg = h.sendEmail.mock.calls[0][0]
     expect(arg.to).toBe('donna@example.com')
     expect(arg.from).toContain('communications@tee-admin.com') // canonical sender, not noreply@
-    expect(arg.replyTo).toBe('teerecbro@gmail.com')
+    expect(arg.replyTo).toBe('recbro@example.org')
     expect(arg.subject).toContain('Newsletter')
     expect(arg.body).toContain('news')
 

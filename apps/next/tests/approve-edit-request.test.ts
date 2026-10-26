@@ -31,7 +31,7 @@ vi.mock('../utils/apply-approved-edit', () => ({ applyApprovedEdit: h.applyAppro
 
 const REQUEST = {
   requestId: 'req-1',
-  targetEmail: 'bgrosewood@gmail.com',
+  targetEmail: 'member1@gmail.com',
   field: 'address',
   suggestedValue: '12 New Rd, Peterborough, ON K9H 1A1',
   status: 'pending',

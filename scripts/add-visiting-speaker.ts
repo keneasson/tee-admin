@@ -23,8 +23,8 @@
  *   AWS creds first:  eval "$(aws configure export-credentials --format env)"
  *
  *   npx tsx scripts/add-visiting-speaker.ts \
- *     --name "Tom Briggs" --ecclesia "Barrie Ecclesia" \
- *     --email briggstom64@gmail.com [--phone 705-555-0134] [--apply]
+ *     --name "Tom Sketch" --ecclesia "Barrie Ecclesia" \
+ *     --email member5@gmail.com [--phone 705-555-0134] [--apply]
  *
  * Idempotent: a name that already resolves is reported as skipped, not
  * duplicated. Safe to re-run.
@@ -43,7 +43,7 @@ const phone = arg('--phone')
 const apply = process.argv.includes('--apply')
 
 if (!name || !ecclesia) {
-  console.error('Usage: --name "Tom Briggs" --ecclesia "Barrie Ecclesia" [--email x@y.z] [--phone …] [--apply]')
+  console.error('Usage: --name "Tom Sketch" --ecclesia "Barrie Ecclesia" [--email x@y.z] [--phone …] [--apply]')
   console.error('\n--ecclesia is REQUIRED and must not be blank: it is part of the record key.')
   process.exit(1)
 }

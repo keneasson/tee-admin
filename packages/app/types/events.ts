@@ -284,7 +284,7 @@ export interface Event extends BaseEvent {
 
   // Engagement fields
   engagementDate?: Date
-  engagementProposed?: string // Free-form name text (e.g., "Brother Gord Easson")
+  engagementProposed?: string // Free-form name text (e.g., "Brother Ben Example")
   engagementTo?: string // Free-form name text
   engagementAnnouncement?: string // The announcement blurb
   engagementPhoto?: {

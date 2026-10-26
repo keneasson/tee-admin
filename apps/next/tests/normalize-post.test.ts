@@ -66,7 +66,7 @@ describe('normalizePost — repairs convertEmptyValues damage', () => {
       id: 'p1',
       kind: 'person',
       role: 'speaker',
-      people: [{ id: 'x', firstName: null, lastName: 'Easson' }],
+      people: [{ id: 'x', firstName: null, lastName: 'Example' }],
     } as unknown as TextBlock
     const [block] = normalizePost(postWith([person])).blocks
     const people = (block as unknown as { people: Array<{ firstName: string }> }).people

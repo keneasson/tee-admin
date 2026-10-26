@@ -29,7 +29,7 @@ const person: PersonBlock = {
   kind: 'person',
   role: 'contact',
   visibility: 'members', // members-only: anon must not see this name
-  people: [{ id: 'x', firstName: 'Gordon', lastName: 'Easson' }],
+  people: [{ id: 'x', firstName: 'Benjamin', lastName: 'Example' }],
 }
 
 const postWith = (body: string, blocks: Post['blocks']): Post =>
@@ -107,7 +107,7 @@ describe('redaction — a dropped block takes its marker with it', () => {
     const post = postWith(`Contact ${markerFor(person)} for details.`, [person])
     const html = await render(<PostEmailView post={redactPost(post, anon)!} />)
 
-    expect(html).not.toContain('Easson')
+    expect(html).not.toContain('Example')
     expect(html).not.toContain('{{')
   })
 })

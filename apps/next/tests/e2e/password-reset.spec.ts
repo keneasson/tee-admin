@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 // Test data
-const TEST_EMAIL = 'ken.easson@gmail.com' // Using existing test user
+const TEST_EMAIL = 'owner@example.org' // Using existing test user
 const NEW_PASSWORD = 'NewTestPassword123!'
 const INVALID_PASSWORD = '123' // Too short
 const BASE_URL = 'http://localhost:3000'

@@ -12,7 +12,7 @@ const dbClientConfig = {
 };
 
 const tableName = process.env.DYNAMODB_TABLE_NAME || 'tee-admin';
-const email = process.env.TARGET_EMAIL || 'ken.easson@gmail.com';
+const email = process.env.TARGET_EMAIL || 'owner@example.org';
 
 async function fixKenRole() {
   const dbClient = new DynamoDBClient(dbClientConfig);

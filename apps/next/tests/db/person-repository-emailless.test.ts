@@ -42,7 +42,7 @@ describe('PersonRepository.create — emailless visitor path (issue #109)', () =
   it('creates a visitor with NO email: no EMAIL# item, NOEMAIL# GSI1 sentinel', async () => {
     const record = await repository.create({
       firstName: 'Alan',
-      lastName: 'Markwith',
+      lastName: 'Mockup',
       ecclesia: 'Greenaway Hamilton',
       memberStatus: 'visitor',
       role: 'guest',
@@ -80,7 +80,7 @@ describe('PersonRepository.create — emailless visitor path (issue #109)', () =
     await expect(
       repository.create({
         firstName: 'Alan',
-        lastName: 'Markwith',
+        lastName: 'Mockup',
         ecclesia: 'Greenaway Hamilton',
         memberStatus: 'member',
       })

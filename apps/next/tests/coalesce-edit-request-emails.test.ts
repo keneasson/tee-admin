@@ -44,7 +44,7 @@ const post = (field: string) =>
   new Request('http://x/api/edit-requests', {
     method: 'POST',
     body: JSON.stringify({
-      targetEmail: 'bgrosewood@gmail.com',
+      targetEmail: 'member1@gmail.com',
       field,
       suggestedValue: 'new value',
       currentValue: 'old value',
@@ -56,7 +56,7 @@ beforeEach(() => {
   h.auth.mockResolvedValue({ user: { email: 'admin@x.z', name: 'Ken' } })
   h.render.mockResolvedValue('<html></html>')
   h.sendEmail.mockResolvedValue(undefined)
-  h.getByEmail.mockResolvedValue({ personId: 'p1', firstName: 'Georgina' })
+  h.getByEmail.mockResolvedValue({ personId: 'p1', firstName: 'Grace' })
   h.createRequest.mockResolvedValue({ requestId: 'req-new', approvalToken: 'tok' })
   // The route already guards against a duplicate request for the SAME field;
   // coalescing is about different fields, so this stays false.

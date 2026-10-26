@@ -88,7 +88,7 @@ export function RegistrationBlockEditor({ block, onChange }: BlockEditorProps<Re
                     : undefined,
               })
             }
-            placeholder="Jessica"
+            placeholder="Ann"
           />
         </YStack>
         <YStack minWidth={200} flex={1} gap="$2">
@@ -107,7 +107,7 @@ export function RegistrationBlockEditor({ block, onChange }: BlockEditorProps<Re
                     : undefined,
               })
             }
-            placeholder="Easson"
+            placeholder="Example"
           />
         </YStack>
       </XStack>

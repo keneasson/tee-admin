@@ -3,8 +3,8 @@
  * revealing the whole thing (e.g. to a forward recipient holding a recognized
  * token — see #80).
  *
- *   ken.easson@gmail.com  ->  k***n@gmail.com     (free/ISP domain shown whole)
- *   ken@rangle.io         ->  k***n@r**e.io       (custom domain masked too)
+ *   member1@gmail.com  ->  m***1@gmail.com     (free/ISP domain shown whole)
+ *   ann@acme.io        ->  a***n@a**e.io       (custom domain masked too)
  *
  * Free / ISP providers are shown in full because the domain gives nothing away.
  * A custom (org) domain is masked because it can identify where someone works.

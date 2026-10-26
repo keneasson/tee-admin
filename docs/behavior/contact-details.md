@@ -78,7 +78,7 @@ Access is granted **by rung, not by field** *(owner)*.
 | EDIT-02 | RB/Rep/recorder can edit people of **their own** ecclesia only. | ✅ `admin-people-email-change-route.test` "403 when the actor cannot edit the target ecclesia" |
 | EDIT-03 | A person edits their **own** details on their profile; changing their own sign-in email needs step-up + a code sent to the new address. | ✅ `email-change-logic.test`, `token-repository-email-change.test` |
 | EDIT-04 | An editor **corrects any email in one step**: pencil → fix → Save. No verification round-trip. *(owner)* | ✅ #258, `admin-people-email-change-route.test` "correction mode" |
-| EDIT-05 | Correcting the **sign-in** email moves sign-in and subscriptions to the corrected address, **removes** the wrong one, and doesn't email it. | ✅ `admin-people-email-change-route.test` "the Jared case"; `person-repository.test` "replace: true…" |
+| EDIT-05 | Correcting the **sign-in** email moves sign-in and subscriptions to the corrected address, **removes** the wrong one, and doesn't email it. | ✅ `admin-people-email-change-route.test` "the typo case"; `person-repository.test` "replace: true…" |
 | EDIT-06 | The sign-in email can't be deleted, only corrected (deleting would orphan the login). | ⚠️ UI and route refuse it; no test for the route refusal |
 | EDIT-07 | A corrected address that belongs to someone else is refused; nothing is written. | ✅ `admin-people-email-change-route.test` "409…" |
 | EDIT-08 | Moving or correcting an email never changes newsletter subscription state. | ✅ `person-repository.test` "…inherits sesSubscribed" |
@@ -108,7 +108,7 @@ For anyone signed in who can **see** a detail but can't **edit** it.
 | CONFIRM-06 | **Email is not community-confirmed.** It's a sign-in identity; it's corrected by an editor (`EDIT-04`). By design (#245). | ✅ decision |
 
 ## 6. Smart contacts in posts and newsletters — `CONTACT-SMART`
-A smart contact ("To register: email {Smart Contact: Ken Easson}") follows the
+A smart contact ("To register: email {Smart Contact: Ken Example}") follows the
 [smart-component contract (ADR-0005)](../adr/0005-never-silently-withhold.md):
 full value, or first name + the way to get the rest. It also obeys the
 **contact person's own privacy rung** for email and phone *(owner)*.

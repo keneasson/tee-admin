@@ -299,9 +299,9 @@ export interface OfficeProposal {
  * The named person the data records as this ecclesia's Recording Brother, in
  * order: the person flag, the 'recorder' role, the RB person id copied onto
  * the ecclesia, then the RB email copied onto the ecclesia when it is a named
- * person's own primary. Older records set only some of these (Picton: the
- * ecclesia names Rick Hill and his role is 'recorder', but the flag was never
- * set). Null when none of them names a person at this ecclesia.
+ * person's own primary. Older records set only some of these (one ecclesia
+ * names its Recording Brother and his role is 'recorder', but the flag was
+ * never set). Null when none of them names a person at this ecclesia.
  */
 function recordedRecordingBrother(e: ProposalEcclesia, at: ProposalPerson[]): string | null {
   const named = at.filter((p) => p.named)

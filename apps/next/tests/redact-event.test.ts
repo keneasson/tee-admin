@@ -11,20 +11,20 @@ const event = {
   id: 'e1',
   title: 'Test',
   type: 'baptism',
-  candidate: { firstName: 'Joshua', lastName: 'Archibald', testimony: 'secret', baptismStatement: 'secret' },
+  candidate: { firstName: 'Joshua', lastName: 'Fixture', testimony: 'secret', baptismStatement: 'secret' },
   aboutCandidate: 'A long private bio',
   candidatePhoto: { url: 'http://x/p.jpg', fileName: 'p.jpg', originalName: 'p.jpg' },
-  sponsors: [{ firstName: 'Gord', lastName: 'Easson', role: 'proposer' }],
-  deceased: { firstName: 'Tom', lastName: 'Perks', obituary: 'obit text' },
+  sponsors: [{ firstName: 'Ben', lastName: 'Example', role: 'proposer' }],
+  deceased: { firstName: 'Tom', lastName: 'Placeholder', obituary: 'obit text' },
   aboutDeceased: 'tribute text',
-  couple: { bride: { firstName: 'Jess', lastName: 'Millar' }, groom: { firstName: 'Gord', lastName: 'Easson' } },
+  couple: { bride: { firstName: 'Annie', lastName: 'Demo' }, groom: { firstName: 'Ben', lastName: 'Example' } },
   weddingParty: [{ firstName: 'Sam', lastName: 'Jones', role: 'best man' }],
   speakers: [
-    { firstName: 'Pete', lastName: 'Skariah', ecclesia: 'Toronto West' },
-    { firstName: 'Jo', lastName: 'Vance', ecclesia: { name: 'Verdugo Hills', city: 'LA', province: 'CA', country: 'US', address: '10210 Commerce Ave', postalCode: '91042' } },
+    { firstName: 'Pete', lastName: 'Stub', ecclesia: 'Toronto West' },
+    { firstName: 'Jo', lastName: 'Dummy', ecclesia: { name: 'Verdugo Hills', city: 'LA', province: 'CA', country: 'US', address: '10210 Commerce Ave', postalCode: '91042' } },
   ],
-  engagementProposed: 'Brother Gord Easson',
-  engagementTo: 'Sister Jessica Millar',
+  engagementProposed: 'Brother Ben Example',
+  engagementTo: 'Sister Ann Demo',
   engagementAnnouncement: 'We are pleased to announce…',
   location: { name: 'TE Hall', city: 'Toronto', province: 'ON', address: '123 Main St', postalCode: 'M1 1M1', lat: 43.7, lng: -79.3 },
   registration: { required: true, contactEmail: 'sue@x.z', contactPhone: '416-555-1212', registrationUrl: 'http://reg' },
@@ -37,8 +37,8 @@ describe('redactEventForViewer — anonymous (public web)', () => {
     expect(r.candidate).toEqual({ firstName: 'Joshua' })
     expect((r.candidate as any).lastName).toBeUndefined()
     expect(r.deceased).toEqual({ firstName: 'Tom' })
-    expect(r.sponsors).toEqual([{ firstName: 'Gord', role: 'proposer' }])
-    expect(r.couple).toEqual({ bride: { firstName: 'Jess' }, groom: { firstName: 'Gord' } })
+    expect(r.sponsors).toEqual([{ firstName: 'Ben', role: 'proposer' }])
+    expect(r.couple).toEqual({ bride: { firstName: 'Annie' }, groom: { firstName: 'Ben' } })
     expect(r.weddingParty).toEqual([{ firstName: 'Sam', role: 'best man' }])
     expect(r.speakers![0]).toEqual({ firstName: 'Pete', ecclesia: 'Toronto West' })
   })
@@ -77,7 +77,7 @@ describe('redactEventForViewer — anonymous (public web)', () => {
   })
 
   it('does not mutate the original event', () => {
-    expect((event.candidate as any).lastName).toBe('Archibald')
+    expect((event.candidate as any).lastName).toBe('Fixture')
     expect((event.location as any).address).toBe('123 Main St')
   })
 })
@@ -101,9 +101,9 @@ describe('redactEventForViewer — reports what it withheld', () => {
   it('the Shelburne case: anon loses the registration email AND is told so', () => {
     const shelburne = {
       id: 'shelburne',
-      title: 'Shelburne Reception for Gord and Jessica',
+      title: 'Shelburne Reception for Ben and Ann',
       type: 'general',
-      registration: { required: true, contactEmail: 'jessica@example.com' },
+      registration: { required: true, contactEmail: 'ann@example.com' },
     } as unknown as Event
     const r = redactEventForViewer(shelburne, ANONYMOUS_VIEWER)
     expect(r.registration?.contactEmail).toBeUndefined()

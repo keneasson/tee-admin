@@ -5,10 +5,10 @@ import { describe, it, expect } from 'vitest'
  * add somebody you knew only by name, could not tell whether they were already
  * in the directory, and — because one address can belong to a whole household —
  * linking by email could attach the wrong person entirely (which is exactly how
- * Georgina became her own spouse).
+ * Grace became her own spouse).
  *
  * Search now covers name, email AND phone, and a phone search has to survive
- * punctuation: people type "905-797-3415" and the stored value is "9057973415".
+ * punctuation: people type "905-555-0108" and the stored value is "9055550108".
  */
 const matches = (
   member: { name?: string; email?: string; ecclesia?: string; phones?: string[] },
@@ -24,44 +24,44 @@ const matches = (
   return Boolean(nameMatch || ecclesiaMatch || emailMatch || phoneMatch)
 }
 
-const georgina = {
-  name: 'Georgina Rose',
-  email: 'bgrosewood@gmail.com',
+const grace = {
+  name: 'Grace Outline',
+  email: 'member1@gmail.com',
   ecclesia: 'Toronto East Ecclesia',
-  phones: ['9057973415', '9053732911'],
+  phones: ['9055550108', '9055550109'],
 }
 
 describe('directory search covers name, email and phone', () => {
   it('finds by last name — the common case when adding family', () => {
-    expect(matches(georgina, 'Rose')).toBe(true)
-    expect(matches(georgina, 'rose')).toBe(true)
+    expect(matches(grace, 'Outline')).toBe(true)
+    expect(matches(grace, 'outline')).toBe(true)
   })
 
   it('finds by first name', () => {
-    expect(matches(georgina, 'Georgina')).toBe(true)
+    expect(matches(grace, 'Grace')).toBe(true)
   })
 
   it('finds by email', () => {
-    expect(matches(georgina, 'bgrosewood')).toBe(true)
+    expect(matches(grace, 'member1')).toBe(true)
   })
 
   it('finds by phone typed WITH punctuation', () => {
-    expect(matches(georgina, '905-797-3415')).toBe(true)
-    expect(matches(georgina, '(905) 797 3415')).toBe(true)
+    expect(matches(grace, '905-555-0108')).toBe(true)
+    expect(matches(grace, '(905) 555 0108')).toBe(true)
   })
 
   it('finds by a partial phone number', () => {
-    expect(matches(georgina, '7973415')).toBe(true)
+    expect(matches(grace, '5550108')).toBe(true)
   })
 
   it('does not match half the directory on one or two digits', () => {
-    expect(matches(georgina, '9')).toBe(false)
-    expect(matches(georgina, '90')).toBe(false)
+    expect(matches(grace, '9')).toBe(false)
+    expect(matches(grace, '90')).toBe(false)
   })
 
   it('does not match somebody unrelated', () => {
-    expect(matches(georgina, 'Smith')).toBe(false)
-    expect(matches(georgina, '4165550000')).toBe(false)
+    expect(matches(grace, 'Smith')).toBe(false)
+    expect(matches(grace, '4165550000')).toBe(false)
   })
 
   it('survives a member with no phones, name or email', () => {

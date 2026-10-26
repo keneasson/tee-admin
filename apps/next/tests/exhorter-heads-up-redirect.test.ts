@@ -46,8 +46,8 @@ vi.mock('../utils/ecclesia-offices', () => ({ recordingBrotherOf: h.recordingBro
 import { prepareHeadsUpForReview } from '../utils/email/exhorter-heads-up-review'
 
 const REAL_SUBJECT = 'Your exhortation at Toronto East on Sunday, September 20, 2026'
-const REAL_HTML = '<html><body><p>Dear Brother Brad Stephens,</p></body></html>'
-const REAL_TEXT = 'Dear Brother Brad Stephens,'
+const REAL_HTML = '<html><body><p>Dear Brother Brad Tester,</p></body></html>'
+const REAL_TEXT = 'Dear Brother Brad Tester,'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -56,7 +56,7 @@ beforeEach(() => {
     test: false,
     status: 'dry-run',
     personId: 'p-brad',
-    exhortName: 'Brad Stephens',
+    exhortName: 'Brad Tester',
     rendered: {
       subject: REAL_SUBJECT,
       html: REAL_HTML,
@@ -67,7 +67,7 @@ beforeEach(() => {
   h.getById.mockResolvedValue({
     personId: 'p-brad',
     primaryEmail: 'brad@example.com',
-    displayName: 'Brad Stephens',
+    displayName: 'Brad Tester',
   })
   h.getEcclesiaByName.mockResolvedValue({})
   h.recordingBrotherOf.mockResolvedValue({ email: 'rb@tee-admin.com', source: 'office' })
@@ -106,12 +106,12 @@ describe('the QA copy is the real email, redirected', () => {
     const sent = h.sendEmail.mock.calls[0][0]
 
     // Everything the brother would read is present, unaltered.
-    expect(sent.body).toContain('Dear Brother Brad Stephens,')
+    expect(sent.body).toContain('Dear Brother Brad Tester,')
     expect(sent.textBody).toContain(REAL_TEXT)
 
     // Plus one clearly-marked addition, and the link through to the decision.
     expect(sent.body).toContain('REVIEW COPY')
-    expect(sent.body).toMatch(/Continue — Brad Stephens/)
+    expect(sent.body).toMatch(/Continue — Brad Tester/)
     // A stable, findable page — the token only says WHICH copy.
     expect(sent.body).toMatch(/\/admin\/exhorter-heads-up\?token=/)
 
@@ -129,7 +129,7 @@ describe('the QA copy is the real email, redirected', () => {
   })
 
   it('does not promise to SEND from a link that only opens a page', async () => {
-    // The button used to read "Send this to Brad Stephens" directly above a
+    // The button used to read "Send this to Brad Tester" directly above a
     // line saying it sends nothing — the label contradicted the fine print,
     // and the page it opens offers a Stop as well as a Send.
     await prepareHeadsUpForReview({ date: '2026-09-20' })
@@ -231,15 +231,15 @@ describe('which copy am I looking at?', () => {
   it('names the recipient and the Sunday on the button itself', async () => {
     await prepareHeadsUpForReview({ date: '2026-09-20' })
     const sent = h.sendEmail.mock.calls[0][0]
-    expect(sent.body).toMatch(/Continue — Brad Stephens, .*Sep 20/)
-    expect(sent.textBody).toMatch(/\(Brad Stephens, .*Sep 20\)/)
+    expect(sent.body).toMatch(/Continue — Brad Tester, .*Sep 20/)
+    expect(sent.textBody).toMatch(/\(Brad Tester, .*Sep 20\)/)
   })
 
   it('says who and when at the top of the block too', async () => {
     await prepareHeadsUpForReview({ date: '2026-09-20' })
     const sent = h.sendEmail.mock.calls[0][0]
-    expect(sent.body).toMatch(/REVIEW COPY — for Brad Stephens, .*Sep 20/)
-    expect(sent.textBody).toMatch(/REVIEW COPY — for Brad Stephens, .*Sep 20/)
+    expect(sent.body).toMatch(/REVIEW COPY — for Brad Tester, .*Sep 20/)
+    expect(sent.textBody).toMatch(/REVIEW COPY — for Brad Tester, .*Sep 20/)
   })
 
   it('distinguishes two copies for different Sundays', async () => {
@@ -254,21 +254,21 @@ describe('which copy am I looking at?', () => {
       test: false,
       status: 'dry-run',
       personId: 'p-tom',
-      exhortName: 'Tom Briggs',
+      exhortName: 'Tom Sketch',
       rendered: { subject: 's', html: '<html><body>x</body></html>', text: 'x', contentDigest: 'd' },
     })
     h.getById.mockResolvedValue({
       personId: 'p-tom',
       primaryEmail: 'briggstom64@example.com',
-      displayName: 'Tom Briggs',
+      displayName: 'Tom Sketch',
     })
     await prepareHeadsUpForReview({ date: '2026-09-27' })
     const second = h.sendEmail.mock.calls[0][0].body
 
-    expect(first).toMatch(/Continue — Brad Stephens/)
-    expect(second).toMatch(/Continue — Tom Briggs/)
-    expect(first).not.toMatch(/Tom Briggs/)
-    expect(second).not.toMatch(/Brad Stephens/)
+    expect(first).toMatch(/Continue — Brad Tester/)
+    expect(second).toMatch(/Continue — Tom Sketch/)
+    expect(first).not.toMatch(/Tom Sketch/)
+    expect(second).not.toMatch(/Brad Tester/)
   })
 })
 

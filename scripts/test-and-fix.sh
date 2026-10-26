@@ -17,8 +17,8 @@ echo "3️⃣ Waiting for server to be ready..."
 sleep 10
 
 echo ""
-# Use environment variable for target email, default to ken.easson@gmail.com
-TARGET_EMAIL=${TARGET_EMAIL:-"ken.easson@gmail.com"}
+# Use environment variable for target email, default to owner@example.org
+TARGET_EMAIL=${TARGET_EMAIL:-"owner@example.org"}
 
 echo "4️⃣ Testing role assignment API..."
 curl -s "http://localhost:3001/api/debug/check-role?email=${TARGET_EMAIL}" | jq '.'
