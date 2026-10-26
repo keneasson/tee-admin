@@ -58,6 +58,23 @@ Done in code (PR #282, on top of #298):
 
 Owner-run steps: EXTERNAL_CHANGES.md, "ecclesia offices (R3)". R3 is done when they are applied and the flag is on.
 
+### R3 done (2026-10-24)
+
+Both flags are released to everyone; production reads them after #313. Recipient diff after the flags: 30 same, Brampton RB added, the 7 accepted changes. #280 closed. The flags are deleted in R8.
+
+## 0.2a Next: the access-pattern rules, enforced (from the 2026-10-24 architecture review)
+
+The design in §7 is right: generic, reusable index names (`gsi1`–`gsi4`) and sparse, overloaded entries, with an API that translates each query into a pattern. It drifted because nothing enforces it. Today: about 20 one-page Scans (a Scan reads 1 MB and stops; `tee-admin` is 2.7 MB, so rows are silently missed, e.g. the feature flags fixed in #313); each repository builds its own keys; `apps/next/utils/dynamodb/*` hard-codes table names; side tables use `PK`/`SK`/`GSI1` and that leaked into `tee-admin` (`meeting-repository.ts:120` queries `GSI1`, which does not exist).
+
+Done in this order, one PR each, as soon as possible. Sites that R8 deletes (legacy `USER#`, `DIRECTORY#MEMBERS`, ecclesia RB copies) are left to R8, not fixed twice.
+
+| # | Work | Done when |
+|---|---|---|
+| A1 | **Access-pattern registry + enforcement.** One file lists every pattern: name, index, key templates, the one writer. Repositories call patterns by name. A test fails on any Scan or raw index name outside the registry (scripts and named crons on an allowlist). Every one-page Scan on a request path becomes a key read or a pattern Query, adding a sparse entry where none exists. The meetings index name is fixed. | The test passes with an empty request-path allowlist. |
+| A2 | **Admin page guards.** One server-side role check per admin route group (`(admin-plus)`, `(owner)`), so no admin page renders for a non-admin. | 12 unguarded admin pages are guarded; a test covers each group. |
+| A3 | **Dead code.** Delete routes and pages nothing calls, duplicate pages (two email testers, two list pages), Pages Router leftovers, `.bak` files, `pages-backup/`, `nextjs15-react19-nextauth-test/`. | The list in the review is gone; build and tests pass. |
+| A4 | **`docs/ARCHITECTURE.md` rewritten** from the code, including the EventBridge schedules that run the sends (`tee-email-cron` 5 min, `tee-email-queue-processor` hourly, `tee-exhorter-heads-up` Sat 14:00 UTC), which are not defined in the repo, and the access-pattern registry. CLAUDE.md's "Vercel cron" section corrected. | Reviewed by the owner. |
+
 ## 0.3 Out of scope ("Not now")
 
 Not part of this work. Each is one line here, not an issue.
@@ -73,6 +90,8 @@ Not part of this work. Each is one line here, not an issue.
 - Signing in with an office inbox that has no PersonRecord still creates a PersonRecord for that inbox; signing in *as the office holder* belongs with R2's chooser.
 - Non-ecclesial offices (e.g. magazine editors) that also receive inter-ecclesia mail.
 - A directory-editor admin who adds and approves people across Canada and the USA (Paul Brokaw).
+- One content system: News, Events, Posts ("New CMS") and Meetings exist side by side. Merging them is the owner's decision, not cleanup.
+- Defining the EventBridge schedules in code (infrastructure as code); A4 only documents them.
 - Merging twin persons (R1, `scripts/merge-duplicate-persons.ts`) does not yet move a person's `REL#` relationship rows to the surviving person; the relationship migration's dry run also shows 2 people with 2 spouse rows each, left for the owner's review page.
 
 ## 0.4 Definition of done
