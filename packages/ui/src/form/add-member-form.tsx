@@ -16,6 +16,8 @@ export interface AddMemberFormData {
 
 interface AddMemberFormProps {
   defaultEcclesia?: string
+  /** A name typed elsewhere ("Rob Huc"): first word is the first name, the rest the last */
+  defaultName?: string
   ecclesias: string[]
   onSave: (data: AddMemberFormData) => Promise<boolean>
   onCancel: () => void
@@ -25,6 +27,7 @@ interface AddMemberFormProps {
 
 export function AddMemberForm({
   defaultEcclesia,
+  defaultName,
   ecclesias,
   onSave,
   onCancel,
@@ -32,8 +35,8 @@ export function AddMemberForm({
   resultMessage,
 }: AddMemberFormProps) {
   const [formData, setFormData] = useState<AddMemberFormData>({
-    firstName: '',
-    lastName: '',
+    firstName: (defaultName || '').trim().split(/\s+/)[0] || '',
+    lastName: (defaultName || '').trim().split(/\s+/).slice(1).join(' '),
     email: '',
     ecclesia: defaultEcclesia || '',
     role: defaultEcclesia ? 'member' : 'guest',

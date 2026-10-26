@@ -33,6 +33,8 @@ interface RecordingBrotherManagerProps {
   onSaveRb?: (email: string, name: string) => Promise<boolean>
   /** Resend confirmation email for a nomination */
   onResend?: (nominationId: string) => Promise<void>
+  /** The name typed matches no one: open the add-member form for this ecclesia */
+  onAddMember?: (typedName: string) => void
 }
 
 export function RecordingBrotherManager({
@@ -47,6 +49,7 @@ export function RecordingBrotherManager({
   onDirectSet,
   onSaveRb,
   onResend,
+  onAddMember,
 }: RecordingBrotherManagerProps) {
   const rbName = recordingBrother?.name
   const rbEmail = recordingBrother?.email
@@ -194,6 +197,7 @@ export function RecordingBrotherManager({
             </XStack>
             <XStack gap="$2" flexWrap="wrap">
               <PersonAutocomplete
+                onAddNew={onAddMember}
                 ecclesia={ecclesiaName}
                 value={editRbName}
                 onChangeText={setEditRbName}
@@ -417,6 +421,7 @@ export function RecordingBrotherManager({
                 </Text>
 
                 <PersonAutocomplete
+                onAddNew={onAddMember}
                   ecclesia={ecclesiaName}
                   value={autocompleteValue}
                   onChangeText={(text) => {
@@ -484,6 +489,7 @@ export function RecordingBrotherManager({
               <Text fontWeight="600" fontSize="$3">Nominate a Recording Brother</Text>
 
               <PersonAutocomplete
+                onAddNew={onAddMember}
                 ecclesia={ecclesiaName}
                 value={autocompleteValue}
                 onChangeText={(text) => {

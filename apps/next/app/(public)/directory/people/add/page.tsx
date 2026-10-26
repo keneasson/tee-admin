@@ -12,6 +12,15 @@ import { Button } from 'tamagui'
 export default function DirectoryAddMemberPage() {
   const { isMemberOrHigher, isLoading: authLoading } = useUserRole()
   const router = useRouter()
+  // Opened from an ecclesia page: that ecclesia is filled in and Save/Cancel go back there.
+  const [fromEcclesia, setFromEcclesia] = useState<string | undefined>()
+  const [typedName, setTypedName] = useState<string | undefined>()
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    setFromEcclesia(q.get('ecclesia') || undefined)
+    setTypedName(q.get('name') || undefined)
+  }, [])
+  const backTo = fromEcclesia ? `/directory/ecclesias/${encodeURIComponent(fromEcclesia)}` : '/directory/people'
   const isHydrated = useHydrated()
   const [ecclesias, setEcclesias] = useState<string[]>([])
   const [viewerEcclesia, setViewerEcclesia] = useState<string | undefined>()
@@ -58,10 +67,10 @@ export default function DirectoryAddMemberPage() {
       }
 
       if (result.mode === 'direct') {
-        router.push('/directory/people')
+        router.push(backTo)
       } else {
         setResultMessage('Draft submitted for approval. A recorder or admin will review it.')
-        setTimeout(() => router.push('/directory/people'), 2000)
+        setTimeout(() => router.push(backTo), 2000)
       }
       return true
     } catch (error) {
@@ -74,7 +83,7 @@ export default function DirectoryAddMemberPage() {
   }
 
   const handleCancel = () => {
-    router.push('/directory/people')
+    router.push(backTo)
   }
 
   if (!isHydrated || authLoading) {
@@ -106,7 +115,7 @@ export default function DirectoryAddMemberPage() {
             borderWidth={0}
             chromeless
           >
-            Back to Contact List
+            {fromEcclesia ? `Back to ${fromEcclesia}` : 'Back to Contact List'}
           </Button>
         </XStack>
 
@@ -132,7 +141,8 @@ export default function DirectoryAddMemberPage() {
             </XStack>
           ) : (
             <AddMemberForm
-              defaultEcclesia={viewerEcclesia}
+              defaultEcclesia={fromEcclesia || viewerEcclesia}
+              defaultName={typedName}
               ecclesias={ecclesias}
               onSave={handleSave}
               onCancel={handleCancel}
