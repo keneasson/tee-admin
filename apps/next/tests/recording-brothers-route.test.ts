@@ -158,12 +158,12 @@ describe('/api/admin/recording-brothers', () => {
     h.getByEmail.mockResolvedValue(MAILBOX)
     const res = await post({
       ecclesiaName: 'Alpha',
-      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'AlphaMailbox@example.org' },
+      newPerson: { firstName: 'Ann', lastName: 'Example', email: 'AlphaMailbox@example.org' },
       mailTo: 'own',
     })
     expect(res.status).toBe(200)
     expect(h.create).not.toHaveBeenCalled()
-    expect(h.updatePerson).toHaveBeenCalledWith('mb', { firstName: 'Rob', lastName: 'Huc' })
+    expect(h.updatePerson).toHaveBeenCalledWith('mb', { firstName: 'Ann', lastName: 'Example' })
     expect(h.setRecordingBrother).toHaveBeenCalledWith(expect.objectContaining({ newPersonId: 'mb' }))
   })
 
@@ -172,7 +172,7 @@ describe('/api/admin/recording-brothers', () => {
     h.getByEmail.mockResolvedValue({ ...MAILBOX, ecclesia: 'Beta' })
     const res = await post({
       ecclesiaName: 'Alpha',
-      newPerson: { firstName: 'Rob', lastName: 'Huc', email: 'alphamailbox@example.org' },
+      newPerson: { firstName: 'Ann', lastName: 'Example', email: 'alphamailbox@example.org' },
       mailTo: 'own',
     })
     expect(res.status).toBe(409)

@@ -16,7 +16,7 @@ export interface AddMemberFormData {
 
 interface AddMemberFormProps {
   defaultEcclesia?: string
-  /** A name typed elsewhere ("Rob Huc"): first word is the first name, the rest the last */
+  /** A name typed elsewhere ("Ann Example"): first word is the first name, the rest the last */
   defaultName?: string
   ecclesias: string[]
   onSave: (data: AddMemberFormData) => Promise<boolean>
