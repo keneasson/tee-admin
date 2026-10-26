@@ -276,8 +276,7 @@ export default function MyPage() {
 
 Scheduled sends run from **AWS EventBridge rules** (account 911911532459, `ca-central-1`), not Vercel cron — `apps/next/vercel.json` has no crons. The rules are not defined in the repo.
 
-- `tee-email-cron` — every 5 min → `GET https://www.tee-admin.com/api/cron/email-queue` (sends whatever the schedules in `tee-send-queue` say is due)
-- `tee-email-queue-processor` — hourly → the same endpoint
+- `tee-email-cron` — every :00 and :30 → `GET https://www.tee-admin.com/api/cron/email-queue` (sends whatever the schedules in `tee-send-queue` say is due)
 - `tee-exhorter-heads-up` — `cron(0 14 ? * SAT *)` → `POST /api/cron/exhorter-heads-up`
 - `tee-admin-health-check-schedule` — every 6 hours → Lambda `tee-admin-health-check` (`apps/next/aws-monitor/`)
 

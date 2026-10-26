@@ -185,8 +185,7 @@ Verified read-only on 2026-10-25:
 
 | Rule | Schedule | Target | Calls |
 |------|----------|--------|-------|
-| `tee-email-cron` | `rate(5 minutes)` | API destination `tee-email-cron-dest` (connection `tee-email-cron-conn`, role `tee-scheduler-email-role`) | `GET https://www.tee-admin.com/api/cron/email-queue` |
-| `tee-email-queue-processor` | `rate(1 hour)` | API destination `tee-email-queue-endpoint` (connection `tee-email-auth-connection`, role `EventBridgeSchedulerHttpRole`, 2 retries / 1 h) | `GET https://www.tee-admin.com/api/cron/email-queue` (same endpoint; redundant with the 5-minute tick, harmless because entries are claimed) |
+| `tee-email-cron` | `cron(0,30 * * * ? *)` (every :00 and :30, UTC) | API destination `tee-email-cron-dest` (connection `tee-email-cron-conn`, role `tee-scheduler-email-role`) | `GET https://www.tee-admin.com/api/cron/email-queue` |
 | `tee-exhorter-heads-up` | `cron(0 14 ? * SAT *)` (10:00 EDT / 9:00 EST) | API destination `tee-exhorter-headsup-dest` (connection `tee-email-auth-connection`, role `tee-scheduler-exhorter-role`, 1 retry / 1 h) | `POST https://www.tee-admin.com/api/cron/exhorter-heads-up` |
 | `tee-admin-health-check-schedule` | `rate(6 hours)` | Lambda `tee-admin-health-check` (nodejs18.x) | The Lambda GETs public pages and `/api/upcoming-program`, `/api/enhanced-schedule` on `www.tee-admin.com` and emails an alert via SES on failure |
 
