@@ -11,6 +11,11 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### AWS EventBridge — email cron on :00/:30, hourly duplicate deleted — DONE 2026-10-25
+- `tee-email-cron`: `rate(5 minutes)` → `cron(0,30 * * * ? *)`. Sends set on the hour or half hour go out on time; any other minute waits for the next tick.
+- `tee-email-queue-processor` (hourly, same endpoint) deleted.
+- Backup of both rules and targets: `s3://tee-admin-backups/backups/eventbridge-2026-10-25/`.
+
 ### Prod data — access-pattern backfill for A1 (owner-run, BEFORE or right after this deploys)
 - **Date**: 2026-10-24
 - **Branch**: `feat/access-pattern-registry`

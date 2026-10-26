@@ -146,7 +146,7 @@ TEE Admin is a cross-platform monorepo for the Toronto East Christadelphian Eccl
 - Role-based access control (owner, admin, member, guest) stored on PersonRecord
 - Privacy system: per-field visibility with role-based overrides (Owner sees all, Admin sees same-ecclesia)
 - Google Sheets integration for **schedules/programs only** (NOT members or contacts)
-- Email campaigns scheduled via Vercel cron (AWS EventBridge migration planned for future)
+- Email campaigns scheduled by AWS EventBridge rules calling `/api/cron/email-queue` (see `docs/ARCHITECTURE.md`)
 
 ### Cross-Platform Development & Package Architecture Rules
 
@@ -274,44 +274,19 @@ export default function MyPage() {
 
 ### Email Scheduling System
 
-TEE Admin uses a simple Vercel cron-based email system for scheduled test emails.
+Scheduled sends run from **AWS EventBridge rules** (account 911911532459, `ca-central-1`), not Vercel cron — `apps/next/vercel.json` has no crons. The rules are not defined in the repo.
 
-#### Current Schedule
-- **Thursday 9:30pm** - Test newsletter email (via Vercel cron)
-  - Endpoint: `/api/email/test-thursday`
-  - Always runs in **TEST MODE** (sends to test list only)
-  - Uses newsletter template
+- `tee-email-cron` — every :00 and :30 → `GET https://www.tee-admin.com/api/cron/email-queue` (sends whatever the schedules in `tee-send-queue` say is due)
+- `tee-exhorter-heads-up` — `cron(0 14 ? * SAT *)` → `POST /api/cron/exhorter-heads-up`
+- `tee-admin-health-check-schedule` — every 6 hours → Lambda `tee-admin-health-check` (`apps/next/aws-monitor/`)
 
-#### Configuration
-Scheduled emails are configured in `apps/next/vercel.json`:
-```json
-{
-  "crons": [
-    {
-      "path": "/api/email/test-thursday",
-      "schedule": "30 21 * * 4"  // Thursday 9:30pm
-    }
-  ]
-}
-```
-
-#### Security
-- All email endpoints require `EMAIL_SENDER_SECRET` authentication
-- Vercel automatically includes this in cron requests
-- Manual testing: `curl -H "Authorization: Bearer $EMAIL_SENDER_SECRET" https://your-domain.vercel.app/api/email/test-thursday`
+Cron endpoints require `Authorization: Bearer $EMAIL_SENDER_SECRET` (the EventBridge connections send it). Recipients come from the mailing-list registry; SES topics are a safety net. Full map, targets and send paths: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) sections 5 and 7.
 
 #### Email Types Available
 - `newsletter` - Weekly newsletter
 - `bible-class` - Bible class reminder
 - `sunday-school` - Sunday school reminder
 - `recap` - Memorial service (recap)
-
-#### Advanced System (Future)
-For advanced scheduling needs, see [`AWS_EVENTBRIDGE_SETUP.md`](./AWS_EVENTBRIDGE_SETUP.md) for the DynamoDB queue-based system with EventBridge integration.
-
-#### Environment Variables
-- `EMAIL_SENDER_SECRET` - Bearer token for authenticating cron requests
-- AWS credentials - Required for SES email delivery
 
 ## Configuration Requirements
 
