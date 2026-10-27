@@ -418,10 +418,10 @@ export function RecordingBrotherManager({
                 </XStack>
                 <Text fontSize="$2" color="$textSecondary">
                   Admin override — bypasses nomination and seconder process.
+                </Text>
+
                 <PersonAutocomplete
                   onAddNew={onAddMember}
-                <PersonAutocomplete
-                onAddNew={onAddMember}
                   ecclesia={ecclesiaName}
                   value={autocompleteValue}
                   onChangeText={(text) => {
