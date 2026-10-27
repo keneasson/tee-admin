@@ -17348,7 +17348,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"email-builder@workspace:apps/email-builder":
+"email-builder@npm:0.0.1, email-builder@workspace:apps/email-builder":
   version: 0.0.0-use.local
   resolution: "email-builder@workspace:apps/email-builder"
   dependencies:
@@ -23676,6 +23676,7 @@ __metadata:
     "@vitest/ui": "npm:^3.2.4"
     bcryptjs: "npm:^3.0.2"
     buffer-crc32: "npm:^1.0.0"
+    email-builder: "npm:0.0.1"
     eslint-config-next: "npm:^14.2.3"
     google-auth-library: "npm:^9.15.0"
     google-spreadsheet: "npm:^4.1.4"

@@ -34,6 +34,7 @@
     "@vercel/analytics": "^1.5.0",
     "bcryptjs": "^3.0.2",
     "buffer-crc32": "^1.0.0",
+    "email-builder": "0.0.1",
     "google-auth-library": "^9.15.0",
     "google-spreadsheet": "^4.1.4",
     "lexical": "^0.49.0",
