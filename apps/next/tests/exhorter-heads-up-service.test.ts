@@ -80,7 +80,7 @@ function personRecord(
 const BRAD = personRecord({
   personId: 'p-brad',
   firstName: 'Brad',
-  lastName: 'Stephens',
+  lastName: 'Tester',
   ecclesia: 'Toronto East Ecclesia',
   primaryEmail: 'brad@example.com',
 })
@@ -108,7 +108,7 @@ function memorialRow(extra: Record<string, any> = {}) {
         Date: 'Feb 1, 2026',
         DateTime: '2026-02-01T16:00:00.000Z',
         ServiceTimezone: 'America/Toronto',
-        Exhort: 'Brad Stephens',
+        Exhort: 'Brad Tester',
         Preside: 'Someone Else',
         Key: 'memorial',
         ...extra,
@@ -123,7 +123,7 @@ beforeEach(() => {
   // past-date guard (and stay stable in CI as real time marches on).
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-01-15T12:00:00Z'))
-  h.getScheduleData.mockResolvedValue(memorialSchedule('Brad Stephens'))
+  h.getScheduleData.mockResolvedValue(memorialSchedule('Brad Tester'))
   h.listAll.mockResolvedValue({ items: [BRAD], lastEvaluatedKey: undefined })
   h.getById.mockResolvedValue(BRAD)
   h.renderExhorterHeadsUp.mockResolvedValue({ html: '<html></html>', text: 'text' })
@@ -140,7 +140,7 @@ beforeEach(() => {
     createdAt: new Date(0),
     updatedAt: new Date(0),
   })
-  h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Easson', email: 'teerecbro@gmail.com', source: 'office' })
+  h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Example', email: 'recbro@example.org', source: 'office' })
 })
 
 afterEach(() => {
@@ -162,7 +162,7 @@ describe('resolveAndSendExhorterHeadsUp — matched', () => {
     const arg = h.sendEmail.mock.calls[0][0]
     expect(arg.to).toBe('brad@example.com')
     expect(arg.from).toContain('communications@tee-admin.com')
-    expect(arg.replyTo).toBe('teerecbro@gmail.com')
+    expect(arg.replyTo).toBe('recbro@example.org')
   })
 
   it('TEST sends to the requester, NEVER the exhorter; no idempotency write', async () => {
@@ -219,7 +219,7 @@ describe('resolveAndSendExhorterHeadsUp — guards (no send)', () => {
       personRecord({
         personId: 'p-brad',
         firstName: 'Brad',
-        lastName: 'Stephens',
+        lastName: 'Tester',
         ecclesia: 'Toronto East Ecclesia',
         primaryEmail: '',
       })
@@ -263,7 +263,7 @@ describe('resolveAndSendExhorterHeadsUp — visiting flag', () => {
       personRecord({
         personId: 'p-brad',
         firstName: 'Brad',
-        lastName: 'Stephens',
+        lastName: 'Tester',
         ecclesia: 'Hamilton Book Road',
         primaryEmail: 'brad@example.com',
       })
@@ -281,7 +281,7 @@ describe('resolveAndSendExhorterHeadsUp — visiting flag', () => {
       personRecord({
         personId: 'p-brad',
         firstName: 'Brad',
-        lastName: 'Stephens',
+        lastName: 'Tester',
         ecclesia: 'Toronto East Ecclesia',
         primaryEmail: 'brad@example.com',
         memberStatus: 'visitor' as PersonRecord['memberStatus'],
@@ -353,7 +353,7 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
       updatedAt: new Date(0),
     })
     // prove it's office-driven
-    h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Easson', email: 'custom-rb@example.com', source: 'office' })
+    h.recordingBrotherOf.mockResolvedValue({ name: 'Ken Example', email: 'custom-rb@example.com', source: 'office' })
     const report = await resolveAndSendExhorterHeadsUp({
       date: TARGET_DATE,
       test: true,
@@ -362,9 +362,9 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
     expect(report.status).toBe('sent')
     const props = h.renderExhorterHeadsUp.mock.calls[0][0]
     expect(props.hostEcclesiaName).toBe('Toronto East') // "Christadelphians"/"Ecclesia" trimmed
-    expect(props.exhorterName).toBe('Brad Stephens') // formal full name, not first-name-only
+    expect(props.exhorterName).toBe('Brad Tester') // formal full name, not first-name-only
     expect(props.address).toContain('975 Cosburn')
-    expect(props.signatoryName).toBe('Ken Easson')
+    expect(props.signatoryName).toBe('Ken Example')
     const sent = h.sendEmail.mock.calls[0][0]
     expect(sent.subject).toContain('Toronto East')
     expect(sent.subject).not.toContain('Christadelphians')
@@ -389,7 +389,8 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
     const props = h.renderExhorterHeadsUp.mock.calls[0][0]
     expect(props.address).toBe('Toronto, ON') // composed from city/province
     expect(props.signatoryName).toBeUndefined() // no RB name on record
-    expect(h.sendEmail.mock.calls[0][0].replyTo).toBe('teerecbro@gmail.com') // constant fallback
+    // constant fallback: the module's role-mailbox Reply-To (not repeated here)
+    expect(h.sendEmail.mock.calls[0][0].replyTo).toMatch(/^[^@\s]+@[^@\s]+$/)
   })
 })
 
@@ -419,11 +420,11 @@ describe('resolveAndSendExhorterHeadsUp — special-occasion guard (no send)', (
   it.each([
     [
       'relocation in Activities, blank Exhort',
-      { Exhort: '', Activities: 'We will be joining Toronto West For the Baptism of Rebekah Persaud-Amos' },
+      { Exhort: '', Activities: 'We will be joining Toronto West For the Baptism of Rita Template' },
     ],
     [
       'cancelled-at-hall in Lunch, exhorter present (the dangerous case)',
-      { Exhort: 'Brad Stephens', Lunch: 'Activities at the Hall are Cancelled, Please join us on Zoom or YouTube.' },
+      { Exhort: 'Brad Tester', Lunch: 'Activities at the Hall are Cancelled, Please join us on Zoom or YouTube.' },
     ],
     [
       'fraternal gathering',
@@ -507,7 +508,7 @@ describe('resolveAndSendExhorterHeadsUp — date-only row (no DateTime)', () => 
           Date: 'August 9, 2026', // non-dash, sheet-style
           // no DateTime
           ServiceTimezone: 'America/Toronto',
-          Exhort: 'Brad Stephens',
+          Exhort: 'Brad Tester',
           Preside: 'Someone Else',
           Key: 'memorial',
         },

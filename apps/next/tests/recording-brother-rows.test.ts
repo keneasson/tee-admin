@@ -20,7 +20,7 @@ describe('buildRecordingBrotherRows', () => {
 
   it('treats a nameless contact as an address on file, not a person', () => {
     const mailbox = p('m', 'A', '', 'TownChristadelphians@example.org')
-    const named = p('jf', 'A', 'Jason Fish')
+    const named = p('jf', 'A', 'Jay Sampler')
     const { rows } = buildRecordingBrotherRows([ecc('A')], [mailbox], [], [[mailbox, named]])
     expect(rows[0].people.map((x) => x.personId)).toEqual(['jf'])
     expect(rows[0].addresses).toEqual([

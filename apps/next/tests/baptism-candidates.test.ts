@@ -10,8 +10,8 @@ describe('getBaptismCandidates', () => {
 
   it('falls back to the single legacy candidate when candidates is empty', () => {
     expect(
-      getBaptismCandidates({ candidate: { firstName: 'Jasper', lastName: 'Deadman' } })
-    ).toEqual([{ firstName: 'Jasper', lastName: 'Deadman' }])
+      getBaptismCandidates({ candidate: { firstName: 'Jasper', lastName: 'Instance' } })
+    ).toEqual([{ firstName: 'Jasper', lastName: 'Instance' }])
   })
 
   it('ignores a blank legacy candidate', () => {
@@ -21,15 +21,15 @@ describe('getBaptismCandidates', () => {
   it('prefers the candidates array when it has named rows', () => {
     expect(
       getBaptismCandidates({
-        candidate: { firstName: 'Jasper', lastName: 'Deadman' },
+        candidate: { firstName: 'Jasper', lastName: 'Instance' },
         candidates: [
-          { firstName: 'Seth', lastName: 'Cooper' },
-          { firstName: 'Isabella', lastName: 'Toste' },
+          { firstName: 'Seth', lastName: 'Model' },
+          { firstName: 'Isabella', lastName: 'Proxy' },
         ],
       })
     ).toEqual([
-      { firstName: 'Seth', lastName: 'Cooper' },
-      { firstName: 'Isabella', lastName: 'Toste' },
+      { firstName: 'Seth', lastName: 'Model' },
+      { firstName: 'Isabella', lastName: 'Proxy' },
     ])
   })
 
@@ -37,20 +37,20 @@ describe('getBaptismCandidates', () => {
     expect(
       getBaptismCandidates({
         candidates: [
-          { firstName: 'Seth', lastName: 'Cooper' },
+          { firstName: 'Seth', lastName: 'Model' },
           { firstName: '', lastName: '' },
         ],
       })
-    ).toEqual([{ firstName: 'Seth', lastName: 'Cooper' }])
+    ).toEqual([{ firstName: 'Seth', lastName: 'Model' }])
   })
 
   it('falls back to legacy candidate when candidates has only blank rows', () => {
     expect(
       getBaptismCandidates({
-        candidate: { firstName: 'Jasper', lastName: 'Deadman' },
+        candidate: { firstName: 'Jasper', lastName: 'Instance' },
         candidates: [{ firstName: '', lastName: '' }],
       })
-    ).toEqual([{ firstName: 'Jasper', lastName: 'Deadman' }])
+    ).toEqual([{ firstName: 'Jasper', lastName: 'Instance' }])
   })
 })
 
@@ -62,18 +62,18 @@ describe('formatCandidateNames', () => {
   })
 
   it('formats one name', () => {
-    expect(formatCandidateNames([{ firstName: 'Jasper', lastName: 'Deadman' }])).toBe(
-      'Jasper Deadman'
+    expect(formatCandidateNames([{ firstName: 'Jasper', lastName: 'Instance' }])).toBe(
+      'Jasper Instance'
     )
   })
 
   it('formats two names with "and"', () => {
     expect(
       formatCandidateNames([
-        { firstName: 'Seth', lastName: 'Cooper' },
-        { firstName: 'Isabella', lastName: 'Toste' },
+        { firstName: 'Seth', lastName: 'Model' },
+        { firstName: 'Isabella', lastName: 'Proxy' },
       ])
-    ).toBe('Seth Cooper and Isabella Toste')
+    ).toBe('Seth Model and Isabella Proxy')
   })
 
   it('formats three or more names with commas and a trailing "and"', () => {
@@ -89,9 +89,9 @@ describe('formatCandidateNames', () => {
   it('skips blank names when joining', () => {
     expect(
       formatCandidateNames([
-        { firstName: 'Seth', lastName: 'Cooper' },
+        { firstName: 'Seth', lastName: 'Model' },
         { firstName: '', lastName: '' },
       ])
-    ).toBe('Seth Cooper')
+    ).toBe('Seth Model')
   })
 })

@@ -58,7 +58,7 @@ Tier also governs **how much of a person renders**:
 | Viewer tier | Renders as |
 |-------------|-----------|
 | anonymous / guest / `recognized` | **first name only** — "Peter" |
-| `authenticated` member+ | **full name** — "Peter Skariah" |
+| `authenticated` member+ | **full name** — "Peter Stub" |
 
 - **Sanitation happens on the server.** The public render/response emits **only**
   the first name — never full names hidden by CSS/JS (a View-Source leak). Public

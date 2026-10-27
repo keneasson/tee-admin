@@ -363,8 +363,8 @@ function RegistrationBlockView({
         </Text>
       ) : null}
       {/* Smart contact field (#254, ADR-0005) — exactly two renderings:
-          full: "Contact Jessica Easson" + email/phone
-          floor: "Contact Jessica" + "Sign in to view contact details" */}
+          full: "Contact Ann Example" + email/phone
+          floor: "Contact Ann" + "Sign in to view contact details" */}
       {hasContact ? (
         <YStack gap="$1">
           {contactName ? (

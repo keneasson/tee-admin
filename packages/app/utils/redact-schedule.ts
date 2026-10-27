@@ -1,7 +1,7 @@
 /**
  * Server-side PII redaction for schedule data (Phase 0 — see
  * docs/UNIFIED_POST_MODEL_DESIGN.md). Schedule rows carry role assignments as
- * full-name STRINGS (e.g. Presider "Brad Stephens", Doorkeeper "Ken Easson"), not
+ * full-name STRINGS (e.g. Presider "Brad Tester", Doorkeeper "Ken Example"), not
  * structured names. For anon we reduce each to its FIRST NAME ("Brad", "Ken") —
  * sufficiently non-identifying — and drop precise host addresses. Bible readings,
  * hymns, topics, dates etc. are NOT names and pass through untouched.

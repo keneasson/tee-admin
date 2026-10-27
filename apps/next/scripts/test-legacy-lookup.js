@@ -4,8 +4,8 @@ const fetch = require('node-fetch');
 async function testLegacyLookup() {
   try {
     // Test the role assignment for Ken
-    console.log('🔍 Testing role assignment for ken.easson@gmail.com');
-    const response = await fetch('http://localhost:3001/api/debug/check-role?email=ken.easson@gmail.com');
+    console.log('🔍 Testing role assignment for owner@example.org');
+    const response = await fetch('http://localhost:3001/api/debug/check-role?email=owner@example.org');
     const result = await response.json();
     
     console.log('📋 Results:');

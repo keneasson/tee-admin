@@ -1,7 +1,7 @@
 # Offices, Audiences & Sending — Design Doc
 
 > **Status**: Proposal / north-star (no code committed)
-> **Author**: Ken Easson + Claude
+> **Author**: Owner + Claude
 > **Date**: 2026-06-28
 > **Audience**: Developers (human and AI) working on TEE Admin
 > **Purpose**: Define the target model that unifies content (News/Events), email
@@ -155,8 +155,8 @@ A role contact address can be **either**:
 
 - the holder's **personal** email (the *common* case — many recording brothers just
   use their own address), or
-- a **dedicated role inbox** (`teerecbro@gmail.com` = "the Recording Brother of
-  Toronto East," distinct from the person `ken.easson@gmail.com`).
+- a **dedicated role inbox** (e.g. `recbro@example.org` = "the Recording Brother of
+  Toronto East," distinct from the person `owner@example.org`).
 
 Neither is "standard"; both are common. The invariant is **the office, not the
 address**: *"Recording Brother of TEE is held by person X, reachable at address Y,"*
@@ -184,7 +184,7 @@ The choice of address **is** the privacy control.
 An address must resolve to its person — **including a dedicated role inbox** that
 isn't on the person's personal PersonRecord. This is the same one-address→one-person
 lookup that exists today (GSI1); the office assignment becomes *another way an address
-attaches to a person*. Logging in as `teerecbro@gmail.com` resolves to "Ken, acting as
+attaches to a person*. Logging in as `recbro@example.org` resolves to "the holder, acting as
 Recording Brother of TEE, and therefore a member of Toronto East."
 
 ---

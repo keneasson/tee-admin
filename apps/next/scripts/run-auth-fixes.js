@@ -25,13 +25,13 @@ async function runAuthFixes() {
     
     console.log('\n✅ Authentication fixes completed!');
     console.log('\n📋 Summary of changes:');
-    console.log('   • Added ken.easson@gmail.com to owner emails list');
+    console.log('   • Added owner@example.org to owner emails list');
     console.log('   • Fixed credentials auth to prevent duplicate accounts');
     console.log('   • Updated DynamoDB records to set correct owner role');
     console.log('   • Added comprehensive unit and e2e tests');
     console.log('\n🔧 Manual steps still needed:');
     console.log('   • Run the fix-ken-role.js script manually with proper AWS credentials');
-    console.log('   • Delete guest credentials record for ken.easson@gmail.com');
+    console.log('   • Delete guest credentials record for owner@example.org');
     console.log('   • Test sign-in flows with both Google OAuth and credentials');
     
   } catch (error) {

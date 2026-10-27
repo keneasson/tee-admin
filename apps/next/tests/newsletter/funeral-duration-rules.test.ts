@@ -484,13 +484,13 @@ describe('Funeral Duration Rules', () => {
   // ==========================================================================
 
   describe('Real-world scenarios', () => {
-    test('David McKay - service Jan 3, today Jan 16 - should be EXCLUDED', () => {
+    test('David Memoria - service Jan 3, today Jan 16 - should be EXCLUDED', () => {
       const publishDate = new Date('2025-12-20') // Assume published ~2 weeks before service
       const currentDate = new Date('2026-01-16') // Today
       const serviceDate = new Date('2026-01-03') // Service already passed
 
       const event = createFuneralEvent({
-        title: 'In Loving Memory of Brother David McKay',
+        title: 'In Loving Memory of Brother David Memoria',
         serviceDate,
         publishDate,
       })
@@ -506,13 +506,13 @@ describe('Funeral Duration Rules', () => {
       expect(result.reason).toContain('has passed')
     })
 
-    test('Hammy Neblett - service Jan 10, today Jan 16 - should be EXCLUDED', () => {
+    test('Harry Remembered - service Jan 10, today Jan 16 - should be EXCLUDED', () => {
       const publishDate = new Date('2025-12-27') // Assume published ~2 weeks before service
       const currentDate = new Date('2026-01-16') // Today
       const serviceDate = new Date('2026-01-10') // Service already passed
 
       const event = createFuneralEvent({
-        title: 'In loving memory of Hammy Neblett',
+        title: 'In loving memory of Harry Remembered',
         serviceDate,
         publishDate,
       })

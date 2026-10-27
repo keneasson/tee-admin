@@ -7,8 +7,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
  * source of truth, and heals historical addresses that only ever lived in the
  * legacy USER# store via a lazy-migrate on read (see the GET handler). These
  * tests PROVE that consolidation never drops or duplicates a person's addresses —
- * the failure mode that matters for someone like a Recording Brother (e.g. Geoff
- * McKay of Brampton) who has several personal emails plus a role email.
+ * the failure mode that matters for someone like a Recording Brother (e.g. Gil
+ * Memoria of Alpha) who has several personal emails plus a role email.
  *
  * The PersonRecord side is a STATEFUL mock: `addEmail` actually appends to the
  * in-memory row set and `getEmails` returns the current set. That is deliberate —
@@ -47,10 +47,10 @@ vi.mock('../utils/email/public-topics', () => ({ getPublicOptInCount: h.optInCou
 
 import { GET } from '../app/api/user/emails/route'
 
-const PID = 'geoff-mckay-1'
-const PRIMARY = 'geoff@brampton.example'
+const PID = 'gil-memoria-1'
+const PRIMARY = 'gil@alpha.example'
 
-const GEOFF: any = { personId: PID, primaryEmail: PRIMARY }
+const GIL: any = { personId: PID, primaryEmail: PRIMARY }
 
 // ---- Stateful PersonRecord EMAIL# store ------------------------------------
 
@@ -110,8 +110,8 @@ const addressesMigrated = () => h.p_addEmail.mock.calls.map((c) => c[1].email)
 beforeEach(() => {
   vi.clearAllMocks()
   h.auth.mockResolvedValue({ user: { email: PRIMARY } })
-  h.p_getByEmail.mockResolvedValue(GEOFF)
-  h.p_getAllPersonsByEmail.mockResolvedValue([GEOFF])
+  h.p_getByEmail.mockResolvedValue(GIL)
+  h.p_getAllPersonsByEmail.mockResolvedValue([GIL])
   h.t_getByPersonAndType.mockResolvedValue([])
   h.optInCount.mockResolvedValue(2)
 
@@ -141,9 +141,9 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
     // Legacy has the primary plus 3 secondaries that never made it onto the PersonRecord.
     legacy([
       { email: PRIMARY, isPrimary: true, verified: true },
-      { email: 'geoff.personal@gmail.example', order: 1, verified: true },
-      { email: 'geoffmckay@outlook.example', order: 2 },
-      { email: 'g.mckay@work.example', order: 3, verified: true },
+      { email: 'gil.personal@gmail.example', order: 1, verified: true },
+      { email: 'gilmemoria@outlook.example', order: 2 },
+      { email: 'g.memoria@work.example', order: 3, verified: true },
     ])
 
     const emails = await getJson()
@@ -153,9 +153,9 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
     expect(set).toEqual(
       expect.arrayContaining([
         PRIMARY,
-        'geoff.personal@gmail.example',
-        'geoffmckay@outlook.example',
-        'g.mckay@work.example',
+        'gil.personal@gmail.example',
+        'gilmemoria@outlook.example',
+        'g.memoria@work.example',
       ])
     )
     expect(set).toHaveLength(4)
@@ -169,9 +169,9 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
     expect(h.p_addEmail).toHaveBeenCalledTimes(3)
     expect(addressesMigrated()).toEqual(
       expect.arrayContaining([
-        'geoff.personal@gmail.example',
-        'geoffmckay@outlook.example',
-        'g.mckay@work.example',
+        'gil.personal@gmail.example',
+        'gilmemoria@outlook.example',
+        'g.memoria@work.example',
       ])
     )
     expect(addressesMigrated()).not.toContain(PRIMARY)
@@ -274,19 +274,19 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
   it('6) Recording Brother: all personal addresses remain; the role address is not listed among them (R3: "Your role")', async () => {
     const RB_EMAIL = 'recorder@brampton-ecclesia.example'
     h.p_getByEmail.mockResolvedValue({
-      ...GEOFF,
+      ...GIL,
       isRecordingBrother: true,
       rbEcclesiaEmail: RB_EMAIL,
     })
     h.p_getAllPersonsByEmail.mockResolvedValue([
-      { ...GEOFF, isRecordingBrother: true, rbEcclesiaEmail: RB_EMAIL },
+      { ...GIL, isRecordingBrother: true, rbEcclesiaEmail: RB_EMAIL },
     ])
 
-    // Geoff's real personal addresses, already consolidated onto the PersonRecord.
+    // Gil's real personal addresses, already consolidated onto the PersonRecord.
     seedPersonEmails([
       { emailId: 'p', email: PRIMARY, emailType: 'primary', order: 0, verified: true },
-      { emailId: 's1', email: 'geoff.personal@gmail.example', emailType: 'secondary', order: 1, verified: true },
-      { emailId: 's2', email: 'g.mckay@work.example', emailType: 'secondary', order: 2, verified: true },
+      { emailId: 's1', email: 'gil.personal@gmail.example', emailType: 'secondary', order: 1, verified: true },
+      { emailId: 's2', email: 'g.memoria@work.example', emailType: 'secondary', order: 2, verified: true },
     ])
     legacy([]) // nothing left in the legacy store
 
@@ -295,7 +295,7 @@ describe('GET /api/user/emails — multi-email consolidation (no drop, no dupe)'
 
     // All three personal addresses, and only those: an office address lives on
     // the office and is shown in the profile's "Your role" section.
-    expect(set.sort()).toEqual([PRIMARY, 'geoff.personal@gmail.example', 'g.mckay@work.example'].sort())
+    expect(set.sort()).toEqual([PRIMARY, 'gil.personal@gmail.example', 'g.memoria@work.example'].sort())
 
     // The role email is NOT written back onto the personal EMAIL# set.
     expect(h.p_addEmail).not.toHaveBeenCalled()

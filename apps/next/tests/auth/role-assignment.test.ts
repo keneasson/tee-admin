@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { getRoleFromLegacyUser } from '@my/app/provider/auth/get-user-from-legacy'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { DirectoryType } from '@my/app/types'
@@ -6,35 +6,40 @@ import type { DirectoryType } from '@my/app/types'
 describe('Role Assignment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Owner list comes from OWNER_EMAILS; the tests set a placeholder list.
+    vi.stubEnv('OWNER_EMAILS', 'owner.legacy@example.org,owner@example.org')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   describe('getRoleFromLegacyUser', () => {
-    it('should assign OWNER role to ken.easson@gmail.com', async () => {
+    it('should assign OWNER role to owner@example.org', async () => {
       const mockUser: DirectoryType = {
         Key: 'directory',
         FirstName: 'Ken',
-        LastName: 'Easson',
-        Email: 'ken.easson@gmail.com',
+        LastName: 'Example',
+        Email: 'owner@example.org',
         ecclesia: 'TEE',
-        Phone: '647-393-3153',
-        Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Phone: '416-555-0101',
+        Address: '1 Example St',
+        Children: 'Kara, Zane'
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
       expect(role).toBe(ROLES.OWNER)
     })
 
-    it('should assign OWNER role to keneasson@gmail.com (legacy format)', async () => {
+    it('should assign OWNER role to owner.legacy@example.org (legacy format)', async () => {
       const mockUser: DirectoryType = {
         Key: 'directory',
         FirstName: 'Ken',
-        LastName: 'Easson',
-        Email: 'keneasson@gmail.com',
+        LastName: 'Example',
+        Email: 'owner.legacy@example.org',
         ecclesia: 'TEE',
-        Phone: '647-393-3153',
-        Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Phone: '416-555-0101',
+        Address: '1 Example St',
+        Children: 'Kara, Zane'
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -93,12 +98,12 @@ describe('Role Assignment', () => {
       const mockUser: DirectoryType = {
         Key: 'directory',
         FirstName: 'Ken',
-        LastName: 'Easson',
-        Email: 'work@company.com\nken.easson@gmail.com\npersonal@other.com',
+        LastName: 'Example',
+        Email: 'work@company.com\nowner@example.org\npersonal@other.com',
         ecclesia: 'TEE',
-        Phone: '647-393-3153',
-        Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Phone: '416-555-0101',
+        Address: '1 Example St',
+        Children: 'Kara, Zane'
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -109,12 +114,12 @@ describe('Role Assignment', () => {
       const mockUser: DirectoryType = {
         Key: 'directory',
         FirstName: 'Ken',
-        LastName: 'Easson',
-        Email: 'KEN.EASSON@GMAIL.COM',
+        LastName: 'Example',
+        Email: 'OWNER@EXAMPLE.ORG',
         ecclesia: 'TEE',
-        Phone: '647-393-3153',
-        Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Phone: '416-555-0101',
+        Address: '1 Example St',
+        Children: 'Kara, Zane'
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })
@@ -125,12 +130,12 @@ describe('Role Assignment', () => {
       const mockUser: DirectoryType = {
         Key: 'directory',
         FirstName: 'Ken',
-        LastName: 'Easson',
-        Email: 'ken.easson@gmail.com',
+        LastName: 'Example',
+        Email: 'owner@example.org',
         ecclesia: 'Other Ecclesia', // Even with different ecclesia, should be owner
-        Phone: '647-393-3153',
-        Address: '28 Plumridge Crt',
-        Children: 'Krystal, Zaiden'
+        Phone: '416-555-0101',
+        Address: '1 Example St',
+        Children: 'Kara, Zane'
       }
 
       const role = await getRoleFromLegacyUser({ user: mockUser })

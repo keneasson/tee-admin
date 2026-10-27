@@ -124,7 +124,7 @@ describe('applyOverrideToProgramItem — roleFields (roster overlay)', () => {
 
   it('an overridden role value is still first-name-only redacted for an anon viewer', () => {
     const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
-    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }))
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Variant' }))
     // Merge runs BEFORE redaction on the anon read path, so the overridden full name
     // must collapse to the first name just like a synced value would.
     const [safe] = redactScheduleData([item], ANONYMOUS_VIEWER, 'public-web')
@@ -133,9 +133,9 @@ describe('applyOverrideToProgramItem — roleFields (roster overlay)', () => {
 
   it('reveals the overridden full name on the member/newsletter channel', () => {
     const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
-    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }))
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Variant' }))
     const [full] = redactScheduleData([item], ANONYMOUS_VIEWER, 'newsletter-email')
-    expect(full.Exhort).toBe('Jonathan Bowen')
+    expect(full.Exhort).toBe('Jonathan Variant')
   })
 })
 
@@ -162,16 +162,16 @@ describe('applyOverrideToProgramItem — roleFieldRefs (metadata isolation, Slic
     const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
     const result = applyOverrideToProgramItem(
       item,
-      makeOverride({ Exhort: 'Jonathan Bowen' }, { Exhort: 'person-123' })
+      makeOverride({ Exhort: 'Jonathan Variant' }, { Exhort: 'person-123' })
     )
-    expect(result.Exhort).toBe('Jonathan Bowen') // display value drives render
+    expect(result.Exhort).toBe('Jonathan Variant') // display value drives render
     expect(result.roleFieldRefs).toBeUndefined() // metadata never merged in
     expect(JSON.stringify(result)).not.toContain('person-123') // personId absent everywhere
   })
 
   it('anon redaction is unchanged when a member is linked (still first-name-only)', () => {
     const item: Record<string, any> = { Key: 'memorial', Exhort: 'Bro Synced' }
-    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Bowen' }, { Exhort: 'person-123' }))
+    applyOverrideToProgramItem(item, makeOverride({ Exhort: 'Jonathan Variant' }, { Exhort: 'person-123' }))
     const [safe] = redactScheduleData([item], ANONYMOUS_VIEWER, 'public-web')
     expect(safe.Exhort).toBe('Jonathan')
     expect(JSON.stringify(safe)).not.toContain('person-123')

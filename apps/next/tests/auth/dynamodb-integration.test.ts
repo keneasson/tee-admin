@@ -29,24 +29,24 @@ describe('DynamoDB User Integration', () => {
       mockSend.mockResolvedValueOnce({
         Items: [{
           id: 'user-123',
-          email: 'ken.easson@gmail.com',
-          name: 'Ken Easson',
+          email: 'owner@example.org',
+          name: 'Ken Example',
           role: 'owner',
           ecclesia: 'TEE',
           profile: {
             fname: 'Ken',
-            lname: 'Easson',
-            phone: '647-393-3153',
-            address: '28 Plumridge Crt',
-            children: 'Krystal, Zaiden'
+            lname: 'Example',
+            phone: '416-555-0101',
+            address: '1 Example St',
+            children: 'Kara, Zane'
           }
         }]
       })
 
-      const user = await getUserFromDynamoDB('ken.easson@gmail.com')
+      const user = await getUserFromDynamoDB('owner@example.org')
 
       expect(user).toBeTruthy()
-      expect(user?.email).toBe('ken.easson@gmail.com')
+      expect(user?.email).toBe('owner@example.org')
       expect(user?.role).toBe('owner')
       expect(user?.profile?.fname).toBe('Ken')
     })
