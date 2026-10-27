@@ -140,7 +140,7 @@ const MeetingEmail: React.FC<MeetingEmailProps> = (props) => {
           {hasScheduleInfo ? (
             <Section>
               <Text style={defaultText}>
-                Here are the details for tonight&apos;s {title}
+                Here are the details for the {title}
                 {time ? ` at ${time}` : ''}
                 {date ? ` on ${date}` : ''}
               </Text>
