@@ -158,7 +158,7 @@ Sending follows the exhorter heads-up pattern: an idempotency claim, SES
   dates if enabled. After acceptance it's the manage view: change date / swap / cancel.
 - **Swap response page** `/invite/swap/{swapId}`.
 
-Everything sits behind a new `SPEAKER_INVITES` feature flag.
+No feature flag (owner decision): the feature is limited to RB/Rep/owner senders and invite-link holders, and those gates are the control.
 
 ## 10. Acceptance criteria
 
@@ -172,7 +172,7 @@ Everything sits behind a new `SPEAKER_INVITES` feature flag.
 8. A swap accepted by the other speaker exchanges both dates atomically. A swap within 24h shows the "Please inform the Presiding/Exhorting brother" note. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
 9. Expired, cancelled or unknown links show a clear page with the inviter's contact, never an error.
 10. Lecture invites work end-to-end with manually entered dates.
-11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod behind the flag **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
+11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
 
 ## 11. Out of scope (*Not now*)
 
@@ -187,5 +187,5 @@ Everything sits behind a new `SPEAKER_INVITES` feature flag.
 
 ## 12. Definition of done
 
-Merged in **one PR**, deployed, flag on for TEE, criteria 1–11 verified,
-issue closed, nothing half-built behind the flag.
+Merged in **one PR**, deployed, criteria 1–11 verified,
+issue closed, nothing half-built left in place.
