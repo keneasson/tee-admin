@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   YStack,
   XStack,
@@ -19,7 +19,7 @@ import type { RosterCandidate } from '@my/ui'
 import { Check, Plus, Trash2 } from '@tamagui/lucide-icons'
 import { callApi } from './api'
 import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
-import { NOT_AN_INVITER, addDaysISO, formatDate, formatTime, isISODate, slotLabel, todayISO } from './format'
+import { NOT_AN_INVITER, addDaysISO, formatDate, isISODate, slotLabel, slotWhen, todayISO, usualMeeting } from './format'
 import { Notice } from './identity-parts'
 import type { Slot, InviterInviteView, SpeakerInviteType } from './types'
 
@@ -37,6 +37,14 @@ export interface SpeakerInviteComposerProps {
 }
 
 const MAX_DATES = 3
+/**
+ * Programs are planned 6–12 months ahead, so the list covers a year: it looks a
+ * year out for the first open date, then shows a full year from one meeting
+ * before it. Filled weeks stay visible so visiting speakers can be interleaved
+ * with the ecclesia's own members.
+ */
+const SEARCH_AHEAD_DAYS = 365
+const VISIBLE_RANGE_DAYS = 365
 const TYPES: SpeakerInviteType[] = ['memorial', 'bible_class', 'lecture']
 
 type InviteeMode = 'directory' | 'other'
@@ -51,8 +59,11 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   const [picked, setPicked] = useState<RosterCandidate | null>(null)
   const [other, setOther] = useState({ firstName: '', lastName: '', email: '', ecclesia: '' })
 
+  // The first load looks a year ahead, then the list starts one meeting before
+  // the first open date (see loadSlots), so nobody pages past filled weeks.
   const [from, setFrom] = useState(todayISO())
-  const [to, setTo] = useState(addDaysISO(todayISO(), 90))
+  const [to, setTo] = useState(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
+  const autoRangedFor = useRef<SpeakerInviteType | null>(null)
   const [slots, setSlots] = useState<Slot[] | null>(null)
   const [slotsError, setSlotsError] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -79,6 +90,20 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
     const res = await callApi<{ slots: Slot[] }>(`/api/speaker-invites/slots?${params.toString()}`)
     setLoadingSlots(false)
     if (res.ok) {
+      if (autoRangedFor.current !== type) {
+        autoRangedFor.current = type
+        const firstOpen = res.data.slots.findIndex((s) => s.state === 'OPEN')
+        if (firstOpen >= 0) {
+          const start = res.data.slots[Math.max(firstOpen - 1, 0)].date
+          const end = addDaysISO(start, VISIBLE_RANGE_DAYS)
+          if (start !== from || end !== to) {
+            // Narrowing the range refetches; this result is superseded.
+            setFrom(start)
+            setTo(end)
+            return
+          }
+        }
+      }
       setSlots(res.data.slots)
       // Keep only selections that are still open.
       const open = new Set(res.data.slots.filter((s) => s.state === 'OPEN').map((s) => s.date))
@@ -207,7 +232,19 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
       <Section title="Invitation for">
         <XStack gap="$2" flexWrap="wrap">
           {TYPES.map((t) => (
-            <Button key={t} variant={type === t ? 'action' : 'outlined'} onPress={() => setType(t)} testID={`type-${t}`}>
+            <Button
+              key={t}
+              variant={type === t ? 'action' : 'outlined'}
+              onPress={() => {
+                if (t === type) return
+                setType(t)
+                // A new type has its own schedule: search a year ahead again.
+                setFrom(todayISO())
+                setTo(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
+                setSlots(null)
+              }}
+              testID={`type-${t}`}
+            >
               {INVITE_TYPE_LABEL[t]}
             </Button>
           ))}
@@ -352,15 +389,25 @@ function SlotPicker({
     return <Paragraph color="$colorSecondary">No meeting days in this range.</Paragraph>
   }
   const full = selected.length >= MAX_DATES
+  const usual = usualMeeting(slots)
   return (
-    <YStack gap="$1" testID="slot-list">
+    <YStack gap="$2">
+      {usual.label ? (
+        <Text fontSize="$3" color="$colorSecondary" testID="slot-usual">
+          {usual.label}
+        </Text>
+      ) : null}
+      <Text fontSize="$2" color="$colorSecondary">
+        Tip: offer one date soon, one a couple of months out, and one further out.
+      </Text>
+      <XStack flexWrap="wrap" gap="$2" testID="slot-list">
       {slots.map((s) => {
         const isSelected = selected.includes(s.date)
         const open = s.state === 'OPEN'
         const error = notOpen[s.date]
         const disabled = !open || (full && !isSelected)
         return (
-          <YStack key={s.date} gap="$1">
+          <YStack key={s.date} gap="$1" width="100%" $gtXs={{ width: '49%' }}>
             <XStack
               padding="$2"
               borderRadius="$3"
@@ -381,11 +428,10 @@ function SlotPicker({
                   <Check />
                 </Checkbox.Indicator>
               </Checkbox>
-              <Text flex={1} fontWeight={isSelected ? '600' : '400'}>
-                {formatDate(s.date, { short: true })}
-                {s.time ? ` · ${formatTime(s.time)}` : ''}
+              <Text flexShrink={0} fontWeight={isSelected ? '600' : '400'}>
+                {slotWhen(s, usual)}
               </Text>
-              <Text fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
+              <Text flex={1} textAlign="right" numberOfLines={1} fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
                 {slotLabel(s)}
               </Text>
             </XStack>
@@ -397,6 +443,7 @@ function SlotPicker({
           </YStack>
         )
       })}
+      </XStack>
     </YStack>
   )
 }
