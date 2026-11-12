@@ -19,7 +19,7 @@ import type { RosterCandidate } from '@my/ui'
 import { Check, Plus, Trash2 } from '@tamagui/lucide-icons'
 import { callApi } from './api'
 import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
-import { NOT_AN_INVITER, addDaysISO, formatDate, isISODate, slotLabel, slotWhen, todayISO, usualMeeting } from './format'
+import { NOT_AN_INVITER, addDaysISO, formatDate, isISODate, slotLabel, slotWhen, todayISO, usualMeeting, type UsualMeeting } from './format'
 import { Notice } from './identity-parts'
 import type { Slot, InviterInviteView, SpeakerInviteType } from './types'
 
@@ -400,50 +400,89 @@ function SlotPicker({
       <Text fontSize="$2" color="$colorSecondary">
         Tip: offer one date soon, one a couple of months out, and one further out.
       </Text>
-      <XStack flexWrap="wrap" gap="$2" testID="slot-list">
-      {slots.map((s) => {
-        const isSelected = selected.includes(s.date)
-        const open = s.state === 'OPEN'
-        const error = notOpen[s.date]
-        const disabled = !open || (full && !isSelected)
-        return (
-          <YStack key={s.date} gap="$1" width="100%" $gtXs={{ width: '49%' }}>
-            <XStack
-              padding="$2"
-              borderRadius="$3"
-              borderWidth={1}
-              borderColor={isSelected ? '$primary' : error ? '$red8' : '$borderColor'}
-              backgroundColor={isSelected ? '$blue2' : 'transparent'}
-              opacity={open ? 1 : 0.55}
-              alignItems="center"
-              gap="$3"
-              cursor={disabled ? 'default' : 'pointer'}
-              hoverStyle={disabled ? undefined : { borderColor: '$primary' }}
-              onPress={disabled ? undefined : () => onToggle(s.date)}
-              testID={`slot-${s.date}`}
-              aria-disabled={disabled}
-            >
-              <Checkbox checked={isSelected} disabled={disabled} pointerEvents="none" size="$3" aria-label={formatDate(s.date)}>
-                <Checkbox.Indicator>
-                  <Check />
-                </Checkbox.Indicator>
-              </Checkbox>
-              <Text flexShrink={0} fontWeight={isSelected ? '600' : '400'}>
-                {slotWhen(s, usual)}
-              </Text>
-              <Text flex={1} textAlign="right" numberOfLines={1} fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
-                {slotLabel(s)}
-              </Text>
-            </XStack>
-            {error ? (
-              <Text fontSize="$2" color="$red10" paddingLeft="$2" testID={`slot-error-${s.date}`}>
-                {`No longer open (${error.toLowerCase().replace('_', ' ')}).`}
-              </Text>
-            ) : null}
+      {/*
+        Two columns read top-to-bottom: the left is the first half of the range,
+        the right the second half, so consecutive weeks are never side by side.
+        On narrow screens the columns stack, which keeps date order.
+      */}
+      <XStack flexDirection="column" $gtXs={{ flexDirection: 'row' }} gap="$2" testID="slot-list">
+        {splitInHalf(slots).map((column, c) => (
+          <YStack key={c} flex={1} gap="$2" testID={`slot-column-${c}`}>
+            {column.map((s) => (
+              <SlotRow
+                key={s.date}
+                slot={s}
+                usual={usual}
+                isSelected={selected.includes(s.date)}
+                full={full}
+                error={notOpen[s.date]}
+                onToggle={onToggle}
+              />
+            ))}
           </YStack>
-        )
-      })}
+        ))}
       </XStack>
+    </YStack>
+  )
+}
+
+/** First half (rounded up) and second half, each still in date order. */
+function splitInHalf<T>(items: T[]): [T[], T[]] {
+  const mid = Math.ceil(items.length / 2)
+  return [items.slice(0, mid), items.slice(mid)]
+}
+
+function SlotRow({
+  slot: s,
+  usual,
+  isSelected,
+  full,
+  error,
+  onToggle,
+}: {
+  slot: Slot
+  usual: UsualMeeting
+  isSelected: boolean
+  full: boolean
+  error: string | undefined
+  onToggle: (date: string) => void
+}) {
+  const open = s.state === 'OPEN'
+  const disabled = !open || (full && !isSelected)
+  return (
+    <YStack gap="$1">
+      <XStack
+        padding="$2"
+        borderRadius="$3"
+        borderWidth={1}
+        borderColor={isSelected ? '$primary' : error ? '$red8' : '$borderColor'}
+        backgroundColor={isSelected ? '$blue2' : 'transparent'}
+        opacity={open ? 1 : 0.55}
+        alignItems="center"
+        gap="$3"
+        cursor={disabled ? 'default' : 'pointer'}
+        hoverStyle={disabled ? undefined : { borderColor: '$primary' }}
+        onPress={disabled ? undefined : () => onToggle(s.date)}
+        testID={`slot-${s.date}`}
+        aria-disabled={disabled}
+      >
+        <Checkbox checked={isSelected} disabled={disabled} pointerEvents="none" size="$3" aria-label={formatDate(s.date)}>
+          <Checkbox.Indicator>
+            <Check />
+          </Checkbox.Indicator>
+        </Checkbox>
+        <Text flexShrink={0} fontWeight={isSelected ? '600' : '400'}>
+          {slotWhen(s, usual)}
+        </Text>
+        <Text flex={1} textAlign="right" numberOfLines={1} fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
+          {slotLabel(s)}
+        </Text>
+      </XStack>
+      {error ? (
+        <Text fontSize="$2" color="$red10" paddingLeft="$2" testID={`slot-error-${s.date}`}>
+          {`No longer open (${error.toLowerCase().replace('_', ' ')}).`}
+        </Text>
+      ) : null}
     </YStack>
   )
 }
