@@ -1,33 +1,6 @@
 import { getTimezoneCityName } from '@my/app/utils/timezone'
-import type { InviteSlot, NoMeetingReason, SpeakerInviteStatus, SpeakerInviteType } from './types'
-
-/** What the inviter picks in the composer, and how the list names each type. */
-export const INVITE_TYPE_LABEL: Record<SpeakerInviteType, string> = {
-  memorial: 'Memorial exhortation',
-  bible_class: 'Bible Class',
-  lecture: 'Lecture',
-}
-
-/** "An invitation to {phrase} at {ecclesia}" (spec §1). */
-export const INVITE_TYPE_PHRASE: Record<SpeakerInviteType, string> = {
-  memorial: 'exhort at the Memorial',
-  bible_class: 'lead Bible Class',
-  lecture: 'give a Lecture',
-}
-
-export const INVITE_STATUS_LABEL: Record<SpeakerInviteStatus, string> = {
-  sent: 'Waiting for a reply',
-  accepted: 'Accepted',
-  cancelled: 'Cancelled',
-  expired: 'Expired',
-}
-
-const REASON_LABEL: Record<NoMeetingReason, string> = {
-  NO_SCHEDULE_ROW: 'No meeting scheduled',
-  CANCELLED: 'Meeting cancelled',
-  NO_SERVICE_AT_HALL: 'No service at the hall',
-  SPECIAL_OCCASION: 'Special occasion',
-}
+import { NO_MEETING_REASON_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import type { Slot } from './types'
 
 /** "Sunday, November 15, 2026" for a YYYY-MM-DD (no timezone drift). */
 export function formatDate(date: string, opts: { short?: boolean } = {}): string {
@@ -58,10 +31,10 @@ export function formatWhen(date: string, time?: string, tz?: string): string {
 }
 
 /** The label a non-open slot carries in a list (never hidden, ADR-0005). */
-export function slotLabel(slot: InviteSlot): string {
+export function slotLabel(slot: Slot): string {
   if (slot.state === 'OPEN') return 'Open'
   if (slot.state === 'FILLED') return slot.speakerName ? `Filled: ${slot.speakerName}` : 'Filled'
-  const reason = slot.reason ? REASON_LABEL[slot.reason] : 'No meeting'
+  const reason = slot.reason ? NO_MEETING_REASON_LABEL[slot.reason] : 'No meeting'
   return slot.reasonNote ? `${reason}: ${slot.reasonNote}` : reason
 }
 
@@ -94,32 +67,5 @@ export function isISODate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
 }
 
-/**
- * Fallback "Add to Google Calendar" link, used only until the invite API sends
- * its own `googleCalendarUrl`. Local `dates` (no `Z`) plus `ctz` open the form
- * at the hall's local time.
- */
-export function googleCalendarFallback(input: {
-  title: string
-  date: string
-  time?: string
-  tz?: string
-  location?: string
-  durationMinutes: number
-}): string | null {
-  if (!input.time || !/^\d{2}:\d{2}$/.test(input.time)) return null
-  const [h, m] = input.time.split(':').map(Number)
-  const [y, mo, d] = input.date.split('-').map(Number)
-  // Wall-clock time carried in a UTC Date purely for formatting.
-  const start = new Date(Date.UTC(y, mo - 1, d, h, m))
-  const end = new Date(start.getTime() + input.durationMinutes * 60_000)
-  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').slice(0, 15)
-  const params = [
-    `action=TEMPLATE`,
-    `text=${encodeURIComponent(input.title)}`,
-    `dates=${fmt(start)}/${fmt(end)}`,
-    `location=${encodeURIComponent(input.location ?? '')}`,
-    ...(input.tz ? [`ctz=${encodeURIComponent(input.tz)}`] : []),
-  ]
-  return `https://calendar.google.com/calendar/render?${params.join('&')}`
-}
+/** What a signed-in admin who isn't an RB/Rep sees instead of a broken page (403). */
+export const NOT_AN_INVITER = 'Speaker invitations are sent by the Recording Brother or Rep of an ecclesia.'

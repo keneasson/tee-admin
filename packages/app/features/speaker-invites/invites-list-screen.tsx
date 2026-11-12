@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { YStack, XStack, Text, Card, Paragraph, Button, Separator, PageHeader, LoadingState } from '@my/ui'
 import { ChevronDown, ChevronRight, Plus } from '@tamagui/lucide-icons'
 import { callApi } from './api'
-import { INVITE_STATUS_LABEL, INVITE_TYPE_LABEL, formatDate, formatWhen } from './format'
+import { INVITE_HISTORY_ACTION_LABEL, INVITE_STATUS_LABEL, INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { formatDate, formatWhen } from './format'
 import { Notice } from './identity-parts'
-import type { InviteHistoryEntry, InviterInviteView } from './types'
+import { NOT_AN_INVITER } from './format'
+import type { InviterInviteView } from './types'
 
 /**
  * Invites list, `/admin/speaker-invites` (spec §9): invitee, type, offered or
@@ -14,20 +16,6 @@ export interface SpeakerInvitesListProps {
   onNew: () => void
   /** Arrived straight from a successful send. */
   justSent?: boolean
-}
-
-const HISTORY_LABEL: Record<InviteHistoryEntry['action'], string> = {
-  created: 'Invitation sent',
-  accepted: 'Accepted',
-  changed: 'Changed date',
-  cancelled: 'Cancelled by the speaker',
-  cancelled_by_inviter: 'Cancelled by the sender',
-  swap_requested: 'Asked to swap',
-  swap_accepted: 'Swap accepted',
-  swap_declined: 'Swap declined',
-  swap_expired: 'Swap request expired',
-  swapped_in: 'Swapped in',
-  email_failed: 'An email could not be sent',
 }
 
 export function SpeakerInvitesList({ onNew, justSent }: SpeakerInvitesListProps) {
@@ -43,7 +31,7 @@ export function SpeakerInvitesList({ onNew, justSent }: SpeakerInvitesListProps)
       setInvites([...res.data.invites].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     } else {
       setInvites([])
-      setError(res.error.error || 'Could not load invitations.')
+      setError(res.status === 403 ? NOT_AN_INVITER : res.error.error || 'Could not load invitations.')
     }
   }, [])
 
@@ -90,6 +78,8 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reminder, setReminder] = useState<string | null>(null)
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState<string | null>(null)
   const name = invite.invitee?.name || invite.inviteeEmail
   const dateText = invite.acceptedDate
     ? formatWhen(invite.acceptedDate, invite.acceptedTime, invite.acceptedTz)
@@ -114,6 +104,29 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
     }
   }
 
+  const resend = async () => {
+    setResending(true)
+    setError(null)
+    setResent(null)
+    const res = await callApi<{ invite: InviterInviteView; sent: 'invitation' | 'confirmation' }>(
+      `/api/speaker-invites/${encodeURIComponent(invite.inviteId)}/resend`,
+      { method: 'POST', body: {} }
+    )
+    setResending(false)
+    if (res.ok) {
+      setResent(res.data.sent === 'confirmation' ? 'Confirmation sent again.' : 'Invitation sent again.')
+      onChanged(res.data.invite)
+      return
+    }
+    setError(
+      res.error.code === 'SEND_FAILED'
+        ? 'The email could not be sent. Please try again later.'
+        : res.status === 403
+          ? NOT_AN_INVITER
+          : res.error.error || 'Could not send the email again.'
+    )
+  }
+
   return (
     <Card padding="$3" bordered testID={`invite-row-${invite.inviteId}`}>
       <XStack gap="$3" alignItems="center" flexWrap="wrap">
@@ -134,9 +147,14 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
           {INVITE_STATUS_LABEL[invite.status]}
         </Text>
         {cancellable && !confirming ? (
-          <Button size="$2" variant="outlined" onPress={() => setConfirming(true)} testID="invite-cancel">
-            Cancel
-          </Button>
+          <XStack gap="$2">
+            <Button size="$2" variant="outlined" disabled={resending} onPress={resend} testID="invite-resend">
+              {resending ? 'Sending…' : 'Resend'}
+            </Button>
+            <Button size="$2" variant="outlined" onPress={() => setConfirming(true)} testID="invite-cancel">
+              Cancel
+            </Button>
+          </XStack>
         ) : null}
       </XStack>
 
@@ -158,6 +176,11 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
         </YStack>
       ) : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
+      {resent ? (
+        <Notice tone="success" testID="invite-resent">
+          {resent}
+        </Notice>
+      ) : null}
       {reminder ? (
         <Notice tone="warning" testID="sheet-reminder">
           {reminder}
@@ -171,7 +194,7 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
           {invite.history.map((h, i) => (
             <Text key={`${h.at}-${i}`} fontSize="$2" color="$colorSecondary">
               {`${new Date(h.at).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })} · ${
-                HISTORY_LABEL[h.action] ?? h.action
+                INVITE_HISTORY_ACTION_LABEL[h.action] ?? h.action
               }${h.from ? ` from ${h.from}` : ''}${h.to ? ` to ${h.to}` : ''}${h.note ? ` · ${h.note}` : ''} (${h.trust})`}
             </Text>
           ))}

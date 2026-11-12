@@ -18,9 +18,10 @@ import {
 import type { RosterCandidate } from '@my/ui'
 import { Check, Plus, Trash2 } from '@tamagui/lucide-icons'
 import { callApi } from './api'
-import { INVITE_TYPE_LABEL, addDaysISO, formatDate, formatTime, isISODate, slotLabel, todayISO } from './format'
+import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { NOT_AN_INVITER, addDaysISO, formatDate, formatTime, isISODate, slotLabel, todayISO } from './format'
 import { Notice } from './identity-parts'
-import type { InviteSlot, InviterInviteView, SpeakerInviteType } from './types'
+import type { Slot, InviterInviteView, SpeakerInviteType } from './types'
 
 /**
  * Composer, `/admin/speaker-invites/new` (spec §9). The ecclesia is the
@@ -52,7 +53,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
   const [from, setFrom] = useState(todayISO())
   const [to, setTo] = useState(addDaysISO(todayISO(), 90))
-  const [slots, setSlots] = useState<InviteSlot[] | null>(null)
+  const [slots, setSlots] = useState<Slot[] | null>(null)
   const [slotsError, setSlotsError] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
@@ -67,6 +68,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   const [sending, setSending] = useState<'test' | 'live' | null>(null)
   const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
+  const [forbidden, setForbidden] = useState(false)
   const isLecture = type === 'lecture'
 
   const loadSlots = useCallback(async () => {
@@ -74,7 +76,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
     setLoadingSlots(true)
     setSlotsError(null)
     const params = new URLSearchParams({ type, from, to, ...(isOwner ? { ecclesia } : {}) })
-    const res = await callApi<{ slots: InviteSlot[] }>(`/api/speaker-invites/slots?${params.toString()}`)
+    const res = await callApi<{ slots: Slot[] }>(`/api/speaker-invites/slots?${params.toString()}`)
     setLoadingSlots(false)
     if (res.ok) {
       setSlots(res.data.slots)
@@ -83,6 +85,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
       setSelected((prev) => prev.filter((d) => open.has(d)))
     } else {
       setSlots(null)
+      if (res.status === 403) setForbidden(true)
       setSlotsError(res.error.error || 'Could not load the schedule for these dates.')
     }
   }, [isLecture, ecclesia, from, to, type, isOwner])
@@ -168,7 +171,25 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
       void loadSlots()
       return
     }
-    setResult({ tone: 'error', text: res.error.error || 'The invitation could not be sent.' })
+    if (res.status === 403) {
+      setForbidden(true)
+      return
+    }
+    setResult({
+      tone: 'error',
+      text: res.error.code === 'SEND_FAILED' ? 'The test email could not be sent.' : res.error.error || 'The invitation could not be sent.',
+    })
+  }
+
+  if (forbidden) {
+    return (
+      <YStack gap="$4" maxWidth={760} width="100%">
+        <PageHeader title="New speaker invitation" />
+        <Notice tone="info" testID="not-an-inviter">
+          {NOT_AN_INVITER}
+        </Notice>
+      </YStack>
+    )
   }
 
   return (
@@ -322,7 +343,7 @@ function SlotPicker({
   notOpen,
   onToggle,
 }: {
-  slots: InviteSlot[]
+  slots: Slot[]
   selected: string[]
   notOpen: Record<string, string>
   onToggle: (date: string) => void

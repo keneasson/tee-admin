@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { YStack, XStack, Text, Heading, Card, Paragraph, Button, LoadingState } from '@my/ui'
 import { AlertTriangle, Info } from '@tamagui/lucide-icons'
-import type { InviteContact, ShortNotice } from './types'
+import type { InviteContactView, ShortNotice } from './types'
 import { formatDate } from './format'
 import type { InviteIdentityState, InviteIdentitySlots } from './use-invite-identity'
 
@@ -102,7 +102,7 @@ export function ShortNoticeCallout({ notices }: { notices: ShortNotice[] | undef
   )
 }
 
-export function InviterContactLine({ inviter }: { inviter: InviteContact | null | undefined }) {
+export function InviterContactLine({ inviter }: { inviter: InviteContactView | null | undefined }) {
   if (!inviter) {
     return <Paragraph color="$colorSecondary">Reply to the email that brought you here and the sender will help.</Paragraph>
   }

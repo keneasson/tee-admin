@@ -2,16 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { YStack, XStack, Text, Heading, Card, Paragraph, Button, TextArea, Anchor, Separator, Spinner } from '@my/ui'
 import { CalendarPlus, Download } from '@tamagui/lucide-icons'
 import { callApi, withToken } from './api'
-import {
-  INVITE_TYPE_LABEL,
-  INVITE_TYPE_PHRASE,
-  brotherName,
-  formatDate,
-  formatTime,
-  formatWhen,
-  googleCalendarFallback,
-  slotLabel,
-} from './format'
+import { INVITE_TYPE_PHRASE } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { brotherName, formatDate, formatTime, formatWhen, slotLabel } from './format'
 import {
   DateChoice,
   InviteIdentityHeader,
@@ -22,7 +14,7 @@ import {
   ShortNoticeCallout,
 } from './identity-parts'
 import { useInviteIdentity, type InviteIdentitySlots } from './use-invite-identity'
-import type { InviteApiError, InviteSlot, InviteeInviteView, SwapView } from './types'
+import type { InviteActionResponse, InviteApiError, InviteeInviteView, ShortNotice, Slot, SwapView } from './types'
 
 /**
  * The invitee's page, `/invite/{inviteId}?token=…[&date=…]` (spec §6, §9).
@@ -55,9 +47,6 @@ export interface InviteeInviteScreenProps {
 
 type InviteResponse = { invite: InviteeInviteView }
 
-/** How long a calendar entry blocks out, until the API sends its own Google link. */
-const FALLBACK_MINUTES = 90
-
 export function InviteeInviteScreen(props: InviteeInviteScreenProps) {
   const { inviteId, token, slots } = props
   const load = useCallback(
@@ -66,6 +55,7 @@ export function InviteeInviteScreen(props: InviteeInviteScreenProps) {
   )
   const identity = useInviteIdentity<InviteResponse>({ load, token, slots })
   const invite = identity.data?.invite ?? null
+  const [shortNotice, setShortNotice] = useState<ShortNotice[] | undefined>(undefined)
   const who = brotherName(invite?.invitee)
 
   return (
@@ -87,7 +77,11 @@ export function InviteeInviteScreen(props: InviteeInviteScreenProps) {
           <InviteBody
             invite={invite}
             {...props}
-            onInvite={(next) => identity.setData({ invite: next })}
+            shortNotice={shortNotice}
+            onInvite={(next, notice) => {
+              setShortNotice(notice)
+              identity.setData({ invite: next })
+            }}
             handleRefusal={identity.handleRefusal}
           />
         </>
@@ -100,12 +94,14 @@ export function InviteeInviteScreen(props: InviteeInviteScreenProps) {
 
 interface BodyProps extends InviteeInviteScreenProps {
   invite: InviteeInviteView
-  onInvite: (invite: InviteeInviteView) => void
+  /** From the last accept / change (within 24h of the appointment). */
+  shortNotice?: ShortNotice[]
+  onInvite: (invite: InviteeInviteView, shortNotice?: ShortNotice[]) => void
   handleRefusal: (error: InviteApiError) => Promise<boolean>
 }
 
 function InviteBody(props: BodyProps) {
-  const { invite } = props
+  const { invite, shortNotice } = props
   const intro = `An invitation to ${INVITE_TYPE_PHRASE[invite.type]} at ${invite.ecclesia}`
 
   if (invite.status === 'cancelled' || invite.status === 'expired') {
@@ -133,7 +129,7 @@ function InviteBody(props: BodyProps) {
           </Card>
         ) : null}
       </YStack>
-      <ShortNoticeCallout notices={invite.shortNotice} />
+      <ShortNoticeCallout notices={shortNotice} />
       {invite.status === 'accepted' ? <ManageView {...props} /> : <AcceptView {...props} />}
       <InviterContactLine inviter={invite.inviter} />
     </YStack>
@@ -146,7 +142,7 @@ function InviteBody(props: BodyProps) {
 
 function AcceptView({ invite, token, preselectDate, onInvite, handleRefusal }: BodyProps) {
   // After SLOT_TAKEN the API returns the dates still open; those replace the choices.
-  const [takenOpenDates, setTakenOpenDates] = useState<InviteSlot[] | null>(null)
+  const [takenOpenDates, setTakenOpenDates] = useState<Slot[] | null>(null)
   const offered = takenOpenDates ?? invite.offeredDates
   const others = takenOpenDates ? null : invite.otherDates
   const selectable = useMemo(
@@ -165,12 +161,12 @@ function AcceptView({ invite, token, preselectDate, onInvite, handleRefusal }: B
     if (!selected) return
     setBusy(true)
     setError(null)
-    const res = await callApi<InviteResponse>(`/api/invite/${encodeURIComponent(invite.inviteId)}`, {
+    const res = await callApi<InviteActionResponse>(`/api/invite/${encodeURIComponent(invite.inviteId)}`, {
       method: 'POST',
       body: { action: 'accept', date: selected, ...(token ? { token } : {}) },
     })
     setBusy(false)
-    if (res.ok) return onInvite(res.data.invite)
+    if (res.ok) return onInvite(res.data.invite, res.data.shortNotice)
     if (await handleRefusal(res.error)) return
     if (res.error.code === 'SLOT_TAKEN') {
       setTakenOpenDates(res.error.openDates ?? [])
@@ -242,7 +238,7 @@ function SlotChoiceList({
   emptyText,
 }: {
   heading: string
-  slots: InviteSlot[]
+  slots: Slot[]
   selected: string | null
   onSelect: (date: string) => void
   testPrefix: string
@@ -292,29 +288,18 @@ function ManageView({ invite, token, onInvite, handleRefusal, renderStepUp }: Bo
   const date = invite.acceptedDate!
   const when = formatWhen(date, invite.acceptedTime, invite.acceptedTz)
   const where = [invite.place?.hallName, invite.place?.address].filter(Boolean).join(', ')
-  const title = `${INVITE_TYPE_LABEL[invite.type]} at ${invite.ecclesia}`
-  const google =
-    invite.googleCalendarUrl ??
-    googleCalendarFallback({
-      title,
-      date,
-      time: invite.acceptedTime,
-      tz: invite.acceptedTz,
-      location: where || invite.ecclesia,
-      durationMinutes: FALLBACK_MINUTES,
-    })
-  const ics = withToken(`/api/invite/${encodeURIComponent(invite.inviteId)}/ics`, token)
+  const online = invite.place?.onlineMeetings ?? []
 
   const post = (body: Record<string, unknown>) =>
-    callApi<{ invite?: InviteeInviteView; swap?: SwapView }>(`/api/invite/${encodeURIComponent(invite.inviteId)}`, {
+    callApi<{ invite?: InviteeInviteView; swap?: SwapView; shortNotice?: ShortNotice[] }>(`/api/invite/${encodeURIComponent(invite.inviteId)}`, {
       method: 'POST',
       body: { ...body, ...(token ? { token } : {}) },
     })
 
-  const done = (next: InviteeInviteView, text: string) => {
+  const done = (next: InviteeInviteView, text: string, shortNotice?: ShortNotice[]) => {
     setMode('none')
     setNotice({ tone: 'success', text })
-    onInvite(next)
+    onInvite(next, shortNotice)
   }
 
   return (
@@ -324,22 +309,31 @@ function ManageView({ invite, token, onInvite, handleRefusal, renderStepUp }: Bo
           You’re booked
         </Text>
         <Heading size="$6">{when}</Heading>
-        <Text>{where ? `${invite.ecclesia} · ${where}` : invite.ecclesia}</Text>
+        <Text testID="booking-place">{where ? `${invite.ecclesia} · ${where}` : invite.ecclesia}</Text>
+        {online.map((m) => (
+          <Text key={m.label} fontSize="$3" color="$colorSecondary">
+            {`${m.label}${m.url ? `: ${m.url}` : ''}${m.meetingId ? ` · Meeting ID ${m.meetingId}` : ''}${
+              m.password ? ` · Passcode ${m.password}` : ''
+            }${m.dialInNumber ? ` · Dial in ${m.dialInNumber}` : ''}`}
+          </Text>
+        ))}
         <XStack gap="$3" flexWrap="wrap" marginTop="$2">
-          {google ? (
-            <Anchor href={google} target="_blank" rel="noopener noreferrer" testID="google-calendar-link">
+          {invite.googleCalendarUrl ? (
+            <Anchor href={invite.googleCalendarUrl} target="_blank" rel="noopener noreferrer" testID="google-calendar-link">
               <XStack gap="$1" alignItems="center">
                 <CalendarPlus size={16} color="$primary" />
                 <Text color="$primary">Add to Google Calendar</Text>
               </XStack>
             </Anchor>
           ) : null}
-          <Anchor href={ics} testID="ics-link">
-            <XStack gap="$1" alignItems="center">
-              <Download size={16} color="$primary" />
-              <Text color="$primary">Download .ics (Apple / Outlook)</Text>
-            </XStack>
-          </Anchor>
+          {invite.icsUrl ? (
+            <Anchor href={invite.icsUrl} testID="ics-link">
+              <XStack gap="$1" alignItems="center">
+                <Download size={16} color="$primary" />
+                <Text color="$primary">Download .ics (Apple / Outlook)</Text>
+              </XStack>
+            </Anchor>
+          ) : null}
         </XStack>
       </Card>
 
@@ -389,7 +383,9 @@ function ManageView({ invite, token, onInvite, handleRefusal, renderStepUp }: Bo
   )
 }
 
-type Post = (body: Record<string, unknown>) => ReturnType<typeof callApi<{ invite?: InviteeInviteView; swap?: SwapView }>>
+type Post = (
+  body: Record<string, unknown>
+) => ReturnType<typeof callApi<{ invite?: InviteeInviteView; swap?: SwapView; shortNotice?: ShortNotice[] }>>
 
 function ChangeDatePanel({
   invite,
@@ -400,9 +396,9 @@ function ChangeDatePanel({
   invite: InviteeInviteView
   post: Post
   handleRefusal: (e: InviteApiError) => Promise<boolean>
-  onDone: (next: InviteeInviteView, text: string) => void
+  onDone: (next: InviteeInviteView, text: string, shortNotice?: ShortNotice[]) => void
 }) {
-  const [taken, setTaken] = useState<InviteSlot[] | null>(null)
+  const [taken, setTaken] = useState<Slot[] | null>(null)
   const pool = (taken ?? [...invite.offeredDates, ...(invite.otherDates ?? [])]).filter(
     (s) => s.date !== invite.acceptedDate
   )
@@ -417,7 +413,9 @@ function ChangeDatePanel({
     setError(null)
     const res = await post({ action: 'change', date: selected })
     setBusy(false)
-    if (res.ok && res.data.invite) return onDone(res.data.invite, `Done. You’re now booked for ${formatDate(selected)}.`)
+    if (res.ok && res.data.invite) {
+      return onDone(res.data.invite, `Done. You’re now booked for ${formatDate(selected)}.`, res.data.shortNotice)
+    }
     if (!res.ok && (await handleRefusal(res.error))) return
     if (!res.ok && res.error.code === 'SLOT_TAKEN') {
       setTaken(res.error.openDates ?? [])
@@ -528,7 +526,7 @@ function SwapPanel({
         <YStack gap="$2">
           <Heading size="$5">Trade dates with</Heading>
           {choices.map((s) =>
-            unreachable.has(s.date) ? (
+            s.reachable === false || unreachable.has(s.date) ? (
               <DateChoice
                 key={s.date}
                 label={formatDate(s.date)}
@@ -611,7 +609,7 @@ function CancelPanel({
   )
 }
 
-function dedupe(slots: InviteSlot[]): InviteSlot[] {
+function dedupe(slots: Slot[]): Slot[] {
   const seen = new Set<string>()
   return slots
     .filter((s) => (seen.has(s.date) ? false : (seen.add(s.date), true)))

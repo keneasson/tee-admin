@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import { YStack, XStack, Text, Card, Heading, Paragraph, Button, Spinner } from '@my/ui'
 import { callApi, withToken } from './api'
-import { INVITE_TYPE_LABEL, formatWhen, formatDate } from './format'
+import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { firstWord, formatWhen, formatDate } from './format'
 import {
   InviteIdentityHeader,
   InviteIdentityStates,
@@ -74,10 +75,15 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
   }
 
   // The viewer is the target: their own name comes back unredacted.
-  const who = surnameOf(swap.target.name)
-  const requester = swap.requester.name ?? 'Another speaker'
-  const theirs = formatWhen(swap.requester.date, swap.requester.time, swap.requester.tz)
-  const yours = formatWhen(swap.target.date, swap.target.time, swap.target.tz)
+  // Each viewer's own name comes back unredacted; the other party's is tier-redacted.
+  const isTarget = swap.viewerRole !== 'requester'
+  const me = isTarget ? swap.target : swap.requester
+  const other = isTarget ? swap.requester : swap.target
+  const who = surnameOf(me.name)
+  const otherName = other.name ?? 'the other speaker'
+  const otherFirst = firstWord(other.name) || 'the other speaker'
+  const mine = formatWhen(me.date, me.time, me.tz)
+  const theirs = formatWhen(other.date, other.time, other.tz)
 
   return (
     <InvitePageColumn>
@@ -87,7 +93,7 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
         onSignInAgain={() => slots.signInAgain(props.selfUrlWithoutToken)}
         switchedNotice={
           identity.switched
-            ? `You were signed in as someone else, so we've switched to ${swap.target.name?.split(/\s+/)[0] || who}'s swap request.`
+            ? `You were signed in as someone else, so we've switched to ${firstWord(me.name) || who}'s swap request.`
             : null
         }
       />
@@ -96,14 +102,24 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
         <Text fontSize="$2" color="$colorSecondary" textTransform="uppercase">
           {`${INVITE_TYPE_LABEL[swap.type]} at ${swap.ecclesia}`}
         </Text>
-        <Heading size="$6">{`${requester} asks to trade ${theirs} for your ${yours}`}</Heading>
+        <Heading size="$6">
+          {isTarget
+            ? `${otherName} asks to trade ${theirs} for your ${mine}`
+            : `You asked ${otherName} to trade your ${mine} for their ${theirs}`}
+        </Heading>
         {swap.note ? <Text fontStyle="italic">{`“${swap.note}”`}</Text> : null}
       </Card>
 
       <ShortNoticeCallout notices={swap.shortNotice} />
       {error ? <Notice tone="error">{error}</Notice> : null}
 
-      {swap.status === 'open' ? (
+      {swap.status === 'open' && !isTarget ? (
+        <Notice tone="info" testID="swap-waiting">
+          {`Waiting for ${otherFirst} to reply. You’ll get an email when they answer.`}
+        </Notice>
+      ) : null}
+
+      {swap.status === 'open' && isTarget ? (
         <YStack gap="$2">
           {props.preselectAction ? (
             <Notice tone="info" testID="swap-preselected">
@@ -113,8 +129,8 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
             </Notice>
           ) : null}
           <Paragraph>
-            If you accept, you’ll speak on {formatDate(swap.requester.date)} instead, and {requester} takes your date.
-            You’ll both get new confirmations.
+            If you accept, you’ll speak on {formatDate(other.date)} instead, and {otherName} takes your date. You’ll both
+            get new confirmations.
           </Paragraph>
           <XStack gap="$2" flexWrap="wrap">
             <Button
@@ -138,17 +154,21 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
             </Button>
           </XStack>
         </YStack>
-      ) : (
+      ) : null}
+
+      {swap.status !== 'open' ? (
         <Notice tone={swap.status === 'accepted' ? 'success' : 'info'} testID="swap-outcome">
           {swap.status === 'accepted'
             ? `Swap done. You’re now booked for ${theirs}. A new confirmation is on its way.`
             : swap.status === 'declined'
-              ? `You declined. Your booking for ${yours} stays as it was, and ${requester} has been told.`
+              ? isTarget
+                ? `You declined. Your booking for ${mine} stays as it was, and ${otherName} has been told.`
+                : `${otherName} declined. Your booking for ${mine} stays as it was.`
               : swap.status === 'expired'
                 ? 'This swap request has expired. Nothing was changed.'
                 : 'This swap couldn’t go ahead because one of the bookings changed. Nothing was changed.'}
         </Notice>
-      )}
+      ) : null}
     </InvitePageColumn>
   )
 }

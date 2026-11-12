@@ -37,7 +37,16 @@ function invite(overrides: Record<string, unknown> = {}) {
 }
 
 const accepted = (date: string) =>
-  invite({ status: 'accepted', acceptedDate: date, acceptedTime: '11:00', acceptedTz: 'America/Toronto', swapAvailable: true })
+  invite({
+    status: 'accepted',
+    acceptedDate: date,
+    acceptedTime: '11:00',
+    acceptedTz: 'America/Toronto',
+    swapAvailable: true,
+    place: { hallName: 'Example Hall', address: '1 Placeholder St' },
+    googleCalendarUrl: 'https://calendar.google.com/calendar/render?action=TEMPLATE',
+    icsUrl: `/api/invite/${INVITE_ID}/ics?token=${TOKEN}`,
+  })
 
 /** next-auth client endpoints, signed out unless `session` says otherwise. */
 async function mockAuth(page: Page, calls: string[], session: () => Record<string, unknown> = () => ({})) {
@@ -87,6 +96,8 @@ test.describe('Speaker invitation page', () => {
     await expect(page.getByTestId('booking')).toBeVisible()
     expect(posts).toEqual([{ action: 'accept', date: D2, token: TOKEN }])
     await expect(page.getByTestId('ics-link')).toHaveAttribute('href', `/api/invite/${INVITE_ID}/ics?token=${TOKEN}`)
+    await expect(page.getByTestId('booking-place')).toContainText('Example Hall')
+    await expect(page.getByTestId('google-calendar-link')).toBeVisible()
   })
 
   test('SLOT_TAKEN shows "just taken" and the dates still open', async ({ page }) => {
@@ -152,6 +163,7 @@ test.describe('Speaker invitation page', () => {
       ecclesia: 'Example Ecclesia',
       type: 'memorial',
       status,
+      viewerRole: 'target',
       requester: { name: 'Alex', date: D1, time: '11:00', tz: 'America/Toronto' },
       target: { name: 'Sam Placeholder', date: D2, time: '11:00', tz: 'America/Toronto' },
       expiresAt: '2030-03-01T00:00:00.000Z',
@@ -170,5 +182,32 @@ test.describe('Speaker invitation page', () => {
     await page.getByTestId('swap-accept').click()
     await expect(page.getByTestId('swap-outcome')).toContainText('Swap done')
     expect(posts).toEqual([{ action: 'accept', token: TOKEN }])
+  })
+
+  test('the requester sees "Waiting for … to reply" and no Accept/Decline', async ({ page }) => {
+    await mockAuth(page, [])
+    await page.route('**/api/invite/swap/swap-test-0002**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          swap: {
+            swapId: 'swap-test-0002',
+            ecclesia: 'Example Ecclesia',
+            type: 'memorial',
+            status: 'open',
+            viewerRole: 'requester',
+            requester: { name: 'Sam Placeholder', date: D2, time: '11:00', tz: 'America/Toronto' },
+            target: { name: 'Alex', date: D1, time: '11:00', tz: 'America/Toronto' },
+            expiresAt: '2030-03-01T00:00:00.000Z',
+          },
+          actor: { trust: 'recognized' },
+        }),
+      })
+    )
+    await page.goto(`/invite/swap/swap-test-0002?token=${TOKEN}`)
+    await expect(page.getByTestId('swap-waiting')).toContainText('Waiting for Alex to reply')
+    await expect(page.getByTestId('swap-accept')).toHaveCount(0)
+    await expect(page.getByTestId('invite-heading')).toHaveText('Swap request for Brother Placeholder')
   })
 })
