@@ -79,6 +79,7 @@ export const KEYS = {
   contactRequestsBy: (email: string) => `CONTACTREQBY#${lower(email)}`,
   youtubeOAuthAll: () => 'OAUTH#youtube',
   webAnalytics: () => 'ANALYTICS#WEB',
+  speakerInvites: (ecclesia: string) => `SPEAKER_INVITES#${ecclesia}`,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -335,6 +336,14 @@ export const PATTERNS = {
     shape: 'EXHORTER_RELEASE#<token> / <expiresAt>',
     writer: 'packages/app/provider/dynamodb/repositories/exhorter-headsup-repository.ts',
   } as AccessPattern<{ token: string }>,
+
+  // Speaker invitations (SPEAKER_INVITE#<id> / META), listed per inviting ecclesia
+  speakerInvitesByEcclesia: {
+    name: 'speakerInvitesByEcclesia', ...onAdmin('gsi1'),
+    pk: (a: { ecclesia: string }) => KEYS.speakerInvites(a.ecclesia),
+    shape: 'SPEAKER_INVITES#<ecclesia> / <createdAt>#<inviteId>',
+    writer: 'packages/app/provider/dynamodb/repositories/speaker-invite-repository.ts',
+  } as AccessPattern<{ ecclesia: string }>,
 
   // LEGACY (R8 deletes): the USER# NextAuth/credentials store
   legacyUserByEmail: {
