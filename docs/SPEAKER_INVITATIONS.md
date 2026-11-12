@@ -121,9 +121,17 @@ Also:
 4. **Accept** = one transaction that swaps both bookings and both overlay
    fields, conditioned on both still being as they were when requested. Both get
    fresh confirmations (+ .ics updates).
-5. Decline or expiry (7 days, or the day before the earlier date) changes nothing,
-   and the requester is told. Only one open swap request per booking at a time.
-6. The RB is **neither asked nor notified**. The change shows up in the newsletter and in later emails.
+5. Decline or expiry (7 days, or the **start time** of the earlier appointment)
+   changes nothing, and the requester is told. Only one open swap request per
+   booking at a time. Last-minute swaps are allowed. They happen.
+6. **Short-notice note.** When a swap is accepted within **24 hours** of either
+   appointment, the swap page and both confirmation emails show:
+   **"Please inform the {counterpart} of this change"**, where the counterpart
+   is derived from the swapped role: Exhort → the **Presiding** brother (named
+   from that date's schedule when known, with per-tier redaction), Preside →
+   the **Exhorting** brother, Bible Class Speaker → the **Host**. Roles with
+   no counterpart get no note.
+7. The RB is **neither asked nor notified**. The change shows up in the newsletter and in later emails.
 
 ## 8. Emails (templates in `apps/email-builder/emails/`)
 
@@ -161,7 +169,7 @@ Everything sits behind a new `SPEAKER_INVITES` feature flag.
 5. After accept, the public schedule and the newsletter's upcoming program show the speaker on that date.
 6. Arriving already signed in as the invitee needs no extra step. Arriving signed in as someone else signs that session out, continues as the invitee at `recognized`, and shows "Not Brother X? Sign in again". A token alone allows accept/change/cancel. A token alone cannot request a swap until step-up.
 7. The Google link and the .ics open the correct date, time, timezone and address in Google Calendar and Apple Calendar. Change and cancel update or remove the same entry.
-8. A swap accepted by the other speaker exchanges both dates atomically. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
+8. A swap accepted by the other speaker exchanges both dates atomically. A swap within 24h shows the "Please inform the Presiding/Exhorting brother" note. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
 9. Expired, cancelled or unknown links show a clear page with the inviter's contact, never an error.
 10. Lecture invites work end-to-end with manually entered dates.
 11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod behind the flag **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
