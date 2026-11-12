@@ -156,6 +156,7 @@ import {
   changeDate,
   createInvite,
   requestSwap,
+  resendInvite,
   respondSwap,
   sendTestInvitation,
   swapExpiry,
@@ -548,6 +549,79 @@ describe('releasing a slot the Sheet also names (cancel / change bug fix)', () =
       previousDate: '2026-11-15',
       sheetReminder: { name: 'Alex Speaker', date: '2026-11-15' },
     })
+  })
+})
+
+describe('phase-4 additions: cancel reason, short notice on accept/change, resend', () => {
+  beforeEach(() => {
+    memorialRow('2026-11-15', { Preside: 'Pat Presider' })
+    memorialRow('2026-11-22', { Preside: 'Quinn Presider' })
+  })
+
+  it('the cancel reason is kept in history and passed to the inviter', async () => {
+    const inv = await invite('p-a', ['2026-11-15'])
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    const r = await cancelByInvitee(inv.inviteId, as('p-a'), '  Unwell this week  ')
+    expect(r.ok).toBe(true)
+    expect(h.state.invites.get(inv.inviteId).history.at(-1)).toMatchObject({ action: 'cancelled', note: 'Unwell this week' })
+    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'cancelled', { reason: 'Unwell this week' })
+  })
+
+  it('accepting within 24h of the start returns (and emails) the counterpart note; earlier does not', async () => {
+    const early = await invite('p-a', ['2026-11-15'])
+    const r1 = await acceptInvite(early.inviteId, '2026-11-15', as('p-a'))
+    expect((r1 as any).shortNotice).toBeUndefined()
+
+    const late = await invite('p-b', ['2026-11-22'])
+    __setClock(() => new Date('2026-11-21T16:00:00.000Z')) // exactly 24h before 11:00 Toronto
+    vi.mocked(emails.sendConfirmationEmail).mockClear()
+    const r2 = await acceptInvite(late.inviteId, '2026-11-22', as('p-b'))
+    expect((r2 as any).shortNotice).toEqual([
+      { date: '2026-11-22', counterpartRole: 'Presiding', counterpartName: 'Quinn Presider' },
+    ])
+    expect(vi.mocked(emails.sendConfirmationEmail).mock.calls[0][2]).toMatchObject({
+      shortNotice: { date: '2026-11-22', counterpartRole: 'Presiding' },
+    })
+  })
+
+  it('a change within 24h notes both dates', async () => {
+    const inv = await invite('p-a', ['2026-11-15', '2026-11-22'])
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    __setClock(() => new Date('2026-11-14T17:00:00.000Z'))
+    const r = await changeDate(inv.inviteId, '2026-11-22', as('p-a'))
+    expect((r as any).shortNotice.map((n: any) => [n.date, n.counterpartName])).toEqual([
+      ['2026-11-22', 'Quinn Presider'],
+      ['2026-11-15', 'Pat Presider'],
+    ])
+  })
+
+  it('resend sends the email for the current state with its own history entry; refused once cancelled', async () => {
+    const inv = await invite('p-a', ['2026-11-15'])
+    vi.mocked(emails.sendInvitationEmail).mockClear()
+    const r1 = await resendInvite(inv.inviteId, RB)
+    expect(r1).toMatchObject({ ok: true, sent: 'invitation' })
+    expect(emails.sendInvitationEmail).toHaveBeenCalledTimes(1)
+    expect(h.state.invites.get(inv.inviteId).history.at(-1)).toMatchObject({ action: 'resent', byPersonId: 'p-rb' })
+
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    vi.mocked(emails.sendConfirmationEmail).mockClear()
+    const r2 = await resendInvite(inv.inviteId, RB)
+    expect(r2).toMatchObject({ ok: true, sent: 'confirmation' })
+    expect(emails.sendConfirmationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ inviteId: inv.inviteId }),
+      expect.objectContaining({ date: '2026-11-15' }),
+      { reason: 'accepted' }
+    )
+
+    await cancelByInvitee(inv.inviteId, as('p-a'))
+    expect(await resendInvite(inv.inviteId, RB)).toMatchObject({ ok: false, code: 'INVITE_CANCELLED' })
+  })
+
+  it('a failed resend is reported and recorded', async () => {
+    const inv = await invite('p-a', ['2026-11-15'])
+    vi.mocked(emails.sendInvitationEmail).mockRejectedValueOnce(new Error('SES down'))
+    expect(await resendInvite(inv.inviteId, RB)).toMatchObject({ ok: false, code: 'SEND_FAILED' })
+    expect(h.state.invites.get(inv.inviteId).history.at(-1)).toMatchObject({ action: 'email_failed' })
   })
 })
 

@@ -1,13 +1,22 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { firstNameOf } from '@my/app/utils/viewer-pii'
-import type {
-  ShortNotice,
-  SpeakerInviteRecord,
-  SpeakerSwapRecord,
+import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
+import {
+  INVITE_TYPE_SLOT,
+  type AppointmentPlaceView,
+  type InviteeInviteView,
+  type ShortNotice,
+  type Slot,
+  type SpeakerInviteRecord,
+  type SpeakerSwapRecord,
+  type SwapView,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
 import type { Trust } from '../auth-trust'
-import type { Slot } from './slots'
+import { loadSlotDetails } from './slots'
 import { effectiveStatus, effectiveSwapStatus, inviteSlots } from './service'
+import { appointmentPlace, googleCalendarUrlFor, onlineMeetingsFor } from './appointment'
+
+export type { InviteeInviteView, SwapView } from '@my/app/provider/dynamodb/speaker-invite-types'
 
 /**
  * Response shapes for the invitee pages (spec §6 "Also"). Other speakers' names
@@ -40,25 +49,61 @@ async function contactOf(personId: string): Promise<{ name: string; email: strin
   return { name: `${p.firstName} ${p.lastName}`.trim(), email: p.primaryEmail || null }
 }
 
-export interface InviteeInviteView {
-  inviteId: string
-  ecclesia: string
-  type: SpeakerInviteRecord['type']
-  status: SpeakerInviteRecord['status']
-  invitee: { firstName: string; lastName: string }
-  inviter: { name: string; email: string | null } | null
-  note?: string
-  acceptedDate?: string
-  acceptedTime?: string
-  acceptedTz?: string
-  /** Offered dates with their live state (stored dates when not actionable). */
-  offeredDates: Slot[]
-  /** Other dates in the window, when the inviter enabled them; null otherwise. */
-  otherDates: Slot[] | null
-  swapAvailable: boolean
+/**
+ * Mark each FILLED slot `reachable` (its speaker resolves to a person with an
+ * email) — computed BEFORE redaction drops the personId. One lookup per person.
+ */
+export async function markReachable(slots: Slot[]): Promise<Slot[]> {
+  const cache = new Map<string, Promise<boolean>>()
+  const reachable = (personId: string) => {
+    if (!cache.has(personId)) {
+      cache.set(
+        personId,
+        personRepository
+          .getById(personId)
+          .then((p) => !!p?.primaryEmail)
+          .catch(() => false)
+      )
+    }
+    return cache.get(personId)!
+  }
+  return Promise.all(
+    slots.map(async (s) =>
+      s.state === 'FILLED' ? { ...s, reachable: s.speakerPersonId ? await reachable(s.speakerPersonId) : false } : s
+    )
+  )
 }
 
-export async function inviteeInviteView(invite: SpeakerInviteRecord, trust: Trust): Promise<InviteeInviteView> {
+/** The accepted appointment's place + calendar links, from the same helpers as the confirmation email. */
+async function appointmentExtras(
+  invite: SpeakerInviteRecord
+): Promise<{ place: AppointmentPlaceView; googleCalendarUrl: string }> {
+  const date = invite.acceptedDate!
+  const when = { type: invite.type, date, time: invite.acceptedTime ?? '', tz: invite.acceptedTz ?? DEFAULT_TIMEZONE }
+  const [place, detail] = await Promise.all([
+    appointmentPlace(invite.ecclesia),
+    INVITE_TYPE_SLOT[invite.type]
+      ? loadSlotDetails(invite.ecclesia, invite.type, date, date)
+          .then((c) => c.slots.find((x) => x.date === date))
+          .catch(() => undefined)
+      : Promise.resolve(undefined),
+  ])
+  const onlineMeetings = onlineMeetingsFor(invite.type, invite.ecclesia, detail)
+  return {
+    place: {
+      ...(place.hallName ? { hallName: place.hallName } : {}),
+      ...(place.address ? { address: place.address } : {}),
+      ...(onlineMeetings.length > 0 ? { onlineMeetings } : {}),
+    },
+    googleCalendarUrl: googleCalendarUrlFor(when, place),
+  }
+}
+
+export async function inviteeInviteView(
+  invite: SpeakerInviteRecord,
+  trust: Trust,
+  opts: { token?: string | null } = {}
+): Promise<InviteeInviteView> {
   const status = effectiveStatus(invite)
   const [inviteePerson, inviter] = await Promise.all([
     personRepository.getById(invite.inviteePersonId).catch(() => null),
@@ -66,6 +111,11 @@ export async function inviteeInviteView(invite: SpeakerInviteRecord, trust: Trus
   ])
   const actionable = status === 'sent' || status === 'accepted'
   const live = actionable ? await inviteSlots(invite) : null
+  const extras = status === 'accepted' && invite.acceptedDate ? await appointmentExtras(invite) : null
+  // Same-origin path: the page's session/cookie applies; the token covers a fresh tab.
+  const icsUrl = invite.acceptedDate
+    ? `/api/invite/${invite.inviteId}/ics${opts.token ? `?token=${encodeURIComponent(opts.token)}` : ''}`
+    : undefined
   return {
     inviteId: invite.inviteId,
     ecclesia: invite.ecclesia,
@@ -78,23 +128,13 @@ export async function inviteeInviteView(invite: SpeakerInviteRecord, trust: Trus
       ? { acceptedDate: invite.acceptedDate, acceptedTime: invite.acceptedTime, acceptedTz: invite.acceptedTz }
       : {}),
     offeredDates: live
-      ? redactSlots(live.offered, trust)
+      ? redactSlots(await markReachable(live.offered), trust)
       : invite.offeredDates.map((d) => ({ ...d, state: 'NO_MEETING' as const })),
-    otherDates: live && invite.otherDatesWindow ? redactSlots(live.other, trust) : null,
+    otherDates: live && invite.otherDatesWindow ? redactSlots(await markReachable(live.other), trust) : null,
     swapAvailable: invite.type !== 'lecture' && status === 'accepted',
+    ...(extras ? extras : {}),
+    ...(icsUrl && (status === 'accepted' || status === 'cancelled') ? { icsUrl } : {}),
   }
-}
-
-export interface SwapView {
-  swapId: string
-  ecclesia: string
-  type: SpeakerSwapRecord['type']
-  status: SpeakerSwapRecord['status']
-  requester: { name: string | undefined; date: string; time: string; tz: string }
-  target: { name: string | undefined; date: string; time: string; tz: string }
-  note?: string
-  expiresAt: string
-  shortNotice?: ShortNotice[]
 }
 
 /** The swap as the target (or requester) sees it. The other party's name is tier-redacted. */
@@ -116,6 +156,7 @@ export function swapView(
     ecclesia: swap.ecclesia,
     type: swap.type,
     status: effectiveSwapStatus(swap),
+    viewerRole: viewerPersonId !== null && viewerPersonId === swap.requester.personId ? 'requester' : 'target',
     requester: side(swap.requester),
     target: side(swap.target),
     ...(swap.note ? { note: swap.note } : {}),

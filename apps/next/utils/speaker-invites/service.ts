@@ -84,6 +84,7 @@ export type ServiceErrorCode =
   | 'SWAP_EXPIRED'
   | 'SWAP_STALE'
   | 'CONFLICT'
+  | 'SEND_FAILED'
 
 export interface ServiceError {
   ok: false
@@ -519,7 +520,22 @@ export async function sendTestInvitation(
 // Accept
 // ---------------------------------------------------------------------------
 
-export type AcceptResult = { ok: true; invite: SpeakerInviteRecord } | ServiceError
+/**
+ * `shortNotice`: accepted or moved within 24h of the appointment (or, for a
+ * change, of either date) — the same rule and shape as respondSwap.
+ */
+export type AcceptResult = { ok: true; invite: SpeakerInviteRecord; shortNotice?: ShortNotice[] } | ServiceError
+
+/** The §7.6 note for dates whose speaker just changed, if any is within 24h. */
+function shortNoticeIfDue(
+  type: SpeakerInviteType,
+  slots: Array<{ date: string; time: string; tz: string; row?: Record<string, any> }>
+): ShortNotice[] | undefined {
+  const mapping = INVITE_TYPE_SLOT[type]
+  if (!mapping || !isShortNotice(nowFn(), slots)) return undefined
+  const notes = shortNoticesFor(mapping.field, slots)
+  return notes.length > 0 ? notes : undefined
+}
 
 function statusGuard(invite: SpeakerInviteRecord, wanted: 'sent' | 'accepted'): ServiceError | null {
   const status = effectiveStatus(invite)
@@ -585,14 +601,16 @@ export async function acceptInvite(inviteId: string, date: string, actor: Actor)
     throw err
   }
 
-  await notifyAccepted(updated, actor)
-  return { ok: true, invite: updated }
+  const shortNotice = shortNoticeIfDue(invite.type, [slot])
+  await notifyAccepted(updated, actor, shortNotice)
+  return { ok: true, invite: updated, ...(shortNotice ? { shortNotice } : {}) }
 }
 
-async function notifyAccepted(invite: SpeakerInviteRecord, actor: Actor) {
+async function notifyAccepted(invite: SpeakerInviteRecord, actor: Actor, shortNotice?: ShortNotice[]) {
   const details = acceptedDetails(invite)!
+  const mine = shortNotice?.find((n) => n.date === details.date)
   await afterCommitEmail('confirmation', invite.inviteId, actor, () =>
-    sendConfirmationEmail(invite, details, { reason: 'accepted' })
+    sendConfirmationEmail(invite, details, { reason: 'accepted', ...(mine ? { shortNotice: mine } : {}) })
   )
   await afterCommitEmail('inviter notice', invite.inviteId, actor, () => sendInviterNotice(invite, 'accepted'))
 }
@@ -663,19 +681,23 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
     throw err
   }
 
-  await notifyChanged(updated, actor, oldDate, reminder)
-  return { ok: true, invite: updated }
+  // Both dates' counterparts are affected: one gains this speaker, one loses him.
+  const shortNotice = shortNoticeIfDue(invite.type, [newSlot, ...(oldSlot ? [oldSlot] : [])])
+  await notifyChanged(updated, actor, oldDate, reminder, shortNotice)
+  return { ok: true, invite: updated, ...(shortNotice ? { shortNotice } : {}) }
 }
 
 async function notifyChanged(
   invite: SpeakerInviteRecord,
   actor: Actor,
   previousDate: string,
-  reminder?: InviterNoticeOptions['sheetReminder']
+  reminder?: InviterNoticeOptions['sheetReminder'],
+  shortNotice?: ShortNotice[]
 ) {
   const details = acceptedDetails(invite)!
+  const mine = shortNotice?.find((n) => n.date === details.date)
   await afterCommitEmail('confirmation', invite.inviteId, actor, () =>
-    sendConfirmationEmail(invite, details, { reason: 'changed', previousDate })
+    sendConfirmationEmail(invite, details, { reason: 'changed', previousDate, ...(mine ? { shortNotice: mine } : {}) })
   )
   await afterCommitEmail('inviter notice', invite.inviteId, actor, () =>
     sendInviterNotice(invite, 'changed', { previousDate, ...(reminder ? { sheetReminder: reminder } : {}) })
@@ -694,8 +716,11 @@ export type CancelResult =
 async function cancel(
   inviteId: string,
   actor: Actor,
-  by: 'invitee' | 'inviter'
+  by: 'invitee' | 'inviter',
+  rawNote?: string
 ): Promise<CancelResult> {
+  // The speaker's reason, kept in history and passed to the inviter (bounded).
+  const note = rawNote?.trim().slice(0, 1000) || undefined
   const invite = await speakerInviteRepository.getInvite(inviteId)
   if (!invite) return fail('NOT_FOUND', 'Invitation not found.')
   if (invite.status === 'cancelled') return fail('INVITE_CANCELLED', 'This invitation is already cancelled.')
@@ -706,7 +731,10 @@ async function cancel(
   const details = wasAccepted ? acceptedDetails(invite) : null
   const action: InviteHistoryAction = by === 'inviter' ? 'cancelled_by_inviter' : 'cancelled'
   const updated = nextInvite(invite, { status: 'cancelled' }, [
-    historyEntry(action, actor, wasAccepted ? { from: invite.acceptedDate } : {}),
+    historyEntry(action, actor, {
+      ...(wasAccepted ? { from: invite.acceptedDate } : {}),
+      ...(note ? { note } : {}),
+    }),
   ])
   const ops: SpeakerWriteOp[] = []
   let reminder: InviterNoticeOptions['sheetReminder']
@@ -744,14 +772,63 @@ async function cancel(
   }
   if (by === 'invitee') {
     await afterCommitEmail('inviter notice', inviteId, actor, () =>
-      sendInviterNotice(updated, 'cancelled', reminder ? { sheetReminder: reminder } : undefined)
+      sendInviterNotice(
+        updated,
+        'cancelled',
+        reminder || note ? { ...(reminder ? { sheetReminder: reminder } : {}), ...(note ? { reason: note } : {}) } : undefined
+      )
     )
   }
   return { ok: true, invite: updated, ...(reminder ? { sheetReminder: reminder } : {}) }
 }
 
-export const cancelByInvitee = (inviteId: string, actor: Actor) => cancel(inviteId, actor, 'invitee')
+export const cancelByInvitee = (inviteId: string, actor: Actor, note?: string) =>
+  cancel(inviteId, actor, 'invitee', note)
 export const cancelByInviter = (inviteId: string, actor: Actor) => cancel(inviteId, actor, 'inviter')
+
+// ---------------------------------------------------------------------------
+// Resend (§9 invites list)
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-send the email for the invite's current state — the invitation while
+ * `sent`, the confirmation once `accepted` — with fresh token links. A
+ * `resent` history entry is written first: it is the record of the resend and
+ * it moves the email's idempotency key on, so each resend is its own claim.
+ * Refused for cancelled / expired invites. A failed send is reported (the
+ * inviter pressed the button) and recorded as `email_failed`.
+ */
+export async function resendInvite(
+  inviteId: string,
+  actor: Actor
+): Promise<{ ok: true; invite: SpeakerInviteRecord; sent: 'invitation' | 'confirmation' } | ServiceError> {
+  const invite = await speakerInviteRepository.getInvite(inviteId)
+  if (!invite) return fail('NOT_FOUND', 'Invitation not found.')
+  const status = effectiveStatus(invite)
+  if (status === 'cancelled') return fail('INVITE_CANCELLED', 'This invitation was cancelled.')
+  if (status === 'expired') return fail('INVITE_EXPIRED', 'This invitation has expired.')
+  const sent = status === 'accepted' ? 'confirmation' : 'invitation'
+
+  const updated = nextInvite(invite, {}, [historyEntry('resent', actor, { note: sent })])
+  try {
+    await speakerInviteRepository.commit([{ kind: 'putInvite', invite: updated, expect: { version: invite.version } }])
+  } catch (err) {
+    if (err instanceof SpeakerWriteConflict) return fail('CONFLICT', 'The invitation changed. Reload and try again.')
+    throw err
+  }
+
+  try {
+    if (sent === 'invitation') await sendInvitationEmail(updated)
+    else await sendConfirmationEmail(updated, acceptedDetails(updated)!, { reason: 'accepted' })
+  } catch (err: any) {
+    console.error('[speaker-invites] resend failed:', err)
+    await speakerInviteRepository
+      .appendHistory(inviteId, [historyEntry('email_failed', actor, { note: `resend ${sent}: ${err?.message ?? String(err)}` })])
+      .catch(() => undefined)
+    return fail('SEND_FAILED', 'The email could not be sent. Try again later.')
+  }
+  return { ok: true, invite: updated, sent }
+}
 
 // ---------------------------------------------------------------------------
 // Swaps (§7)

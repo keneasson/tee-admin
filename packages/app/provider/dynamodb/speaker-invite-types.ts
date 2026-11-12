@@ -42,6 +42,7 @@ export type InviteHistoryAction =
   | 'swap_declined'
   | 'swap_expired'
   | 'swapped_in'
+  | 'resent'
   | 'email_failed'
 
 export interface InviteHistoryEntry {
@@ -152,4 +153,145 @@ export const speakerInviteKeys = {
   bookingPk: (ecclesia: string, type: SpeakerInviteType) => `SPEAKER_BOOKING#${ecclesia}#${type}`,
   swapPk: (swapId: string) => `SPEAKER_SWAP#${swapId}`,
   META: 'META' as const,
+}
+
+// ---------------------------------------------------------------------------
+// Wire contract shared by the API (apps/next) and the screens
+// (packages/app/features/speaker-invites). Declared ONCE here: both sides
+// import these, neither redeclares them.
+// ---------------------------------------------------------------------------
+
+export type SlotState = 'OPEN' | 'FILLED' | 'NO_MEETING'
+
+/** Why a date is NO_MEETING. */
+export type NoMeetingReason = 'NO_SCHEDULE_ROW' | 'CANCELLED' | 'NO_SERVICE_AT_HALL' | 'SPECIAL_OCCASION'
+
+/** One date as `getSlots` reports it (§4). */
+export interface Slot {
+  date: string
+  time: string
+  tz: string
+  state: SlotState
+  speakerName?: string
+  /** Inviter-facing only; invitee responses never carry it. */
+  speakerPersonId?: string
+  /**
+   * Invitee views, FILLED slots only: the speaker resolves to a person with an
+   * email, so a swap can be requested. false → "Filled. Contact {inviter} to arrange".
+   */
+  reachable?: boolean
+  reason?: NoMeetingReason
+  /** Free text behind `reason` (override message, the row's note). */
+  reasonNote?: string
+}
+
+/** What the inviter picks, and how lists name each type. */
+export const INVITE_TYPE_LABEL: Record<SpeakerInviteType, string> = {
+  memorial: 'Memorial exhortation',
+  bible_class: 'Bible Class',
+  lecture: 'Lecture',
+}
+
+/** "An invitation to {phrase} at {ecclesia}" (§1). */
+export const INVITE_TYPE_PHRASE: Record<SpeakerInviteType, string> = {
+  memorial: 'exhort at the Memorial',
+  bible_class: 'lead Bible Class',
+  lecture: 'give a Lecture',
+}
+
+export const INVITE_STATUS_LABEL: Record<SpeakerInviteStatus, string> = {
+  sent: 'Waiting for a reply',
+  accepted: 'Accepted',
+  cancelled: 'Cancelled',
+  expired: 'Expired',
+}
+
+/** The invites list's history line for each action. */
+export const INVITE_HISTORY_ACTION_LABEL: Record<InviteHistoryAction, string> = {
+  created: 'Invitation sent',
+  accepted: 'Accepted',
+  changed: 'Changed date',
+  cancelled: 'Cancelled by the speaker',
+  cancelled_by_inviter: 'Cancelled by the sender',
+  swap_requested: 'Asked to swap',
+  swap_accepted: 'Swap accepted',
+  swap_declined: 'Swap declined',
+  swap_expired: 'Swap request expired',
+  swapped_in: 'Swapped in',
+  resent: 'Email sent again',
+  email_failed: 'An email could not be sent',
+}
+
+export const NO_MEETING_REASON_LABEL: Record<NoMeetingReason, string> = {
+  NO_SCHEDULE_ROW: 'No meeting scheduled',
+  CANCELLED: 'Meeting cancelled',
+  NO_SERVICE_AT_HALL: 'No service at the hall',
+  SPECIAL_OCCASION: 'Special occasion',
+}
+
+export interface OnlineMeeting {
+  label: string
+  url?: string
+  meetingId?: string
+  password?: string
+  dialInNumber?: string
+}
+
+/** Where the accepted appointment is (§8.2), as the confirmation email shows it. */
+export interface AppointmentPlaceView {
+  hallName?: string
+  address?: string
+  onlineMeetings?: OnlineMeeting[]
+}
+
+export interface InviteContactView {
+  name: string
+  email: string | null
+}
+
+/** GET /api/invite/{inviteId} → `invite`. */
+export interface InviteeInviteView {
+  inviteId: string
+  ecclesia: string
+  type: SpeakerInviteType
+  status: SpeakerInviteStatus
+  invitee: { firstName: string; lastName: string }
+  inviter: InviteContactView | null
+  note?: string
+  acceptedDate?: string
+  acceptedTime?: string
+  acceptedTz?: string
+  /** Offered dates with their live state (stored dates when not actionable). */
+  offeredDates: Slot[]
+  /** Other dates in the window, when the inviter enabled them; null otherwise. */
+  otherDates: Slot[] | null
+  swapAvailable: boolean
+  /** Accepted only: the hall + online options, from the same helper as the email. */
+  place?: AppointmentPlaceView
+  /** Accepted only. */
+  googleCalendarUrl?: string
+  /** Accepted (or cancelled after accepting): the hosted .ics, same-origin path. */
+  icsUrl?: string
+}
+
+export interface SwapSideView {
+  name: string | undefined
+  date: string
+  time: string
+  tz: string
+}
+
+/** GET/POST /api/invite/swap/{swapId} → `swap`. */
+export interface SwapView {
+  swapId: string
+  ecclesia: string
+  type: SpeakerInviteType
+  status: SpeakerSwapStatus
+  /** Who is looking: the speaker asked to trade, or the one who asked. */
+  viewerRole: 'target' | 'requester'
+  requester: SwapSideView
+  target: SwapSideView
+  note?: string
+  expiresAt: string
+  shortNotice?: ShortNotice[]
 }

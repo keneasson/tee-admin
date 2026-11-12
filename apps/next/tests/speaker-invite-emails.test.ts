@@ -258,5 +258,7 @@ describe('confirmation, cancellation, swap request, inviter notice', () => {
     })
     expect(sent()[0]).toMatchObject({ to: 'rb@example.test', replyTo: 'alex@example.test' })
     expect(h.claimEmail).toHaveBeenCalledWith('inv-1#inviter-cancelled#1', expect.anything())
+    await sendInviterNotice(invite({ status: 'cancelled' }), 'cancelled', { reason: 'Unwell this week' })
+    expect(lastRender('inviter-notice').speakerNote).toBe('Unwell this week')
   })
 })

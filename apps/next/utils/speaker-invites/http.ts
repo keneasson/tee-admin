@@ -11,6 +11,8 @@ export function errorStatus(code: ServiceError['code']): number {
   switch (code) {
     case 'NOT_FOUND':
       return 404
+    case 'SEND_FAILED':
+      return 502
     case 'INVALID_INPUT':
     case 'DATES_NOT_OPEN':
     case 'DATE_NOT_OFFERED':

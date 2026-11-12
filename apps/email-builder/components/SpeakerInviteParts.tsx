@@ -1,4 +1,9 @@
 import { Link, Section, Text } from '@react-email/components'
+import {
+  INVITE_TYPE_LABEL,
+  INVITE_TYPE_PHRASE,
+  type SpeakerInviteType,
+} from '@my/app/provider/dynamodb/speaker-invite-types'
 import React from 'react'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { defaultText, footer, footerLink, footerText, link } from '../styles'
@@ -13,30 +18,16 @@ import { defaultText, footer, footerLink, footerText, link } from '../styles'
  */
 
 /** What the speaker is invited to do. Stored on the invite as data (§3). */
-export type SpeakerInviteType = 'memorial' | 'bible_class' | 'lecture'
+export type { SpeakerInviteType }
 
-/** "An invitation to {phrase} at {Ecclesia}". */
+/** "An invitation to {phrase} at {Ecclesia}". Labels are declared once in speaker-invite-types. */
 export function inviteTypeVerbPhrase(type: SpeakerInviteType): string {
-  switch (type) {
-    case 'memorial':
-      return 'exhort at the Memorial'
-    case 'bible_class':
-      return 'lead Bible Class'
-    case 'lecture':
-      return 'give a Lecture'
-  }
+  return INVITE_TYPE_PHRASE[type]
 }
 
-/** The appointment as a noun: "the Memorial exhortation", "Bible Class", "the Lecture". */
+/** The appointment as a noun: "Memorial exhortation", "Bible Class", "Lecture". */
 export function inviteTypeNoun(type: SpeakerInviteType): string {
-  switch (type) {
-    case 'memorial':
-      return 'Memorial exhortation'
-    case 'bible_class':
-      return 'Bible Class'
-    case 'lecture':
-      return 'Lecture'
-  }
+  return INVITE_TYPE_LABEL[type]
 }
 
 /** One way to attend online (same shape as the heads-up's attend options). */

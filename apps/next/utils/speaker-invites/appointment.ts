@@ -1,12 +1,17 @@
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { getTenantById, type TenantConfig } from '@my/app/config/tenants'
 import { getTimezoneCityName } from '@my/app/utils/timezone'
-import type { SpeakerInviteRecord, SpeakerInviteType } from '@my/app/provider/dynamodb/speaker-invite-types'
+import type {
+  OnlineMeeting,
+  SpeakerInviteRecord,
+  SpeakerInviteType,
+} from '@my/app/provider/dynamodb/speaker-invite-types'
 import { inviteTypeNoun } from 'email-builder/components/SpeakerInviteParts'
 import { buildIcs } from '../calendar/ics'
 import { buildGoogleCalendarUrl } from '../calendar/google-calendar-link'
 import { getEcclesiaByName, type EcclesiaData } from '../dynamodb/locations'
-import { resolveHallAddress } from '../email/exhorter-heads-up'
+import { DEFAULT_TEE_ZOOM, resolveHallAddress } from '../email/exhorter-heads-up'
+import type { SlotDetail } from './slots'
 
 /**
  * The appointment as calendars and emails describe it: which brand, which
@@ -58,6 +63,36 @@ export async function appointmentPlace(ecclesia: string): Promise<AppointmentPla
     ...(resolveHallAddress(data) ? { address: resolveHallAddress(data) } : {}),
     ecclesiaData: data,
   }
+}
+
+/** Ways to attend online: the occurrence's override first, as the heads-up does. */
+export function onlineMeetingsFor(type: SpeakerInviteType, ecclesia: string, slot: SlotDetail | undefined): OnlineMeeting[] {
+  const options = (slot?.override?.attendOptions ?? []).filter((o) => o.mode !== 'in_person')
+  if (options.length > 0) {
+    return options.map((o) => ({
+      label: o.label,
+      ...(o.url ? { url: o.url } : {}),
+      ...(o.meetingId ? { meetingId: o.meetingId } : {}),
+      ...(o.password ? { password: o.password } : {}),
+      ...(o.dialInNumber ? { dialInNumber: o.dialInNumber } : {}),
+    }))
+  }
+  const row = slot?.row ?? {}
+  if (type === 'bible_class' && row.ZoomURL) {
+    return [
+      {
+        label: 'Online',
+        url: String(row.ZoomURL),
+        ...(row.MeetingID ? { meetingId: String(row.MeetingID) } : {}),
+        ...(row.MeetingPwd ? { password: String(row.MeetingPwd) } : {}),
+      },
+    ]
+  }
+  if (type === 'memorial' && HOME_ECCLESIA.isHomeEcclesia(ecclesia)) {
+    const z = DEFAULT_TEE_ZOOM
+    return [{ label: z.label, url: z.url, meetingId: z.meetingId, password: z.password, dialInNumber: z.dialInNumber }]
+  }
+  return []
 }
 
 export function appointmentTitle(type: SpeakerInviteType, ecclesiaName: string): string {

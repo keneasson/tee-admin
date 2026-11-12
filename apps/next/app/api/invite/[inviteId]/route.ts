@@ -10,7 +10,7 @@ import {
   type Actor,
   type ServiceError,
 } from '@/utils/speaker-invites/service'
-import { inviteeInviteView, redactSlots, swapView } from '@/utils/speaker-invites/views'
+import { inviteeInviteView, redactShortNotice, redactSlots, swapView } from '@/utils/speaker-invites/views'
 import { noStore, readInviteToken, readJson, serviceErrorResponse } from '@/utils/speaker-invites/http'
 
 /**
@@ -20,7 +20,8 @@ import { noStore, readInviteToken, readJson, serviceErrorResponse } from '@/util
  * POST /api/invite/{inviteId}          body { action, date?, note?, token? }
  *   action 'accept'       { date }  → { invite }                 (recognized + invitee)
  *   action 'change'       { date }  → { invite }                 (recognized + invitee)
- *   action 'cancel'                 → { invite }                 (recognized + invitee)
+ *   action 'cancel'       { note? } → { invite }                 (recognized + invitee; note = the reason, sent to the inviter)
+ *   accept / change also return `shortNotice?: ShortNotice[]` (within 24h; names tier-redacted)
  *   action 'swap-request' { date, note? } → { swap: SwapView }   (AUTHENTICATED + invitee; else 403 stepUpRequired)
  *
  * Refusals: 401 { code: 'SIGN_IN_REQUIRED' } · 403 { code: 'SESSION_MISMATCH', mismatch: true }
@@ -48,7 +49,7 @@ export async function GET(request: Request, { params }: Params) {
   if (refusal) return NextResponse.json(refusal.body, { status: refusal.status, headers: noStore })
 
   return NextResponse.json(
-    { invite: await inviteeInviteView(invite, actor.trust), actor: { trust: actor.trust } },
+    { invite: await inviteeInviteView(invite, actor.trust, { token }), actor: { trust: actor.trust } },
     { headers: noStore }
   )
 }
@@ -85,7 +86,14 @@ export async function POST(request: Request, { params }: Params) {
       ? await acceptInvite(inviteId, date, who)
       : action === 'change'
         ? await changeDate(inviteId, date, who)
-        : await cancelByInvitee(inviteId, who)
+        : await cancelByInvitee(inviteId, who, typeof body.note === 'string' ? body.note : undefined)
   if (!result.ok) return errorFor(result, actor.trust)
-  return NextResponse.json({ invite: await inviteeInviteView(result.invite, actor.trust) }, { headers: noStore })
+  const shortNotice = 'shortNotice' in result ? redactShortNotice(result.shortNotice, actor.trust) : undefined
+  return NextResponse.json(
+    {
+      invite: await inviteeInviteView(result.invite, actor.trust, { token }),
+      ...(shortNotice ? { shortNotice } : {}),
+    },
+    { headers: noStore }
+  )
 }

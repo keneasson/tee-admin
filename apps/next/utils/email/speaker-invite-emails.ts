@@ -1,7 +1,6 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { speakerInviteRepository } from '@my/app/provider/dynamodb/repositories/speaker-invite-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
-import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import type { TenantConfig } from '@my/app/config/tenants'
 import {
   INVITE_TYPE_SLOT,
@@ -13,7 +12,7 @@ import {
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { sendEmail } from './sesClient'
 import { generateEcclesiaToken, generateEmailPreferencesUrl } from './ecclesia-token'
-import { DEFAULT_TEE_ZOOM, EMAIL_TRACKING_CONFIG_SET } from './exhorter-heads-up'
+import { EMAIL_TRACKING_CONFIG_SET } from './exhorter-heads-up'
 import {
   renderSpeakerConfirmation,
   renderSpeakerInvitation,
@@ -21,7 +20,6 @@ import {
   renderSpeakerSwapOutcome,
   renderSpeakerSwapRequest,
   type RenderedSpeakerEmail,
-  type SpeakerOnlineMeeting,
 } from './speaker-invite-render'
 import {
   appointmentPlace,
@@ -29,6 +27,7 @@ import {
   dateDisplay,
   googleCalendarUrlFor,
   icsSequence,
+  onlineMeetingsFor,
   tenantForEcclesia,
   timeDisplay,
   timezoneDisplay,
@@ -79,6 +78,8 @@ export interface InviterNoticeOptions {
   previousDate?: string
   /** The Sheet still lists the speaker on `date`: ask the RB to remove it. */
   sheetReminder?: { name: string; date: string }
+  /** The speaker's own reason, given when they cancelled. */
+  reason?: string
 }
 
 export type SwapOutcome = 'declined' | 'expired'
@@ -158,36 +159,6 @@ function linker(base: string, token: string) {
     swap: (swapId: string, suffix = '') => `${base}/invite/swap/${swapId}?token=${t}${suffix}`,
     ics: (inviteId: string) => `${base}/api/invite/${inviteId}/ics?token=${t}`,
   }
-}
-
-/** Ways to attend online: the occurrence's override first, as the heads-up does. */
-function onlineMeetingsFor(type: SpeakerInviteType, ecclesia: string, slot: SlotDetail | undefined): SpeakerOnlineMeeting[] {
-  const options = (slot?.override?.attendOptions ?? []).filter((o) => o.mode !== 'in_person')
-  if (options.length > 0) {
-    return options.map((o) => ({
-      label: o.label,
-      ...(o.url ? { url: o.url } : {}),
-      ...(o.meetingId ? { meetingId: o.meetingId } : {}),
-      ...(o.password ? { password: o.password } : {}),
-      ...(o.dialInNumber ? { dialInNumber: o.dialInNumber } : {}),
-    }))
-  }
-  const row = slot?.row ?? {}
-  if (type === 'bible_class' && row.ZoomURL) {
-    return [
-      {
-        label: 'Online',
-        url: String(row.ZoomURL),
-        ...(row.MeetingID ? { meetingId: String(row.MeetingID) } : {}),
-        ...(row.MeetingPwd ? { password: String(row.MeetingPwd) } : {}),
-      },
-    ]
-  }
-  if (type === 'memorial' && HOME_ECCLESIA.isHomeEcclesia(ecclesia)) {
-    const z = DEFAULT_TEE_ZOOM
-    return [{ label: z.label, url: z.url, meetingId: z.meetingId, password: z.password, dialInNumber: z.dialInNumber }]
-  }
-  return []
 }
 
 async function slotFor(b: Pick<SpeakerBookingDetails, 'ecclesia' | 'type' | 'date'>): Promise<SlotDetail | undefined> {
@@ -471,6 +442,7 @@ export async function sendInviterNotice(
     ...(options.sheetReminder
       ? { sheetReminder: { name: options.sheetReminder.name, dateDisplay: dateDisplay(options.sheetReminder.date) } }
       : {}),
+    ...(options.reason ? { speakerNote: options.reason } : {}),
     emailPreferencesUrl: await generateEmailPreferencesUrl(to, base),
     tenant,
   })

@@ -17,6 +17,7 @@ import type { ServiceOccurrenceOverrideRecord } from '@my/app/provider/dynamodb/
 import type { ScheduleRecord } from '@my/app/provider/dynamodb/types'
 import {
   INVITE_TYPE_SLOT,
+  type Slot,
   type SpeakerBookingRecord,
   type SpeakerInviteType,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
@@ -32,22 +33,7 @@ import { localHHmm } from './time'
  * with a state — non-open dates are labelled, never dropped (ADR-0005).
  */
 
-export type SlotState = 'OPEN' | 'FILLED' | 'NO_MEETING'
-
-/** Why a date is NO_MEETING. */
-export type NoMeetingReason = 'NO_SCHEDULE_ROW' | 'CANCELLED' | 'NO_SERVICE_AT_HALL' | 'SPECIAL_OCCASION'
-
-export interface Slot {
-  date: string
-  time: string
-  tz: string
-  state: SlotState
-  speakerName?: string
-  speakerPersonId?: string
-  reason?: NoMeetingReason
-  /** Free text behind `reason` (override message, the row's note). */
-  reasonNote?: string
-}
+export type { NoMeetingReason, Slot, SlotState } from '@my/app/provider/dynamodb/speaker-invite-types'
 
 /** A slot plus what the service needs to write it (never sent to clients). */
 export interface SlotDetail extends Slot {

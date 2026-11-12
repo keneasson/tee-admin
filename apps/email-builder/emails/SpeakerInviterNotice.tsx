@@ -40,6 +40,8 @@ export interface SpeakerInviterNoticeProps {
    * open; this asks the RB to remove the name from the Sheet too.
    */
   sheetReminder?: { name: string; dateDisplay: string }
+  /** The speaker's own words (e.g. why they cancelled). */
+  speakerNote?: string
   emailPreferencesUrl: string
   echadHubUrl?: string
   identity?: EmailIdentity
@@ -73,6 +75,7 @@ const SpeakerInviterNotice = ({
   previousDateDisplay,
   adminUrl,
   sheetReminder,
+  speakerNote,
   emailPreferencesUrl,
   echadHubUrl,
   identity,
@@ -109,6 +112,9 @@ const SpeakerInviterNotice = ({
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Text style={defaultText}>{first ? `Dear ${first},` : 'Hello,'}</Text>
           <Text style={defaultText}>{body}</Text>
+          {speakerNote?.trim() ? (
+            <Text style={{ ...defaultText, fontStyle: 'italic' }}>{`Their note: "${speakerNote.trim()}"`}</Text>
+          ) : null}
           <Text style={defaultText}>
             The website schedule and newsletter already show this. If you keep a Google Sheet for
             the schedule, please update it too.
