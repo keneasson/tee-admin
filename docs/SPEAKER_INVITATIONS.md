@@ -160,6 +160,46 @@ Sending follows the exhorter heads-up pattern: an idempotency claim, SES
 
 No feature flag (owner decision): the feature is limited to RB/Rep/owner senders and invite-link holders, and those gates are the control.
 
+## 9a. Choosing the invitee (owner feedback, 2026-11-12)
+
+One field: **"Start typing a name"**, with directory autocomplete across all
+ecclesias. Each result shows name + ecclesia. Results show names and ecclesia
+only, never contact details. The last row is always **"＋ {typed} isn't listed,
+add them"**.
+
+**Add them** opens the form with the typed name filled in. Two words fill
+first + last name; one word fills the first name. The fields are:
+1. **Email first.** When the email is entered, it is looked up
+   (`GET /api/speaker-invites/lookup-email`, inviter-gated, returns
+   `{personId, displayName, ecclesia}` or nothing, never contact details):
+   - It matches someone: "This email belongs to **{Name}** ({Ecclesia}). Is that who you mean?"
+     - **Yes** switches the invite to that person. No new record is created.
+     - **No, someone else uses this address** (a household): the form continues.
+       The new person is created **without an email of their own**, because two
+       people under one email login key would let sign-in resolve to the wrong
+       person (#129/#130). The invitation is still sent to the shared address,
+       which identity checks accept (`invite.inviteeEmail`). The invite carries a
+       **follow-up flag** `{kind: 'shared-email', withPersonId}`.
+   - No match: the form continues, and the new person gets this email.
+2. First name, last name.
+3. **Home ecclesia: autocomplete** over the ecclesia list. If exactly one
+   ecclesia matches ("Mississ" → Mississauga West), it is filled in and can be
+   accepted with one tap or Enter. Several matches ("Toronto") are listed to
+   pick from. No match offers "Use '{typed}' (not in our list)". The owner's
+   ecclesia selector uses the same component.
+
+**Who created them.** New people are made by ONE shared helper
+`createVisitorPerson()`, which the visiting-speaker schedule import also uses.
+It sets `memberStatus: 'visitor'`, `role: 'guest'`, and the same visitor privacy
+defaults. Provenance is `source: 'speaker-invitation'`,
+`sourceRef: 'speaker-invite:{inviteId}'` and **`createdByPersonId`** = the inviter.
+
+**Follow-up.** A flagged invite shows a "Needs follow-up: shares an email with
+{Name}" badge in the invites list, to its inviter and the owner, with a
+**Mark resolved** button that records who resolved it and when.
+
+The picker's "Unlink" is not used here. Changing the pick is "Change".
+
 ## 10. Acceptance criteria
 
 1. Only the owner, or the RB/Rep **of X**, can create an invite for X. An RB of Y gets 403 for X, and so does an admin of X (tests).
@@ -172,6 +212,7 @@ No feature flag (owner decision): the feature is limited to RB/Rep/owner senders
 8. A swap accepted by the other speaker exchanges both dates atomically. A swap within 24h shows the "Please inform the Presiding/Exhorting brother" note. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
 9. Expired, cancelled or unknown links show a clear page with the inviter's contact, never an error.
 10. Lecture invites work end-to-end with manually entered dates.
+12. Typing a name finds directory people across ecclesias; "add them" pre-fills the name; an email already in the directory offers that person; "no, someone else" creates an emailless visitor, still emails the shared address, and shows the follow-up badge; home ecclesia autocompletes; new people record source, invite and inviter.
 11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
 
 ## 11. Out of scope (*Not now*)
