@@ -75,6 +75,14 @@ export interface ServiceOccurrenceOverrideRecord extends BaseRecord {
   // `roleFieldRefs` must NEVER reach the anon/public read path.
   roleFieldRefs?: Record<string, string>
 
+  // Speaker invitations: a CONDITIONAL blank. When a speaker cancels (or moves
+  // away from a date) while the synced Sheet still names them, the overlay
+  // writes `roleFields[key] = ''` and records here the Sheet value it hides.
+  // The blank applies only while the Sheet still says that (name-normalized);
+  // once the RB types someone else into the Sheet, the Sheet value shows.
+  // Records without this map merge exactly as before.
+  roleFieldSuppress?: Record<string, string>
+
   createdBy: string
   createdAt: string
   updatedAt: string

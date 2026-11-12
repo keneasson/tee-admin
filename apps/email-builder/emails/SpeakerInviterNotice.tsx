@@ -34,6 +34,12 @@ export interface SpeakerInviterNoticeProps {
   previousDateDisplay?: string
   /** Link to the invites list / this invite in admin. */
   adminUrl?: string
+  /**
+   * The schedule Sheet itself still lists the speaker on a date they left
+   * (cancel, or the old date of a change). The website already shows the slot
+   * open; this asks the RB to remove the name from the Sheet too.
+   */
+  sheetReminder?: { name: string; dateDisplay: string }
   emailPreferencesUrl: string
   echadHubUrl?: string
   identity?: EmailIdentity
@@ -66,6 +72,7 @@ const SpeakerInviterNotice = ({
   timeDisplay,
   previousDateDisplay,
   adminUrl,
+  sheetReminder,
   emailPreferencesUrl,
   echadHubUrl,
   identity,
@@ -106,6 +113,11 @@ const SpeakerInviterNotice = ({
             The website schedule and newsletter already show this. If you keep a Google Sheet for
             the schedule, please update it too.
           </Text>
+          {sheetReminder ? (
+            <Text style={defaultText}>
+              {`If your schedule sheet lists ${sheetReminder.name} for ${sheetReminder.dateDisplay}, please remove it.`}
+            </Text>
+          ) : null}
           {adminUrl ? (
             <Text style={defaultText}>
               <Link href={adminUrl} style={link}>

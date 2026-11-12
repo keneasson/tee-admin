@@ -1,4 +1,4 @@
-import { PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { DeleteCommand, PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
 import { docClient } from '../config'
 import { PATTERNS, patternEntry } from '../access-patterns'
@@ -162,6 +162,37 @@ export class SpeakerInviteRepository extends BaseRepository<Record<string, any>>
         },
       })
     )
+  }
+
+  /**
+   * Idempotency claim for one speaker-invite email (exhorter heads-up pattern):
+   * `SPEAKER_EMAIL#{key}` / `SEND`, taken with attribute_not_exists BEFORE the
+   * send. True = safe to send; false = already sent. Release on send failure.
+   */
+  async claimEmail(key: string, meta: { sentTo: string; event: string }): Promise<boolean> {
+    try {
+      await docClient.send(
+        new PutCommand({
+          TableName: this.tableName,
+          Item: { pkey: `SPEAKER_EMAIL#${key}`, skey: 'SEND', ...meta, createdAt: new Date().toISOString() },
+          ConditionExpression: 'attribute_not_exists(pkey)',
+        })
+      )
+      return true
+    } catch (error: any) {
+      if (error?.name === 'ConditionalCheckFailedException') return false
+      throw error
+    }
+  }
+
+  async releaseEmail(key: string): Promise<void> {
+    try {
+      await docClient.send(
+        new DeleteCommand({ TableName: this.tableName, Key: { pkey: `SPEAKER_EMAIL#${key}`, skey: 'SEND' } })
+      )
+    } catch (error) {
+      console.error('[speaker-invites] failed to release email claim (non-fatal):', error)
+    }
   }
 
   /** The TransactWrite items for a set of ops (exposed for tests). */

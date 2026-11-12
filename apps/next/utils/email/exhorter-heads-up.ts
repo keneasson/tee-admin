@@ -87,7 +87,7 @@ export function resolveHallAddress(ecclesia: EcclesiaData | null): string | unde
 
 // Fallback "ways to attend" — the SAME Zoom the memorial template hardcodes.
 // Used only when the occurrence has no per-occurrence `attendOptions` override.
-const DEFAULT_TEE_ZOOM: ExhorterHeadsUpAttendOption = {
+export const DEFAULT_TEE_ZOOM: ExhorterHeadsUpAttendOption = {
   label: 'Toronto East Zoom',
   url: 'https://us04web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09',
   meetingId: '586 952 386',

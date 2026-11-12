@@ -28,6 +28,11 @@ export interface RoleFieldChange {
   value: string | null
   /** The PersonRecord id behind `value` (ignored when value is null). */
   personId?: string
+  /**
+   * With value '': the synced Sheet value this blank hides. The blank then
+   * applies only while the Sheet still says that (see merge.ts).
+   */
+  suppress?: string
   by: string
 }
 
@@ -52,6 +57,23 @@ export interface OverrideTransactPut {
 }
 
 const buildPk = (ecclesia: string) => `SERVICE_OVERRIDE#${ecclesia}`
+
+/**
+ * An admin edit (upsert) keeps a speaker-invite conditional blank only for the
+ * keys it leaves as '' — so editing the note doesn't turn a conditional blank
+ * into an unconditional one, and typing a name over it drops the condition.
+ */
+function keptSuppress(
+  existing: ServiceOccurrenceOverrideRecord | null,
+  roleFields: Record<string, string> | undefined
+): { roleFieldSuppress?: Record<string, string> } {
+  const fields = roleFields
+  if (!existing?.roleFieldSuppress || !fields) return {}
+  const kept = Object.fromEntries(
+    Object.entries(existing.roleFieldSuppress).filter(([k]) => fields[k] === '')
+  )
+  return Object.keys(kept).length > 0 ? { roleFieldSuppress: kept } : {}
+}
 const buildSk = (serviceType: ServiceOverrideType, date: string) => `${serviceType}#${date}`
 
 /**
@@ -96,6 +118,7 @@ export class ServiceOverrideRepository extends BaseRepository<ServiceOccurrenceO
       ...(input.attendOptions !== undefined ? { attendOptions: input.attendOptions } : {}),
       ...(input.roleFields !== undefined ? { roleFields: input.roleFields } : {}),
       ...(input.roleFieldRefs !== undefined ? { roleFieldRefs: input.roleFieldRefs } : {}),
+      ...keptSuppress(existing, input.roleFields),
       createdBy: existing?.createdBy ?? input.createdBy,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -151,6 +174,9 @@ export class ServiceOverrideRepository extends BaseRepository<ServiceOccurrenceO
     const now = new Date().toISOString()
     const roleFields = { ...(existing?.roleFields ?? {}) }
     const roleFieldRefs = { ...(existing?.roleFieldRefs ?? {}) }
+    const roleFieldSuppress = { ...(existing?.roleFieldSuppress ?? {}) }
+    if (change.value === '' && change.suppress) roleFieldSuppress[change.field] = change.suppress
+    else delete roleFieldSuppress[change.field]
     if (change.value === null) {
       delete roleFields[change.field]
       delete roleFieldRefs[change.field]
@@ -178,6 +204,8 @@ export class ServiceOverrideRepository extends BaseRepository<ServiceOccurrenceO
     else delete item.roleFields
     if (Object.keys(roleFieldRefs).length > 0) item.roleFieldRefs = roleFieldRefs
     else delete item.roleFieldRefs
+    if (Object.keys(roleFieldSuppress).length > 0) item.roleFieldSuppress = roleFieldSuppress
+    else delete item.roleFieldSuppress
 
     if (!existing) {
       return { Put: { TableName: this.tableName, Item: item, ConditionExpression: 'attribute_not_exists(pkey)' } }

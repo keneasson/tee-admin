@@ -12,6 +12,10 @@ import SpeakerSwapRequest, {
   speakerSwapRequestSubject,
   type SpeakerSwapRequestProps,
 } from 'email-builder/emails/SpeakerSwapRequest'
+import SpeakerSwapOutcome, {
+  speakerSwapOutcomeSubject,
+  type SpeakerSwapOutcomeProps,
+} from 'email-builder/emails/SpeakerSwapOutcome'
 import SpeakerInviterNotice, {
   speakerInviterNoticeSubject,
   type SpeakerInviterNoticeProps,
@@ -38,6 +42,7 @@ export type {
   SpeakerShortNotice,
 } from 'email-builder/emails/SpeakerConfirmation'
 export type { SpeakerInviterNoticeKind } from 'email-builder/emails/SpeakerInviterNotice'
+export type { SpeakerSwapOutcomeKind } from 'email-builder/emails/SpeakerSwapOutcome'
 
 export interface RenderedSpeakerEmail {
   html: string
@@ -52,6 +57,7 @@ export type RenderSpeakerInvitationInput = WithTenant<SpeakerInvitationProps>
 export type RenderSpeakerConfirmationInput = WithTenant<SpeakerConfirmationProps>
 export type RenderSpeakerSwapRequestInput = WithTenant<SpeakerSwapRequestProps>
 export type RenderSpeakerInviterNoticeInput = WithTenant<SpeakerInviterNoticeProps>
+export type RenderSpeakerSwapOutcomeInput = WithTenant<SpeakerSwapOutcomeProps>
 
 async function identityFor(tenant?: TenantConfig): Promise<EmailIdentity> {
   const t = tenant ?? resolveTenantFromEnv()
@@ -108,5 +114,16 @@ export async function renderSpeakerInviterNotice(
   return renderBoth(
     <SpeakerInviterNotice {...props} identity={identity} />,
     speakerInviterNoticeSubject(props.kind, props.speakerName, props.inviteType, props.dateDisplay)
+  )
+}
+
+export async function renderSpeakerSwapOutcome(
+  input: RenderSpeakerSwapOutcomeInput
+): Promise<RenderedSpeakerEmail> {
+  const { tenant, ...props } = input
+  const identity = await identityFor(tenant)
+  return renderBoth(
+    <SpeakerSwapOutcome {...props} identity={identity} />,
+    speakerSwapOutcomeSubject(props.outcome, props.inviteType)
   )
 }

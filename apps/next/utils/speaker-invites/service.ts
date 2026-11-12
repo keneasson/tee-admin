@@ -34,6 +34,7 @@ import {
   sendInviterNotice,
   sendSwapOutcomeEmail,
   sendSwapRequestEmail,
+  type InviterNoticeOptions,
   type SpeakerBookingDetails,
 } from '../email/speaker-invite-emails'
 import { loadSlotDetails, toPublicSlot, type Slot, type SlotDetail } from './slots'
@@ -289,28 +290,53 @@ function overlaySet(invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>, slot
   }
 }
 
-/** Overlay write that removes the field — only if it still names `personId`. */
+/**
+ * Release a departing speaker's slot on the roster overlay.
+ *
+ *  - Overlay names someone else → leave it alone (null op).
+ *  - Overlay names this person and the synced Sheet does NOT → remove the key,
+ *    so the Sheet's own value (blank / someone else) shows again.
+ *  - The Sheet itself names this person (the RB typed them in after the
+ *    accept) → write an explicit '' so the merged slot reads OPEN. Removing the
+ *    key would put a speaker who cancelled back on the schedule.
+ *
+ * `sheetNamed` tells the caller to remind the inviter to clear the Sheet.
+ */
 function overlayClear(
   invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>,
   slot: SlotDetail | undefined,
   personId: string,
   by: string
-): SpeakerWriteOp | null {
+): { op: SpeakerWriteOp | null; sheetNamed: boolean } {
   const mapping = INVITE_TYPE_SLOT[invite.type]
-  if (!mapping || !slot?.override) return null
-  const ref = slot.override.roleFieldRefs?.[mapping.field]
-  if (ref !== personId) return null
+  if (!mapping || !slot) return { op: null, sheetNamed: false }
+  const overlayHasField = slot.override?.roleFields?.[mapping.field] !== undefined
+  const ref = slot.override?.roleFieldRefs?.[mapping.field]
+  // Without an overlay entry, the merged speaker IS the Sheet's value.
+  const sheetNamed = overlayHasField ? slot.basePersonId === personId : slot.speakerPersonId === personId
+  if (overlayHasField && ref !== personId) return { op: null, sheetNamed: false }
+  if (!overlayHasField && !sheetNamed) return { op: null, sheetNamed: false }
   return {
-    kind: 'override',
-    put: serviceOverrideRepository.buildRoleFieldPut(slot.override, {
-      ecclesia: invite.ecclesia,
-      serviceType: mapping.scheduleType,
-      date: slot.date,
-      field: mapping.field,
-      value: null,
-      by,
-    }),
+    op: {
+      kind: 'override',
+      put: serviceOverrideRepository.buildRoleFieldPut(slot.override ?? null, {
+        ecclesia: invite.ecclesia,
+        serviceType: mapping.scheduleType,
+        date: slot.date,
+        field: mapping.field,
+        value: sheetNamed ? '' : null,
+        // The Sheet value the blank hides: once the RB types someone else, that shows.
+        ...(sheetNamed ? { suppress: (overlayHasField ? slot.baseName : slot.speakerName) ?? '' } : {}),
+        by,
+      }),
+    },
+    sheetNamed,
   }
+}
+
+/** Reminder for the inviter's notice when the Sheet still names the speaker. */
+function sheetReminder(sheetNamed: boolean, name: string, date: string): InviterNoticeOptions['sheetReminder'] {
+  return sheetNamed ? { name, date } : undefined
 }
 
 /** Is a booking's swap lock free? A lock on a closed or expired swap is stale. */
@@ -339,13 +365,14 @@ export interface CreateInviteInput {
 }
 
 async function resolveInvitee(
-  invitee: CreateInviteInput['invitee']
-): Promise<{ ok: true; person: PersonRecord; email: string } | ServiceError> {
+  invitee: CreateInviteInput['invitee'],
+  create: boolean
+): Promise<{ ok: true; person: PersonRecord | null; name: string; email: string } | ServiceError> {
   if ('personId' in invitee) {
     const person = await personRepository.getById(invitee.personId)
     if (!person) return fail('INVITEE_NOT_FOUND', 'That person is not in the directory.')
     if (!person.primaryEmail) return fail('INVITEE_NO_EMAIL', 'That person has no email address on file.')
-    return { ok: true, person, email: person.primaryEmail }
+    return { ok: true, person, name: personName(person), email: person.primaryEmail }
   }
   const email = invitee.email?.trim().toLowerCase()
   const firstName = invitee.firstName?.trim()
@@ -354,7 +381,9 @@ async function resolveInvitee(
   if (!firstName || !lastName) return fail('INVALID_INPUT', 'First and last name are required.')
   // Look the address up first (GSI1) — never create a duplicate person.
   const existing = await personRepository.getByEmail(email)
-  if (existing) return { ok: true, person: existing, email }
+  if (existing) return { ok: true, person: existing, name: personName(existing), email }
+  // A test send names the invitee in the preview but creates no one.
+  if (!create) return { ok: true, person: null, name: `${firstName} ${lastName}`, email }
   const person = await personRepository.create({
     email,
     firstName,
@@ -363,12 +392,18 @@ async function resolveInvitee(
     memberStatus: 'visitor',
     role: 'guest',
   })
-  return { ok: true, person, email }
+  return { ok: true, person, name: personName(person), email }
 }
 
-export async function createInvite(
-  input: CreateInviteInput
-): Promise<{ ok: true; invite: SpeakerInviteRecord } | ServiceError> {
+/**
+ * Validate the input and build the invite record — no writes, except that a
+ * real create (`create: true`) makes a visitor PersonRecord for an unknown
+ * name + email.
+ */
+async function prepareInvite(
+  input: CreateInviteInput,
+  create: boolean
+): Promise<{ ok: true; invite: SpeakerInviteRecord; inviteeName: string } | ServiceError> {
   if (!SPEAKER_INVITE_TYPES.includes(input.type)) return fail('INVALID_INPUT', 'Unknown invitation type.')
   if (!input.ecclesia) return fail('INVALID_INPUT', 'An ecclesia is required.')
   const dates = input.dates ?? []
@@ -419,7 +454,7 @@ export async function createInvite(
     }
   }
 
-  const invitee = await resolveInvitee(input.invitee)
+  const invitee = await resolveInvitee(input.invitee, create)
   if (!invitee.ok) return invitee
 
   const inviteId = randomUUID()
@@ -434,7 +469,7 @@ export async function createInvite(
     type: input.type,
     status: 'sent',
     inviterPersonId: input.inviter.personId,
-    inviteePersonId: invitee.person.personId,
+    inviteePersonId: invitee.person?.personId ?? '',
     inviteeEmail: invitee.email,
     offeredDates,
     ...(otherDatesWindow ? { otherDatesWindow } : {}),
@@ -444,6 +479,16 @@ export async function createInvite(
     updatedAt: now,
     version: 1,
   }
+  return { ok: true, invite, inviteeName: invitee.name }
+}
+
+export async function createInvite(
+  input: CreateInviteInput
+): Promise<{ ok: true; invite: SpeakerInviteRecord } | ServiceError> {
+  const prepared = await prepareInvite(input, true)
+  if (!prepared.ok) return prepared
+  const { invite } = prepared
+  const inviteId = invite.inviteId
 
   await speakerInviteRepository.createInvite(invite)
 
@@ -451,6 +496,23 @@ export async function createInvite(
     await afterCommitEmail('invitation', inviteId, input.inviter, () => sendInvitationEmail(invite))
   }
   return { ok: true, invite }
+}
+
+/**
+ * TEST send (composer "send a test to me"): validates exactly like
+ * createInvite, then renders the invitation and sends it ONLY to `testTo` (the
+ * signed-in inviter). No invite, no booking, no person is created, and the
+ * invitee is never mailed. Send errors propagate (the inviter is waiting on it).
+ */
+export async function sendTestInvitation(
+  input: CreateInviteInput,
+  testTo: string
+): Promise<{ ok: true; sentTo: string } | ServiceError> {
+  if (!testTo) return fail('INVALID_INPUT', 'Your account has no email address to send a test to.')
+  const prepared = await prepareInvite(input, false)
+  if (!prepared.ok) return prepared
+  await sendInvitationEmail(prepared.invite, { testTo, inviteeName: prepared.inviteeName })
+  return { ok: true, sentTo: testTo }
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +628,7 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
       if (err instanceof SpeakerWriteConflict) return fail('CONFLICT', 'The invitation changed. Reload and try again.')
       throw err
     }
-    await notifyChanged(updated, actor)
+    await notifyChanged(updated, actor, oldDate)
     return { ok: true, invite: updated }
   }
 
@@ -586,11 +648,12 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
   const name = personName(person) || invite.inviteeEmail
   const updated = nextInvite(invite, { acceptedDate: newDate, acceptedTime: newSlot.time, acceptedTz: newSlot.tz }, [entry])
   const clear = overlayClear(invite, oldSlot, invite.inviteePersonId, actor.personId)
+  const reminder = sheetReminder(clear.sheetNamed, name, oldDate)
   try {
     // One transaction: release the old booking + overlay, take the new ones.
     await speakerInviteRepository.commit([
       { kind: 'deleteBooking', ecclesia: invite.ecclesia, type: invite.type, date: oldDate, expect: heldBookingExpect(invite, lock) },
-      ...(clear ? [clear] : []),
+      ...(clear.op ? [clear.op] : []),
       { kind: 'putBooking', booking: bookingRecord(invite.ecclesia, invite.type, newDate, invite.inviteePersonId, inviteId), expect: 'absent' },
       overlaySet(invite, newSlot, name, invite.inviteePersonId, actor.personId),
       { kind: 'putInvite', invite: updated, expect: { version: invite.version } },
@@ -600,27 +663,39 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
     throw err
   }
 
-  await notifyChanged(updated, actor)
+  await notifyChanged(updated, actor, oldDate, reminder)
   return { ok: true, invite: updated }
 }
 
-async function notifyChanged(invite: SpeakerInviteRecord, actor: Actor) {
+async function notifyChanged(
+  invite: SpeakerInviteRecord,
+  actor: Actor,
+  previousDate: string,
+  reminder?: InviterNoticeOptions['sheetReminder']
+) {
   const details = acceptedDetails(invite)!
   await afterCommitEmail('confirmation', invite.inviteId, actor, () =>
-    sendConfirmationEmail(invite, details, { reason: 'changed' })
+    sendConfirmationEmail(invite, details, { reason: 'changed', previousDate })
   )
-  await afterCommitEmail('inviter notice', invite.inviteId, actor, () => sendInviterNotice(invite, 'changed'))
+  await afterCommitEmail('inviter notice', invite.inviteId, actor, () =>
+    sendInviterNotice(invite, 'changed', { previousDate, ...(reminder ? { sheetReminder: reminder } : {}) })
+  )
 }
 
 // ---------------------------------------------------------------------------
 // Cancel (invitee or inviter)
 // ---------------------------------------------------------------------------
 
+/** `sheetReminder`: the Sheet still lists the speaker on that date — tell the inviter to remove it. */
+export type CancelResult =
+  | { ok: true; invite: SpeakerInviteRecord; sheetReminder?: { name: string; date: string } }
+  | ServiceError
+
 async function cancel(
   inviteId: string,
   actor: Actor,
   by: 'invitee' | 'inviter'
-): Promise<{ ok: true; invite: SpeakerInviteRecord } | ServiceError> {
+): Promise<CancelResult> {
   const invite = await speakerInviteRepository.getInvite(inviteId)
   if (!invite) return fail('NOT_FOUND', 'Invitation not found.')
   if (invite.status === 'cancelled') return fail('INVITE_CANCELLED', 'This invitation is already cancelled.')
@@ -634,6 +709,7 @@ async function cancel(
     historyEntry(action, actor, wasAccepted ? { from: invite.acceptedDate } : {}),
   ])
   const ops: SpeakerWriteOp[] = []
+  let reminder: InviterNoticeOptions['sheetReminder']
 
   if (wasAccepted && INVITE_TYPE_SLOT[invite.type]) {
     const date = invite.acceptedDate!
@@ -648,7 +724,11 @@ async function cancel(
       ops.push({ kind: 'deleteBooking', ecclesia: invite.ecclesia, type: invite.type, date, expect: heldBookingExpect(invite, lock) })
     }
     const clear = overlayClear(invite, slot, invite.inviteePersonId, actor.personId)
-    if (clear) ops.push(clear)
+    if (clear.op) ops.push(clear.op)
+    if (clear.sheetNamed) {
+      const person = await personRepository.getById(invite.inviteePersonId)
+      reminder = sheetReminder(true, personName(person) || invite.inviteeEmail, date)
+    }
   }
   ops.push({ kind: 'putInvite', invite: updated, expect: { version: invite.version } })
 
@@ -663,9 +743,11 @@ async function cancel(
     await afterCommitEmail('cancellation', inviteId, actor, () => sendCancellationEmail(updated, details))
   }
   if (by === 'invitee') {
-    await afterCommitEmail('inviter notice', inviteId, actor, () => sendInviterNotice(updated, 'cancelled'))
+    await afterCommitEmail('inviter notice', inviteId, actor, () =>
+      sendInviterNotice(updated, 'cancelled', reminder ? { sheetReminder: reminder } : undefined)
+    )
   }
-  return { ok: true, invite: updated }
+  return { ok: true, invite: updated, ...(reminder ? { sheetReminder: reminder } : {}) }
 }
 
 export const cancelByInvitee = (inviteId: string, actor: Actor) => cancel(inviteId, actor, 'invitee')
@@ -963,14 +1045,14 @@ export async function respondSwap(swapId: string, response: 'accept' | 'decline'
     sendConfirmationEmail(
       rInviteNext,
       bookingDetails(swap.ecclesia, swap.type, T.date, tSlot.time, tSlot.tz, R.personId, R.inviteId),
-      { reason: 'swapped', shortNotice: noticeFor(T.date) }
+      { reason: 'swapped', swapId: swap.swapId, previousDate: R.date, shortNotice: noticeFor(T.date) }
     )
   )
   await afterCommitEmail('confirmation', tInviteNext?.inviteId ?? null, actor, () =>
     sendConfirmationEmail(
       tInviteNext,
       bookingDetails(swap.ecclesia, swap.type, R.date, rSlot.time, rSlot.tz, T.personId, T.inviteId),
-      { reason: 'swapped', shortNotice: noticeFor(R.date) }
+      { reason: 'swapped', swapId: swap.swapId, previousDate: T.date, shortNotice: noticeFor(R.date) }
     )
   )
 

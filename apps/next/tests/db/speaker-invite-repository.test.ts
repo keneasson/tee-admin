@@ -103,6 +103,30 @@ describe('speaker invite repository', () => {
     expect(cleared.Put.ConditionExpression).toBe('version = :overrideReadVersion')
   })
 
+  it('a conditional blank records the Sheet value it hides; setting a name drops it', () => {
+    const blank = overrides.buildRoleFieldPut(null, {
+      ecclesia: 'E', serviceType: 'memorial', date: '2026-11-15', field: 'Exhort', value: '', suppress: 'Alex Speaker', by: 'p-a',
+    })
+    expect(blank.Put.Item).toMatchObject({ roleFields: { Exhort: '' }, roleFieldSuppress: { Exhort: 'Alex Speaker' } })
+    const named = overrides.buildRoleFieldPut(blank.Put.Item, {
+      ecclesia: 'E', serviceType: 'memorial', date: '2026-11-15', field: 'Exhort', value: 'Blair Speaker', personId: 'p-b', by: 'p-b',
+    })
+    expect(named.Put.Item.roleFieldSuppress).toBeUndefined()
+  })
+
+  it('an admin upsert keeps the condition only for keys it leaves blank', async () => {
+    const stored = {
+      pkey: 'SERVICE_OVERRIDE#E', skey: 'memorial#2026-11-15', ecclesia: 'E', serviceType: 'memorial', date: '2026-11-15',
+      roleFields: { Exhort: '' }, roleFieldSuppress: { Exhort: 'Alex Speaker' }, version: 2, createdBy: 'a', createdAt: 'c', updatedAt: 'u',
+    }
+    mockSend.mockResolvedValueOnce({ Item: stored }).mockResolvedValueOnce({})
+    const kept = await overrides.upsert({ ecclesia: 'E', serviceType: 'memorial', date: '2026-11-15', note: 'n', roleFields: { Exhort: '' }, createdBy: 'admin' })
+    expect(kept.roleFieldSuppress).toEqual({ Exhort: 'Alex Speaker' })
+    mockSend.mockResolvedValueOnce({ Item: stored }).mockResolvedValueOnce({})
+    const typed = await overrides.upsert({ ecclesia: 'E', serviceType: 'memorial', date: '2026-11-15', roleFields: { Exhort: 'Casey Visitor' }, createdBy: 'admin' })
+    expect(typed.roleFieldSuppress).toBeUndefined()
+  })
+
   it('a held booking is conditioned on person, invite and swap lock', () => {
     const [del] = repo.buildTransactItems([
       { kind: 'deleteBooking', ecclesia: 'E', type: 'memorial', date: '2026-11-15', expect: { personId: 'p-a', inviteId: 'inv-1', openSwapId: null } },

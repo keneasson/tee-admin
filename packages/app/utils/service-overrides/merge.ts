@@ -1,4 +1,5 @@
 import { serviceOverrideRepository } from '@my/app/provider/dynamodb/repositories/service-override-repository'
+import { normalizeName } from '../name-resolver'
 import type {
   ServiceOccurrenceOverrideRecord,
   ServiceOverrideType,
@@ -100,9 +101,26 @@ export function applyOverrideToProgramItem<T extends Record<string, any>>(
   // and redaction runs AFTER this merge on the anon read path.
   if (override.roleFields) {
     for (const [key, value] of Object.entries(override.roleFields)) {
+      // Conditional blank (speaker invitations): '' with a suppress entry hides
+      // the Sheet value ONLY while the Sheet still names the suppressed person.
+      // A different (later) Sheet name shows through. No suppress entry → the
+      // value applies unconditionally, exactly as before.
+      const suppressed = override.roleFieldSuppress?.[key]
+      if (value === '' && suppressed !== undefined && !sameScheduleName(target[key], suppressed)) continue
       target[key] = value
     }
   }
 
   return item
+}
+
+/**
+ * Do two free-text schedule names name the same person? Case, whitespace,
+ * punctuation and a leading honorific ("Bro.", "Brother", …) are ignored —
+ * the same normalization the name resolver matches with.
+ */
+export function sameScheduleName(a: unknown, b: unknown): boolean {
+  const na = normalizeName(typeof a === 'string' ? a : '').full
+  const nb = normalizeName(typeof b === 'string' ? b : '').full
+  return na !== '' && na === nb
 }

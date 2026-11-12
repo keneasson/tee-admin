@@ -55,6 +55,14 @@ export interface SlotDetail extends Slot {
   booking?: SpeakerBookingRecord
   /** The merged schedule row (overlay applied), when one exists. */
   row?: Record<string, any>
+  /**
+   * The synced Sheet's own value for the slot field (before the overlay), and
+   * who it resolves to. Only set when the overlay carries the field, i.e. when
+   * the two can differ. Cancel/change use it: if the Sheet itself names the
+   * departing speaker, removing the overlay key would bring them back.
+   */
+  baseName?: string
+  basePersonId?: string
 }
 
 const scheduleRepository = new ScheduleRepository()
@@ -190,6 +198,15 @@ export async function loadSlotDetails(
       continue
     }
 
+    if (override?.roleFields?.[field] !== undefined) {
+      const sheetName = String(raw[field] ?? '').trim()
+      if (!isPlaceholderName(sheetName)) {
+        base.baseName = sheetName
+        const id = await resolveNameToPersonId(sheetName, nameCache)
+        if (id) base.basePersonId = id
+      }
+    }
+
     const name = String(row[field] ?? '').trim()
     if (!isPlaceholderName(name)) {
       const overlayNamed = override?.roleFields?.[field] !== undefined
@@ -217,7 +234,7 @@ export async function loadSlotDetails(
 
 /** Public shape: strips the internal override/booking/row. */
 export function toPublicSlot(s: SlotDetail): Slot {
-  const { override: _o, booking: _b, row: _r, ...slot } = s
+  const { override: _o, booking: _b, row: _r, baseName: _bn, basePersonId: _bp, ...slot } = s
   return slot
 }
 

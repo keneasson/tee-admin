@@ -157,6 +157,7 @@ import {
   createInvite,
   requestSwap,
   respondSwap,
+  sendTestInvitation,
   swapExpiry,
   type Actor,
 } from '@/utils/speaker-invites/service'
@@ -331,6 +332,38 @@ describe('createInvite — the invitee is always a PersonRecord', () => {
   })
 })
 
+describe('test send (composer "send a test to me")', () => {
+  beforeEach(() => memorialRow('2026-11-15'))
+
+  it('validates like a real invite, mails only the inviter, and writes nothing', async () => {
+    const r = await sendTestInvitation(
+      {
+        ecclesia: ECC, type: 'memorial', inviter: RB,
+        invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test' },
+        dates: [{ date: '2026-11-15' }],
+      },
+      'rb@example.test'
+    )
+    expect(r).toEqual({ ok: true, sentTo: 'rb@example.test' })
+    expect(emails.sendInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ inviteeEmail: 'new@example.test', offeredDates: [{ date: '2026-11-15', time: '11:00', tz: 'America/Toronto' }] }),
+      { testTo: 'rb@example.test', inviteeName: 'New Brother' }
+    )
+    expect(h.state.invites.size).toBe(0)
+    expect(h.state.bookings.size).toBe(0)
+    expect(personRepository.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses a date that is not open, sending nothing', async () => {
+    const r = await sendTestInvitation(
+      { ecclesia: ECC, type: 'memorial', inviter: RB, invitee: { personId: 'p-a' }, dates: [{ date: '2026-11-22' }] },
+      'rb@example.test'
+    )
+    expect(r).toMatchObject({ ok: false, code: 'DATES_NOT_OPEN' })
+    expect(emails.sendInvitationEmail).not.toHaveBeenCalled()
+  })
+})
+
 describe('accept — no holds, first to accept wins (criterion 4)', () => {
   beforeEach(() => {
     memorialRow('2026-11-15')
@@ -427,7 +460,7 @@ describe('change date and cancel', () => {
     expect(bookingOn('2026-11-22').personId).toBe('p-a')
     expect(overrideOn('2026-11-15').roleFields).toBeUndefined()
     expect(overrideOn('2026-11-22').roleFields).toEqual({ Exhort: 'Alex Speaker' })
-    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'changed')
+    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'changed', { previousDate: '2026-11-15' })
   })
 
   it('cancel releases the booking and clears the overlay field', async () => {
@@ -438,7 +471,7 @@ describe('change date and cancel', () => {
     expect(bookingOn('2026-11-15')).toBeUndefined()
     expect(overrideOn('2026-11-15').roleFields).toBeUndefined()
     expect(emails.sendCancellationEmail).toHaveBeenCalledTimes(1)
-    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'cancelled')
+    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'cancelled', undefined)
   })
 
   it('cancel leaves the overlay alone when it no longer names this person', async () => {
@@ -450,6 +483,71 @@ describe('change date and cancel', () => {
     const r = await cancelByInvitee(inv.inviteId, as('p-a'))
     expect(r.ok).toBe(true)
     expect(overrideOn('2026-11-15').roleFields).toEqual({ Exhort: 'Blair Speaker' })
+  })
+})
+
+describe('releasing a slot the Sheet also names (cancel / change bug fix)', () => {
+  beforeEach(() => {
+    memorialRow('2026-11-15')
+    memorialRow('2026-11-22')
+  })
+
+  /** After accepting, the RB types the speaker into the Google Sheet too (synced row). */
+  function sheetNames(date: string, name: string) {
+    const row = h.state.rows.find((r) => r.date === date)
+    row.data.Exhort = name
+  }
+
+  it('cancel writes an explicit blank so the slot reads OPEN, and the inviter is asked to clear the Sheet', async () => {
+    const inv = await invite('p-a', ['2026-11-15'])
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    sheetNames('2026-11-15', 'Alex Speaker')
+
+    const r = await cancelByInvitee(inv.inviteId, as('p-a'))
+    expect(r).toMatchObject({ ok: true, sheetReminder: { name: 'Alex Speaker', date: '2026-11-15' } })
+    expect(overrideOn('2026-11-15').roleFields).toEqual({ Exhort: '' })
+    expect(overrideOn('2026-11-15').roleFieldSuppress).toEqual({ Exhort: 'Alex Speaker' })
+    expect(overrideOn('2026-11-15').roleFieldRefs).toBeUndefined()
+    const [slot] = await getSlots(ECC, 'memorial', '2026-11-15', '2026-11-15')
+    expect(slot.state).toBe('OPEN')
+
+    // The RB later types a NEW speaker into the Sheet for that date: it shows.
+    sheetNames('2026-11-15', 'Blair Speaker')
+    const [later] = await getSlots(ECC, 'memorial', '2026-11-15', '2026-11-15')
+    expect(later).toMatchObject({ state: 'FILLED', speakerName: 'Blair Speaker', speakerPersonId: 'p-b' })
+    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'cancelled', {
+      sheetReminder: { name: 'Alex Speaker', date: '2026-11-15' },
+    })
+  })
+
+  it('a Sheet naming someone else is left to show through (key removed)', async () => {
+    const inv = await invite('p-a', ['2026-11-15'])
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    sheetNames('2026-11-15', 'Blair Speaker')
+    const r = await cancelByInvitee(inv.inviteId, as('p-a'))
+    expect(r.ok && 'sheetReminder' in r ? r.sheetReminder : undefined).toBeUndefined()
+    expect(overrideOn('2026-11-15').roleFields).toBeUndefined()
+    const [slot] = await getSlots(ECC, 'memorial', '2026-11-15', '2026-11-15')
+    expect(slot).toMatchObject({ state: 'FILLED', speakerPersonId: 'p-b' })
+  })
+
+  it('change applies the same rule to the old date', async () => {
+    const inv = await invite('p-a', ['2026-11-15', '2026-11-22'])
+    await acceptInvite(inv.inviteId, '2026-11-15', as('p-a'))
+    sheetNames('2026-11-15', 'Bro. Alex Speaker')
+    const r = await changeDate(inv.inviteId, '2026-11-22', as('p-a'))
+    expect(r.ok).toBe(true)
+    expect(overrideOn('2026-11-15').roleFields).toEqual({ Exhort: '' })
+    expect(overrideOn('2026-11-15').roleFieldSuppress).toEqual({ Exhort: 'Bro. Alex Speaker' })
+    const slots = await getSlots(ECC, 'memorial', '2026-11-15', '2026-11-22')
+    expect(slots.map((s) => [s.date, s.state, s.speakerPersonId])).toEqual([
+      ['2026-11-15', 'OPEN', undefined],
+      ['2026-11-22', 'FILLED', 'p-a'],
+    ])
+    expect(emails.sendInviterNotice).toHaveBeenLastCalledWith(expect.anything(), 'changed', {
+      previousDate: '2026-11-15',
+      sheetReminder: { name: 'Alex Speaker', date: '2026-11-15' },
+    })
   })
 })
 

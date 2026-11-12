@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
     changeDate: vi.fn(),
     cancelByInvitee: vi.fn(),
     requestSwap: vi.fn(),
+    sendTestInvitation: vi.fn(),
   },
 }))
 
@@ -112,6 +113,23 @@ describe('POST /api/speaker-invites — server-side ecclesia check (criterion 1)
     signIn('rb-y@example.test')
     await post({ ...body, ecclesia: undefined })
     expect(h.service.createInvite).toHaveBeenCalledWith(expect.objectContaining({ ecclesia: Y }))
+  })
+
+  it("send: 'test' mails only the signed-in inviter and creates nothing", async () => {
+    signIn('rb-x@example.test')
+    people['rb-x@example.test'].primaryEmail = 'rb-x@example.test'
+    h.service.sendTestInvitation.mockResolvedValue({ ok: true, sentTo: 'rb-x@example.test' })
+    const res = await post({ ...body, send: 'test' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ test: true, sentTo: 'rb-x@example.test' })
+    expect(h.service.sendTestInvitation).toHaveBeenCalledWith(expect.objectContaining({ ecclesia: X }), 'rb-x@example.test')
+    expect(h.service.createInvite).not.toHaveBeenCalled()
+  })
+
+  it("send: 'test' is gated like a real send", async () => {
+    signIn('admin-x@example.test')
+    expect((await post({ ...body, send: 'test' })).status).toBe(403)
+    expect(h.service.sendTestInvitation).not.toHaveBeenCalled()
   })
 
   it('an unauthenticated caller gets the assurance refusal', async () => {

@@ -5,7 +5,9 @@ import { inviterInviteView } from '@/utils/speaker-invites/views'
 import { forbidden, inviterContext, noStore, serviceErrorResponse } from '@/utils/speaker-invites/http'
 
 /**
- * POST /api/speaker-invites/{inviteId}/cancel → { invite } | 4xx { error, code }
+ * POST /api/speaker-invites/{inviteId}/cancel → { invite, sheetReminder? } | 4xx { error, code }
+ * `sheetReminder: { name, date }` — the schedule Sheet still lists the speaker
+ * on that date; show "If your schedule sheet lists {name} for {date}, please remove it".
  * The inviter withdraws the invite; an accepted booking and its roster entry are released.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ inviteId: string }> }) {
@@ -18,5 +20,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ in
 
   const result = await cancelByInviter(inviteId, { personId: ctx.person.personId, trust: ctx.trust })
   if (!result.ok) return serviceErrorResponse(result)
-  return NextResponse.json({ invite: await inviterInviteView(result.invite) }, { headers: noStore })
+  return NextResponse.json(
+    {
+      invite: await inviterInviteView(result.invite),
+      ...(result.sheetReminder ? { sheetReminder: result.sheetReminder } : {}),
+    },
+    { headers: noStore }
+  )
 }
