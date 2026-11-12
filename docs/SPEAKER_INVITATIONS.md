@@ -1,6 +1,6 @@
 # Speaker Invitations — Requirements
 
-**Status:** DRAFT v2, awaiting owner approval · **Branch:** `feat/speaker-invitations`
+**Status:** APPROVED 2026-11-12 · **Branch:** `feat/speaker-invitations`
 **Rule:** build to this doc and stop. Anything found outside it goes on the *Not now* line.
 
 ## 1. What it is
@@ -88,12 +88,14 @@ id: `/invite/{inviteId}?token=…`. `getTrust()` resolves it:
 |---|---|
 | Already signed in (Google / OTP / password) **as the invitee** | `authenticated` and continues; stays signed in |
 | Not signed in, valid token for the invitee | `recognized` as themselves |
-| Signed in as **someone else** | "This invitation is for {first name}." Offer to switch account; no actions |
+| Signed in as **someone else** (partner, forwarded email, shared device) | The other session is **signed out** and the token is exchanged for a `recognized` session as the invitee (existing `/auth/signin-token` path). Same rights as the row above |
 | No or invalid token, not signed in | Sign-in prompt (OTP / Google); the invite resumes after sign-in |
+
+The header always names who the page is acting as: **"Invitation for Brother {Surname}. (Not Brother {Surname}? Sign in again)"**. That link signs out and runs the normal sign-in flow, returning to the invite.
 
 **What each tier may do.** This is a deliberate, narrow exception to the
 "recognized = no mutations that matter" rule. It only covers the invitee's own
-booking, it's reversible, and the inviter is notified of every action:
+booking, it's reversible, and the inviter is notified of accept, change and cancel:
 
 | Action | Minimum |
 |---|---|
@@ -118,10 +120,10 @@ Also:
    "{Name} asks to trade {their date} for your {date}". Accept / Decline (POST).
 4. **Accept** = one transaction that swaps both bookings and both overlay
    fields, conditioned on both still being as they were when requested. Both get
-   fresh confirmations (+ .ics updates) and the inviter is notified.
+   fresh confirmations (+ .ics updates).
 5. Decline or expiry (7 days, or the day before the earlier date) changes nothing,
    and the requester is told. Only one open swap request per booking at a time.
-6. The RB is notified but **not** asked to approve.
+6. The RB is **neither asked nor notified**. The change shows up in the newsletter and in later emails.
 
 ## 8. Emails (templates in `apps/email-builder/emails/`)
 
@@ -133,7 +135,7 @@ Also:
    live, stable `UID` so updates replace the earlier entry), and the "need to
    change" link. Re-sent on change or swap. Cancel sends the `METHOD:CANCEL` .ics.
 3. **Swap request** to the other speaker (§7).
-4. **Inviter notice**: accepted / changed / swap done / cancelled.
+4. **Inviter notice**: accepted / changed / cancelled (swaps send no notice).
 
 Sending follows the exhorter heads-up pattern: an idempotency claim, SES
 `tee-email-tracking`, recipient snapshot. Test sends go to the user's own address only.
@@ -157,9 +159,9 @@ Everything sits behind a new `SPEAKER_INVITES` feature flag.
 3. Opening a date link changes nothing until Confirm (POST) is pressed.
 4. Two people accepting the same slot: exactly one wins. The other sees "just taken" plus the remaining options (test).
 5. After accept, the public schedule and the newsletter's upcoming program show the speaker on that date.
-6. Arriving already signed in as the invitee needs no extra step. Arriving signed in as someone else blocks all actions. A token alone allows accept/change/cancel. A token alone cannot request a swap until step-up.
+6. Arriving already signed in as the invitee needs no extra step. Arriving signed in as someone else signs that session out, continues as the invitee at `recognized`, and shows "Not Brother X? Sign in again". A token alone allows accept/change/cancel. A token alone cannot request a swap until step-up.
 7. The Google link and the .ics open the correct date, time, timezone and address in Google Calendar and Apple Calendar. Change and cancel update or remove the same entry.
-8. A swap accepted by the other speaker exchanges both dates atomically. Both get new confirmations and the inviter is notified. If either booking changed in the meantime, the swap fails cleanly.
+8. A swap accepted by the other speaker exchanges both dates atomically. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
 9. Expired, cancelled or unknown links show a clear page with the inviter's contact, never an error.
 10. Lecture invites work end-to-end with manually entered dates.
 11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod behind the flag **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
