@@ -268,7 +268,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
               <Input width={140} value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" testID="range-from" />
               <Text>to</Text>
               <Input width={140} value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" testID="range-to" />
-              {loadingSlots ? <Spinner size="small" /> : null}
+              {loadingSlots ? <Spinner size="small" width={20} height={20} /> : null}
             </XStack>
             {slotsError ? <Notice tone="error">{slotsError}</Notice> : null}
             {slots ? (
