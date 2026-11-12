@@ -62,6 +62,15 @@ const contentManagerPages: MainPageType[] = [
   { path: '/admin/meetings', label: 'Meeting Manager' },
 ]
 
+// Speaker invitations — narrower than the content managers: only the owner, or
+// a Recording Brother / Rep (of their own ecclesia; the API enforces that).
+// Admins and the legacy recorder role are not inviters (SPEAKER_INVITATIONS.md §2).
+const speakerInvitePage: MainPageType = { path: '/admin/speaker-invites', label: 'Speaker Invitations' }
+
+function canInviteSpeakers(user: UserSession | null | undefined): boolean {
+  return !!user && (user.role === ROLES.OWNER || user.role === ROLES.REP || !!user.isRecordingBrother)
+}
+
 // Admin Tools - System Management (admin/owner only)
 const systemAdminPages: MainPageType[] = [
   { path: '/admin/youtube', label: 'YouTube' },
@@ -329,7 +338,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             >
               Content
             </Text>
-            {contentManagerPages.map((page) => (
+            {(canInviteSpeakers(user) ? [...contentManagerPages, speakerInvitePage] : contentManagerPages).map((page) => (
               <Button
                 variant="chromeless"
                 key={page.path}

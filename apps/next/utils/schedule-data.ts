@@ -8,6 +8,7 @@ import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-sched
 import { CACHE_TAGS } from './cache'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
 import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
+import { isValidScheduleRow } from '@my/app/utils/schedule-row-rules'
 
 // ── Helpers ──
 
@@ -66,30 +67,6 @@ function addScheduleSpecificFields(event: any, row: any, type: string): void {
   }
 }
 
-function isValidRow(event: any, type: string): boolean {
-  switch (type) {
-    case 'memorial': {
-      const hasAssignments = !!(event.Preside || event.Exhort || event.Organist || event.Steward || event.Doorkeeper)
-      if (hasAssignments) return true
-      // No assignments — only keep if there's Lunch or Activities content (indicates "no service" with explanation)
-      const hasContent = !!(event.Lunch?.trim() || event.Activities?.trim())
-      if (hasContent) {
-        event.noServiceAtHall = true
-        return true
-      }
-      return false
-    }
-    case 'bibleClass':
-      return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
-    case 'sundaySchool':
-      return !!event.Refreshments
-    case 'cyc':
-      return !!(event.speaker || event.topic)
-    default:
-      return true
-  }
-}
-
 function transformSheet(sheetData: GoogleSheetData): EnhancedScheduleEvent[] {
   const config = getScheduleConfig(sheetData.type as Exclude<GoogleSheetTypes, 'directory'>)
   if (!config.name) return []
@@ -123,7 +100,7 @@ function transformSheet(sheetData: GoogleSheetData): EnhancedScheduleEvent[] {
       addScheduleSpecificFields(event, row, sheetData.type as string)
       return event
     })
-    .filter((e: any): e is EnhancedScheduleEvent => e !== null && e.date && isValidRow(e, sheetData.type as string))
+    .filter((e: any): e is EnhancedScheduleEvent => e !== null && e.date && isValidScheduleRow(e, sheetData.type as string))
 }
 
 // ── Core fetch (not cached — called inside unstable_cache wrappers) ──

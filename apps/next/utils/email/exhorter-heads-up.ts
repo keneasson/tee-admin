@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { resolveScheduleName, isPlaceholderName } from '@my/app/utils/name-resolver'
+import { detectSpecialOccasion } from '@my/app/utils/schedule-row-rules'
 import { toDirectoryPerson } from '@my/app/utils/name-resolver-directory'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { resolveTenantFromEnv } from '@my/app/config/tenants'
@@ -54,23 +55,9 @@ const SENDER_LOCAL_PART = 'communications'
 // domain verification needed).
 const REPLY_TO = 'teerecbro@gmail.com'
 
-// A non-lunch note in the memorial row's `Lunch`/`Activities` free-text columns
-// signals the normal at-hall memorial DIDN'T happen — cancelled, online-only, or
-// relocated (joining another ecclesia / a fraternal gathering). On those days the
-// heads-up's core promise ("come exhort at {hall} at {time}") is WRONG, so we must
-// NOT auto-send — we flag for human review instead. Keyword-based (verified
-// against the live schedule: matches the 4 cancel/relocate days, and leaves the
-// "tee study weekend" + potluck days alone). STOPGAP: the durable fix is a
-// structured occurrence status on the service-override record (see #124 follow-up)
-// so we stop parsing free-text.
-const SPECIAL_OCCASION_RE = /(cancel|joining|join us at|fraternal gathering|elsewhere)/i
-
-/** Returns the free-text signal for a cancelled/relocated occurrence, else null. */
-export function detectSpecialOccasion(lunch?: string, activities?: string): string | null {
-  const blob = `${lunch ?? ''}  ${activities ?? ''}`
-  if (!SPECIAL_OCCASION_RE.test(blob)) return null
-  return activities?.trim() || lunch?.trim() || 'Special occasion — not the usual memorial'
-}
+// Moved to packages/app so getSlots (speaker invitations) shares it; re-exported
+// here so existing importers keep working.
+export { detectSpecialOccasion }
 
 /** Classify the row's `Lunch` value into an invite style, or undefined for none. */
 export function resolveLunchType(lunch?: string): ExhorterHeadsUpLunch | undefined {
@@ -100,7 +87,7 @@ export function resolveHallAddress(ecclesia: EcclesiaData | null): string | unde
 
 // Fallback "ways to attend" — the SAME Zoom the memorial template hardcodes.
 // Used only when the occurrence has no per-occurrence `attendOptions` override.
-const DEFAULT_TEE_ZOOM: ExhorterHeadsUpAttendOption = {
+export const DEFAULT_TEE_ZOOM: ExhorterHeadsUpAttendOption = {
   label: 'Toronto East Zoom',
   url: 'https://us04web.zoom.us/j/586952386?pwd=Z2svVG0zTmNlTWx2MTFoMlZIaDZLQT09',
   meetingId: '586 952 386',
