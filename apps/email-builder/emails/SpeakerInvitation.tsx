@@ -99,10 +99,10 @@ const SpeakerInvitation = ({
             <strong>{ecclesiaName}</strong>
             {'.'}
           </Text>
+          {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
           <Text style={defaultText}>
             {single ? 'Here is a date we have coming up:' : 'Here are a few dates we have coming up:'}
           </Text>
-          {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
         </Container>
 
         <Container style={container} className="container">

@@ -204,6 +204,15 @@ describe('SpeakerInvitation opening lines', () => {
     expect(noPhone).toContain('Feel free to reach out: just reply to this email.')
   })
 
+  it('the personal note sits between the greeting and the dates', async () => {
+    const text = (await render(React.createElement(SpeakerInvitation, base), { plainText: true })).replace(/\s+/g, ' ')
+    const greet = text.indexOf('We invite you to')
+    const note = text.indexOf('It has been too long')
+    const dates = text.indexOf('Here are a few dates')
+    expect(greet).toBeLessThan(note)
+    expect(note).toBeLessThan(dates)
+  })
+
   it('says "a date" when only one is offered', async () => {
     const text = await render(
       React.createElement(SpeakerInvitation, { ...base, dateOptions: base.dateOptions.slice(0, 1) }),
