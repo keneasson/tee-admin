@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   snapshotRoster: vi.fn(),
   generateEcclesiaToken: vi.fn(),
   people: new Map<string, any>(),
+  invites: new Map<string, any>(),
   loadSlotDetails: vi.fn(),
   rendered: [] as Array<{ kind: string; props: any }>,
 }))
@@ -24,7 +25,11 @@ vi.mock('@/utils/email/ecclesia-token', () => ({
   generateEmailPreferencesUrl: async (email: string, base: string) => `${base}/email-preferences?token=prefs-${email}`,
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/speaker-invite-repository', () => ({
-  speakerInviteRepository: { claimEmail: h.claimEmail, releaseEmail: h.releaseEmail },
+  speakerInviteRepository: {
+    claimEmail: h.claimEmail,
+    releaseEmail: h.releaseEmail,
+    getInvite: async (id: string) => h.invites.get(id) ?? null,
+  },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/send-recipient-repository', () => ({
   sendRecipientRepository: { snapshotRoster: h.snapshotRoster },
@@ -94,6 +99,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.rendered.length = 0
   h.people.clear()
+  h.invites.clear()
   h.people.set('p-rb', { personId: 'p-rb', firstName: 'Rob', lastName: 'Recorder', primaryEmail: 'rb@example.test' })
   h.people.set('p-a', { personId: 'p-a', firstName: 'Alex', lastName: 'Speaker', primaryEmail: 'alex@example.test' })
   h.people.set('p-b', { personId: 'p-b', firstName: 'Blair', lastName: 'Speaker', primaryEmail: 'blair@example.test' })
@@ -227,6 +233,30 @@ describe('confirmation, cancellation, swap request, inviter notice', () => {
     expect(props.acceptUrl).toBe('https://tee-admin.com/invite/swap/sw-1?token=tok-blair%40example.test&action=accept')
     expect(props.declineUrl).toBe('https://tee-admin.com/invite/swap/sw-1?token=tok-blair%40example.test&action=decline')
     expect(sent()[0]).toMatchObject({ to: 'blair@example.test', replyTo: 'alex@example.test' })
+  })
+
+  it('§9a: a speaker with no primary of their own (household address) is reached at their invite address', async () => {
+    h.people.set('p-h', { personId: 'p-h', firstName: 'Jordan', lastName: 'Household', primaryEmail: '' })
+    h.invites.set('inv-h', { inviteId: 'inv-h', inviteePersonId: 'p-h', inviteeEmail: 'home@example.test' })
+    const swap = {
+      swapId: 'sw-2', ecclesia: HOME, type: 'memorial', field: 'Exhort', status: 'open',
+      requester: { personId: 'p-h', name: 'Jordan Household', date: '2026-11-15', time: '11:00', tz: 'America/Toronto', inviteId: 'inv-h', hadBooking: true },
+      target: { personId: 'p-b', name: 'Blair Speaker', date: '2026-11-22', time: '11:00', tz: 'America/Toronto', hadBooking: false },
+      createdAt: 'x', expiresAt: '2026-11-15T16:00:00.000Z', version: 1, pkey: 'x', skey: 'META',
+    } as any
+    await sendSwapRequestEmail(swap)
+    expect(sent()[0]).toMatchObject({ to: 'blair@example.test', replyTo: 'home@example.test' })
+    await sendSwapOutcomeEmail({ ...swap, status: 'declined' }, 'declined')
+    expect(sent()[1]).toMatchObject({ to: 'home@example.test' })
+    // As a swap TARGET, too.
+    await sendSwapRequestEmail({ ...swap, swapId: 'sw-3', requester: swap.target, target: swap.requester })
+    expect(sent()[2]).toMatchObject({ to: 'home@example.test' })
+    // Confirmation for their own invite falls back to the invite address.
+    await sendConfirmationEmail(
+      invite({ inviteId: 'inv-h', inviteePersonId: 'p-h', inviteeEmail: 'home@example.test', status: 'accepted', acceptedDate: '2026-11-15' }),
+      { ecclesia: HOME, type: 'memorial', date: '2026-11-15', time: '11:00', tz: 'America/Toronto', personId: 'p-h', inviteId: 'inv-h' }
+    )
+    expect(sent()[3]).toMatchObject({ to: 'home@example.test' })
   })
 
   it('swap outcome uses the template, to the requester, with the other speaker’s first name only', async () => {

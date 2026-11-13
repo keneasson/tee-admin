@@ -13,6 +13,7 @@ import {
   SPEAKER_INVITE_TYPES,
   speakerInviteKeys,
   type CounterpartRole,
+  type InviteFollowUp,
   type InviteHistoryAction,
   type InviteHistoryEntry,
   type InviteTrust,
@@ -26,6 +27,8 @@ import {
   type SwapSide,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { createVisitorPerson } from '@my/app/provider/dynamodb/repositories/visitor-person'
+import { isInvitableSpeaker } from '@my/app/utils/speaker-eligibility'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import {
   sendCancellationEmail,
@@ -39,6 +42,7 @@ import {
 } from '../email/speaker-invite-emails'
 import { loadSlotDetails, toPublicSlot, type Slot, type SlotDetail } from './slots'
 import { isHHmm, isISODate, isValidTimeZone, localISODate, zonedStart } from './time'
+import { speakerEmailFor } from './contact'
 
 /**
  * Speaker invitations service (docs/SPEAKER_INVITATIONS.md §2–§7).
@@ -70,6 +74,7 @@ export type ServiceErrorCode =
   | 'DATES_NOT_OPEN'
   | 'INVITEE_NOT_FOUND'
   | 'INVITEE_NO_EMAIL'
+  | 'NOT_INVITABLE'
   | 'INVITE_CANCELLED'
   | 'INVITE_EXPIRED'
   | 'ALREADY_ACCEPTED'
@@ -352,11 +357,30 @@ async function swapLock(booking: SpeakerBookingRecord | null): Promise<{ free: b
 // Create
 // ---------------------------------------------------------------------------
 
+export interface NewInviteeInput {
+  firstName: string
+  lastName: string
+  email: string
+  ecclesia?: string
+  /**
+   * §9a: the inviter confirmed this address belongs to SOMEONE ELSE in the
+   * directory (a household inbox). The new visitor joins that address as a
+   * shared one (#267) instead of being taken for its existing holder.
+   */
+  sharedEmailConfirmedNotSamePerson?: boolean
+  /** §9b: required, and must be 'male' (invitations to speak are for brethren). */
+  gender?: 'male' | 'female'
+  /** §9b: true = Yes, false = No (refused), absent/null = not answered (left unset). */
+  baptized?: boolean | null
+  /** YYYY-MM-DD, optional. */
+  baptismDate?: string
+}
+
 export interface CreateInviteInput {
   ecclesia: string
   type: SpeakerInviteType
   inviter: Actor
-  invitee: { personId: string } | { firstName: string; lastName: string; email: string; ecclesia?: string }
+  invitee: { personId: string } | NewInviteeInput
   /** 1–3. memorial/bible_class: date only (time comes from the schedule). lecture: date + time (+ tz). */
   dates: Array<{ date: string; time?: string; tz?: string }>
   otherDatesWindow?: { from: string; to: string }
@@ -365,35 +389,85 @@ export interface CreateInviteInput {
   send?: boolean
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function isEmailAddress(value: unknown): value is string {
+  return typeof value === 'string' && EMAIL_RE.test(value.trim())
+}
+
+const sameName = (p: Pick<PersonRecord, 'firstName' | 'lastName'>, first: string, last: string) =>
+  (p.firstName ?? '').trim().toLowerCase() === first.toLowerCase() &&
+  (p.lastName ?? '').trim().toLowerCase() === last.toLowerCase()
+
+const notInvitable = () =>
+  fail('NOT_INVITABLE', 'Only brethren can be invited to speak, and this person isn’t recorded as one.')
+
+type ResolvedInvitee =
+  | { ok: true; person: PersonRecord | null; name: string; email: string; followUp?: InviteFollowUp }
+  | ServiceError
+
 async function resolveInvitee(
   invitee: CreateInviteInput['invitee'],
-  create: boolean
-): Promise<{ ok: true; person: PersonRecord | null; name: string; email: string } | ServiceError> {
+  create: boolean,
+  ctx: { inviteId: string; inviter: Actor }
+): Promise<ResolvedInvitee> {
   if ('personId' in invitee) {
     const person = await personRepository.getById(invitee.personId)
     if (!person) return fail('INVITEE_NOT_FOUND', 'That person is not in the directory.')
+    if (!isInvitableSpeaker(person)) return notInvitable()
     if (!person.primaryEmail) return fail('INVITEE_NO_EMAIL', 'That person has no email address on file.')
     return { ok: true, person, name: personName(person), email: person.primaryEmail }
   }
   const email = invitee.email?.trim().toLowerCase()
   const firstName = invitee.firstName?.trim()
   const lastName = invitee.lastName?.trim()
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('INVALID_INPUT', 'A valid email is required.')
+  if (!email || !isEmailAddress(email)) return fail('INVALID_INPUT', 'A valid email is required.')
   if (!firstName || !lastName) return fail('INVALID_INPUT', 'First and last name are required.')
-  // Look the address up first (GSI1) — never create a duplicate person.
+  // Look the address up first (GSI1) — never take an address from its holder.
   const existing = await personRepository.getByEmail(email)
-  if (existing) return { ok: true, person: existing, name: personName(existing), email }
+  const shared = !!existing && invitee.sharedEmailConfirmedNotSamePerson === true
+  if (existing && !shared) {
+    if (!isInvitableSpeaker(existing)) return notInvitable()
+    return { ok: true, person: existing, name: personName(existing), email }
+  }
+  // §9b: a person added here is added as a Brother, and not one recorded as unbaptized.
+  if (invitee.gender !== 'male') return fail('NOT_INVITABLE', 'Invitations to speak are for brethren. Choose Brother to continue.')
+  if (invitee.baptized === false) return notInvitable()
+  const baptismDate = invitee.baptismDate?.trim() || undefined
+  if (baptismDate && !isISODate(baptismDate)) return fail('INVALID_INPUT', 'The baptism date must be YYYY-MM-DD.')
+  if (existing && shared) {
+    // Already added on this address before (a second invite)? Use them.
+    const holders = await personRepository.getAllPersonsByEmail(email)
+    const again = holders.find((p) => p.personId !== existing.personId && sameName(p, firstName, lastName))
+    if (again) return { ok: true, person: again, name: personName(again), email }
+  }
   // A test send names the invitee in the preview but creates no one.
   if (!create) return { ok: true, person: null, name: `${firstName} ${lastName}`, email }
-  const person = await personRepository.create({
-    email,
+
+  const now = nowFn().toISOString()
+  const person = await createVisitorPerson({
     firstName,
     lastName,
     ecclesia: invitee.ecclesia?.trim() || 'Unknown',
-    memberStatus: 'visitor',
-    role: 'guest',
+    ...(shared
+      ? { sharedEmail: { address: email, asPrimary: existing!.primaryEmail?.toLowerCase() === email } }
+      : { email }),
+    source: 'speaker-invitation',
+    sourceRef: `speaker-invite:${ctx.inviteId}`,
+    createdByPersonId: ctx.inviter.personId,
+    // §9b: the inviting RB/Rep vouches they are aligned with an ecclesia, so
+    // 'member' whatever the baptism answer (role and baptism are independent).
+    role: 'member',
+    gender: 'male',
+    ...(invitee.baptized === true ? { baptized: true, ...(baptismDate ? { baptismDate } : {}) } : {}),
   })
-  return { ok: true, person, name: personName(person), email }
+  return {
+    ok: true,
+    person,
+    name: personName(person),
+    email,
+    ...(shared ? { followUp: { kind: 'shared-email' as const, withPersonId: existing!.personId, createdAt: now } } : {}),
+  }
 }
 
 /**
@@ -455,10 +529,11 @@ async function prepareInvite(
     }
   }
 
-  const invitee = await resolveInvitee(input.invitee, create)
+  // The id comes first: a person created for this invite records it (sourceRef).
+  const inviteId = randomUUID()
+  const invitee = await resolveInvitee(input.invitee, create, { inviteId, inviter: input.inviter })
   if (!invitee.ok) return invitee
 
-  const inviteId = randomUUID()
   const now = nowFn().toISOString()
   const note = input.note?.trim() || undefined
   const invite: SpeakerInviteRecord = {
@@ -475,6 +550,7 @@ async function prepareInvite(
     offeredDates,
     ...(otherDatesWindow ? { otherDatesWindow } : {}),
     ...(note ? { note } : {}),
+    ...(invitee.followUp ? { followUp: invitee.followUp } : {}),
     history: [historyEntry('created', input.inviter, { to: offeredDates.map((d) => d.date).join(',') })],
     createdAt: now,
     updatedAt: now,
@@ -893,7 +969,8 @@ export async function requestSwap(
   }
   if (targetSlot.speakerPersonId === invite.inviteePersonId) return fail('INVALID_INPUT', 'That is already your date.')
   const targetPerson = await personRepository.getById(targetSlot.speakerPersonId)
-  if (!targetPerson?.primaryEmail) {
+  // Their own primary, or the (household) address their invite was sent to.
+  if (!targetPerson || !(await speakerEmailFor(targetPerson.personId, targetBooking?.inviteId, targetPerson))) {
     return fail('TARGET_UNREACHABLE', 'That speaker has no email on file. Contact the inviter to arrange it.')
   }
   if (targetBooking && targetBooking.personId !== targetPerson.personId) {
@@ -1147,6 +1224,34 @@ export async function swapViewShortNotice(swap: SpeakerSwapRecord): Promise<Shor
   const ref = { ecclesia: swap.ecclesia, type: swap.type }
   const [r, t] = await Promise.all([slotOn(ref, swap.requester.date), slotOn(ref, swap.target.date)])
   return shortNoticesFor(swap.field, [r ?? { date: swap.requester.date }, t ?? { date: swap.target.date }])
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up (§9a)
+// ---------------------------------------------------------------------------
+
+/** Mark an invite's follow-up resolved (inviter of its ecclesia or owner; the route checks). Idempotent. */
+export async function resolveFollowUp(
+  inviteId: string,
+  actor: Actor
+): Promise<{ ok: true; invite: SpeakerInviteRecord } | ServiceError> {
+  const invite = await speakerInviteRepository.getInvite(inviteId)
+  if (!invite) return fail('NOT_FOUND', 'Invitation not found.')
+  if (!invite.followUp) return fail('INVALID_INPUT', 'This invitation has nothing to follow up.')
+  if (invite.followUp.resolvedAt) return { ok: true, invite }
+  const at = nowFn().toISOString()
+  const updated = nextInvite(
+    invite,
+    { followUp: { ...invite.followUp, resolvedAt: at, resolvedByPersonId: actor.personId } },
+    [historyEntry('follow_up_resolved', actor, { note: invite.followUp.kind })]
+  )
+  try {
+    await speakerInviteRepository.commit([{ kind: 'putInvite', invite: updated, expect: { version: invite.version } }])
+  } catch (err) {
+    if (err instanceof SpeakerWriteConflict) return fail('CONFLICT', 'The invitation changed. Reload and try again.')
+    throw err
+  }
+  return { ok: true, invite: updated }
 }
 
 // ---------------------------------------------------------------------------

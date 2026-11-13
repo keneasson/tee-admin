@@ -20,7 +20,8 @@ describe('SpeakerSwapOutcome (declined / expired swap request, §7.5)', () => {
   it('declined: says who could not trade, that nothing changed, and links to manage', async () => {
     const html = await render(<SpeakerSwapOutcome {...SpeakerSwapOutcome.PreviewProps} />)
     const text = visible(html)
-    expect(text).toContain('Dear Brother Sample Speaker,')
+    // §9b: recorded title + surname (the preview carries greetingTitle 'Brother').
+    expect(text).toContain('Dear Brother Speaker,')
     expect(text).toContain('Other is not able to trade Sunday, March 8, 2026 at 11:00am with you.')
     expect(text).toContain('Nothing has changed: you are still booked for Sunday, March 1, 2026 at 11:00am.')
     expect(html).toContain('https://tee-admin.com/invite/example')

@@ -34,6 +34,8 @@ import {
   whenDisplay,
 } from '../speaker-invites/appointment'
 import { loadSlotDetails, type SlotDetail } from '../speaker-invites/slots'
+import { speakerEmailFor } from '../speaker-invites/contact'
+import { titleFor } from '@my/app/utils/speaker-eligibility'
 
 /**
  * Email seam for speaker invitations (spec §8). The service calls these AFTER
@@ -97,6 +99,12 @@ function fromFor(tenant: TenantConfig): string {
 function fullName(p: Pick<PersonRecord, 'firstName' | 'lastName' | 'displayName'> | null | undefined): string {
   if (!p) return ''
   return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || p.displayName || ''
+}
+
+/** The greeting title from a recorded gender (§9b); none when unset. */
+function titleProp(p: PersonRecord | null | undefined): { greetingTitle?: 'Brother' | 'Sister' } {
+  const t = titleFor(p)
+  return t ? { greetingTitle: t } : {}
 }
 
 async function person(personId: string): Promise<PersonRecord | null> {
@@ -203,6 +211,8 @@ export async function sendInvitationEmail(invite: SpeakerInviteRecord, options: 
   const rendered = await renderSpeakerInvitation({
     inviteType: invite.type,
     inviteeName: options.inviteeName || fullName(invitee) || invite.inviteeEmail,
+    // A test send previews a person not yet created: they will be a Brother (§9b).
+    ...(options.inviteeName && !invitee ? { greetingTitle: 'Brother' as const } : titleProp(invitee)),
     ecclesiaName: place.ecclesiaName,
     dateOptions: invite.offeredDates.map((d) => ({
       label: whenDisplay(d),
@@ -257,6 +267,7 @@ async function sendAppointmentEmail(
     variant,
     inviteType: booking.type,
     speakerName: fullName(speaker),
+    ...titleProp(speaker),
     ecclesiaName: place.ecclesiaName,
     dateDisplay: dateDisplay(booking.date),
     timeDisplay: timeDisplay(booking.time),
@@ -337,7 +348,11 @@ export async function sendSwapRequestEmail(swap: SpeakerSwapRecord): Promise<voi
     person(swap.requester.personId),
     appointmentPlace(swap.ecclesia),
   ])
-  const to = target?.primaryEmail
+  // Their own primary, or the (household) address their invite went to (§9a).
+  const [to, requesterEmail] = await Promise.all([
+    speakerEmailFor(swap.target.personId, swap.target.inviteId, target),
+    speakerEmailFor(swap.requester.personId, swap.requester.inviteId, requester),
+  ])
   if (!to) throw new Error(`swap target ${swap.target.personId} has no email`)
 
   const token = await generateEcclesiaToken(to)
@@ -345,6 +360,7 @@ export async function sendSwapRequestEmail(swap: SpeakerSwapRecord): Promise<voi
   const rendered = await renderSpeakerSwapRequest({
     inviteType: swap.type,
     recipientName: fullName(target) || swap.target.name,
+    ...titleProp(target),
     requesterName: fullName(requester) || swap.requester.name,
     ecclesiaName: place.ecclesiaName,
     requesterDateDisplay: whenDisplay(swap.requester),
@@ -365,7 +381,7 @@ export async function sendSwapRequestEmail(swap: SpeakerSwapRecord): Promise<voi
     rendered,
     tenant,
     // The swap is between the two speakers (the RB is not involved, §7.7).
-    replyTo: requester?.primaryEmail,
+    replyTo: requesterEmail,
     campaignId: speakerSwapCampaignId(swap.swapId),
     ecclesia: swap.ecclesia,
   })
@@ -376,7 +392,7 @@ export async function sendSwapOutcomeEmail(swap: SpeakerSwapRecord, outcome: Swa
   const tenant = tenantForEcclesia(swap.ecclesia)
   const base = baseUrlFor(tenant)
   const [requester, place] = await Promise.all([person(swap.requester.personId), appointmentPlace(swap.ecclesia)])
-  const to = requester?.primaryEmail
+  const to = await speakerEmailFor(swap.requester.personId, swap.requester.inviteId, requester)
   if (!to) throw new Error(`swap requester ${swap.requester.personId} has no email`)
 
   const token = await generateEcclesiaToken(to)
@@ -385,6 +401,7 @@ export async function sendSwapOutcomeEmail(swap: SpeakerSwapRecord, outcome: Swa
     outcome,
     inviteType: swap.type,
     requesterName: fullName(requester) || swap.requester.name,
+    ...titleProp(requester),
     // First name only: the other speaker's full name is not this reader's to see.
     otherSpeakerName: swap.target.name.split(/\s+/)[0] || 'The other speaker',
     ecclesiaName: place.ecclesiaName,

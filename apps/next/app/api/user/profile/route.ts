@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { personForSessionEmail } from '@/utils/session-person'
+import { hasSpeakerFacts, parseSpeakerFactsEdit } from '@my/app/utils/speaker-eligibility'
 
 export async function GET() {
   try {
@@ -42,6 +43,10 @@ export async function GET() {
         lastName: person.lastName,
         role: person.role || 'guest',
         ecclesia: person.ecclesia,
+        // Recorded facts (§9b); null = not set.
+        gender: person.gender ?? null,
+        baptized: person.baptized ?? null,
+        baptismDate: person.baptismDate ?? null,
       }
     })
   } catch (error) {
@@ -112,7 +117,12 @@ export async function PATCH(request: NextRequest) {
       updates.lastName = lastName.trim()
     }
 
-    if (Object.keys(updates).length === 0) {
+    // Recorded facts (§9b): gender / baptized / baptismDate, null = Not set.
+    const parsedFacts = parseSpeakerFactsEdit(body)
+    if (!parsedFacts.ok) return NextResponse.json({ error: parsedFacts.error }, { status: 400 })
+    const facts = parsedFacts.facts
+
+    if (Object.keys(updates).length === 0 && !hasSpeakerFacts(facts)) {
       return NextResponse.json(
         { error: 'No valid fields to update' },
         { status: 400 }
@@ -133,7 +143,11 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const updated = await personRepository.updatePerson(person.personId, updates)
+    if (hasSpeakerFacts(facts)) await personRepository.setSpeakerFacts(person.personId, facts, person.personId)
+    const updated =
+      Object.keys(updates).length > 0
+        ? await personRepository.updatePerson(person.personId, updates)
+        : ((await personRepository.getById(person.personId)) ?? person)
 
     return NextResponse.json({
       success: true,
@@ -141,6 +155,9 @@ export async function PATCH(request: NextRequest) {
       firstName: updated.firstName,
       lastName: updated.lastName,
       displayName: updated.displayName,
+      gender: updated.gender ?? null,
+      baptized: updated.baptized ?? null,
+      baptismDate: updated.baptismDate ?? null,
     })
   } catch (error) {
     console.error('Update user profile error:', error)

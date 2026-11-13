@@ -1,5 +1,7 @@
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { speakerInviteRepository } from '@my/app/provider/dynamodb/repositories/speaker-invite-repository'
 import { firstNameOf } from '@my/app/utils/viewer-pii'
+import { titleFor } from '@my/app/utils/speaker-eligibility'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import {
   INVITE_TYPE_SLOT,
@@ -15,6 +17,7 @@ import type { Trust } from '../auth-trust'
 import { loadSlotDetails } from './slots'
 import { effectiveStatus, effectiveSwapStatus, inviteSlots } from './service'
 import { appointmentPlace, googleCalendarUrlFor, onlineMeetingsFor } from './appointment'
+import { speakerEmailFor } from './contact'
 
 export type { InviteeInviteView, SwapView } from '@my/app/provider/dynamodb/speaker-invite-types'
 
@@ -52,10 +55,15 @@ async function contactOf(personId: string): Promise<{ name: string; email: strin
 /**
  * Mark each FILLED slot `reachable` (its speaker resolves to a person with an
  * email) — computed BEFORE redaction drops the personId. One lookup per person.
+ * A speaker with no primary of their own (a visitor on a household address,
+ * §9a) is reachable through their booking's invite, when `ref` is given.
  */
-export async function markReachable(slots: Slot[]): Promise<Slot[]> {
+export async function markReachable(
+  slots: Slot[],
+  ref?: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>
+): Promise<Slot[]> {
   const cache = new Map<string, Promise<boolean>>()
-  const reachable = (personId: string) => {
+  const hasOwnEmail = (personId: string) => {
     if (!cache.has(personId)) {
       cache.set(
         personId,
@@ -67,9 +75,16 @@ export async function markReachable(slots: Slot[]): Promise<Slot[]> {
     }
     return cache.get(personId)!
   }
+  const reachable = async (s: Slot, personId: string) => {
+    if (await hasOwnEmail(personId)) return true
+    if (!ref) return false
+    const booking = await speakerInviteRepository.getBooking(ref.ecclesia, ref.type, s.date).catch(() => null)
+    if (!booking?.inviteId || booking.personId !== personId) return false
+    return !!(await speakerEmailFor(personId, booking.inviteId, null))
+  }
   return Promise.all(
     slots.map(async (s) =>
-      s.state === 'FILLED' ? { ...s, reachable: s.speakerPersonId ? await reachable(s.speakerPersonId) : false } : s
+      s.state === 'FILLED' ? { ...s, reachable: s.speakerPersonId ? await reachable(s, s.speakerPersonId) : false } : s
     )
   )
 }
@@ -121,16 +136,20 @@ export async function inviteeInviteView(
     ecclesia: invite.ecclesia,
     type: invite.type,
     status,
-    invitee: { firstName: inviteePerson?.firstName ?? '', lastName: inviteePerson?.lastName ?? '' },
+    invitee: {
+      firstName: inviteePerson?.firstName ?? '',
+      lastName: inviteePerson?.lastName ?? '',
+      ...(titleFor(inviteePerson) ? { title: titleFor(inviteePerson) } : {}),
+    },
     inviter,
     ...(invite.note ? { note: invite.note } : {}),
     ...(invite.acceptedDate
       ? { acceptedDate: invite.acceptedDate, acceptedTime: invite.acceptedTime, acceptedTz: invite.acceptedTz }
       : {}),
     offeredDates: live
-      ? redactSlots(await markReachable(live.offered), trust)
+      ? redactSlots(await markReachable(live.offered, invite), trust)
       : invite.offeredDates.map((d) => ({ ...d, state: 'NO_MEETING' as const })),
-    otherDates: live && invite.otherDatesWindow ? redactSlots(await markReachable(live.other), trust) : null,
+    otherDates: live && invite.otherDatesWindow ? redactSlots(await markReachable(live.other, invite), trust) : null,
     swapAvailable: invite.type !== 'lecture' && status === 'accepted',
     ...(extras ? extras : {}),
     ...(icsUrl && (status === 'accepted' || status === 'cancelled') ? { icsUrl } : {}),
@@ -142,7 +161,8 @@ export function swapView(
   swap: SpeakerSwapRecord,
   trust: Trust,
   viewerPersonId: string | null,
-  shortNotice?: ShortNotice[]
+  shortNotice?: ShortNotice[],
+  viewerTitle?: 'Brother' | 'Sister'
 ): SwapView {
   const side = (s: SpeakerSwapRecord['requester']) => ({
     name: s.personId === viewerPersonId ? s.name : nameForTier(s.name, trust),
@@ -157,6 +177,7 @@ export function swapView(
     type: swap.type,
     status: effectiveSwapStatus(swap),
     viewerRole: viewerPersonId !== null && viewerPersonId === swap.requester.personId ? 'requester' : 'target',
+    ...(viewerTitle ? { viewerTitle } : {}),
     requester: side(swap.requester),
     target: side(swap.target),
     ...(swap.note ? { note: swap.note } : {}),
@@ -165,9 +186,27 @@ export function swapView(
   }
 }
 
-/** The inviter's view: the record (with live status) plus the invitee's contact. */
+/**
+ * The inviter's view: the record (with live status) plus the invitee's
+ * contact. A follow-up names the other person on the address (name only).
+ */
 export async function inviterInviteView(invite: SpeakerInviteRecord) {
-  const invitee = await contactOf(invite.inviteePersonId)
-  const { pkey: _pk, skey: _sk, gsi1pk: _g1, gsi1sk: _g2, ...rest } = invite
-  return { ...rest, status: effectiveStatus(invite), invitee }
+  const [invitee, other] = await Promise.all([
+    contactOf(invite.inviteePersonId),
+    invite.followUp ? personRepository.getById(invite.followUp.withPersonId).catch(() => null) : Promise.resolve(null),
+  ])
+  const { pkey: _pk, skey: _sk, gsi1pk: _g1, gsi1sk: _g2, followUp, ...rest } = invite
+  return {
+    ...rest,
+    status: effectiveStatus(invite),
+    invitee,
+    ...(followUp
+      ? {
+          followUp: {
+            ...followUp,
+            withName: (other && (`${other.firstName ?? ''} ${other.lastName ?? ''}`.trim() || other.displayName)) || 'another person',
+          },
+        }
+      : {}),
+  }
 }

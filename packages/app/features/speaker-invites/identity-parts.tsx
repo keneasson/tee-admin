@@ -15,7 +15,8 @@ export function InvitePageColumn({ children }: { children: ReactNode }) {
 }
 
 /**
- * "Invitation for Brother {Surname}. (Not Brother {Surname}? Sign in again)" —
+ * "Invitation for Brother {Surname}. (Not Brother {Surname}? Sign in again)" — the
+ * title follows the recorded gender (§9b: Brother / Sister / first name) —
  * the page always names who it is acting as (spec §6).
  */
 export function InviteIdentityHeader({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   YStack,
   XStack,
@@ -13,14 +13,14 @@ import {
   Separator,
   Spinner,
   PageHeader,
-  RoleMemberPicker,
 } from '@my/ui'
-import type { RosterCandidate } from '@my/ui'
 import { Check, Plus, Trash2 } from '@tamagui/lucide-icons'
 import { callApi } from './api'
 import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
-import { NOT_AN_INVITER, addDaysISO, formatDate, formatTime, isISODate, slotLabel, todayISO } from './format'
+import { NOT_AN_INVITER, addDaysISO, formatDate, isISODate, slotLabel, slotWhen, todayISO, usualMeeting, type UsualMeeting } from './format'
 import { Notice } from './identity-parts'
+import { EcclesiaAutocomplete } from './ecclesia-autocomplete'
+import { InviteePicker, type InviteeChoice } from './invitee-picker'
 import type { Slot, InviterInviteView, SpeakerInviteType } from './types'
 
 /**
@@ -37,22 +37,35 @@ export interface SpeakerInviteComposerProps {
 }
 
 const MAX_DATES = 3
+/**
+ * Programs are planned 6–12 months ahead, so the list covers a year: it looks a
+ * year out for the first open date, then shows a full year from one meeting
+ * before it. Filled weeks stay visible so visiting speakers can be interleaved
+ * with the ecclesia's own members.
+ */
+const SEARCH_AHEAD_DAYS = 365
+const VISIBLE_RANGE_DAYS = 365
 const TYPES: SpeakerInviteType[] = ['memorial', 'bible_class', 'lecture']
 
-type InviteeMode = 'directory' | 'other'
 type LectureRow = { date: string; time: string }
 
 export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerInviteComposerProps) {
   const [ecclesia, setEcclesia] = useState(ownEcclesia ?? '')
   const [type, setType] = useState<SpeakerInviteType>('memorial')
 
-  const [inviteeMode, setInviteeMode] = useState<InviteeMode>('directory')
-  const [pickerText, setPickerText] = useState('')
-  const [picked, setPicked] = useState<RosterCandidate | null>(null)
-  const [other, setOther] = useState({ firstName: '', lastName: '', email: '', ecclesia: '' })
+  // §9a: one "Start typing a name" field (InviteePicker) decides the invitee.
+  const [choice, setChoice] = useState<InviteeChoice | null>(null)
+  const [choiceProblem, setChoiceProblem] = useState<string | null>(null)
+  const onInviteeChange = useCallback((next: InviteeChoice | null, problem?: string) => {
+    setChoice(next)
+    setChoiceProblem(next ? null : problem ?? null)
+  }, [])
 
+  // The first load looks a year ahead, then the list starts one meeting before
+  // the first open date (see loadSlots), so nobody pages past filled weeks.
   const [from, setFrom] = useState(todayISO())
-  const [to, setTo] = useState(addDaysISO(todayISO(), 90))
+  const [to, setTo] = useState(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
+  const autoRangedFor = useRef<SpeakerInviteType | null>(null)
   const [slots, setSlots] = useState<Slot[] | null>(null)
   const [slotsError, setSlotsError] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -79,6 +92,20 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
     const res = await callApi<{ slots: Slot[] }>(`/api/speaker-invites/slots?${params.toString()}`)
     setLoadingSlots(false)
     if (res.ok) {
+      if (autoRangedFor.current !== type) {
+        autoRangedFor.current = type
+        const firstOpen = res.data.slots.findIndex((s) => s.state === 'OPEN')
+        if (firstOpen >= 0) {
+          const start = res.data.slots[Math.max(firstOpen - 1, 0)].date
+          const end = addDaysISO(start, VISIBLE_RANGE_DAYS)
+          if (start !== from || end !== to) {
+            // Narrowing the range refetches; this result is superseded.
+            setFrom(start)
+            setTo(end)
+            return
+          }
+        }
+      }
       setSlots(res.data.slots)
       // Keep only selections that are still open.
       const open = new Set(res.data.slots.filter((s) => s.state === 'OPEN').map((s) => s.date))
@@ -110,16 +137,11 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   }
 
   const invitee = useMemo(() => {
-    if (inviteeMode === 'directory') return picked ? { personId: picked.personId } : null
-    const { firstName, lastName, email } = other
-    if (!firstName.trim() || !lastName.trim() || !email.trim()) return null
-    return {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
-      ...(other.ecclesia.trim() ? { ecclesia: other.ecclesia.trim() } : {}),
-    }
-  }, [inviteeMode, picked, other])
+    if (!choice) return null
+    if (choice.kind === 'person') return { personId: choice.personId }
+    const { kind: _kind, ...fields } = choice
+    return fields
+  }, [choice])
 
   const dates: Array<{ date: string; time?: string }> = isLecture
     ? lectureRows.filter((r) => r.date || r.time).map((r) => ({ date: r.date.trim(), time: r.time.trim() }))
@@ -127,7 +149,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
   const problems: string[] = []
   if (!ecclesia) problems.push('Choose an ecclesia.')
-  if (!invitee) problems.push(inviteeMode === 'directory' ? 'Pick who to invite.' : 'Enter their first name, last name and email.')
+  if (!invitee) problems.push(choiceProblem ?? 'Pick who to invite.')
   if (dates.length === 0) problems.push('Offer at least one date.')
   if (isLecture && dates.some((d) => !isISODate(d.date) || !/^\d{2}:\d{2}$/.test(d.time ?? ''))) {
     problems.push('Each lecture date needs a date (YYYY-MM-DD) and a time (HH:mm).')
@@ -198,7 +220,12 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
       <Section title="Ecclesia">
         {isOwner ? (
-          <EcclesiaSelector value={ecclesia} onChange={setEcclesia} />
+          <YStack gap="$1">
+            <EcclesiaAutocomplete value={ecclesia} onChange={setEcclesia} allowUnlisted={false} testID="composer-ecclesia-select" />
+            <Text fontSize="$2" color="$colorSecondary">
+              {ecclesia ? `Inviting for ${ecclesia}.` : 'No ecclesia chosen.'}
+            </Text>
+          </YStack>
         ) : (
           <Text testID="composer-ecclesia">{ecclesia || 'Your account has no ecclesia on file.'}</Text>
         )}
@@ -207,7 +234,19 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
       <Section title="Invitation for">
         <XStack gap="$2" flexWrap="wrap">
           {TYPES.map((t) => (
-            <Button key={t} variant={type === t ? 'action' : 'outlined'} onPress={() => setType(t)} testID={`type-${t}`}>
+            <Button
+              key={t}
+              variant={type === t ? 'action' : 'outlined'}
+              onPress={() => {
+                if (t === type) return
+                setType(t)
+                // A new type has its own schedule: search a year ahead again.
+                setFrom(todayISO())
+                setTo(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
+                setSlots(null)
+              }}
+              testID={`type-${t}`}
+            >
               {INVITE_TYPE_LABEL[t]}
             </Button>
           ))}
@@ -215,47 +254,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
       </Section>
 
       <Section title="Who">
-        <XStack gap="$2" flexWrap="wrap">
-          <Button variant={inviteeMode === 'directory' ? 'action' : 'outlined'} size="$3" onPress={() => setInviteeMode('directory')}>
-            From the directory
-          </Button>
-          <Button variant={inviteeMode === 'other' ? 'action' : 'outlined'} size="$3" onPress={() => setInviteeMode('other')}>
-            Someone not in the directory
-          </Button>
-        </XStack>
-        {inviteeMode === 'directory' ? (
-          <YStack gap="$1">
-            <RoleMemberPicker
-              value={pickerText}
-              ecclesia={ecclesia}
-              selectedPersonId={picked?.personId}
-              placeholder="Start typing a name"
-              onChangeText={(text) => {
-                setPickerText(text)
-                setPicked(null)
-              }}
-              onSelectMember={(m) => {
-                setPicked(m)
-                setPickerText(m.displayName)
-              }}
-              onClearMember={() => setPicked(null)}
-            />
-            {pickerText && !picked ? (
-              <Text fontSize="$2" color="$colorSecondary">
-                Pick a name from the list. If they aren’t listed, choose “Someone not in the directory”.
-              </Text>
-            ) : null}
-          </YStack>
-        ) : (
-          <YStack gap="$2">
-            <XStack gap="$2" flexWrap="wrap">
-              <Input flex={1} minWidth={180} placeholder="First name" value={other.firstName} onChangeText={(v) => setOther({ ...other, firstName: v })} />
-              <Input flex={1} minWidth={180} placeholder="Last name" value={other.lastName} onChangeText={(v) => setOther({ ...other, lastName: v })} />
-            </XStack>
-            <Input placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={other.email} onChangeText={(v) => setOther({ ...other, email: v })} />
-            <Input placeholder="Home ecclesia" value={other.ecclesia} onChangeText={(v) => setOther({ ...other, ecclesia: v })} />
-          </YStack>
-        )}
+        <InviteePicker onChange={onInviteeChange} />
       </Section>
 
       <Section title={`Dates to offer (up to ${MAX_DATES})`}>
@@ -305,7 +304,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
       {result ? <Notice tone={result.tone}>{result.text}</Notice> : null}
       {problems.length > 0 ? (
-        <Text fontSize="$2" color="$colorSecondary">
+        <Text fontSize="$2" color="$red10" testID="composer-problems">
           {problems.join(' ')}
         </Text>
       ) : null}
@@ -352,51 +351,100 @@ function SlotPicker({
     return <Paragraph color="$colorSecondary">No meeting days in this range.</Paragraph>
   }
   const full = selected.length >= MAX_DATES
+  const usual = usualMeeting(slots)
   return (
-    <YStack gap="$1" testID="slot-list">
-      {slots.map((s) => {
-        const isSelected = selected.includes(s.date)
-        const open = s.state === 'OPEN'
-        const error = notOpen[s.date]
-        const disabled = !open || (full && !isSelected)
-        return (
-          <YStack key={s.date} gap="$1">
-            <XStack
-              padding="$2"
-              borderRadius="$3"
-              borderWidth={1}
-              borderColor={isSelected ? '$primary' : error ? '$red8' : '$borderColor'}
-              backgroundColor={isSelected ? '$blue2' : 'transparent'}
-              opacity={open ? 1 : 0.55}
-              alignItems="center"
-              gap="$3"
-              cursor={disabled ? 'default' : 'pointer'}
-              hoverStyle={disabled ? undefined : { borderColor: '$primary' }}
-              onPress={disabled ? undefined : () => onToggle(s.date)}
-              testID={`slot-${s.date}`}
-              aria-disabled={disabled}
-            >
-              <Checkbox checked={isSelected} disabled={disabled} pointerEvents="none" size="$3" aria-label={formatDate(s.date)}>
-                <Checkbox.Indicator>
-                  <Check />
-                </Checkbox.Indicator>
-              </Checkbox>
-              <Text flex={1} fontWeight={isSelected ? '600' : '400'}>
-                {formatDate(s.date, { short: true })}
-                {s.time ? ` · ${formatTime(s.time)}` : ''}
-              </Text>
-              <Text fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
-                {slotLabel(s)}
-              </Text>
-            </XStack>
-            {error ? (
-              <Text fontSize="$2" color="$red10" paddingLeft="$2" testID={`slot-error-${s.date}`}>
-                {`No longer open (${error.toLowerCase().replace('_', ' ')}).`}
-              </Text>
-            ) : null}
+    <YStack gap="$2">
+      {usual.label ? (
+        <Text fontSize="$3" color="$colorSecondary" testID="slot-usual">
+          {usual.label}
+        </Text>
+      ) : null}
+      <Text fontSize="$2" color="$colorSecondary">
+        Tip: offer one date soon, one a couple of months out, and one further out.
+      </Text>
+      {/*
+        Two columns read top-to-bottom: the left is the first half of the range,
+        the right the second half, so consecutive weeks are never side by side.
+        On narrow screens the columns stack, which keeps date order.
+      */}
+      <XStack flexDirection="column" $gtXs={{ flexDirection: 'row' }} gap="$2" testID="slot-list">
+        {splitInHalf(slots).map((column, c) => (
+          <YStack key={c} flex={1} gap="$2" testID={`slot-column-${c}`}>
+            {column.map((s) => (
+              <SlotRow
+                key={s.date}
+                slot={s}
+                usual={usual}
+                isSelected={selected.includes(s.date)}
+                full={full}
+                error={notOpen[s.date]}
+                onToggle={onToggle}
+              />
+            ))}
           </YStack>
-        )
-      })}
+        ))}
+      </XStack>
+    </YStack>
+  )
+}
+
+/** First half (rounded up) and second half, each still in date order. */
+function splitInHalf<T>(items: T[]): [T[], T[]] {
+  const mid = Math.ceil(items.length / 2)
+  return [items.slice(0, mid), items.slice(mid)]
+}
+
+function SlotRow({
+  slot: s,
+  usual,
+  isSelected,
+  full,
+  error,
+  onToggle,
+}: {
+  slot: Slot
+  usual: UsualMeeting
+  isSelected: boolean
+  full: boolean
+  error: string | undefined
+  onToggle: (date: string) => void
+}) {
+  const open = s.state === 'OPEN'
+  const disabled = !open || (full && !isSelected)
+  return (
+    <YStack gap="$1">
+      <XStack
+        padding="$2"
+        borderRadius="$3"
+        borderWidth={1}
+        borderColor={isSelected ? '$primary' : error ? '$red8' : '$borderColor'}
+        backgroundColor={isSelected ? '$blue2' : 'transparent'}
+        opacity={open ? 1 : 0.55}
+        alignItems="center"
+        gap="$3"
+        cursor={disabled ? 'default' : 'pointer'}
+        hoverStyle={disabled ? undefined : { borderColor: '$primary' }}
+        onPress={disabled ? undefined : () => onToggle(s.date)}
+        testID={`slot-${s.date}`}
+        aria-disabled={disabled}
+      >
+        <Checkbox checked={isSelected} disabled={disabled} pointerEvents="none" size="$3" aria-label={formatDate(s.date)}>
+          <Checkbox.Indicator>
+            <Check />
+          </Checkbox.Indicator>
+        </Checkbox>
+        <Text flexShrink={0} fontWeight={isSelected ? '600' : '400'}>
+          {slotWhen(s, usual)}
+        </Text>
+        <Text flex={1} textAlign="right" numberOfLines={1} fontSize="$2" color={open ? '$green10' : '$colorSecondary'}>
+          {slotLabel(s)}
+        </Text>
+      </XStack>
+      {error ? (
+        <Text fontSize="$2" color="$red10" paddingLeft="$2" testID={`slot-error-${s.date}`}>
+          {`No longer open (${error.toLowerCase().replace('_', ' ')}).`}
+        </Text>
+      ) : null}
     </YStack>
   )
 }
@@ -439,47 +487,6 @@ function LectureRows({
           </Button>
         </XStack>
       ) : null}
-    </YStack>
-  )
-}
-
-/** Owner only: pick any ecclesia (the API re-checks). */
-function EcclesiaSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [names, setNames] = useState<string[]>([])
-  const [query, setQuery] = useState(value)
-  useEffect(() => {
-    let cancelled = false
-    callApi<{ data?: Array<{ name?: string }> }>('/api/ecclesia').then((res) => {
-      if (cancelled || !res.ok) return
-      setNames((res.data.data ?? []).map((e) => e.name ?? '').filter(Boolean).sort())
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  const q = query.trim().toLowerCase()
-  const matches = q && q !== value.toLowerCase() ? names.filter((n) => n.toLowerCase().includes(q)).slice(0, 8) : []
-  return (
-    <YStack gap="$2">
-      <Input value={query} onChangeText={setQuery} placeholder="Ecclesia name" testID="composer-ecclesia-select" />
-      {matches.length > 0 ? (
-        <XStack gap="$2" flexWrap="wrap">
-          {matches.map((n) => (
-            <Button
-              key={n}
-              size="$2"
-              variant="outlined"
-              onPress={() => {
-                onChange(n)
-                setQuery(n)
-              }}
-            >
-              {n}
-            </Button>
-          ))}
-        </XStack>
-      ) : null}
-      <Text fontSize="$2" color="$colorSecondary">{value ? `Inviting for ${value}.` : 'No ecclesia chosen.'}</Text>
     </YStack>
   )
 }

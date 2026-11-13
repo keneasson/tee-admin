@@ -510,8 +510,21 @@ export interface PersonRecord extends BaseRecord {
   // Provenance — set when a record is auto-created from an external source
   // rather than by a person (e.g. a visiting speaker harvested from the
   // memorial schedule). Lets an admin trace/undo machine-created records.
-  source?: 'schedule-import' | 'mailing-list-backfill'
+  source?: 'schedule-import' | 'mailing-list-backfill' | 'speaker-invitation'
   sourceRef?: string                // Free-form ref to the origin, e.g. "visiting-speakers:{sheetId}"
+  createdByPersonId?: string        // The person who added this record (e.g. the speaker-invite inviter)
+
+  // Recorded facts (docs/SPEAKER_INVITATIONS.md §9b). Unset (absent or null) =
+  // unknown. NEVER inferred from names, role, roster history or anything else.
+  // `baptized` is independent of `role` by design; it is read only by the
+  // speaker picker (`isInvitableSpeaker`).
+  gender?: 'male' | 'female' | null
+  genderSetByPersonId?: string
+  genderSetAt?: string
+  baptized?: boolean | null
+  baptismDate?: string | null       // YYYY-MM-DD, optional
+  baptizedSetByPersonId?: string
+  baptizedSetAt?: string
 
   createdAt: string
 }

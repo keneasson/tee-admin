@@ -85,6 +85,20 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
     ? formatWhen(invite.acceptedDate, invite.acceptedTime, invite.acceptedTz)
     : invite.offeredDates.map((d) => formatDate(d.date, { short: true })).join(' · ')
   const cancellable = invite.status === 'sent' || invite.status === 'accepted'
+  const [resolving, setResolving] = useState(false)
+  const needsFollowUp = !!invite.followUp && !invite.followUp.resolvedAt
+
+  const resolveFollowUp = async () => {
+    setResolving(true)
+    setError(null)
+    const res = await callApi<{ invite: InviterInviteView }>(
+      `/api/speaker-invites/${encodeURIComponent(invite.inviteId)}/follow-up/resolve`,
+      { method: 'POST', body: {} }
+    )
+    setResolving(false)
+    if (res.ok) onChanged(res.data.invite)
+    else setError(res.error.error || 'Could not mark this resolved.')
+  }
 
   const cancel = async () => {
     setBusy(true)
@@ -157,6 +171,25 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
           </XStack>
         ) : null}
       </XStack>
+
+      {needsFollowUp ? (
+        <XStack gap="$2" marginTop="$2" alignItems="center" flexWrap="wrap" testID="invite-follow-up">
+          <Text
+            fontSize="$2"
+            fontWeight="600"
+            color="$orange11"
+            backgroundColor="$orange3"
+            paddingHorizontal="$2"
+            paddingVertical="$1"
+            borderRadius="$2"
+          >
+            {`Needs follow-up: shares an email with ${invite.followUp?.withName ?? 'another person'}`}
+          </Text>
+          <Button size="$2" variant="outlined" disabled={resolving} onPress={resolveFollowUp} testID="invite-follow-up-resolve">
+            {resolving ? 'Saving…' : 'Mark resolved'}
+          </Button>
+        </XStack>
+      ) : null}
 
       {confirming ? (
         <YStack gap="$2" marginTop="$3" testID="invite-cancel-confirm">

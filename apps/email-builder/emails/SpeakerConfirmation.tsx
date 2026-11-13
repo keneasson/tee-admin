@@ -9,6 +9,7 @@ import {
   SignOff,
   SpeakerEmailFooter,
   greetingFor,
+  type SpeakerTitle,
   inviteTypeNoun,
   primaryButtonLink,
   type SpeakerInviteType,
@@ -37,8 +38,10 @@ export interface SpeakerShortNotice {
 export interface SpeakerConfirmationProps {
   variant: SpeakerConfirmationVariant
   inviteType: SpeakerInviteType
-  /** Speaker's full name for "Dear Brother {name}". */
+  /** Speaker's full name; the greeting uses the surname with `greetingTitle`, else the first name (§9b). */
   speakerName: string
+  /** From the speaker's recorded gender. Absent = not recorded. */
+  greetingTitle?: SpeakerTitle
   /** Ecclesia SHORT name. */
   ecclesiaName: string
   /** e.g. "Sunday, March 1, 2026". */
@@ -104,6 +107,7 @@ const SpeakerConfirmation = ({
   variant,
   inviteType,
   speakerName,
+  greetingTitle,
   ecclesiaName,
   dateDisplay,
   timeDisplay,
@@ -175,7 +179,7 @@ const SpeakerConfirmation = ({
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          <Text style={defaultText}>{greetingFor(speakerName)}</Text>
+          <Text style={defaultText}>{greetingFor(speakerName, greetingTitle)}</Text>
           <Text style={defaultText}>{lead}</Text>
           {shortNotice ? (
             <Section style={callout}>
@@ -252,6 +256,7 @@ const PREVIEW_BASE = {
   variant: 'confirmed',
   inviteType: 'memorial',
   speakerName: 'Sample Speaker',
+  greetingTitle: 'Brother',
   ecclesiaName: 'Example Ecclesia',
   dateDisplay: 'Sunday, March 1, 2026',
   timeDisplay: '11:00am',
