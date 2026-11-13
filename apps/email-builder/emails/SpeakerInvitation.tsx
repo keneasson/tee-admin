@@ -1,6 +1,6 @@
 import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } from '@react-email/components'
 import React from 'react'
-import { container, defaultText, globalCss, header, link, main } from '../styles'
+import { container, defaultText, globalCss, header, main } from '../styles'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import {
@@ -11,12 +11,14 @@ import {
   greetingFor,
   type SpeakerTitle,
   inviteTypeVerbPhrase,
+  productNameFromHomeUrl,
   type SpeakerInviteType,
 } from '../components/SpeakerInviteParts'
 
 /**
  * Speaker invitation (docs/SPEAKER_INVITATIONS.md §8.1).
- * "An invitation to {exhort at the Memorial | lead Bible Class | give a Lecture} at {Ecclesia}".
+ * Header: "An invitation to {phrase}" under the ecclesia name (no repeat of it).
+ * Subject: the same plus " at {Ecclesia}", since an inbox has no header.
  *
  * Each date button is a LINK to the invite page with that date selected; the
  * page's Confirm button (a POST) does the accepting. Clicking here changes
@@ -42,17 +44,24 @@ export interface SpeakerInvitationProps {
   dateOptions: SpeakerInvitationDateOption[]
   /** Optional personal note from the inviter. */
   note?: string
-  /** "View other open dates" link, when the inviter enabled it. */
+  /** "View more dates" button, when the inviter enabled it. */
   otherDatesUrl?: string
-  /** Inviter's full name for the sign-off. */
+  /** Inviter's name for the sign-off, titled when known ("Brother Sample Inviter"). */
   inviterName: string
+  /** Inviter's phone, offered in "give me a call at …". Omitted when none is on file. */
+  inviterPhone?: string
   emailPreferencesUrl: string
   echadHubUrl?: string
   identity?: EmailIdentity
 }
 
+/** "An invitation to speak at our Bible Class": the header line, under the ecclesia name. */
+export function speakerInvitationHeadline(type: SpeakerInviteType): string {
+  return `An invitation to ${inviteTypeVerbPhrase(type)}`
+}
+
 export function speakerInvitationSubject(type: SpeakerInviteType, ecclesiaName: string): string {
-  return `An invitation to ${inviteTypeVerbPhrase(type)} at ${ecclesiaName}`
+  return `${speakerInvitationHeadline(type)} at ${ecclesiaName}`
 }
 
 const SpeakerInvitation = ({
@@ -64,6 +73,7 @@ const SpeakerInvitation = ({
   note,
   otherDatesUrl,
   inviterName,
+  inviterPhone,
   emailPreferencesUrl,
   echadHubUrl,
   identity,
@@ -81,20 +91,23 @@ const SpeakerInvitation = ({
       <Body style={main}>
         <Section style={header}>
           <Heading>{ecclesiaName}</Heading>
-          <Text style={defaultText}>{speakerInvitationSubject(inviteType, ecclesiaName)}</Text>
+          <Text style={defaultText}>{speakerInvitationHeadline(inviteType)}</Text>
           <EmailBrandLinkContent identity={identity} />
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Text style={defaultText}>{greetingFor(inviteeName, greetingTitle)}</Text>
           <Text style={defaultText}>
-            {'We would love to have you '}
+            {'Greetings in our Master\u2019s name. We invite you to '}
             <strong>{phrase}</strong>
             {' at '}
             <strong>{ecclesiaName}</strong>
-            {single ? '. Would this date suit you?' : '. Would one of these dates suit you?'}
+            {'.'}
           </Text>
           {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
+          <Text style={defaultText}>
+            {single ? 'Here is a date we have coming up:' : 'Here are a few dates we have coming up:'}
+          </Text>
         </Container>
 
         <Container style={container} className="container">
@@ -105,24 +118,21 @@ const SpeakerInvitation = ({
               </Link>
             </Section>
           ))}
-          <Text style={{ ...defaultText, fontSize: '14px' }}>
-            {single
-              ? 'The button opens a page where you can confirm the date.'
-              : 'Each button opens a page where you can confirm that date.'}
-          </Text>
           {otherDatesUrl ? (
-            <Text style={defaultText}>
-              {'None of these work? '}
-              <Link href={otherDatesUrl} style={link}>
-                View other open dates
+            <Section style={{ margin: '8px 0 12px 0' }}>
+              <Text style={{ ...defaultText, margin: '0 0 8px 0' }}>Prefer a different date?</Text>
+              <Link href={otherDatesUrl} style={buttonLink}>
+                {`View more dates at ${productNameFromHomeUrl(otherDatesUrl)}`}
               </Link>
-            </Text>
+            </Section>
           ) : null}
         </Container>
 
         <Container style={container} className="container">
           <Text style={defaultText}>
-            If you have any questions, or none of the dates suit, please reply to this email.
+            {inviterPhone
+              ? `Feel free to reach out: reply to this email or give me a call at ${inviterPhone}.`
+              : 'Feel free to reach out: just reply to this email.'}
           </Text>
           <SignOff name={inviterName} />
         </Container>
@@ -149,7 +159,8 @@ SpeakerInvitation.PreviewProps = {
   ],
   note: 'It has been too long since we heard from you. We hope one of these works.',
   otherDatesUrl: 'https://tee-admin.com/invite/example?view=open-dates',
-  inviterName: 'Recording Brother Example',
+  inviterName: 'Brother Sample Inviter',
+  inviterPhone: '555-0100',
   emailPreferencesUrl: 'https://tee-admin.com/email-preferences',
   identity: PREVIEW_IDENTITY,
 } satisfies SpeakerInvitationProps

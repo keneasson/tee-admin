@@ -101,6 +101,25 @@ function fullName(p: Pick<PersonRecord, 'firstName' | 'lastName' | 'displayName'
   return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || p.displayName || ''
 }
 
+/** "Brother Sample Inviter" for a sign-off: the recorded title (§9b), else the bare name. */
+function signOffName(p: PersonRecord | null | undefined): string {
+  const name = fullName(p)
+  const t = titleFor(p)
+  return t && name ? `${t} ${name}` : name
+}
+
+/** The number to offer in "give me a call at …": primary first, else the first listed. */
+async function contactPhone(personId: string): Promise<string | undefined> {
+  try {
+    const phones = await personRepository.getPhones(personId)
+    const pick = phones.find((ph) => ph.isPrimary) ?? phones[0]
+    return pick?.number?.trim() || undefined
+  } catch {
+    // A missing phone only drops "or give me a call"; never block the invitation.
+    return undefined
+  }
+}
+
 /** The greeting title from a recorded gender (§9b); none when unset. */
 function titleProp(p: PersonRecord | null | undefined): { greetingTitle?: 'Brother' | 'Sister' } {
   const t = titleFor(p)
@@ -200,10 +219,11 @@ export async function sendInvitationEmail(invite: SpeakerInviteRecord, options: 
   const base = baseUrlFor(tenant)
   const test = !!options.testTo
   const to = options.testTo ?? invite.inviteeEmail
-  const [invitee, inviter, place] = await Promise.all([
+  const [invitee, inviter, place, inviterPhone] = await Promise.all([
     invite.inviteePersonId ? person(invite.inviteePersonId) : Promise.resolve(null),
     person(invite.inviterPersonId),
     appointmentPlace(invite.ecclesia),
+    contactPhone(invite.inviterPersonId),
   ])
 
   const token = await generateEcclesiaToken(to)
@@ -220,7 +240,8 @@ export async function sendInvitationEmail(invite: SpeakerInviteRecord, options: 
     })),
     ...(invite.note ? { note: invite.note } : {}),
     ...(invite.otherDatesWindow ? { otherDatesUrl: links.invite(invite.inviteId, '#other-dates') } : {}),
-    inviterName: fullName(inviter),
+    inviterName: signOffName(inviter),
+    ...(inviterPhone ? { inviterPhone } : {}),
     emailPreferencesUrl: await generateEmailPreferencesUrl(to, base),
     tenant,
   })
@@ -286,7 +307,7 @@ async function sendAppointmentEmail(
           },
         }
       : {}),
-    ...(inviter ? { inviterName: fullName(inviter) } : {}),
+    ...(inviter ? { inviterName: signOffName(inviter) } : {}),
     emailPreferencesUrl: await generateEmailPreferencesUrl(to, base),
     tenant,
   })

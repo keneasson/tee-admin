@@ -1,7 +1,7 @@
 /**
  * Who may be invited to speak (docs/SPEAKER_INVITATIONS.md §9b).
  *
- * In this community only brethren (baptized males) exhort, lead Bible Class or
+ * In this community only brethren (baptized males) exhort, speak at Bible Class or
  * lecture. Both facts are RECORDED, never inferred: `gender` and `baptized`
  * are unset until a person (themselves, an admin, or an inviter vouching) sets
  * them. Nothing here reads the role: role is how an ecclesia treats someone

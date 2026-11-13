@@ -209,11 +209,15 @@ export const INVITE_TYPE_LABEL: Record<SpeakerInviteType, string> = {
   lecture: 'Lecture',
 }
 
-/** "An invitation to {phrase} at {ecclesia}" (§1). */
+/**
+ * "An invitation to {phrase}" (email header) and "We invite you to {phrase} at
+ * {ecclesia}." (opening line). Owner wording, 2026-11-13. Fixed for the core
+ * three until ecclesias configure their own programs (spec §3a).
+ */
 export const INVITE_TYPE_PHRASE: Record<SpeakerInviteType, string> = {
-  memorial: 'exhort at the Memorial',
-  bible_class: 'lead Bible Class',
-  lecture: 'give a Lecture',
+  memorial: 'exhort at our Memorial Service',
+  bible_class: 'speak at our Bible Class',
+  lecture: 'speak at a Public Lecture',
 }
 
 export const INVITE_STATUS_LABEL: Record<SpeakerInviteStatus, string> = {

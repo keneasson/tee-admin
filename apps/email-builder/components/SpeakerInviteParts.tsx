@@ -104,7 +104,8 @@ export const OnlineMeetingBlock = ({ option }: { option: SpeakerOnlineMeeting })
   </Section>
 )
 
-function productNameFromHomeUrl(homeUrl?: string): string {
+/** "Echad Hub" for an echadhub.org link, else "TEE-Admin". */
+export function productNameFromHomeUrl(homeUrl?: string): string {
   const host = (homeUrl ?? '').replace(/^https?:\/\//, '').replace(/^www\./, '').toLowerCase()
   if (host.startsWith('echadhub')) return 'Echad Hub'
   return 'TEE-Admin'

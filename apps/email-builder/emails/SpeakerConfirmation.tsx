@@ -267,7 +267,7 @@ const PREVIEW_BASE = {
   googleCalendarUrl: 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Example',
   icsUrl: 'https://tee-admin.com/api/speaker-invites/example/ics',
   manageUrl: 'https://tee-admin.com/invite/example',
-  inviterName: 'Recording Brother Example',
+  inviterName: 'Brother Sample Inviter',
   emailPreferencesUrl: 'https://tee-admin.com/email-preferences',
   identity: PREVIEW_IDENTITY,
 } satisfies SpeakerConfirmationProps
