@@ -60,7 +60,9 @@ describe('Speaker Invitation templates render', () => {
       />
     )
     const text = visible(html)
-    expect(text).toContain('An invitation to exhort at the Memorial at Example Ecclesia')
+    expect(text).toContain('An invitation to exhort at our Memorial Service')
+    // The header sits under the ecclesia name, so it doesn't repeat it.
+    expect(html).toMatch(/>An invitation to exhort at our Memorial Service<\//)
     // §9b: the recorded title + surname (the preview carries greetingTitle 'Brother').
     expect(text).toContain('Dear Brother Speaker,')
     expect(html).toContain('date=2026-03-01')
@@ -75,7 +77,7 @@ describe('Speaker Invitation templates render', () => {
   it('invitation: no note and no other-dates link when absent', async () => {
     const { note: _n, otherDatesUrl: _o, ...rest } = SpeakerInvitation.PreviewProps
     const text = visible(await render(<SpeakerInvitation {...rest} inviteType="lecture" />))
-    expect(text).toContain('give a Lecture')
+    expect(text).toContain('speak at a Public Lecture')
     expect(text).not.toContain('View other open dates')
     expect(text).not.toContain('It has been too long')
   })
@@ -154,7 +156,7 @@ describe('speaker-invite-render helpers', () => {
   it('return html, text and subject with the tenant identity injected', async () => {
     const { identity: _i, ...props } = SpeakerInvitation.PreviewProps
     const out = await renderSpeakerInvitation(props)
-    expect(out.subject).toBe('An invitation to exhort at the Memorial at Example Ecclesia')
+    expect(out.subject).toBe('An invitation to exhort at our Memorial Service at Example Ecclesia')
     expect(out.html).toContain('Example Ecclesia Christadelphians')
     expect(out.text).toContain('Love in Jesus name')
   })
@@ -183,9 +185,9 @@ describe('speaker-invite-render helpers', () => {
 describe('SpeakerInvitation opening lines', () => {
   const base = SpeakerInvitation.PreviewProps
   it.each([
-    ['memorial', 'exhort'],
-    ['bible_class', 'give a Bible class'],
-    ['lecture', 'lecture'],
+    ['memorial', 'exhort at our Memorial Service'],
+    ['bible_class', 'speak at our Bible Class'],
+    ['lecture', 'speak at a Public Lecture'],
   ] as const)('%s: "We invite you to %s at …"', async (inviteType, verb) => {
     // Plain text wraps at ~80 columns; compare with whitespace collapsed.
     const text = (await render(React.createElement(SpeakerInvitation, { ...base, inviteType }), { plainText: true })).replace(/\s+/g, ' ')

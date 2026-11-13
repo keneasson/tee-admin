@@ -6,7 +6,8 @@
 ## 1. What it is
 
 A Recording Brother or Rep of an ecclesia (or the owner) sends one person
-**"An invitation to {exhort at the Memorial | lead Bible Class | give a Lecture} at {Ecclesia}"**.
+**"An invitation to {exhort at our Memorial Service | speak at our Bible Class | speak at a Public Lecture}"**
+(owner wording 2026-11-13; per-ecclesia wording is §3a).
 It offers **1–3 dates**, and the speaker accepts one by clicking it. After
 accepting they get a confirmation email with **Add to Google Calendar** and
 **.ics (Apple/Outlook)**, plus "If for any reason you need to change your
@@ -38,6 +39,49 @@ different date, swap with another speaker, or cancel**.
 
 The type is stored as data, so when lecture rosters exist (#110 Slice D) lectures
 pick up scanning and swaps through the same code.
+
+## 3a. Ecclesia-configured invitation programs — PROPOSED, not approved (owner, 2026-11-13)
+
+**Status:** draft for the owner's approval. Nothing here is built. Until it is
+approved the three types above stay fixed, with the owner's wording.
+
+**Why.** Each ecclesia offers different programs and words them differently.
+Examples: "An invitation to exhort at our Memorial Service", "…speak at our Bible
+Class", "…speak at a Public Lecture" (another ecclesia: "…share a message with our
+interested friends"), "…lead a CYC class", "…share a message at our Sister
+Class", or youth programs ("…share a meditation", "…organize an activity").
+
+**What an RB/Rep configures**, per program, for their own ecclesia only, on a
+page `/admin/speaker-invites/programs`:
+
+| Field | Example | Used in |
+|---|---|---|
+| Name | Bible Class | composer picker, lists |
+| Invitation phrase | speak at our Bible Class | email header "An invitation to {phrase}"; opening "We invite you to {phrase} at {Ecclesia}."; subject |
+| About line (optional) | Our Bible Class is held over Zoom, Wednesday evenings at 7:30 p.m. | the line after the opening |
+| Who can be invited | brethren / sisters / young people / anyone | the picker filter (replaces the fixed §9b rule per program) |
+| Linked schedule + roster field (optional) | Bible Class → Speaker | open-date scanning, booking writes, swaps (§4, §7). No link = the inviter types dates, like Lecture today |
+| Length | 90 min | calendar entries |
+| Active | on | hide a program without deleting its history |
+
+- **Starting point.** Every ecclesia starts with the core three (Memorial, Bible
+  Class, Lecture), using the wording above. It can reword them, switch them off, or add more.
+- **Sent emails don't change.** An invite stores the program's id and a copy of its
+  phrase and about line at send time. Editing a program later doesn't rewrite
+  history, and doesn't change the links in emails already sent.
+- **Data.** `INVITE_PROGRAM#{ecclesia}` / `{programId}` in `tee-admin`. Same
+  RB/Rep-of-own-ecclesia gate as sending (§2).
+- **Wording is plain text in fixed slots.** No template language and no HTML.
+  The email layout, greeting, date buttons and sign-off stay the same for every program.
+
+**Questions for the owner before approval:**
+1. "Who can be invited" per program: is the list *brethren / sisters / young
+   people / anyone* right? "Young people" isn't a recorded fact today, so it
+   would need one (e.g. a birth year), or it means "anyone" with the inviter choosing.
+2. Should the about line be written by hand, or filled in from the schedule
+   ("held {online|at the hall}, {Wednesdays} at {7:30 p.m.}") and editable?
+3. Programs without a roster (CYC, Sister Class, youth): is "the inviter types
+   the dates; no swaps" (as Lecture works today) enough for now?
 
 ## 4. "Is a meeting planned, and is the slot open?" — one function
 
@@ -213,7 +257,7 @@ The picker's "Unlink" is not used here. Changing the pick is "Change".
 
 ## 9b. Only brethren are invited to speak (owner decision, 2026-11-12)
 
-In this community only **brethren (baptized males)** exhort, lead Bible Class or
+In this community only **brethren (baptized males)** exhort, speak at Bible Class or
 lecture. Both facts are **recorded, never inferred**: there is no backfill, and
 nothing derives them from names, role, roster history or anything else
 ("getting it wrong is worse than not getting it").

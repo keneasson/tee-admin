@@ -2,7 +2,6 @@ import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } fr
 import React from 'react'
 import { container, defaultText, globalCss, header, main } from '../styles'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
-import { INVITE_TYPE_VERB } from '@my/app/provider/dynamodb/speaker-invite-types'
 import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import {
   PREVIEW_IDENTITY,
@@ -18,7 +17,8 @@ import {
 
 /**
  * Speaker invitation (docs/SPEAKER_INVITATIONS.md §8.1).
- * "An invitation to {exhort at the Memorial | lead Bible Class | give a Lecture} at {Ecclesia}".
+ * Header: "An invitation to {phrase}" under the ecclesia name (no repeat of it).
+ * Subject: the same plus " at {Ecclesia}", since an inbox has no header.
  *
  * Each date button is a LINK to the invite page with that date selected; the
  * page's Confirm button (a POST) does the accepting. Clicking here changes
@@ -55,8 +55,13 @@ export interface SpeakerInvitationProps {
   identity?: EmailIdentity
 }
 
+/** "An invitation to speak at our Bible Class": the header line, under the ecclesia name. */
+export function speakerInvitationHeadline(type: SpeakerInviteType): string {
+  return `An invitation to ${inviteTypeVerbPhrase(type)}`
+}
+
 export function speakerInvitationSubject(type: SpeakerInviteType, ecclesiaName: string): string {
-  return `An invitation to ${inviteTypeVerbPhrase(type)} at ${ecclesiaName}`
+  return `${speakerInvitationHeadline(type)} at ${ecclesiaName}`
 }
 
 const SpeakerInvitation = ({
@@ -86,7 +91,7 @@ const SpeakerInvitation = ({
       <Body style={main}>
         <Section style={header}>
           <Heading>{ecclesiaName}</Heading>
-          <Text style={defaultText}>{speakerInvitationSubject(inviteType, ecclesiaName)}</Text>
+          <Text style={defaultText}>{speakerInvitationHeadline(inviteType)}</Text>
           <EmailBrandLinkContent identity={identity} />
         </Section>
 
@@ -94,7 +99,7 @@ const SpeakerInvitation = ({
           <Text style={defaultText}>{greetingFor(inviteeName, greetingTitle)}</Text>
           <Text style={defaultText}>
             {'Greetings in our Master\u2019s name. We invite you to '}
-            <strong>{INVITE_TYPE_VERB[inviteType]}</strong>
+            <strong>{phrase}</strong>
             {' at '}
             <strong>{ecclesiaName}</strong>
             {'.'}
