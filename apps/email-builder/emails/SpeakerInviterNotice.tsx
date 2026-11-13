@@ -146,7 +146,7 @@ const SpeakerInviterNotice = ({
 SpeakerInviterNotice.PreviewProps = {
   kind: 'changed',
   inviteType: 'bible_class',
-  inviterName: 'Recording Brother Example',
+  inviterName: 'Brother Sample Inviter',
   speakerName: 'Sample Speaker',
   ecclesiaName: 'Example Ecclesia',
   dateDisplay: 'Wednesday, March 11, 2026',

@@ -66,10 +66,10 @@ describe('Speaker Invitation templates render', () => {
     expect(html).toContain('date=2026-03-01')
     expect(html).toContain('date=2026-03-15')
     expect(html).not.toContain('Fourth date')
-    expect(text).toContain('View other open dates')
+    expect(text).toContain('View more dates at')
     expect(text).toContain('It has been too long')
     expect(text).toContain('Love in Jesus name')
-    expect(text).toContain('Recording Brother Example')
+    expect(text).toContain('Brother Sample Inviter')
   })
 
   it('invitation: no note and no other-dates link when absent', async () => {
@@ -191,6 +191,16 @@ describe('SpeakerInvitation opening lines', () => {
     const text = (await render(React.createElement(SpeakerInvitation, { ...base, inviteType }), { plainText: true })).replace(/\s+/g, ' ')
     expect(text).toContain(`Greetings in our Master’s name. We invite you to ${verb} at Example Ecclesia.`)
     expect(text).toContain('Here are a few dates we have coming up:')
+  })
+
+  it('no "each button" line; positive other-dates link; reach-out line with the phone', async () => {
+    const text = (await render(React.createElement(SpeakerInvitation, base), { plainText: true })).replace(/\s+/g, ' ')
+    expect(text).not.toContain('Each button opens')
+    expect(text).toContain('Prefer a different date? (View more dates at TEE-Admin')
+    expect(text).toContain('Feel free to reach out: reply to this email or give me a call at 555-0100.')
+    expect(text).toContain('Brother Sample Inviter')
+    const noPhone = (await render(React.createElement(SpeakerInvitation, { ...base, inviterPhone: undefined }), { plainText: true })).replace(/\s+/g, ' ')
+    expect(noPhone).toContain('Feel free to reach out: just reply to this email.')
   })
 
   it('says "a date" when only one is offered', async () => {

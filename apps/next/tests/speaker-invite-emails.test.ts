@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   snapshotRoster: vi.fn(),
   generateEcclesiaToken: vi.fn(),
   people: new Map<string, any>(),
+  phones: new Map<string, any[]>(),
   invites: new Map<string, any>(),
   loadSlotDetails: vi.fn(),
   rendered: [] as Array<{ kind: string; props: any }>,
@@ -35,7 +36,10 @@ vi.mock('@my/app/provider/dynamodb/repositories/send-recipient-repository', () =
   sendRecipientRepository: { snapshotRoster: h.snapshotRoster },
 }))
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
-  personRepository: { getById: async (id: string) => h.people.get(id) ?? null },
+  personRepository: {
+    getById: async (id: string) => h.people.get(id) ?? null,
+    getPhones: async (id: string) => h.phones.get(id) ?? [],
+  },
 }))
 vi.mock('@/utils/dynamodb/locations', () => ({
   getEcclesiaByName: async (name: string) => ({ name, venue: 'Example Hall', address: '1 Example Street, Example City' }),
@@ -99,6 +103,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.rendered.length = 0
   h.people.clear()
+  h.phones.clear()
   h.invites.clear()
   h.people.set('p-rb', { personId: 'p-rb', firstName: 'Rob', lastName: 'Recorder', primaryEmail: 'rb@example.test' })
   h.people.set('p-a', { personId: 'p-a', firstName: 'Alex', lastName: 'Speaker', primaryEmail: 'alex@example.test' })
@@ -111,6 +116,23 @@ beforeEach(() => {
 })
 
 describe('invitation', () => {
+  it('signs off with the inviter\'s title and offers their primary phone', async () => {
+    h.people.set('p-rb', { ...h.people.get('p-rb'), gender: 'male', baptized: true })
+    h.phones.set('p-rb', [
+      { number: '555-0111', isPrimary: false, order: 0 },
+      { number: '555-0100', isPrimary: true, order: 1 },
+    ])
+    await sendInvitationEmail(invite())
+    expect(lastRender('invitation')).toMatchObject({ inviterName: 'Brother Rob Recorder', inviterPhone: '555-0100' })
+  })
+
+  it('no phone on file: no inviterPhone, bare name when no title is recorded', async () => {
+    await sendInvitationEmail(invite())
+    const props = lastRender('invitation')
+    expect(props.inviterName).toBe('Rob Recorder')
+    expect(props).not.toHaveProperty('inviterPhone')
+  })
+
   it('canonical brand sender, Reply-To = inviter, tracking set + Campaign tag, recipient snapshot', async () => {
     await sendInvitationEmail(invite())
     const [mail] = sent()

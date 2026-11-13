@@ -12,6 +12,7 @@ import {
   greetingFor,
   type SpeakerTitle,
   inviteTypeVerbPhrase,
+  productNameFromHomeUrl,
   type SpeakerInviteType,
 } from '../components/SpeakerInviteParts'
 
@@ -45,8 +46,10 @@ export interface SpeakerInvitationProps {
   note?: string
   /** "View other open dates" link, when the inviter enabled it. */
   otherDatesUrl?: string
-  /** Inviter's full name for the sign-off. */
+  /** Inviter's name for the sign-off, titled when known ("Brother Sample Inviter"). */
   inviterName: string
+  /** Inviter's phone, offered in "give me a call at …". Omitted when none is on file. */
+  inviterPhone?: string
   emailPreferencesUrl: string
   echadHubUrl?: string
   identity?: EmailIdentity
@@ -65,6 +68,7 @@ const SpeakerInvitation = ({
   note,
   otherDatesUrl,
   inviterName,
+  inviterPhone,
   emailPreferencesUrl,
   echadHubUrl,
   identity,
@@ -109,24 +113,22 @@ const SpeakerInvitation = ({
               </Link>
             </Section>
           ))}
-          <Text style={{ ...defaultText, fontSize: '14px' }}>
-            {single
-              ? 'The button opens a page where you can confirm the date.'
-              : 'Each button opens a page where you can confirm that date.'}
-          </Text>
           {otherDatesUrl ? (
             <Text style={defaultText}>
-              {'None of these work? '}
+              {'Prefer a different date? ('}
               <Link href={otherDatesUrl} style={link}>
-                View other open dates
+                {`View more dates at ${productNameFromHomeUrl(otherDatesUrl)}`}
               </Link>
+              {')'}
             </Text>
           ) : null}
         </Container>
 
         <Container style={container} className="container">
           <Text style={defaultText}>
-            If you have any questions, or none of the dates suit, please reply to this email.
+            {inviterPhone
+              ? `Feel free to reach out: reply to this email or give me a call at ${inviterPhone}.`
+              : 'Feel free to reach out: just reply to this email.'}
           </Text>
           <SignOff name={inviterName} />
         </Container>
@@ -153,7 +155,8 @@ SpeakerInvitation.PreviewProps = {
   ],
   note: 'It has been too long since we heard from you. We hope one of these works.',
   otherDatesUrl: 'https://tee-admin.com/invite/example?view=open-dates',
-  inviterName: 'Recording Brother Example',
+  inviterName: 'Brother Sample Inviter',
+  inviterPhone: '555-0100',
   emailPreferencesUrl: 'https://tee-admin.com/email-preferences',
   identity: PREVIEW_IDENTITY,
 } satisfies SpeakerInvitationProps
