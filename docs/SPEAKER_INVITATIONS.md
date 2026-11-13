@@ -96,8 +96,8 @@ page `/admin/speaker-invites/programs`:
    program uses *anyone* and the inviter chooses, until something like a birth year is recorded.
 2. Should the about line be written by hand, or filled in from the schedule
    ("held {online|at the hall}, {Wednesdays} at {7:30 p.m.}") and editable?
-3. Programs without a roster (CYC, Sister Class, youth): is "the inviter types
-   the dates; no swaps" (as Lecture works today) enough for now?
+3. ~~Programs without a roster~~ (answered 2026-11-13: yes, for now. The
+   inviter types the dates and there are no swaps, as Lecture works today.)
 
 ## 4. "Is a meeting planned, and is the slot open?" — one function
 
