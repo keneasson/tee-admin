@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: Params) {
   if (action === 'swap-request') {
     const result = await requestSwap(inviteId, date, typeof body.note === 'string' ? body.note : undefined, who)
     if (!result.ok) return errorFor(result, actor.trust)
-    return NextResponse.json({ swap: swapView(result.swap, actor.trust, actor.personId) }, { status: 201, headers: noStore })
+    return NextResponse.json({ swap: swapView(result.swap, actor.trust, invite.inviteePersonId) }, { status: 201, headers: noStore })
   }
 
   const result =

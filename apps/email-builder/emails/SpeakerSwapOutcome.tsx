@@ -8,6 +8,7 @@ import {
   SpeakerEmailFooter,
   buttonLink,
   greetingFor,
+  type SpeakerTitle,
   inviteTypeNoun,
   type SpeakerInviteType,
 } from '../components/SpeakerInviteParts'
@@ -26,6 +27,8 @@ export interface SpeakerSwapOutcomeProps {
   inviteType: SpeakerInviteType
   /** The speaker who asked (the recipient of this email). */
   requesterName: string
+  /** From the requester's recorded gender (§9b). Absent = not recorded. */
+  greetingTitle?: SpeakerTitle
   /** The other speaker, already redacted for the recipient's tier. */
   otherSpeakerName: string
   ecclesiaName: string
@@ -51,6 +54,7 @@ const SpeakerSwapOutcome = ({
   outcome,
   inviteType,
   requesterName,
+  greetingTitle,
   otherSpeakerName,
   ecclesiaName,
   requesterDateDisplay,
@@ -79,7 +83,7 @@ const SpeakerSwapOutcome = ({
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          <Text style={defaultText}>{greetingFor(requesterName)}</Text>
+          <Text style={defaultText}>{greetingFor(requesterName, greetingTitle)}</Text>
           <Text style={defaultText}>{lead}</Text>
           <Text style={defaultText}>
             {'Nothing has changed: you are still booked for '}
@@ -109,6 +113,7 @@ SpeakerSwapOutcome.PreviewProps = {
   outcome: 'declined',
   inviteType: 'memorial',
   requesterName: 'Sample Speaker',
+  greetingTitle: 'Brother',
   otherSpeakerName: 'Other',
   ecclesiaName: 'Example Ecclesia',
   requesterDateDisplay: 'Sunday, March 1, 2026 at 11:00am',

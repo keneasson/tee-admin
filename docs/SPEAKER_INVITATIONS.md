@@ -163,9 +163,9 @@ No feature flag (owner decision): the feature is limited to RB/Rep/owner senders
 ## 9a. Choosing the invitee (owner feedback, 2026-11-12)
 
 One field: **"Start typing a name"**, with directory autocomplete across all
-ecclesias. Each result shows name + ecclesia. Results show names and ecclesia
-only, never contact details. The last row is always **"＋ {typed} isn't listed,
-add them"**.
+ecclesias (`GET /api/speaker-invites/candidates`, grouped per §9b). Each result
+shows name + ecclesia. Results show names and ecclesia only, never contact
+details. The last row is always **"＋ {typed} isn't listed, add them"**.
 
 **Add them** opens the form with the typed name filled in. Two words fill
 first + last name; one word fills the first name. The fields are:
@@ -174,15 +174,25 @@ first + last name; one word fills the first name. The fields are:
    `{personId, displayName, ecclesia}` or nothing, never contact details):
    - It matches someone: "This email belongs to **{Name}** ({Ecclesia}). Is that who you mean?"
      - **Yes** switches the invite to that person. No new record is created.
-     - **No, someone else uses this address** (a household): the form continues.
-       The new person is created **without an email of their own**, because two
-       people under one email login key would let sign-in resolve to the wrong
-       person (#129/#130). The invitation is still sent to the shared address,
-       which identity checks accept (`invite.inviteeEmail`). The invite carries a
-       **follow-up flag** `{kind: 'shared-email', withPersonId}`.
+     - **No, someone else uses this address** (a household): the form continues,
+       and notes: "They'll share this address with {Name}. When they sign in,
+       they'll be asked which of them they are." Shared household addresses are a
+       supported, trusted model (#267, R2): the new person **joins the address**
+       the same way `scripts/join-shared-household-email.ts` joins one, with an
+       EMAIL# row marked `loginExcluded`. It is their primary when it is the
+       existing holder's primary, otherwise a secondary (a second PROFILE on a
+       secondary address would take over `getByEmail`). So the existing holder
+       still signs in by default, `peopleWhoCanUse` lists both, and sign-in asks
+       "Are you A or B?" (`/auth/who`). No privacy settings are written for the
+       address (they are keyed by address and belong to the existing holder).
+       The invitation is sent to the shared address (`invite.inviteeEmail`), and
+       the invite carries a **follow-up flag** `{kind: 'shared-email', withPersonId}`.
+       On the invite pages, **anyone who can use `invite.inviteeEmail`** counts as
+       the invitee; `history.byPersonId` records the session's chosen person.
    - No match: the form continues, and the new person gets this email.
 2. First name, last name.
-3. **Home ecclesia: autocomplete** over the ecclesia list. If exactly one
+3. **Brother / Sister** and **Baptized? Yes / No / Not sure** (+ optional baptism date), per §9b.
+4. **Home ecclesia: autocomplete** over the ecclesia list. If exactly one
    ecclesia matches ("Mississ" → Mississauga West), it is filled in and can be
    accepted with one tap or Enter. Several matches ("Toronto") are listed to
    pick from. No match offers "Use '{typed}' (not in our list)". The owner's
@@ -190,8 +200,9 @@ first + last name; one word fills the first name. The fields are:
 
 **Who created them.** New people are made by ONE shared helper
 `createVisitorPerson()`, which the visiting-speaker schedule import also uses.
-It sets `memberStatus: 'visitor'`, `role: 'guest'`, and the same visitor privacy
-defaults. Provenance is `source: 'speaker-invitation'`,
+It sets `memberStatus: 'visitor'` and the same visitor privacy defaults; the
+role is passed explicitly (`'guest'` for the schedule import, `'member'` for an
+invitation, §9b). Provenance is `source: 'speaker-invitation'`,
 `sourceRef: 'speaker-invite:{inviteId}'` and **`createdByPersonId`** = the inviter.
 
 **Follow-up.** A flagged invite shows a "Needs follow-up: shares an email with
@@ -199,6 +210,59 @@ defaults. Provenance is `source: 'speaker-invitation'`,
 **Mark resolved** button that records who resolved it and when.
 
 The picker's "Unlink" is not used here. Changing the pick is "Change".
+
+## 9b. Only brethren are invited to speak (owner decision, 2026-11-12)
+
+In this community only **brethren (baptized males)** exhort, lead Bible Class or
+lecture. Both facts are **recorded, never inferred**: there is no backfill, and
+nothing derives them from names, role, roster history or anything else
+("getting it wrong is worse than not getting it").
+
+**Fields** (PersonRecord, additive, unset = unknown): `gender?: 'male' | 'female'`,
+`genderSetByPersonId?`, `genderSetAt?`, `baptized?: boolean`, `baptismDate?`
+(YYYY-MM-DD, optional), `baptizedSetByPersonId?`, `baptizedSetAt?`.
+
+**Role and baptism are independent by design.** Role = how the ecclesia treats
+someone (access); `baptized` = a recorded fact, used only where it matters (the
+speaker picker). Unbaptized people aligned with an ecclesia (a member's spouse,
+a regular attendee) are treated as members without being baptized. Never derive
+one from the other.
+
+**One predicate**, `isInvitableSpeaker(p) = p.baptized !== false && p.gender !== 'female'`
+(`packages/app/utils/speaker-eligibility.ts`). The picker shows only people who
+pass it, in two groups:
+- **Brethren**: `baptized === true && gender === 'male'`.
+- **"Not yet confirmed as a baptized brother"**: everyone else who passes (either
+  fact unset), each with a one-tap **"Confirm: baptized brother"** and an in-page
+  confirm ("Confirm {Name} as a baptized brother? This is shown wherever titles
+  are used."). `POST /api/speaker-invites/confirm-brother {personId}`
+  (`canSendSpeakerInvite` callers) sets **only the unset facts** (gender='male'
+  and/or baptized=true), never overwrites, records set-by/at, and answers 409
+  when either is already recorded to the contrary. The person is then selected.
+
+The server also refuses (`NOT_INVITABLE`) an invite to anyone the predicate rejects.
+
+**"Add them" form.** Brother / Sister is required (no default). Baptized?
+Yes / No / Not sure, plus an optional baptism date.
+- Brother + Yes → invited; recorded `gender: 'male'`, `baptized: true`.
+- Brother + Not sure → invited; `baptized` stays unset (they appear in the second group later).
+- Brother + No → explained (only baptized brethren are invited to speak); not sent.
+- Sister → explained (this list is for inviting brethren); not sent.
+
+Every invite-created person gets `role: 'member'` (the inviting RB/Rep vouches
+they are aligned with an ecclesia), regardless of baptism, with
+`memberStatus: 'visitor'`. The facts record the inviter as set-by.
+
+**Titles.** "Brother {Surname}" / "Sister {Surname}" only when BOTH facts are
+recorded: `baptized === true` and a gender (`titleFor`). An unbaptized person,
+or anyone with either fact unset, is addressed by first name. Servers send the
+computed title to pages, never the raw gender. This covers `brotherName()`, the swap page, the "(Not … ? Sign in
+again)" link and the speaker-invite email greetings ("Dear Brother {Surname},"
+/ "Dear {first name},").
+
+**Editing.** The person on their own profile, and the admin person-edit form
+(same permission as its other fields), show "Brother / Sister / Not set" and
+"Baptized: Yes / No / Not set" + an optional baptism date, recording set-by/at.
 
 ## 10. Acceptance criteria
 
@@ -212,7 +276,8 @@ The picker's "Unlink" is not used here. Changing the pick is "Change".
 8. A swap accepted by the other speaker exchanges both dates atomically. A swap within 24h shows the "Please inform the Presiding/Exhorting brother" note. Both get new confirmations. The inviter gets no notice. If either booking changed in the meantime, the swap fails cleanly.
 9. Expired, cancelled or unknown links show a clear page with the inviter's contact, never an error.
 10. Lecture invites work end-to-end with manually entered dates.
-12. Typing a name finds directory people across ecclesias; "add them" pre-fills the name; an email already in the directory offers that person; "no, someone else" creates an emailless visitor, still emails the shared address, and shows the follow-up badge; home ecclesia autocompletes; new people record source, invite and inviter.
+12. Typing a name finds directory people across ecclesias; "add them" pre-fills the name; an email already in the directory offers that person; "no, someone else" adds them to the shared household address (the existing holder's sign-in unchanged, both offered at sign-in), still emails the shared address, and shows the follow-up badge; home ecclesia autocompletes; new people record source, invite and inviter.
+13. The picker shows only `isInvitableSpeaker` people, confirmed brethren first; "Confirm: baptized brother" sets only unset facts and never overwrites; a Sister or a "No, not baptized" is not sent; titles need recorded baptism AND gender.
 11. `yarn lint`, typecheck, build and unit tests are green. The whole path is verified in prod **with the owner's own record as invitee** (never a real member). The swap is verified by unit tests and a read-only prod check.
 
 ## 11. Out of scope (*Not now*)

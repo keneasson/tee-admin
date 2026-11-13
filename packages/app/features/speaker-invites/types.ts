@@ -52,6 +52,15 @@ export interface InviterInviteView {
   createdAt: string
   updatedAt: string
   invitee: InviteContactView | null
+  /** §9a: the invitee shares an address with `withName`; shown until resolved. */
+  followUp?: {
+    kind: 'shared-email'
+    withPersonId: string
+    withName: string
+    createdAt: string
+    resolvedAt?: string
+    resolvedByPersonId?: string
+  }
 }
 
 /** Error body every speaker-invite route returns: `{ error, code, ... }`. */

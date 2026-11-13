@@ -30,6 +30,8 @@ vi.mock('@/utils/auth-trust', async () => {
 vi.mock('@/utils/auth', () => ({ auth: vi.fn() }))
 vi.mock('@/utils/session-person', () => ({ personForSessionEmail: h.personForSessionEmail }))
 vi.mock('@/utils/email/ecclesia-token', () => ({ verifyEcclesiaToken: h.verifyEcclesiaToken }))
+// No household addresses here (see speaker-invites-household-api.test.ts).
+vi.mock('@/utils/sign-in-identity', () => ({ mayActAs: async () => false }))
 vi.mock('@/utils/speaker-invites/service', () => h.service)
 vi.mock('@/utils/speaker-invites/views', () => ({
   inviterInviteView: async (i: any) => i,

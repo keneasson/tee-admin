@@ -1,6 +1,7 @@
 import { getTrust, meetsAssurance, type Trust } from '../auth-trust'
 import { verifyEcclesiaToken } from '../email/ecclesia-token'
 import { personForSessionEmail } from '../session-person'
+import { mayActAs } from '../sign-in-identity'
 
 /**
  * Who is acting on an invitation or swap (spec §6).
@@ -45,8 +46,15 @@ export async function resolveInviteActor(
     return { trust: 'anonymous', personId: null, isInvitee: false, mismatch: false }
   }
 
+  // The session's chosen person ("Are you A or B?"), or the address's default holder.
   const personId = await personIdFor(ctx.email)
-  const isInvitee = personId === subject.personId || same(ctx.email, subject.email)
+  // A shared household address is trusted (§9a): whoever proved it, or anyone
+  // who can use it (`peopleWhoCanUse`), may act on this speaker's invite. The
+  // history still records `personId`, the person actually acting.
+  const isInvitee =
+    personId === subject.personId ||
+    same(ctx.email, subject.email) ||
+    (!!personId && !!subject.email && (await mayActAs(personId, subject.email).catch(() => false)))
 
   let mismatch = false
   if (!isInvitee && ctx.session && opts.ecclesiaToken) {

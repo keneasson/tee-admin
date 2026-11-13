@@ -3,9 +3,6 @@ import { auth } from '@/utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
-import { peopleIndexReady, searchPeopleByNamePrefix } from '@my/app/provider/dynamodb/people-index'
-import { canSendSpeakerInvite } from '@/utils/speaker-invite-permissions'
-import { inviterContext } from '@/utils/speaker-invites/http'
 
 /**
  * READ-ONLY roster member-picker candidate endpoint (#110, Slice B).
@@ -22,15 +19,6 @@ import { inviterContext } from '@/utils/speaker-invites/http'
  * emits, so a directory-scoped substring scan is the correct primary path here.
  * The ecclesia set is small (a few hundred people), so this is a single cheap GSI2
  * partition read.
- *
- * SPEAKER-INVITE INVITERS (RB / Rep, spec §2): a caller who passes
- * `canSendSpeakerInvite` for their own ecclesia also gets candidates, for the
- * composer's invitee picker. Invitees are often visiting speakers, so this
- * path searches EVERY ecclesia — via the people name-typeahead index (one
- * Query, no scan) — and returns the same name floor the member typeahead
- * (`/api/people/typeahead`) already shows any member: id, display name,
- * ecclesia. Never an email, phone or address. The admin/owner path below is
- * unchanged.
  *
  * TODO(multi-tenant, #110): the ecclesia is currently clamped to HOME_ECCLESIA and
  * gated on the GLOBAL admin/owner role. When multi-tenant lands, authorize the
@@ -55,7 +43,7 @@ export async function GET(request: NextRequest) {
   }
   const role = ((session.user as any).role as string) || ROLES.GUEST
   if (role !== ROLES.ADMIN && role !== ROLES.OWNER) {
-    return speakerInviterCandidates(request)
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
   const { searchParams } = new URL(request.url)
@@ -101,30 +89,6 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Error resolving roster candidates:', error)
-    return NextResponse.json({ error: 'Failed to resolve candidates' }, { status: 500 })
-  }
-}
-
-/** Not admin/owner: allowed only for speaker-invite inviters, across all ecclesias. */
-async function speakerInviterCandidates(request: NextRequest) {
-  const ctx = await inviterContext()
-  if (!ctx.ok) return ctx.response
-  if (!canSendSpeakerInvite(ctx.person, ctx.role, ctx.person.ecclesia)) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
-  const headers = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
-  const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80)
-  if (q.length < 2 || !(await peopleIndexReady())) {
-    return NextResponse.json({ candidates: [] as RosterCandidate[] }, { headers })
-  }
-  try {
-    const matches = await searchPeopleByNamePrefix(q, MAX_RESULTS)
-    const candidates: RosterCandidate[] = matches
-      .filter((m) => m.role !== ROLES.SUSPICIOUS && m.role !== ROLES.DECEASED)
-      .map(({ personId, displayName, ecclesia }) => ({ personId, displayName, ecclesia }))
-    return NextResponse.json({ candidates }, { headers })
-  } catch (error) {
-    console.error('Error resolving speaker-invite candidates:', error)
     return NextResponse.json({ error: 'Failed to resolve candidates' }, { status: 500 })
   }
 }

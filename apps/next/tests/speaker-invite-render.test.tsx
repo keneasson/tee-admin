@@ -8,6 +8,7 @@ import SpeakerConfirmation, {
 } from '../../email-builder/emails/SpeakerConfirmation'
 import SpeakerSwapRequest from '../../email-builder/emails/SpeakerSwapRequest'
 import SpeakerInviterNotice from '../../email-builder/emails/SpeakerInviterNotice'
+import { greetingFor } from '../../email-builder/components/SpeakerInviteParts'
 
 vi.mock('../utils/email/resolve-brand-profile', () => ({
   resolveBrandProfile: vi.fn(async () => ({
@@ -28,6 +29,24 @@ import {
 /** Text of the rendered HTML with tags stripped and entities for ' decoded. */
 const visible = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&#x27;|&#39;/g, "'")
 
+describe('§9b greeting follows the recorded gender, never a guess', () => {
+  it('Brother / Sister + surname when recorded; first name when not', () => {
+    expect(greetingFor('Sample Speaker', 'Brother')).toBe('Dear Brother Speaker,')
+    expect(greetingFor('Sample Speaker', 'Sister')).toBe('Dear Sister Speaker,')
+    expect(greetingFor('Sample Speaker')).toBe('Dear Sample,')
+    expect(greetingFor('Sample')).toBe('Dear Sample,')
+    expect(greetingFor('', 'Brother')).toBe('Dear Brother,')
+    expect(greetingFor('')).toBe('Hello,')
+  })
+
+  it('an invitation to someone with no recorded gender greets them by first name', async () => {
+    const { greetingTitle: _t, ...props } = SpeakerInvitation.PreviewProps
+    const text = visible(await render(<SpeakerInvitation {...props} />))
+    expect(text).toContain('Dear Sample,')
+    expect(text).not.toContain('Dear Brother')
+  })
+})
+
 describe('Speaker Invitation templates render', () => {
   it('invitation: subject phrase, up to 3 date links, note, other dates, sign-off', async () => {
     const props = SpeakerInvitation.PreviewProps
@@ -42,7 +61,8 @@ describe('Speaker Invitation templates render', () => {
     )
     const text = visible(html)
     expect(text).toContain('An invitation to exhort at the Memorial at Example Ecclesia')
-    expect(text).toContain('Dear Brother Sample Speaker,')
+    // §9b: the recorded title + surname (the preview carries greetingTitle 'Brother').
+    expect(text).toContain('Dear Brother Speaker,')
     expect(html).toContain('date=2026-03-01')
     expect(html).toContain('date=2026-03-15')
     expect(html).not.toContain('Fourth date')

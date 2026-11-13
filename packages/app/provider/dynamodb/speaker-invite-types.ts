@@ -44,6 +44,7 @@ export type InviteHistoryAction =
   | 'swapped_in'
   | 'resent'
   | 'email_failed'
+  | 'follow_up_resolved'
 
 export interface InviteHistoryEntry {
   at: string
@@ -86,10 +87,26 @@ export interface SpeakerInviteRecord {
   acceptedTz?: string
   note?: string
   history: InviteHistoryEntry[]
+  /** Set when the directory needs a human look after this invite (§9a). */
+  followUp?: InviteFollowUp
 
   createdAt: string
   updatedAt: string
   version: number
+}
+
+/**
+ * §9a: the invitee was added on an address another person already uses (a
+ * household). Shown as "Needs follow-up" to the inviter and the owner until
+ * someone marks it resolved.
+ */
+export interface InviteFollowUp {
+  kind: 'shared-email'
+  /** The person who already used the address. */
+  withPersonId: string
+  createdAt: string
+  resolvedAt?: string
+  resolvedByPersonId?: string
 }
 
 export interface SpeakerBookingRecord {
@@ -220,6 +237,7 @@ export const INVITE_HISTORY_ACTION_LABEL: Record<InviteHistoryAction, string> = 
   swapped_in: 'Swapped in',
   resent: 'Email sent again',
   email_failed: 'An email could not be sent',
+  follow_up_resolved: 'Follow-up marked resolved',
 }
 
 export const NO_MEETING_REASON_LABEL: Record<NoMeetingReason, string> = {
@@ -255,7 +273,8 @@ export interface InviteeInviteView {
   ecclesia: string
   type: SpeakerInviteType
   status: SpeakerInviteStatus
-  invitee: { firstName: string; lastName: string }
+  /** `gender` only when recorded (§9b): the page titles them by it, never by a guess. */
+  invitee: { firstName: string; lastName: string; title?: 'Brother' | 'Sister' }
   inviter: InviteContactView | null
   note?: string
   acceptedDate?: string
@@ -289,6 +308,8 @@ export interface SwapView {
   status: SpeakerSwapStatus
   /** Who is looking: the speaker asked to trade, or the one who asked. */
   viewerRole: 'target' | 'requester'
+  /** The viewer's own recorded gender, for "Brother/Sister {Surname}" (§9b). */
+  viewerTitle?: 'Brother' | 'Sister'
   requester: SwapSideView
   target: SwapSideView
   note?: string

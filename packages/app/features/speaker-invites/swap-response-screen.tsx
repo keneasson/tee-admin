@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { YStack, XStack, Text, Card, Heading, Paragraph, Button, Spinner } from '@my/ui'
 import { callApi, withToken } from './api'
 import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
-import { firstWord, formatWhen, formatDate } from './format'
+import { firstWord, formatWhen, formatDate, titledFullName } from './format'
 import {
   InviteIdentityHeader,
   InviteIdentityStates,
@@ -29,11 +29,6 @@ export interface SwapResponseScreenProps {
 }
 
 type SwapResponse = { swap: SwapView }
-
-function surnameOf(name: string | undefined): string {
-  const parts = name?.trim().split(/\s+/) ?? []
-  return parts.length > 1 ? `Brother ${parts[parts.length - 1]}` : parts[0] || 'the invited speaker'
-}
 
 const ERROR_TEXT: Record<string, string> = {
   SWAP_STALE: 'One of the two bookings changed since this request was sent, so the swap can’t go ahead. Nothing was changed.',
@@ -79,7 +74,7 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
   const isTarget = swap.viewerRole !== 'requester'
   const me = isTarget ? swap.target : swap.requester
   const other = isTarget ? swap.requester : swap.target
-  const who = surnameOf(me.name)
+  const who = titledFullName(me.name, swap.viewerTitle)
   const otherName = other.name ?? 'the other speaker'
   const otherFirst = firstWord(other.name) || 'the other speaker'
   const mine = formatWhen(me.date, me.time, me.tz)

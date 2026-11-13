@@ -1,6 +1,7 @@
 import { getTimezoneCityName } from '@my/app/utils/timezone'
 import { NO_MEETING_REASON_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
 import type { Slot } from './types'
+import { titledName, type SpeakerTitle } from '../../utils/speaker-eligibility'
 
 /** "Sunday, November 15, 2026" for a YYYY-MM-DD (no timezone drift). */
 export function formatDate(date: string, opts: { short?: boolean } = {}): string {
@@ -100,12 +101,23 @@ export function slotLabel(slot: Slot): string {
   return slot.reasonNote ? `${reason}: ${slot.reasonNote}` : reason
 }
 
-/** The name the page addresses: "Brother {Surname}", else the first name. */
-export function brotherName(invitee: { firstName?: string; lastName?: string } | null | undefined): string {
-  const last = invitee?.lastName?.trim()
-  if (last) return `Brother ${last}`
-  const first = invitee?.firstName?.trim()
-  return first ? first : 'the invited speaker'
+/**
+ * The name the page addresses (§9b): "Brother {Surname}" / "Sister {Surname}"
+ * when the gender is recorded, else the first name. Never guessed.
+ */
+export function brotherName(
+  invitee: { firstName?: string; lastName?: string; title?: SpeakerTitle | null } | null | undefined
+): string {
+  return titledName(invitee, 'the invited speaker')
+}
+
+/** The same rule for a full name in one string (the swap page has only that). */
+export function titledFullName(name: string | undefined, title?: SpeakerTitle | null): string {
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? []
+  return titledName(
+    { firstName: parts[0], lastName: parts.length > 1 ? parts[parts.length - 1] : undefined, title },
+    'the invited speaker'
+  )
 }
 
 export function firstWord(name: string | undefined): string {

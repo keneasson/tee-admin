@@ -47,6 +47,11 @@
 import { GoogleSheetsService } from './google-sheets-service'
 import { personRepository } from '../dynamodb/repositories/person-repository'
 import { privacyRepository } from '../dynamodb/repositories/privacy-repository'
+import {
+  VISITING_SPEAKER_VISIBILITY,
+  VISITOR_PRIVACY_SETTINGS,
+  createVisitorPerson,
+} from '../dynamodb/repositories/visitor-person'
 import type { PersonRecord, VisibilityLevel } from '../dynamodb/types'
 import {
   resolveNames,
@@ -66,22 +71,9 @@ const EMAIL_HEADER_RE = /e-?mail/i
 /** Header that holds the speaker's phone number. */
 const PHONE_HEADER_RE = /phone|mobile|cell|tel/i
 
-/**
- * Field visibility applied to every record this ingest touches. Sensitive
- * fields are `ecclesia_and_connections` — same-ecclesia members see them, and
- * the owner / same-ecclesia admin-recorder-rep see them via the role overrides
- * in `PrivacyRepository.canViewField`. Deliberately NOT the literal 'private'
- * level, which would hide the speaker from their own ecclesia too.
- */
-export const VISITING_SPEAKER_VISIBILITY: VisibilityLevel = 'ecclesia_and_connections'
-
-const VISITOR_PRIVACY_SETTINGS = {
-  showName: VISITING_SPEAKER_VISIBILITY,
-  showEmail: VISITING_SPEAKER_VISIBILITY,
-  showPhone: VISITING_SPEAKER_VISIBILITY,
-  showAddress: VISITING_SPEAKER_VISIBILITY,
-  showFamily: VISITING_SPEAKER_VISIBILITY,
-} as const
+// Visitor field visibility + privacy defaults live with the ONE visitor
+// creator (`createVisitorPerson`), which this ingest uses.
+export { VISITING_SPEAKER_VISIBILITY }
 
 /** The minimal repository surface this module needs — lets tests inject a fake. */
 export interface PersonRepositoryLike {
@@ -385,26 +377,19 @@ export async function syncVisitingSpeakers(
 
     let personId: string | undefined
     if (!dryRun) {
-      const created = await repo.create({
-        firstName,
-        lastName,
-        ecclesia,
-        memberStatus: 'visitor',
-        role: 'guest',
-        source: 'schedule-import',
-        sourceRef: `visiting-speakers:${sheetId}`,
-        // With an email we take the normal create() path (real EMAIL# item +
-        // EMAIL# gsi1 key) so getByEmail finds them; without, create() falls
-        // back to the emailless NOEMAIL# sentinel.
-        ...(email ? { email } : {}),
-      })
+      const created = await createVisitorPerson(
+        {
+          firstName,
+          lastName,
+          ecclesia,
+          source: 'schedule-import',
+          sourceRef: `visiting-speakers:${sheetId}`,
+          ...(email ? { email } : {}),
+          ...(phone ? { phone } : {}),
+        },
+        { repository: repo, privacy }
+      )
       personId = created.personId
-      if (phone) {
-        await repo.addPhone(personId, { type: 'mobile', number: phone, isPrimary: true })
-      }
-      if (email) {
-        await privacy.createPrivacySettings(email, { ...VISITOR_PRIVACY_SETTINGS })
-      }
     }
 
     result.created.push({

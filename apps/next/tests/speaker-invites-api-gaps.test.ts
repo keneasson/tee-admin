@@ -73,22 +73,14 @@ beforeEach(() => {
   h.getById.mockResolvedValue(null)
 })
 
-describe('/api/roster/resolve-candidates for speaker-invite inviters', () => {
+describe('/api/roster/resolve-candidates stays admin/owner-only (inviters use /api/speaker-invites/candidates)', () => {
   const get = (q: string) =>
     candidatesGet(new Request(`http://x/api/roster/resolve-candidates?q=${encodeURIComponent(q)}&ecclesia=${X}`) as any)
 
-  it('an RB gets cross-ecclesia candidates with the name floor only — no contact details', async () => {
+  it('an RB is refused here', async () => {
     signIn('rb-x@example.test')
-    h.searchPeopleByNamePrefix.mockResolvedValue([
-      { personId: 'p-v', displayName: 'Visiting Speaker', ecclesia: 'Other Ecclesia', role: 'member' },
-      { personId: 'p-d', displayName: 'Departed Brother', ecclesia: X, role: 'deceased' },
-    ])
-    const res = await get('vis')
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({
-      candidates: [{ personId: 'p-v', displayName: 'Visiting Speaker', ecclesia: 'Other Ecclesia' }],
-    })
-    expect(h.listByEcclesia).not.toHaveBeenCalled()
+    expect((await get('vis')).status).toBe(403)
+    expect(h.searchPeopleByNamePrefix).not.toHaveBeenCalled()
   })
 
   it('a plain member is still refused', async () => {

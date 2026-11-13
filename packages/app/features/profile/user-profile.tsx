@@ -12,6 +12,7 @@ import { ConnectionsList } from '@my/ui/src/profile/connections-list'
 import { PrivacySettings } from '@my/ui/src/profile/privacy-settings'
 import { ContactRequestsList } from '@my/ui/src/profile/contact-requests-list'
 import { Church, Search, Pencil, Check, X } from '@tamagui/lucide-icons'
+import { SpeakerFactsCard, type SpeakerFacts } from './speaker-facts-card'
 import type { AddressType, PhoneType, RelationshipType, VisibilityLevel } from '@my/app/provider/dynamodb/types'
 
 interface UserProfileProps {
@@ -138,6 +139,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [editingName, setEditingName] = useState(false)
+  // Brother / Sister + baptism (§9b), recorded facts; null = not set.
+  const [speakerFacts, setSpeakerFacts] = useState<SpeakerFacts>({ gender: null, baptized: null, baptismDate: null })
   const [firstNameInput, setFirstNameInput] = useState('')
   const [lastNameInput, setLastNameInput] = useState('')
   const [savingName, setSavingName] = useState(false)
@@ -222,6 +225,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         if (data.user?.ecclesia) {
           setEcclesia(normalizeEcclesia(data.user.ecclesia))
         }
+        setSpeakerFacts({
+          gender: data.user?.gender ?? null,
+          baptized: data.user?.baptized ?? null,
+          baptismDate: data.user?.baptismDate ?? null,
+        })
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
@@ -575,6 +583,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   }
 
+  const saveSpeakerFacts = async (facts: SpeakerFacts): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(facts),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return data.error || `Save failed (${res.status})`
+      setSpeakerFacts({ gender: data.gender ?? null, baptized: data.baptized ?? null, baptismDate: data.baptismDate ?? null })
+      return null
+    } catch {
+      return 'Network error — please try again'
+    }
+  }
+
   // Ecclesia handlers
   const startEditingEcclesia = () => {
     setEcclesiaInput(ecclesia)
@@ -772,6 +796,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </Card>
                   )}
                 </YStack>
+
+                {/* Brother / Sister + baptism (§9b) */}
+                <SpeakerFactsCard facts={speakerFacts} onSave={saveSpeakerFacts} testID="profile-speaker-facts" />
 
                 {/* Ecclesia */}
                 <YStack gap="$3">

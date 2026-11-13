@@ -122,18 +122,36 @@ vi.mock('@my/app/provider/dynamodb/repositories/schedule-repository', () => ({
 vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
   personRepository: {
     getById: async (id: string) => h.state.people.get(id) ?? null,
-    getByEmail: async (email: string) => [...h.state.people.values()].find((p) => p.primaryEmail === email) ?? null,
+    // The household default: the holder whose EMAIL# row is not loginExcluded.
+    getByEmail: async (email: string) =>
+      [...h.state.people.values()].find(
+        (p) => (p.primaryEmail === email || (p.emails ?? []).some((e: any) => e.email === email)) && !p.loginExcludedFor?.includes(email)
+      ) ?? null,
+    getAllPersonsByEmail: async (email: string) =>
+      [...h.state.people.values()].filter((p) => p.primaryEmail === email || (p.emails ?? []).some((e: any) => e.email === email)),
+    addEmail: vi.fn(async (personId: string, row: any) => {
+      const p = h.state.people.get(personId)
+      p.emails = [...(p.emails ?? []), row]
+      if (row.loginExcluded) p.loginExcludedFor = [...(p.loginExcludedFor ?? []), row.email]
+      return row
+    }),
+    addPhone: vi.fn(async () => undefined),
     searchByName: async (last: string, first?: string) => ({
       items: [...h.state.people.values()].filter(
         (p) => p.lastName.toLowerCase() === last && (!first || p.firstName.toLowerCase().startsWith(first))
       ),
     }),
     create: vi.fn(async (input: any) => {
-      const p = { ...input, personId: `p-new-${h.state.people.size}`, primaryEmail: input.email }
+      const p: any = { ...input, personId: `p-new-${h.state.people.size}`, primaryEmail: input.email ?? '' }
+      if (input.email && input.emailLoginExcluded) p.loginExcludedFor = [input.email]
       h.state.people.set(p.personId, p)
       return p
     }),
   },
+}))
+
+vi.mock('@my/app/provider/dynamodb/repositories/privacy-repository', () => ({
+  privacyRepository: { createPrivacySettings: vi.fn(async () => undefined) },
 }))
 
 vi.mock('@/utils/dynamodb/locations', () => ({ getEcclesiaByName: async () => null }))
@@ -157,6 +175,7 @@ import {
   createInvite,
   requestSwap,
   resendInvite,
+  resolveFollowUp,
   respondSwap,
   sendTestInvitation,
   swapExpiry,
@@ -316,13 +335,189 @@ describe('createInvite — the invitee is always a PersonRecord', () => {
   it('an unknown address creates a visitor record', async () => {
     const r = await createInvite({
       ecclesia: ECC, type: 'memorial', inviter: RB,
-      invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test', ecclesia: 'Elsewhere' },
+      invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test', ecclesia: 'Elsewhere', gender: 'male' },
       dates: [{ date: '2026-11-15' }],
     })
     expect(r.ok).toBe(true)
     expect(personRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'new@example.test', memberStatus: 'visitor', ecclesia: 'Elsewhere' })
     )
+  })
+
+  it('a new person records where they came from: source, this invite, and the inviter', async () => {
+    const r = await createInvite({
+      ecclesia: ECC, type: 'memorial', inviter: RB,
+      invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test', gender: 'male', baptized: true, baptismDate: '2001-06-03' },
+      dates: [{ date: '2026-11-15' }],
+    })
+    if (!r.ok) throw new Error(r.code)
+    const created = h.state.people.get(r.invite.inviteePersonId)
+    expect(created).toMatchObject({
+      source: 'speaker-invitation',
+      sourceRef: `speaker-invite:${r.invite.inviteId}`,
+      createdByPersonId: 'p-rb',
+      memberStatus: 'visitor',
+      // §9b: the inviter vouches — member, a recorded brother, baptized (Yes).
+      role: 'member',
+      gender: 'male',
+      genderSetByPersonId: 'p-rb',
+      baptized: true,
+      baptismDate: '2001-06-03',
+      baptizedSetByPersonId: 'p-rb',
+    })
+    expect(r.invite.followUp).toBeUndefined()
+  })
+
+  describe('§9b add-them form outcomes', () => {
+    const add = (extra: Record<string, any>) =>
+      createInvite({
+        ecclesia: ECC, type: 'memorial', inviter: RB,
+        invitee: { firstName: 'New', lastName: 'Person', email: 'new@example.test', ...extra },
+        dates: [{ date: '2026-11-15' }],
+      })
+
+    it('Brother + Not sure: invited, baptized left unset, role still member', async () => {
+      const r = await add({ gender: 'male' })
+      if (!r.ok) throw new Error(r.code)
+      const p = h.state.people.get(r.invite.inviteePersonId)
+      expect(p).toMatchObject({ role: 'member', gender: 'male' })
+      expect(p.baptized).toBeUndefined()
+    })
+
+    it('Baptized: No is refused and nobody is created', async () => {
+      expect(await add({ gender: 'male', baptized: false })).toMatchObject({ ok: false, code: 'NOT_INVITABLE' })
+      expect(personRepository.create).not.toHaveBeenCalled()
+    })
+
+    it('Sister, or no choice, is refused and nobody is created', async () => {
+      expect(await add({ gender: 'female', baptized: true })).toMatchObject({ ok: false, code: 'NOT_INVITABLE' })
+      expect(await add({})).toMatchObject({ ok: false, code: 'NOT_INVITABLE' })
+      expect(personRepository.create).not.toHaveBeenCalled()
+    })
+
+    it('a malformed baptism date is refused', async () => {
+      expect(await add({ gender: 'male', baptized: true, baptismDate: 'June' })).toMatchObject({ ok: false, code: 'INVALID_INPUT' })
+    })
+
+    it('an existing person recorded as a sister or unbaptized cannot be invited by id or by email', async () => {
+      h.state.people.get('p-c').gender = 'female'
+      const byId = await createInvite({ ecclesia: ECC, type: 'memorial', inviter: RB, invitee: { personId: 'p-c' }, dates: [{ date: '2026-11-15' }] })
+      expect(byId).toMatchObject({ ok: false, code: 'NOT_INVITABLE' })
+      h.state.people.get('p-c').gender = null
+      h.state.people.get('p-c').baptized = false
+      expect(await add({ email: 'casey@example.test', gender: 'male' })).toMatchObject({ ok: false, code: 'NOT_INVITABLE' })
+    })
+  })
+})
+
+describe('§9a shared household address ("No, someone else uses this address")', () => {
+  beforeEach(() => memorialRow('2026-11-15'))
+  const household = (extra: Record<string, any> = {}) =>
+    createInvite({
+      ecclesia: ECC, type: 'memorial', inviter: RB,
+      invitee: { firstName: 'Jordan', lastName: 'Household', email: 'casey@example.test', sharedEmailConfirmedNotSamePerson: true, gender: 'male', ...extra },
+      dates: [{ date: '2026-11-15' }],
+    })
+
+  it('joins the address as a login-excluded holder: the existing person still signs in, both can use it', async () => {
+    const r = await household()
+    if (!r.ok) throw new Error(r.code)
+    const newId = r.invite.inviteePersonId
+    expect(newId).not.toBe('p-c')
+    // The #267 mechanism: same address, EMAIL# row marked loginExcluded.
+    expect(personRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'casey@example.test', emailLoginExcluded: true, source: 'speaker-invitation' })
+    )
+    // Sign-in default for the address is unchanged.
+    expect((await personRepository.getByEmail('casey@example.test'))?.personId).toBe('p-c')
+    // Both people can use it (what peopleWhoCanUse reads).
+    const holders = (await personRepository.getAllPersonsByEmail('casey@example.test')).map((p) => p.personId).sort()
+    expect(holders).toEqual(['p-c', newId].sort())
+    expect(r.invite.inviteeEmail).toBe('casey@example.test')
+    expect(r.invite.followUp).toEqual({ kind: 'shared-email', withPersonId: 'p-c', createdAt: NOW.toISOString() })
+    expect(emails.sendInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ inviteeEmail: 'casey@example.test' }))
+  })
+
+  it('a holder who has it only as a SECONDARY keeps getByEmail: the visitor gets a secondary row, not a primary', async () => {
+    h.state.people.get('p-c').emails = [{ email: 'shared@example.test' }]
+    const r = await household({ email: 'shared@example.test' })
+    if (!r.ok) throw new Error(r.code)
+    const created = h.state.people.get(r.invite.inviteePersonId)
+    expect(created.primaryEmail).toBe('')
+    expect(personRepository.addEmail).toHaveBeenCalledWith(
+      r.invite.inviteePersonId,
+      expect.objectContaining({ email: 'shared@example.test', emailType: 'secondary', loginExcluded: true })
+    )
+    expect((await personRepository.getByEmail('shared@example.test'))?.personId).toBe('p-c')
+  })
+
+  it('a second invite for the same household member reuses them (no duplicate person)', async () => {
+    const first = await household()
+    if (!first.ok) throw new Error(first.code)
+    memorialRow('2026-11-22')
+    const again = await createInvite({
+      ecclesia: ECC, type: 'memorial', inviter: RB,
+      invitee: { firstName: 'Jordan', lastName: 'Household', email: 'casey@example.test', sharedEmailConfirmedNotSamePerson: true, gender: 'male' },
+      dates: [{ date: '2026-11-22' }],
+    })
+    if (!again.ok) throw new Error(again.code)
+    expect(again.invite.inviteePersonId).toBe(first.invite.inviteePersonId)
+    expect(personRepository.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('without the flag, a matching email still means that person (today’s behaviour)', async () => {
+    const r = await household({ sharedEmailConfirmedNotSamePerson: false })
+    expect(r.ok && r.invite.inviteePersonId).toBe('p-c')
+    expect(personRepository.create).not.toHaveBeenCalled()
+  })
+
+  it('a test send creates no one', async () => {
+    const r = await sendTestInvitation(
+      { ecclesia: ECC, type: 'memorial', inviter: RB, dates: [{ date: '2026-11-15' }],
+        invitee: { firstName: 'Jordan', lastName: 'Household', email: 'casey@example.test', sharedEmailConfirmedNotSamePerson: true, gender: 'male' } },
+      'rb@example.test'
+    )
+    expect(r.ok).toBe(true)
+    expect(personRepository.create).not.toHaveBeenCalled()
+  })
+
+  it('the household member can accept; confirmation and inviter notice go out', async () => {
+    const r = await household()
+    if (!r.ok) throw new Error(r.code)
+    const acc = await acceptInvite(r.invite.inviteId, '2026-11-15', as('p-c'))
+    expect(acc.ok).toBe(true)
+    expect(bookingOn('2026-11-15')).toMatchObject({ personId: r.invite.inviteePersonId })
+    // History records who actually acted (the household member).
+    expect(h.state.invites.get(r.invite.inviteId).history.at(-1)).toMatchObject({ action: 'accepted', byPersonId: 'p-c' })
+    expect(emails.sendConfirmationEmail).toHaveBeenCalled()
+  })
+
+  it('mark resolved records who and when, once', async () => {
+    const r = await household()
+    if (!r.ok) throw new Error(r.code)
+    const done = await resolveFollowUp(r.invite.inviteId, RB)
+    expect(done.ok && done.invite.followUp).toEqual({
+      kind: 'shared-email', withPersonId: 'p-c', createdAt: NOW.toISOString(), resolvedAt: NOW.toISOString(), resolvedByPersonId: 'p-rb',
+    })
+    const v = h.state.invites.get(r.invite.inviteId).version
+    expect((await resolveFollowUp(r.invite.inviteId, RB)).ok).toBe(true)
+    expect(h.state.invites.get(r.invite.inviteId).version).toBe(v)
+    const plain = await invite('p-a', ['2026-11-15'])
+    expect(await resolveFollowUp(plain.inviteId, RB)).toMatchObject({ ok: false, code: 'INVALID_INPUT' })
+  })
+
+  it('swaps reach a speaker with no primary of their own through their invite address', async () => {
+    // A visitor joined a holder's SECONDARY address: no primary of their own.
+    h.state.people.get('p-c').emails = [{ email: 'shared@example.test' }]
+    const v = await household({ email: 'shared@example.test' })
+    if (!v.ok) throw new Error(v.code)
+    const visitorId = v.invite.inviteePersonId
+    memorialRow('2026-11-22')
+    expect((await acceptInvite(v.invite.inviteId, '2026-11-15', as(visitorId))).ok).toBe(true)
+    const mine = await invite('p-a', ['2026-11-22'], { otherDatesWindow: { from: '2026-11-13', to: '2026-12-31' } })
+    expect((await acceptInvite(mine.inviteId, '2026-11-22', as('p-a'))).ok).toBe(true)
+    const swap = await requestSwap(mine.inviteId, '2026-11-15', undefined, as('p-a', 'authenticated'))
+    expect(swap).toMatchObject({ ok: true, swap: { target: { personId: visitorId, inviteId: v.invite.inviteId } } })
   })
 
   it('stores the schedule time + timezone on each offered date, and sends the invitation after the write', async () => {
@@ -340,7 +535,7 @@ describe('test send (composer "send a test to me")', () => {
     const r = await sendTestInvitation(
       {
         ecclesia: ECC, type: 'memorial', inviter: RB,
-        invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test' },
+        invitee: { firstName: 'New', lastName: 'Brother', email: 'new@example.test', gender: 'male', baptized: true, baptismDate: '2001-06-03' },
         dates: [{ date: '2026-11-15' }],
       },
       'rb@example.test'

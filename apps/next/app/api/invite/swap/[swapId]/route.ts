@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import { titleFor } from '@my/app/utils/speaker-eligibility'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { refuseActor, resolveInviteActor } from '@/utils/speaker-invites/actor'
+import { speakerEmailFor } from '@/utils/speaker-invites/contact'
 import { getSwap, respondSwap, swapViewShortNotice } from '@/utils/speaker-invites/service'
 import { swapView } from '@/utils/speaker-invites/views'
 import { noStore, readInviteToken, readJson, serviceErrorResponse } from '@/utils/speaker-invites/http'
@@ -24,7 +26,14 @@ const notFound = () =>
 
 async function subjectOf(side: SpeakerSwapRecord['target']) {
   const person = await personRepository.getById(side.personId).catch(() => null)
-  return { personId: side.personId, email: person?.primaryEmail ?? null }
+  // Their own primary, or the (household) address their invite went to (§9a).
+  return { personId: side.personId, email: await speakerEmailFor(side.personId, side.inviteId, person) }
+}
+
+/** The viewer's recorded gender for the page title (§9b); none when unset. */
+async function titleOf(personId: string | null) {
+  if (!personId) return undefined
+  return titleFor(await personRepository.getById(personId).catch(() => null))
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -34,16 +43,21 @@ export async function GET(request: Request, { params }: Params) {
   const token = await readInviteToken(request.url)
 
   let actor = await resolveInviteActor(await subjectOf(swap.target), { ecclesiaToken: token })
+  // The side the reader acts for (a household member acts for their speaker).
+  let viewer = swap.target.personId
   if (!actor.isInvitee && !actor.mismatch && actor.trust !== 'anonymous') {
     const asRequester = await resolveInviteActor(await subjectOf(swap.requester), { ecclesiaToken: token })
-    if (asRequester.isInvitee) actor = asRequester
+    if (asRequester.isInvitee) {
+      actor = asRequester
+      viewer = swap.requester.personId
+    }
   }
   const refusal = refuseActor(actor, 'recognized')
   if (refusal) return NextResponse.json(refusal.body, { status: refusal.status, headers: noStore })
 
   const shortNotice = await swapViewShortNotice(swap)
   return NextResponse.json(
-    { swap: swapView(swap, actor.trust, actor.personId, shortNotice), actor: { trust: actor.trust } },
+    { swap: swapView(swap, actor.trust, viewer, shortNotice, await titleOf(viewer)), actor: { trust: actor.trust } },
     { headers: noStore }
   )
 }
@@ -65,7 +79,7 @@ export async function POST(request: Request, { params }: Params) {
   const result = await respondSwap(swapId, body.action, { personId: actor.personId!, trust: actor.trust })
   if (!result.ok) return serviceErrorResponse(result)
   return NextResponse.json(
-    { swap: swapView(result.swap, actor.trust, actor.personId, result.shortNotice) },
+    { swap: swapView(result.swap, actor.trust, swap.target.personId, result.shortNotice, await titleOf(swap.target.personId)) },
     { headers: noStore }
   )
 }

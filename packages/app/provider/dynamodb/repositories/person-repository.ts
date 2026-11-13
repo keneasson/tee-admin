@@ -6,6 +6,7 @@ import { projectionWritesEnabled, refreshPersonProjections } from '../people-ind
 import { batchGetItems } from '../people-index/reader'
 import { PATTERNS } from '../access-patterns'
 import type { PersonCard } from '../people-index/keys'
+import { confirmBrotherChanges } from '../../../utils/speaker-eligibility'
 import type {
   ContactVoteRecord,
   PersonRecord,
@@ -37,8 +38,22 @@ export interface CreatePersonInput {
   provider?: 'google' | 'credentials'
   userId?: string
   // Provenance for machine-created records (e.g. schedule ingest).
-  source?: 'schedule-import' | 'mailing-list-backfill'
+  source?: 'schedule-import' | 'mailing-list-backfill' | 'speaker-invitation'
   sourceRef?: string
+  /** The person who added this record (e.g. the speaker-invite inviter). */
+  createdByPersonId?: string
+  /**
+   * The email is a shared household address someone else already signs in
+   * with (#267): mark this person's EMAIL# row `loginExcluded`, so sign-in
+   * still defaults to the existing holder and asks "Are you A or B?".
+   */
+  emailLoginExcluded?: boolean
+  /** Recorded facts (§9b), set by whoever vouches (`*SetByPersonId`). Never inferred. */
+  gender?: 'male' | 'female'
+  genderSetByPersonId?: string
+  baptized?: boolean
+  baptismDate?: string
+  baptizedSetByPersonId?: string
 }
 
 // OAuth profile from Google
@@ -385,6 +400,18 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       userId: input.userId,
       source: input.source,
       sourceRef: input.sourceRef,
+      ...(input.createdByPersonId ? { createdByPersonId: input.createdByPersonId } : {}),
+      ...(input.gender
+        ? { gender: input.gender, genderSetAt: now, ...(input.genderSetByPersonId ? { genderSetByPersonId: input.genderSetByPersonId } : {}) }
+        : {}),
+      ...(typeof input.baptized === 'boolean'
+        ? {
+            baptized: input.baptized,
+            baptizedSetAt: now,
+            ...(input.baptismDate ? { baptismDate: input.baptismDate } : {}),
+            ...(input.baptizedSetByPersonId ? { baptizedSetByPersonId: input.baptizedSetByPersonId } : {}),
+          }
+        : {}),
       createdAt: now,
       lastUpdated: now,
       version: 0,
@@ -402,10 +429,115 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
         verified: true,
         sesSubscribed: false,
         sesStatus: 'active',
+        ...(input.emailLoginExcluded ? { loginExcluded: true } : {}),
       })
     }
 
     return record
+  }
+
+  /**
+   * "Confirm: baptized brother" (§9b): sets ONLY the facts that are unset
+   * (gender → 'male', baptized → true), never overwrites, and records who and
+   * when. The write is conditioned on each fact still being unset, so a
+   * concurrent edit can't be overwritten either.
+   */
+  async confirmBaptizedBrother(
+    personId: string,
+    byPersonId: string
+  ): Promise<{ ok: true; person: PersonRecord } | { ok: false; reason: 'not_found' | 'conflict' }> {
+    const person = await this.getById(personId)
+    if (!person) return { ok: false, reason: 'not_found' }
+    const changes = confirmBrotherChanges(person)
+    if (changes === 'conflict') return { ok: false, reason: 'conflict' }
+    if (changes === 'nothing') return { ok: true, person }
+    const now = new Date().toISOString()
+    const sets: string[] = []
+    const conds: string[] = []
+    const values: Record<string, unknown> = { ':now': now, ':by': byPersonId, ':null': 'NULL' }
+    const names: Record<string, string> = {}
+    if (changes.gender) {
+      names['#g'] = 'gender'
+      sets.push('#g = :male', 'genderSetByPersonId = :by', 'genderSetAt = :now')
+      conds.push('(attribute_not_exists(#g) OR attribute_type(#g, :null))')
+      values[':male'] = 'male'
+    }
+    if (changes.baptized) {
+      names['#b'] = 'baptized'
+      sets.push('#b = :yes', 'baptizedSetByPersonId = :by', 'baptizedSetAt = :now')
+      conds.push('(attribute_not_exists(#b) OR attribute_type(#b, :null))')
+      values[':yes'] = true
+    }
+    try {
+      await docClient.send(
+        new UpdateCommand({
+          TableName: tableNames.admin,
+          Key: { pkey: `PERSON#${personId}`, skey: 'PROFILE' },
+          UpdateExpression: `SET ${sets.join(', ')}`,
+          ConditionExpression: `attribute_exists(pkey) AND ${conds.join(' AND ')}`,
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: values,
+        })
+      )
+    } catch (error: any) {
+      if (error?.name === 'ConditionalCheckFailedException') return { ok: false, reason: 'conflict' }
+      throw error
+    }
+    return {
+      ok: true,
+      person: {
+        ...person,
+        ...(changes.gender ? { gender: 'male' as const, genderSetByPersonId: byPersonId, genderSetAt: now } : {}),
+        ...(changes.baptized ? { baptized: true, baptizedSetByPersonId: byPersonId, baptizedSetAt: now } : {}),
+      },
+    }
+  }
+
+  /**
+   * Edit the recorded facts (§9b) from a profile or the admin person form.
+   * Each provided key is set, or cleared ("Not set") when null; untouched keys
+   * stay as they are. Records who and when for each fact changed.
+   */
+  async setSpeakerFacts(
+    personId: string,
+    facts: { gender?: 'male' | 'female' | null; baptized?: boolean | null; baptismDate?: string | null },
+    byPersonId: string
+  ): Promise<void> {
+    const now = new Date().toISOString()
+    const sets: string[] = []
+    const removes: string[] = []
+    const values: Record<string, unknown> = {}
+    const names: Record<string, string> = {}
+    const field = (key: 'gender' | 'baptized' | 'baptismDate', value: unknown) => {
+      names[`#${key}`] = key
+      if (value === null) removes.push(`#${key}`)
+      else {
+        sets.push(`#${key} = :${key}`)
+        values[`:${key}`] = value
+      }
+    }
+    if (facts.gender !== undefined) {
+      field('gender', facts.gender)
+      sets.push('genderSetByPersonId = :by', 'genderSetAt = :now')
+    }
+    if (facts.baptized !== undefined) field('baptized', facts.baptized)
+    if (facts.baptismDate !== undefined) field('baptismDate', facts.baptismDate)
+    if (facts.baptized !== undefined || facts.baptismDate !== undefined) {
+      sets.push('baptizedSetByPersonId = :by', 'baptizedSetAt = :now')
+    }
+    if (sets.length === 0) return
+    values[':by'] = byPersonId
+    values[':now'] = now
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableNames.admin,
+        Key: { pkey: `PERSON#${personId}`, skey: 'PROFILE' },
+        UpdateExpression: `SET ${sets.join(', ')}${removes.length ? ` REMOVE ${removes.join(', ')}` : ''}`,
+        ConditionExpression: 'attribute_exists(pkey)',
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      })
+    )
   }
 
   /**

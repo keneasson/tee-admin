@@ -21,6 +21,7 @@ import {
 } from '@my/app/utils/placeholder-email'
 import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
 import { personForSessionEmail } from '@/utils/session-person'
+import { hasSpeakerFacts, parseSpeakerFactsEdit } from '@my/app/utils/speaker-eligibility'
 
 interface MemberProfile {
   email: string
@@ -40,6 +41,10 @@ interface MemberProfile {
   isPrivate?: boolean
   isDeceased?: boolean
   canEdit?: boolean
+  /** Recorded facts (§9b), for editors only; null = not set. */
+  gender?: 'male' | 'female' | null
+  baptized?: boolean | null
+  baptismDate?: string | null
   availableContactMethods?: ContactRequestType[]
   role?: string
   managedRegions?: string[]
@@ -110,6 +115,11 @@ interface MemberProfile {
  * Sources from PersonRecords (tee-admin PERSON# items)
  * Looks up by any email via GSI1, returns full profile with privacy filtering.
  */
+/** The recorded facts (§9b) an editor sees on this form; null = not set. */
+function speakerFactsOf(p: { gender?: 'male' | 'female' | null; baptized?: boolean | null; baptismDate?: string | null }) {
+  return { gender: p.gender ?? null, baptized: p.baptized ?? null, baptismDate: p.baptismDate ?? null }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ email: string }> }
@@ -387,6 +397,7 @@ export async function GET(
       profile.firstName = targetPerson.firstName
       profile.lastName = targetPerson.lastName
       profile.canEdit = viewerCanEdit
+      Object.assign(profile, speakerFactsOf(targetPerson))
       if (!isOwnProfile) {
         profile.personId = targetPerson.personId
       }
@@ -409,6 +420,7 @@ export async function GET(
         profile.firstName = targetPerson.firstName
         profile.lastName = targetPerson.lastName
         profile.canEdit = viewerCanEdit
+        Object.assign(profile, speakerFactsOf(targetPerson))
         profile.personId = targetPerson.personId
         profile.role = targetPerson.role || ROLES.GUEST
         profile.canSetRole = true
@@ -548,15 +560,28 @@ export async function PATCH(
     if (lastName !== undefined) updates.lastName = lastName.trim()
     if (ecclesia !== undefined) updates.ecclesia = ecclesia.trim()
 
-    if (Object.keys(updates).length === 0) {
+    // Recorded facts (§9b): gender / baptized / baptismDate, null = Not set.
+    // Same permission as the other fields on this form.
+    const parsedFacts = parseSpeakerFactsEdit(body)
+    if (!parsedFacts.ok) return NextResponse.json({ error: parsedFacts.error }, { status: 400 })
+    const facts = parsedFacts.facts
+
+    if (Object.keys(updates).length === 0 && !hasSpeakerFacts(facts)) {
       return NextResponse.json(
         { error: 'No fields to update' },
         { status: 400 }
       )
     }
 
+    if (hasSpeakerFacts(facts)) {
+      const editor = await personForSessionEmail(session.user.email)
+      await personRepository.setSpeakerFacts(targetPerson.personId, facts, editor?.personId ?? session.user.email)
+    }
     // updatePerson auto-recalculates displayName, GSI2, GSI3 keys
-    const updated = await personRepository.updatePerson(targetPerson.personId, updates)
+    const updated =
+      Object.keys(updates).length > 0
+        ? await personRepository.updatePerson(targetPerson.personId, updates)
+        : ((await personRepository.getById(targetPerson.personId)) ?? targetPerson)
 
     // Invalidate the people list cache so the change is visible immediately
     invalidatePeopleCache()
@@ -568,6 +593,9 @@ export async function PATCH(
         lastName: updated.lastName,
         name: updated.displayName,
         ecclesia: updated.ecclesia,
+        gender: updated.gender ?? null,
+        baptized: updated.baptized ?? null,
+        baptismDate: updated.baptismDate ?? null,
       },
     })
   } catch (error) {

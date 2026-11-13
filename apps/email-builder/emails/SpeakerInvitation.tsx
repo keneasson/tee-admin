@@ -9,6 +9,7 @@ import {
   SpeakerEmailFooter,
   buttonLink,
   greetingFor,
+  type SpeakerTitle,
   inviteTypeVerbPhrase,
   type SpeakerInviteType,
 } from '../components/SpeakerInviteParts'
@@ -31,8 +32,10 @@ export interface SpeakerInvitationDateOption {
 
 export interface SpeakerInvitationProps {
   inviteType: SpeakerInviteType
-  /** Invitee's full name for "Dear Brother {name}". */
+  /** Invitee's full name; the greeting uses the surname with `greetingTitle`, else the first name (§9b). */
   inviteeName: string
+  /** From the invitee's recorded gender. Absent = not recorded. */
+  greetingTitle?: SpeakerTitle
   /** Ecclesia SHORT name, e.g. "Toronto East". */
   ecclesiaName: string
   /** 1–3 offered dates. Anything past 3 is not rendered. */
@@ -55,6 +58,7 @@ export function speakerInvitationSubject(type: SpeakerInviteType, ecclesiaName: 
 const SpeakerInvitation = ({
   inviteType,
   inviteeName,
+  greetingTitle,
   ecclesiaName,
   dateOptions = [],
   note,
@@ -82,7 +86,7 @@ const SpeakerInvitation = ({
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          <Text style={defaultText}>{greetingFor(inviteeName)}</Text>
+          <Text style={defaultText}>{greetingFor(inviteeName, greetingTitle)}</Text>
           <Text style={defaultText}>
             {'We would love to have you '}
             <strong>{phrase}</strong>
@@ -136,6 +140,7 @@ const SpeakerInvitation = ({
 SpeakerInvitation.PreviewProps = {
   inviteType: 'memorial',
   inviteeName: 'Sample Speaker',
+  greetingTitle: 'Brother',
   ecclesiaName: 'Example Ecclesia',
   dateOptions: [
     { label: 'Sunday, March 1, 2026 at 11:00am', url: 'https://tee-admin.com/invite/example?date=2026-03-01' },

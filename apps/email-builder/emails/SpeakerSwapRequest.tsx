@@ -8,6 +8,7 @@ import {
   SpeakerEmailFooter,
   buttonLink,
   greetingFor,
+  type SpeakerTitle,
   inviteTypeNoun,
   primaryButtonLink,
   type SpeakerInviteType,
@@ -26,6 +27,8 @@ export interface SpeakerSwapRequestProps {
   inviteType: SpeakerInviteType
   /** The speaker receiving this request. */
   recipientName: string
+  /** From the recipient's recorded gender (§9b). Absent = not recorded. */
+  greetingTitle?: SpeakerTitle
   /** The speaker asking, already redacted for the recipient's tier. */
   requesterName: string
   ecclesiaName: string
@@ -51,6 +54,7 @@ export function speakerSwapRequestSubject(requesterName: string, inviteType: Spe
 const SpeakerSwapRequest = ({
   inviteType,
   recipientName,
+  greetingTitle,
   requesterName,
   ecclesiaName,
   requesterDateDisplay,
@@ -78,7 +82,7 @@ const SpeakerSwapRequest = ({
         </Section>
 
         <Container style={{ ...container, marginTop: '24px' }} className="container">
-          <Text style={defaultText}>{greetingFor(recipientName)}</Text>
+          <Text style={defaultText}>{greetingFor(recipientName, greetingTitle)}</Text>
           <Text style={defaultText}>
             <strong>{requesterName}</strong>
             {' asks to trade '}
@@ -126,6 +130,7 @@ const SpeakerSwapRequest = ({
 SpeakerSwapRequest.PreviewProps = {
   inviteType: 'memorial',
   recipientName: 'Sample Speaker',
+  greetingTitle: 'Brother',
   requesterName: 'Other Speaker',
   ecclesiaName: 'Example Ecclesia',
   requesterDateDisplay: 'Sunday, March 1, 2026',

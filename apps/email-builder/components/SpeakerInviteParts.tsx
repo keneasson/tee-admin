@@ -59,9 +59,19 @@ export const primaryButtonLink = {
   backgroundColor: '#003da9',
 }
 
-export function greetingFor(name?: string): string {
-  const trimmed = name?.trim() ?? ''
-  return trimmed ? `Dear Brother ${trimmed},` : 'Dear Brother,'
+/** A title the reader's record carries (§9b). Absent = not recorded. */
+export type SpeakerTitle = 'Brother' | 'Sister'
+
+/**
+ * The greeting (§9b): "Dear Brother {Surname}," / "Dear Sister {Surname},"
+ * when the reader's gender is recorded, else "Dear {first name},". Never guessed.
+ */
+export function greetingFor(name?: string, title?: SpeakerTitle): string {
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? []
+  const last = parts.length > 1 ? parts[parts.length - 1] : undefined
+  if (title && last) return `Dear ${title} ${last},`
+  if (parts[0]) return `Dear ${parts[0]},`
+  return title ? `Dear ${title},` : 'Hello,'
 }
 
 /** "Love in Jesus name", then the name on its own line. Verbatim from the heads-up. */

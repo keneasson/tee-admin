@@ -19,6 +19,7 @@ export function errorStatus(code: ServiceError['code']): number {
     case 'DATE_IN_PAST':
     case 'INVITEE_NOT_FOUND':
     case 'INVITEE_NO_EMAIL':
+    case 'NOT_INVITABLE':
     case 'SWAP_NOT_AVAILABLE':
     case 'TARGET_UNREACHABLE':
       return 400

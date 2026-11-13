@@ -19,6 +19,7 @@ import { ManagedRegionsCard } from '@my/ui/src/admin/managed-regions-card'
 import { getRegionOptions } from '@my/app/config/regions'
 import { useFeatureFlag } from '@my/app/features/feature-flags/use-feature-flag'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import { SpeakerFactsCard, type SpeakerFacts } from '@my/app/features/profile/speaker-facts-card'
 
 interface MemberProfile {
   email: string
@@ -38,6 +39,10 @@ interface MemberProfile {
   isPrivate?: boolean
   isDeceased?: boolean
   canEdit?: boolean
+  /** Recorded facts (§9b), editors only; null = not set. */
+  gender?: 'male' | 'female' | null
+  baptized?: boolean | null
+  baptismDate?: string | null
   availableContactMethods?: ContactRequestType[]
   role?: string
   managedRegions?: string[]
@@ -556,6 +561,23 @@ export default function MemberProfilePage() {
       setNewPhoneType('mobile')
       setAddingPhone(false)
       fetchProfile()
+    }
+  }
+
+  /** Brother / Sister + baptism (§9b): same permission as the other fields on this form. */
+  const saveSpeakerFacts = async (facts: SpeakerFacts): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(memberId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(facts),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return data.error || `Save failed (${res.status})`
+      await fetchProfile()
+      return null
+    } catch {
+      return 'Network error — please try again'
     }
   }
 
@@ -1089,6 +1111,17 @@ export default function MemberProfilePage() {
                     ) : null}
                     {profile.isDeceased ? (
                       <Text fontSize="$3" color="$gray10">This member has passed away.</Text>
+                    ) : null}
+                    {canEdit ? (
+                      <SpeakerFactsCard
+                        facts={{
+                          gender: profile.gender ?? null,
+                          baptized: profile.baptized ?? null,
+                          baptismDate: profile.baptismDate ?? null,
+                        }}
+                        onSave={saveSpeakerFacts}
+                        testID="person-speaker-facts"
+                      />
                     ) : null}
                   </>
                 ) : (
