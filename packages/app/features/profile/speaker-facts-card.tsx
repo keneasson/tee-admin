@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { YStack, XStack, Text, Card, Input, Button } from '@my/ui'
+import { Choice } from '../speaker-invites/choice'
 import { Pencil, Check, X } from '@tamagui/lucide-icons'
 
 /**
@@ -133,39 +134,3 @@ export function SpeakerFactsCard({ facts, onSave, testID = 'speaker-facts' }: Sp
   )
 }
 
-function Choice({
-  label,
-  value,
-  options,
-  onChange,
-  testID,
-}: {
-  label: string
-  value: string
-  options: Array<{ value: string; label: string }>
-  onChange: (v: string) => void
-  testID?: string
-}) {
-  return (
-    <YStack gap="$1">
-      <Text fontSize="$2" fontWeight="600">
-        {label}
-      </Text>
-      <XStack gap="$2" flexWrap="wrap" role="radiogroup" aria-label={label}>
-        {options.map((o) => (
-          <Button
-            key={o.value}
-            size="$2"
-            theme={value === o.value ? 'blue' : undefined}
-            role="radio"
-            aria-checked={value === o.value}
-            onPress={() => onChange(o.value)}
-            testID={testID ? `${testID}-${o.value}` : undefined}
-          >
-            {o.label}
-          </Button>
-        ))}
-      </XStack>
-    </YStack>
-  )
-}

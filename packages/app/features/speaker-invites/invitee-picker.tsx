@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { YStack, XStack, Text, Button, Input, Spinner } from '@my/ui'
+import { Choice } from './choice'
 import { Plus, User } from '@tamagui/lucide-icons'
 import { callApi } from './api'
 import { EcclesiaAutocomplete } from './ecclesia-autocomplete'
@@ -463,37 +464,3 @@ function AddInviteeForm({
 }
 
 /** A required single choice: no default, every option a button. */
-function Choice({
-  label,
-  value,
-  options,
-  onChange,
-  testID,
-}: {
-  label: string
-  value: string
-  options: Array<{ value: string; label: string }>
-  onChange: (v: string) => void
-  testID?: string
-}) {
-  return (
-    <YStack gap="$1">
-      <Text fontSize="$2">{label}</Text>
-      <XStack gap="$2" flexWrap="wrap" role="radiogroup" aria-label={label}>
-        {options.map((o) => (
-          <Button
-            key={o.value}
-            size="$3"
-            variant={value === o.value ? 'action' : 'outlined'}
-            role="radio"
-            aria-checked={value === o.value}
-            onPress={() => onChange(o.value)}
-            testID={testID ? `${testID}-${o.value}` : undefined}
-          >
-            {o.label}
-          </Button>
-        ))}
-      </XStack>
-    </YStack>
-  )
-}
