@@ -59,11 +59,27 @@ page `/admin/speaker-invites/programs`:
 | Name | Bible Class | composer picker, lists |
 | Invitation phrase | speak at our Bible Class | email header "An invitation to {phrase}"; opening "We invite you to {phrase} at {Ecclesia}."; subject |
 | About line (optional) | Our Bible Class is held over Zoom, Wednesday evenings at 7:30 p.m. | the line after the opening |
-| Who can be invited | brethren / sisters / young people / anyone | the picker filter (replaces the fixed §9b rule per program) |
+| Directory filter | **Who:** brethren / sisters / anyone. **From where:** our ecclesia / our region / anywhere | the picker's search (below); replaces the fixed §9b rule per program |
 | Linked schedule + roster field (optional) | Bible Class → Speaker | open-date scanning, booking writes, swaps (§4, §7). No link = the inviter types dates, like Lecture today |
 | Length | 90 min | calendar entries |
 | Active | on | hide a program without deleting its history |
 
+- **Directory filter (owner, 2026-11-13).** Each ecclesia decides who its
+  programs draw from. A sisters-only Sister Class: *sisters, our region*. Most
+  exhortations and lectures: *brethren, our region*. "Who" uses only recorded
+  facts (§9b: `gender`, `baptized`), never guesses. "Region" is the ecclesia's
+  existing region (`packages/app/config/regions.ts`, e.g. Canada East), so it is
+  coarser than "southern Ontario" until regions are split further.
+- **Widening as you type.** The picker first lists people inside the filter.
+  An inviter sometimes means someone further away (a brother from the UK they
+  know well). So when the typed name is specific (at least a first name plus
+  the start of a surname, e.g. "Sample Spe") and the in-filter list
+  has nothing left, just before it flips to "isn't listed, add them", it also
+  searches **every region** and shows those matches under their own heading,
+  "Outside {region}", each with their ecclesia. Picking one is a normal invite.
+  Only *where* widens; *who* never does (a Sister Class search never offers brethren,
+  and §9b's unbaptized / not-a-brother exclusions still hold for brethren programs).
+  "Add them" stays the last row, as now.
 - **Starting point.** Every ecclesia starts with the core three (Memorial, Bible
   Class, Lecture), using the wording above. It can reword them, switch them off, or add more.
 - **Sent emails don't change.** An invite stores the program's id and a copy of its
@@ -75,9 +91,9 @@ page `/admin/speaker-invites/programs`:
   The email layout, greeting, date buttons and sign-off stay the same for every program.
 
 **Questions for the owner before approval:**
-1. "Who can be invited" per program: is the list *brethren / sisters / young
-   people / anyone* right? "Young people" isn't a recorded fact today, so it
-   would need one (e.g. a birth year), or it means "anyone" with the inviter choosing.
+1. ~~Who can be invited~~ (answered 2026-11-13: the directory filter above,
+   set by each ecclesia). "Young people" isn't a recorded fact, so a youth
+   program uses *anyone* and the inviter chooses, until something like a birth year is recorded.
 2. Should the about line be written by hand, or filled in from the schedule
    ("held {online|at the hall}, {Wednesdays} at {7:30 p.m.}") and editable?
 3. Programs without a roster (CYC, Sister Class, youth): is "the inviter types
