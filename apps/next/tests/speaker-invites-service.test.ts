@@ -376,7 +376,7 @@ describe('createInvite — the invitee is always a PersonRecord', () => {
         dates: [{ date: '2026-11-15' }],
       })
 
-    it('Brother + Not sure: invited, baptized left unset, role still member', async () => {
+    it('Brother + baptism not answered: invited, baptized left unset, role still member', async () => {
       const r = await add({ gender: 'male' })
       if (!r.ok) throw new Error(r.code)
       const p = h.state.people.get(r.invite.inviteePersonId)

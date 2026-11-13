@@ -191,7 +191,7 @@ first + last name; one word fills the first name. The fields are:
        the invitee; `history.byPersonId` records the session's chosen person.
    - No match: the form continues, and the new person gets this email.
 2. First name, last name.
-3. **Brother / Sister** and **Baptized? Yes / No / Not sure** (+ optional baptism date), per §9b.
+3. **Brother / Sister** and **Baptized? Yes / No (optional)** (+ optional baptism date), per §9b.
 4. **Home ecclesia: autocomplete** over the ecclesia list. If exactly one
    ecclesia matches ("Mississ" → Mississauga West), it is filled in and can be
    accepted with one tap or Enter. Several matches ("Toronto") are listed to
@@ -243,9 +243,9 @@ pass it, in two groups:
 The server also refuses (`NOT_INVITABLE`) an invite to anyone the predicate rejects.
 
 **"Add them" form.** Brother / Sister is required (no default). Baptized?
-Yes / No / Not sure, plus an optional baptism date.
+Yes / No, optional (left blank = unrecorded), plus an optional baptism date.
 - Brother + Yes → invited; recorded `gender: 'male'`, `baptized: true`.
-- Brother + Not sure → invited; `baptized` stays unset (they appear in the second group later).
+- Brother + baptism left blank → invited; `baptized` stays unset (they appear in the second group later).
 - Brother + No → explained (only baptized brethren are invited to speak); not sent.
 - Sister → explained (this list is for inviting brethren); not sent.
 

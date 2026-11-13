@@ -41,7 +41,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type EmailMatch = { personId: string; displayName: string; ecclesia: string; invitable: boolean }
 type Gender = 'male' | 'female' | ''
-type Baptized = 'yes' | 'no' | 'unsure' | ''
+type Baptized = 'yes' | 'no' | ''
 
 export function InviteePicker({ onChange }: InviteePickerProps) {
   const [mode, setMode] = useState<'search' | 'picked' | 'add'>('search')
@@ -329,7 +329,6 @@ function AddInviteeForm({
       if (!ecclesia) return 'Choose their home ecclesia.'
       if (!gender) return 'Choose Brother or Sister.'
       if (gender === 'female') return 'Invitations to speak are for brethren, so this can’t be sent.'
-      if (!baptized) return 'Answer whether he is baptized.'
       if (baptized === 'no') return 'Only baptized brethren can be invited to speak, so this can’t be sent.'
       if (baptismDate.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(baptismDate.trim())) return 'The baptism date must be YYYY-MM-DD.'
       return null
@@ -441,22 +440,22 @@ function AddInviteeForm({
       {gender === 'male' ? (
         <YStack gap="$2">
           <Choice
-            label="Baptized?"
+            label="Baptized? (optional)"
             value={baptized}
             options={[
               { value: 'yes', label: 'Yes' },
               { value: 'no', label: 'No' },
-              { value: 'unsure', label: 'Not sure' },
             ]}
-            onChange={(v) => setBaptized(v as Baptized)}
+            // Optional: tapping the chosen answer again clears it (left unrecorded).
+            onChange={(v) => setBaptized(v === baptized ? '' : (v as Baptized))}
             testID="invitee-baptized"
           />
           {baptized === 'no' ? (
             <Notice tone="info">Only baptized brethren can be invited to speak, so the invitation won’t be sent.</Notice>
           ) : null}
-          {baptized === 'unsure' ? (
+          {baptized === '' ? (
             <Text fontSize="$2" color="$colorSecondary">
-              You can still send it. Baptism stays unrecorded until someone confirms it.
+              Left blank, baptism stays unrecorded until someone confirms it. You can still send it.
             </Text>
           ) : null}
           {baptized === 'yes' ? (

@@ -1,6 +1,6 @@
 import { YStack, XStack, Text, Button } from '@my/ui'
 
-/** A labelled single-choice row of buttons (Brother / Sister, Yes / No / Not sure). */
+/** A labelled single-choice row of buttons (Brother / Sister, Yes / No). */
 export function Choice({
   label,
   value,

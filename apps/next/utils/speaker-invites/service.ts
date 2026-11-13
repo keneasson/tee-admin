@@ -370,7 +370,7 @@ export interface NewInviteeInput {
   sharedEmailConfirmedNotSamePerson?: boolean
   /** §9b: required, and must be 'male' (invitations to speak are for brethren). */
   gender?: 'male' | 'female'
-  /** §9b: true = Yes, false = No (refused), absent/null = Not sure (left unset). */
+  /** §9b: true = Yes, false = No (refused), absent/null = not answered (left unset). */
   baptized?: boolean | null
   /** YYYY-MM-DD, optional. */
   baptismDate?: string
