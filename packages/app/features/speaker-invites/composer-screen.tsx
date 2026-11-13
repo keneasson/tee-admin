@@ -304,7 +304,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
       {result ? <Notice tone={result.tone}>{result.text}</Notice> : null}
       {problems.length > 0 ? (
-        <Text fontSize="$2" color="$colorSecondary">
+        <Text fontSize="$2" color="$red10" testID="composer-problems">
           {problems.join(' ')}
         </Text>
       ) : null}

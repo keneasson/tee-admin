@@ -316,11 +316,13 @@ function AddInviteeForm({
   const emailKey = email.trim().toLowerCase()
   const checked = !!emailKey && emailKey === checkedEmail
   const pendingMatch = checked && match && !(sharedWith && sharedWith.personId === match.personId) ? match : null
+  // Names filled in but no usable email yet: point at the email field.
+  const emailMissing = !!firstName.trim() && !!lastName.trim() && !EMAIL_RE.test(emailKey)
 
   // Report the current state up.
   useEffect(() => {
     const problem = (() => {
-      if (!EMAIL_RE.test(emailKey)) return 'Enter their email.'
+      if (!EMAIL_RE.test(emailKey)) return 'Enter their email address.'
       if (!checked) return 'Checking the email…'
       if (pendingMatch) return 'Answer whether this email belongs to them.'
       if (!firstName.trim() || !lastName.trim()) return 'Enter their first and last name.'
@@ -371,8 +373,14 @@ function AddInviteeForm({
           placeholder="Email"
           autoCapitalize="none"
           keyboardType="email-address"
+          borderColor={emailMissing ? '$red8' : undefined}
           testID="invitee-email"
         />
+        {emailMissing ? (
+          <Text fontSize="$2" color="$red10" testID="invitee-email-missing">
+            {emailKey ? 'That doesn’t look like an email address.' : 'Enter their email address.'}
+          </Text>
+        ) : null}
         {lookupError ? <Notice tone="error">{lookupError}</Notice> : null}
         {pendingMatch ? (
           <YStack gap="$2" testID="invitee-email-match">
