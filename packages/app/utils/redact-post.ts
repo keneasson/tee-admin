@@ -195,7 +195,7 @@ function redactRegistration(
   const { contactEmail: _e, contactPhone: _p, contactPerson, ...rest } = block
   const out: RegistrationBlock = rest
   // name-class — the contact's FIRST NAME is the floor and always survives
-  // ("Contact Jessica"); surname + directory linkage do not.
+  // ("Contact Ann"); surname + directory linkage do not.
   if (contactPerson?.firstName) {
     out.contactPerson = { firstName: contactPerson.firstName }
     if (contactPerson.lastName) noteWithheld(withheld, 'name')

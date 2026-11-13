@@ -25,7 +25,7 @@ describe('redactBlock — PiiClass name (PersonBlock)', () => {
     kind: 'person',
     role: 'candidate',
     people: [
-      { id: 'ppl-1', firstName: 'Joshua', lastName: 'Archibald', ecclesia: 'Toronto East', title: 'Brother' },
+      { id: 'ppl-1', firstName: 'Joshua', lastName: 'Fixture', ecclesia: 'Toronto East', title: 'Brother' },
     ],
   }
 
@@ -42,12 +42,12 @@ describe('redactBlock — PiiClass name (PersonBlock)', () => {
 
   it('authenticated member → full name', () => {
     const r = redactBlock(block, member) as PersonBlock
-    expect(r.people[0].lastName).toBe('Archibald')
+    expect(r.people[0].lastName).toBe('Fixture')
   })
 
   it('newsletter-email channel → full name even for a recognized viewer', () => {
     const r = redactBlock(block, recognized, 'newsletter-email') as PersonBlock
-    expect(r.people[0].lastName).toBe('Archibald')
+    expect(r.people[0].lastName).toBe('Fixture')
   })
 })
 
@@ -57,7 +57,7 @@ describe('redactBlock — PiiClass bio', () => {
     id: 'p2',
     kind: 'person',
     role: 'deceased',
-    people: [{ id: 'ppl-2', firstName: 'Tom', lastName: 'Perks', bio: 'A long obituary', age: 84 }],
+    people: [{ id: 'ppl-2', firstName: 'Tom', lastName: 'Placeholder', bio: 'A long obituary', age: 84 }],
   }
 
   it('anon → bio omitted (name floored)', () => {
@@ -291,7 +291,7 @@ describe('redactPost — withheld reporting', () => {
     const reg: RegistrationBlock = {
       id: 'r',
       kind: 'registration',
-      contactEmail: 'jessica@example.com',
+      contactEmail: 'ann@example.com',
     } as RegistrationBlock
     const r = redactPost({ ...base, blocks: [reg] }, anon)!
     expect((r.blocks[0] as RegistrationBlock).contactEmail).toBeUndefined()
@@ -331,13 +331,13 @@ describe('registration contact — first-name floor + sign-in', () => {
   const reg = {
     id: 'r',
     kind: 'registration',
-    contactPerson: { firstName: 'Jessica', lastName: 'Easson', personId: 'p-j' },
-    contactEmail: 'jessica@example.com',
+    contactPerson: { firstName: 'Ann', lastName: 'Example', personId: 'p-j' },
+    contactEmail: 'ann@example.com',
   } as RegistrationBlock
 
-  it('anon keeps "Jessica" and is told the contact is withheld', () => {
+  it('anon keeps "Ann" and is told the contact is withheld', () => {
     const r = redactBlock(reg, anon) as RegistrationBlock
-    expect(r.contactPerson).toEqual({ firstName: 'Jessica' })
+    expect(r.contactPerson).toEqual({ firstName: 'Ann' })
     expect(r.contactEmail).toBeUndefined()
     expect(r.contactWithheld).toBe(true)
   })
@@ -346,7 +346,7 @@ describe('registration contact — first-name floor + sign-in', () => {
     for (const v of [recognized, member]) {
       const r = redactBlock(reg, v) as RegistrationBlock
       expect(r.contactPerson).toEqual(reg.contactPerson)
-      expect(r.contactEmail).toBe('jessica@example.com')
+      expect(r.contactEmail).toBe('ann@example.com')
       expect(r.contactWithheld).toBeUndefined()
     }
   })
@@ -356,10 +356,10 @@ describe('registration contact — first-name floor + sign-in', () => {
       id: 'pb',
       kind: 'person',
       role: 'contact',
-      people: [{ id: 'x', firstName: 'Jessica', lastName: 'Easson', contact: '416-555-1212' }],
+      people: [{ id: 'x', firstName: 'Ann', lastName: 'Example', contact: '416-555-1212' }],
     } as PersonBlock
     const r = redactBlock(person, anon) as PersonBlock
-    expect(r.people[0]).toMatchObject({ firstName: 'Jessica', contactWithheld: true })
+    expect(r.people[0]).toMatchObject({ firstName: 'Ann', contactWithheld: true })
     expect(r.people[0].contact).toBeUndefined()
     expect((redactBlock(person, member) as PersonBlock).people[0].contactWithheld).toBeUndefined()
   })

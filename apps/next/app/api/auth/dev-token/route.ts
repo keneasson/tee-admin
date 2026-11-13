@@ -10,7 +10,7 @@ const DEV_KEY = process.env.DEV_AUTH_SERVER_KEY
  * Usage:
  *   curl -X POST http://localhost:4000/api/auth/dev-token \
  *     -H "Content-Type: application/json" \
- *     -d '{"key":"<DEV_AUTH_SERVER_KEY>","email":"ken.easson@gmail.com"}'
+ *     -d '{"key":"<DEV_AUTH_SERVER_KEY>","email":"owner@example.org"}'
  *
  * Then use the token:
  *   curl -H "Authorization: Bearer <access_token>" http://localhost:4000/api/people

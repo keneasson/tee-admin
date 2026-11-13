@@ -1,8 +1,8 @@
 /**
  * Deterministic schedule-name → member resolver (keystone — see
  * project_name_member_resolver). Schedule data arrives from Google Sheets as
- * FREE-TEXT names ("Brad Stephens", the odd typo "kent easson", honorifics like
- * "Bro. Alan Markwith"). This maps such a name to a directory PersonRecord, or
+ * FREE-TEXT names ("Brad Tester", the odd typo "kent example", honorifics like
+ * "Bro. Alan Mockup"). This maps such a name to a directory PersonRecord, or
  * flags it so an admin can fix it:
  *
  *   matched   — exactly one confident match
@@ -32,7 +32,7 @@ export type NameMatch =
   | { status: 'not-found'; input: NormalizedName }
 
 export interface NormalizedName {
-  /** The full normalized name, e.g. "ken easson". */
+  /** The full normalized name, e.g. "ken example". */
   full: string
   first: string
   last: string

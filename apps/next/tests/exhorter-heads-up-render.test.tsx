@@ -13,7 +13,7 @@ import ExhorterHeadsUp, {
  */
 
 const baseProps: ExhorterHeadsUpProps = {
-  exhorterName: 'Brad Stephens',
+  exhorterName: 'Brad Tester',
   hostEcclesiaName: 'Toronto East',
   address: '975 Cosburn Ave., East York, ON M4C 2W8, Canada',
   dateDisplay: 'Sunday, February 1, 2026',
@@ -27,7 +27,7 @@ const baseProps: ExhorterHeadsUpProps = {
       dialInNumber: '+1 647 374 4685',
     },
   ],
-  signatoryName: 'Ken Easson',
+  signatoryName: 'Ken Example',
   emailPreferencesUrl: 'https://tee-admin.com/email-preferences?token=abc',
   identity: {
     name: 'Toronto East Christadelphians',
@@ -45,7 +45,7 @@ describe('ExhorterHeadsUp template render', () => {
   it('renders formal greeting, short host name, date, time, address, zoom', async () => {
     // A VISITING brother gets the full picture, address included.
     const html = await renderHtml({ ...baseProps, visiting: true })
-    expect(html).toContain('Dear Brother Brad Stephens,')
+    expect(html).toContain('Dear Brother Brad Tester,')
     expect(html).toContain('Toronto East')
     expect(html).not.toContain('Christadelphians on') // short name in the body sentence
     expect(html).toContain('Sunday, February 1, 2026')
@@ -79,7 +79,7 @@ describe('ExhorterHeadsUp template render', () => {
     const html = await renderHtml(baseProps)
     expect(html).toContain('Looking forward to seeing you again.')
     expect(html).toContain('Love in Jesus name')
-    expect(html).toContain('Ken Easson')
+    expect(html).toContain('Ken Example')
     // It is a note from a brother, not a memo from an office.
     expect(html).not.toContain('With love in the LORD')
     expect(html).not.toContain('Ecclesial Recorder')
@@ -223,10 +223,10 @@ describe('the footer reads properly', () => {
   })
 
   it('gives the signature room before the dark footer band', async () => {
-    // "Love in Jesus name / Ken Easson" ended flush against the footer. A
+    // "Love in Jesus name / Ken Example" ended flush against the footer. A
     // signed-off letter needs a beat before the small print.
     const html = await renderHtml(baseProps)
-    const sig = html.lastIndexOf('Ken Easson')
+    const sig = html.lastIndexOf('Ken Example')
     const footer = html.indexOf('background:#011759', sig)
     expect(footer).toBeGreaterThan(-1)
     expect(html.slice(sig, footer)).toContain('height:24px')

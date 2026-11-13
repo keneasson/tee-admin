@@ -6,7 +6,7 @@
  * key like `pending-1789001511101-dntj1@family.local`. That is plumbing: it
  * exists so a person can have an identity at all.
  *
- * It must NEVER be shown. Somebody looking at Brian Rose's profile and reading
+ * It must NEVER be shown. Somebody looking at a member's profile and reading
  * "pending-1789001511101-dntj1@family.local" would reasonably conclude the
  * record is broken, or try to email it. Nothing is ever delivered there —
  * `family.local` is not a routable domain.

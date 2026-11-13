@@ -23,17 +23,17 @@ describe('Credentials Authentication', () => {
       mockScan.mockResolvedValueOnce({
         Items: [{
           id: 'existing-user-id',
-          email: 'ken.easson@gmail.com',
+          email: 'owner@example.org',
           provider: 'google',
           role: 'owner'
         }]
       })
 
       await expect(createCredentialsUser({
-        email: 'ken.easson@gmail.com',
+        email: 'owner@example.org',
         password: 'password123',
         firstName: 'Ken',
-        lastName: 'Easson',
+        lastName: 'Example',
         ecclesia: 'TEE'
       })).rejects.toThrow('User with this email already exists. Please sign in with your existing account or use a different email.')
     })

@@ -280,7 +280,7 @@ function eventToPost(event: Event): Post {
   }
 
   // Engagement free-text names → members-only text block (can't structure a
-  // free-form "Brother Gord Easson" string safely).
+  // free-form "Brother Ben Example" string safely).
   const engagementText = joinBio(
     event.engagementProposed && event.engagementTo
       ? `${event.engagementProposed} & ${event.engagementTo}`

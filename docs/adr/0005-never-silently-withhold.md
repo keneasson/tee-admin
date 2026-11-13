@@ -4,8 +4,8 @@
 - **Date:** 2026-09-28
 
 ## Context
-On the weekend of 2026-09-26 a general event ("Shelburne Reception for Gord and
-Jessica") asked newsletter readers to register by emailing Jessica. Readers who
+On the weekend of 2026-09-26 a general event ("Shelburne Reception for Ben and
+Ann") asked newsletter readers to register by emailing Ann. Readers who
 clicked through saw "send an email", but the email line itself was gone, with
 nothing telling them that signing in would bring it back. Three things combined:
 
@@ -15,7 +15,7 @@ nothing telling them that signing in would bring it back. Three things combined:
    reader was treated like a stranger.
 3. **The first-name floor was not applied to the contact.** The rule since
    2026-07-10 is that an unidentified reader still gets the safe part: the
-   first name. Applied here, it would have read "Please email Jessica", which is
+   first name. Applied here, it would have read "Please email Ann", which is
    imperfect but usable. Instead the redactor deleted `registration.contactEmail`
    outright (a bare string, with no name to fall back to), and the view
    rendered `contactEmail ? … : null`, so the line vanished without a word.
@@ -95,7 +95,7 @@ area") MUST:
   pick the right action. Until then every withheld field means "sign in".
 - **Strict enforcement belongs in the new editor's smart fields.** A contact is
   a person (first name + gated email/phone), so the field always has two
-  renderings: full, or "Please email Jessica — Sign in to view contact
+  renderings: full, or "Please email Ann — Sign in to view contact
   details". Legacy events store a bare email and can only show the generic
   prompt; the banner and inline prompt in this change are the stopgap there.
 - Follow-ups not covered by this change: news items and schedules (first-name

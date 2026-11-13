@@ -44,18 +44,18 @@ const req = (body: any) => ({ json: async () => body }) as any
 // (requireAssurance('authenticated') + isRecentlyAuthenticated), so the caller
 // must have a recent `authTime`. This is the normal post-step-up state.
 const ME = {
-  user: { email: 'gord@yahoo.com', assuranceLevel: 'authenticated', authTime: Date.now() },
+  user: { email: 'member4@yahoo.com', assuranceLevel: 'authenticated', authTime: Date.now() },
 }
-const GORD = { personId: 'gord-1', primaryEmail: 'gord@yahoo.com' }
+const BEN = { personId: 'ben-1', primaryEmail: 'member4@yahoo.com' }
 
 beforeEach(() => {
   vi.clearAllMocks()
   h.auth.mockResolvedValue(ME)
   h.u_getEmails.mockResolvedValue({ items: [] })
-  h.p_getByEmail.mockResolvedValue(GORD)
+  h.p_getByEmail.mockResolvedValue(BEN)
   h.p_getAllPersonsByEmail.mockResolvedValue([]) // address free
   h.p_getEmails.mockResolvedValue([])
-  h.p_addEmail.mockResolvedValue({ emailId: 'new-email-id', email: 'gord@gmail.com', emailType: 'secondary' })
+  h.p_addEmail.mockResolvedValue({ emailId: 'new-email-id', email: 'member4@gmail.com', emailType: 'secondary' })
   h.t_getByPersonAndType.mockResolvedValue([])
 })
 
@@ -68,7 +68,7 @@ describe('POST /api/user/emails', () => {
 
   it('403 stepUpRequired when the session is not freshly authenticated', async () => {
     // A recognized-tier or stale session (no fresh authTime) must step up first.
-    h.auth.mockResolvedValue({ user: { email: 'gord@yahoo.com', assuranceLevel: 'recognized' } })
+    h.auth.mockResolvedValue({ user: { email: 'member4@yahoo.com', assuranceLevel: 'recognized' } })
     const res = await POST(req({ email: 'x@y.com' }))
     expect(res.status).toBe(403)
     const body = await res.json()
@@ -82,15 +82,15 @@ describe('POST /api/user/emails', () => {
   })
 
   it('writes the address to the PersonRecord ONLY, as a SECONDARY email', async () => {
-    const res = await POST(req({ email: 'Gord@Gmail.com' }))
+    const res = await POST(req({ email: 'Member4@Gmail.com' }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.emailId).toBe('new-email-id')
     // PersonRecord EMAIL# item written, lowercased, as secondary
     expect(h.p_addEmail).toHaveBeenCalledTimes(1)
     const [pid, rec] = h.p_addEmail.mock.calls[0]
-    expect(pid).toBe('gord-1')
-    expect(rec.email).toBe('gord@gmail.com')
+    expect(pid).toBe('ben-1')
+    expect(rec.email).toBe('member4@gmail.com')
     expect(rec.emailType).toBe('secondary')
     expect(rec.verified).toBe(false)
   })
@@ -103,8 +103,8 @@ describe('POST /api/user/emails', () => {
   })
 
   it('409 when this person already has the address (duplicate)', async () => {
-    h.p_getEmails.mockResolvedValue([{ emailId: 'x', email: 'gord@gmail.com', emailType: 'secondary' }])
-    const res = await POST(req({ email: 'gord@gmail.com' }))
+    h.p_getEmails.mockResolvedValue([{ emailId: 'x', email: 'member4@gmail.com', emailType: 'secondary' }])
+    const res = await POST(req({ email: 'member4@gmail.com' }))
     expect(res.status).toBe(409)
     expect(h.p_addEmail).not.toHaveBeenCalled()
   })

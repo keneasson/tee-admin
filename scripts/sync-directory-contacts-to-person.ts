@@ -175,7 +175,7 @@ function normalizePhone(raw: string): string | null {
 
 /**
  * Parse phone field — may contain multiple numbers separated by delimiters,
- * newlines, or name prefixes like "Ken (C) 647-393-3153\nNipun (C) 647-567-6416".
+ * newlines, or name prefixes like "Ann (C) 416-555-0101\nBen (C) 416-555-0102".
  * Also handles annotations like "(C)", "Cell:", "Shop:", "(address updated ...)".
  */
 function parsePhones(raw: string): string[] {
@@ -192,7 +192,7 @@ function parsePhones(raw: string): string[] {
     let trimmed = part.trim()
     if (!trimmed) continue
 
-    // Handle "Name (C) 416-587-6763 Name (C) 416-587-1950" on a single line
+    // Handle "Name (C) 416-555-0103 Name (C) 416-555-0104" on a single line
     // Split on pattern: word(s) + (C) + number, then recurse
     const multiNameMatch = trimmed.match(/^[A-Za-z]+\s*\(C\)\s*[\d\-()+ ]+\s+[A-Za-z]+\s*\(C\)\s*[\d\-()+ ]+$/i)
     if (multiNameMatch) {
@@ -218,10 +218,10 @@ function parsePhones(raw: string): string[] {
       continue
     }
 
-    // Strip name prefixes: "Ken (C) 647-393-3153" → "647-393-3153"
-    // Also handles "Cell: 705-931-2705", "Shop: 705-738-6178", "(C) 416-854-5521"
+    // Strip name prefixes: "Ann (C) 416-555-0101" → "416-555-0101"
+    // Also handles "Cell: 705-555-0105", "Shop: 705-555-0106", "(C) 416-555-0107"
     trimmed = trimmed
-      .replace(/^[A-Za-z]+\s*\(C\)\s*/i, '')   // "Ken (C) " prefix
+      .replace(/^[A-Za-z]+\s*\(C\)\s*/i, '')   // "Ann (C) " prefix
       .replace(/^[A-Za-z]+\s+(?=\d)/i, '')      // "Steve " before digits
       .replace(/^\(C\)\s*/i, '')                  // "(C) " prefix
       .replace(/^Cell:\s*/i, '')                  // "Cell: " prefix

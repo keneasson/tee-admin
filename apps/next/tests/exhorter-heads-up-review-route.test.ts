@@ -59,7 +59,7 @@ const PENDING = {
   personId: 'p-brad',
   token: TOKEN,
   recipientEmail: 'brad@example.com',
-  recipientName: 'Brad Stephens',
+  recipientName: 'Brad Tester',
   previewedBy: 'rb@tee-admin.com',
   contentDigest: 'abc123def456abc123def456abc12345',
   expiresAt: new Date(Date.now() + 86400000).toISOString(),

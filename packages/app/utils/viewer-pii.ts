@@ -213,7 +213,7 @@ export function shapeLocation(
 const NAME_TITLE_RE = /^(bro\.?|brother|sis\.?|sister|bre\.?|mr\.?|mrs\.?|ms\.?|dr\.?)\s+/i
 
 /**
- * Reduce a free-text FULL NAME string ("Bro. John Smith", "Brad Stephens") to its
+ * Reduce a free-text FULL NAME string ("Bro. John Smith", "Brad Tester") to its
  * FIRST NAME ("John", "Brad") — the anon floor for name-string fields that aren't
  * structured `{firstName,lastName}` (e.g. schedule Presider/Speaker). Strips a
  * leading honorific, then takes the first token. First name only is sufficiently

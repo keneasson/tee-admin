@@ -23,10 +23,10 @@ test.describe('Authentication Flows', () => {
     await page.goto('/auth/register')
     
     // Try to register with Ken's email (which already exists as Google OAuth)
-    await page.fill('input[name="email"]', 'ken.easson@gmail.com')
+    await page.fill('input[name="email"]', 'owner@example.org')
     await page.fill('input[name="password"]', 'testpassword123')
     await page.fill('input[name="firstName"]', 'Ken')
-    await page.fill('input[name="lastName"]', 'Easson')
+    await page.fill('input[name="lastName"]', 'Example')
     await page.selectOption('select[name="ecclesia"]', 'TEE')
     
     await page.click('button[type="submit"]')
@@ -138,7 +138,7 @@ test.describe('Authentication Flows', () => {
 test.describe('Role Assignment Integration', () => {
   test('should assign correct roles from legacy directory', async ({ page }) => {
     // Test the debug API endpoint for role assignment
-    const response = await page.request.get('/api/debug/check-role?email=ken.easson@gmail.com')
+    const response = await page.request.get('/api/debug/check-role?email=owner@example.org')
     const data = await response.json()
     
     expect(data.success).toBe(true)
@@ -160,10 +160,10 @@ test.describe('DynamoDB Integration', () => {
   test('should prevent duplicate user creation', async ({ page }) => {
     // Test account linking prevention via API
     const registrationData = {
-      email: 'ken.easson@gmail.com',
+      email: 'owner@example.org',
       password: 'testpassword123',
       firstName: 'Ken',
-      lastName: 'Easson',
+      lastName: 'Example',
       ecclesia: 'TEE'
     }
     

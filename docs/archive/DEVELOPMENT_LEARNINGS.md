@@ -724,5 +724,5 @@ export async function GET() {
 ---
 
 *Last Updated: August 31, 2025*
-*Contributors: Claude (AI Assistant), Ken Easson*
+*Contributors: Claude (AI Assistant), the owner*
 *Review Schedule: Monthly*

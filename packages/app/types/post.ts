@@ -248,7 +248,7 @@ export interface FlyerBlock extends BlockBase {
 /**
  * Who to contact about a registration — a PERSON, not a bare address, so there
  * is always a safe fallback to show (#254, ADR-0005): an unidentified reader
- * sees "Contact Jessica — Sign in to view contact details", never nothing.
+ * sees "Contact Ann — Sign in to view contact details", never nothing.
  */
 export interface RegistrationContact {
   firstName: string // pii:'name' — ALWAYS shown (the floor)

@@ -50,7 +50,7 @@ describe('punctuation that is part of the address survives', () => {
     expect(cleanContactField('RR#1')).toBe('RR#1')
     expect(cleanContactField('1443 Elizabeth St.')).toBe('1443 Elizabeth St.')
     expect(cleanContactField('Unit 3-B')).toBe('Unit 3-B')
-    expect(cleanContactField("12 O'Connor Drive")).toBe("12 O'Connor Drive")
+    expect(cleanContactField("12 O'Example Drive")).toBe("12 O'Example Drive")
   })
 
   it('does not reorder, re-case or expand anything', () => {

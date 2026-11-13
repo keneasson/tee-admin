@@ -1,7 +1,7 @@
 # Unified Post Model — PII-Aware by Construction
 
 > **Status**: Design / proposal (no code committed). §8 decisions RESOLVED 2026-07-20 → Phase 0 unblocked.
-> **Author**: Ken Easson + Claude
+> **Author**: Owner + Claude
 > **Date**: 2026-07-16 (decisions 2026-07-20)
 > **Depends on / extends**:
 > - [`OFFICES_AUDIENCES_AND_SENDING_REDESIGN.md`](./OFFICES_AUDIENCES_AND_SENDING_REDESIGN.md) §2.1 — "News and Events are one thing (a *post*); occasion is data, not a code path."

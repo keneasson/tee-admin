@@ -251,8 +251,8 @@ function applyFilters(
       const ecclesiaMatch = member.ecclesia?.toLowerCase().includes(searchQuery)
       const emailMatch = member.email?.toLowerCase().includes(searchQuery)
 
-      // Phone: compare digits to digits. People type "905-797-3415" and the
-      // stored value may be "9057973415"; matching the raw strings would fail on
+      // Phone: compare digits to digits. People type "905-555-0108" and the
+      // stored value may be "9055550108"; matching the raw strings would fail on
       // punctuation alone. Only attempted when the query actually looks like a
       // number, so "4" does not match half the directory.
       const queryDigits = searchQuery.replace(/\D/g, '')

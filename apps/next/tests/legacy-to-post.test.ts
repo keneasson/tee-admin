@@ -27,15 +27,15 @@ describe('legacyToPost — funeral', () => {
   const funeral = {
     ...baseEvent,
     type: 'funeral',
-    title: 'Funeral of Tom Perks',
+    title: 'Funeral of Tom Placeholder',
     serviceDate: new Date('2026-03-01T15:00:00Z'),
-    deceased: { title: 'Brother', firstName: 'Tom', lastName: 'Perks', age: 84, obituary: 'obit text' },
+    deceased: { title: 'Brother', firstName: 'Tom', lastName: 'Placeholder', age: 84, obituary: 'obit text' },
     aboutDeceased: 'tribute text',
     description: 'Private family notes',
     documents: [{ id: 'd', documentType: 'upload', fileName: 'f', originalName: 'order.pdf', fileUrl: 'u', fileSize: 1, mimeType: 'application/pdf', uploadedAt: new Date(), uploadedBy: 'x' }],
     locations: {
       service: { name: 'Toronto East Hall', city: 'Toronto', province: 'ON', address: '123 Main St', postalCode: 'M1 1M1' },
-      visitation: { name: 'The Perks home', address: '5 Elm Ave', privateResidence: true },
+      visitation: { name: 'The Placeholder home', address: '5 Elm Ave', privateResidence: true },
     },
   } as unknown as Event
 
@@ -46,7 +46,7 @@ describe('legacyToPost — funeral', () => {
   it('maps deceased → PersonBlock with name + bio(obituary+about) + title + age', () => {
     const d = person(persons, 'deceased')!
     expect(d.people[0].firstName).toBe('Tom')
-    expect(d.people[0].lastName).toBe('Perks')
+    expect(d.people[0].lastName).toBe('Placeholder')
     expect(d.people[0].title).toBe('Brother')
     expect(d.people[0].age).toBe(84)
     expect(d.people[0].bio).toContain('tribute text')
@@ -85,7 +85,7 @@ describe('legacyToPost — funeral', () => {
   it('newsletter-email channel = member tier: full names, full location, bio, members blocks kept', () => {
     const r = redactPost(post, anon, { channel: 'newsletter-email' })!
     const d = r.blocks.filter((b): b is PersonBlock => b.kind === 'person').find((b) => b.role === 'deceased')!
-    expect(d.people[0].lastName).toBe('Perks')
+    expect(d.people[0].lastName).toBe('Placeholder')
     expect(d.people[0].bio).toContain('obit text')
     const locs = r.blocks.filter((b): b is LocationBlock => b.kind === 'location')
     expect(locs.map((l) => l.label).sort()).toEqual(['Service', 'Visitation'])
@@ -102,9 +102,9 @@ describe('legacyToPost — baptism', () => {
     type: 'baptism',
     title: 'Baptism',
     baptismDate: new Date('2026-09-01T18:00:00Z'),
-    candidate: { firstName: 'Joshua', lastName: 'Archibald', testimony: 'my testimony', baptismStatement: 'stmt' },
+    candidate: { firstName: 'Joshua', lastName: 'Fixture', testimony: 'my testimony', baptismStatement: 'stmt' },
     aboutCandidate: 'A private bio',
-    sponsors: [{ firstName: 'Gord', lastName: 'Easson', role: 'proposer' }],
+    sponsors: [{ firstName: 'Ben', lastName: 'Example', role: 'proposer' }],
     location: { name: 'TE Hall', city: 'Toronto', address: '123 Main St' },
   } as unknown as Event
 
@@ -125,7 +125,7 @@ describe('legacyToPost — baptism', () => {
 
   it('sponsors → PersonBlock with sub-role label', () => {
     const s = person(persons, 'sponsor')!
-    expect(s.people[0]).toMatchObject({ firstName: 'Gord', lastName: 'Easson', label: 'proposer' })
+    expect(s.people[0]).toMatchObject({ firstName: 'Ben', lastName: 'Example', label: 'proposer' })
   })
 
   it('redacted for anon: candidate first-name only, bio gone', () => {
@@ -145,8 +145,8 @@ describe('legacyToPost — engagement', () => {
     ...baseEvent,
     type: 'engagement',
     title: 'Engagement',
-    engagementProposed: 'Brother Gord Easson',
-    engagementTo: 'Sister Jessica Millar',
+    engagementProposed: 'Brother Ben Example',
+    engagementTo: 'Sister Ann Demo',
     engagementAnnouncement: 'We are pleased to announce…',
   } as unknown as Event
 
@@ -156,8 +156,8 @@ describe('legacyToPost — engagement', () => {
     const text = post.blocks.find((b): b is TextBlock => b.kind === 'text')!
     expect(text.visibility).toBe('members')
     expect(text.containsPii).toBe(true)
-    expect(text.body).toContain('Gord Easson')
-    expect(text.body).toContain('Jessica Millar')
+    expect(text.body).toContain('Ben Example')
+    expect(text.body).toContain('Ann Demo')
   })
 
   it('anon sees no engagement text at all', () => {

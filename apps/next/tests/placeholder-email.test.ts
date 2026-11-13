@@ -24,7 +24,7 @@ describe('placeholder addresses are recognised', () => {
   })
 
   it('leaves real addresses alone', () => {
-    expect(isPlaceholderEmail('bgrosewood@gmail.com')).toBe(false)
+    expect(isPlaceholderEmail('member1@gmail.com')).toBe(false)
     expect(isPlaceholderEmail('someone@family.local.example.com')).toBe(false)
   })
 
@@ -38,12 +38,12 @@ describe('placeholder addresses are recognised', () => {
 describe('placeholders never reach a display surface', () => {
   it('displayableEmail hides a placeholder', () => {
     expect(displayableEmail('pending-1-x@family.local')).toBeUndefined()
-    expect(displayableEmail('bgrosewood@gmail.com')).toBe('bgrosewood@gmail.com')
+    expect(displayableEmail('member1@gmail.com')).toBe('member1@gmail.com')
   })
 
   it('filters a list down to real addresses', () => {
     const kept = withoutPlaceholderEmails([
-      { email: 'bgrosewood@gmail.com' },
+      { email: 'member1@gmail.com' },
       { email: 'pending-1-x@family.local' },
       { email: undefined },
     ])

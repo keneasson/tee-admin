@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 
 async function testRoleAssignment() {
   try {
-    const response = await fetch('http://localhost:3001/api/debug/check-role?email=ken.easson@gmail.com');
+    const response = await fetch('http://localhost:3001/api/debug/check-role?email=owner@example.org');
     const result = await response.json();
     
     console.log('🔍 Role assignment test results:');

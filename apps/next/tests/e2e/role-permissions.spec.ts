@@ -91,7 +91,7 @@ test.describe('Database Consistency', () => {
     
     // Find Ken's records
     const kenRecords = data.users.filter((user: any) => 
-      user.email === 'ken.easson@gmail.com'
+      user.email === 'owner@example.org'
     )
     
     // Should have consistent role (owner) across all records

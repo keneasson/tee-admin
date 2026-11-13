@@ -1974,7 +1974,7 @@ export function ProgressiveEventForm({
                         control={control}
                         name="engagementProposed"
                         label="Proposed"
-                        placeholder="e.g., Brother Gord Easson"
+                        placeholder="e.g., Brother Ben Example"
                         required
                       />
                     </YStack>

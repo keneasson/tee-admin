@@ -7,9 +7,9 @@ const recognized: Viewer = { assurance: 'recognized', role: 'member', tenant: 'T
 
 describe('firstNameOf', () => {
   it('takes the first name, stripping honorifics', () => {
-    expect(firstNameOf('Brad Stephens')).toBe('Brad')
-    expect(firstNameOf('Ken Easson')).toBe('Ken')
-    expect(firstNameOf('Desmond Amos ')).toBe('Desmond')
+    expect(firstNameOf('Brad Tester')).toBe('Brad')
+    expect(firstNameOf('Ken Example')).toBe('Ken')
+    expect(firstNameOf('Derek Prototype ')).toBe('Derek')
     expect(firstNameOf('Bro. John Smith')).toBe('John')
     expect(firstNameOf('Sister Jane Doe')).toBe('Jane')
     expect(firstNameOf('Hakime')).toBe('Hakime')
@@ -24,14 +24,14 @@ describe('redactScheduleData — anon (public web)', () => {
     data: {
       memorial: [
         {
-          date: '2026-07-26', Preside: 'Brad Stephens', Exhort: 'Desmond Amos', Organist: 'Joan Curry',
-          Steward: 'Zaiden Easson', Doorkeeper: 'Ken Easson', Lunch: 'The Smith family',
-          'Reader 1': 'Peter Skariah', 'Reader 2': 'John Vance', 'Prayer - Wine': 'Gord Easson',
+          date: '2026-07-26', Preside: 'Brad Tester', Exhort: 'Derek Prototype', Organist: 'Joan Specimen',
+          Steward: 'Zane Example', Doorkeeper: 'Ken Example', Lunch: 'The Smith family',
+          'Reader 1': 'Peter Stub', 'Reader 2': 'John Dummy', 'Prayer - Wine': 'Ben Example',
           'Reading 1': 'Genesis 1', 'Reading 2': 'Matthew 5', 'Hymn-opening': '158',
         },
       ],
       bibleClass: [
-        { Presider: 'Peter Skariah', Speaker: 'Bro. John Vance', Topic: 'Daily readings',
+        { Presider: 'Peter Stub', Speaker: 'Bro. John Dummy', Topic: 'Daily readings',
           InPerson: '123 Main St, Toronto', resolvedAddress: '123 Main St', resolvedMapUrl: 'http://maps' },
       ],
     },
@@ -41,7 +41,7 @@ describe('redactScheduleData — anon (public web)', () => {
   it('reduces role-assignment names to first name', () => {
     const m = r.data.memorial[0] as any
     expect(m.Preside).toBe('Brad')
-    expect(m.Exhort).toBe('Desmond')
+    expect(m.Exhort).toBe('Derek')
     expect(m.Organist).toBe('Joan')
     expect(m.Doorkeeper).toBe('Ken')
     const b = r.data.bibleClass[0] as any
@@ -53,7 +53,7 @@ describe('redactScheduleData — anon (public web)', () => {
     const m = r.data.memorial[0] as any
     expect(m['Reader 1']).toBe('Peter')
     expect(m['Reader 2']).toBe('John')
-    expect(m['Prayer - Wine']).toBe('Gord')
+    expect(m['Prayer - Wine']).toBe('Ben')
   })
 
   it('leaves non-name fields (readings passages, hymns, topic, date) untouched', () => {
@@ -73,12 +73,12 @@ describe('redactScheduleData — anon (public web)', () => {
   })
 
   it('does not mutate the input', () => {
-    expect((memorial.data.memorial[0] as any).Preside).toBe('Brad Stephens')
+    expect((memorial.data.memorial[0] as any).Preside).toBe('Brad Tester')
   })
 })
 
 describe('redactScheduleData — reveal tiers pass through unchanged', () => {
-  const data = { data: { memorial: [{ Preside: 'Brad Stephens' }] } }
+  const data = { data: { memorial: [{ Preside: 'Brad Tester' }] } }
   it('authenticated member', () => {
     expect(redactScheduleData(data, member)).toBe(data)
   })

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
- * A system admin changed Georgina Rose's address and NOTHING indicated it had
+ * A system admin changed Grace Outline's address and NOTHING indicated it had
  * happened — because addresses and phones had no verification concept at all
  * (only emails did), so an edit silently overwrote the record.
  *
@@ -40,23 +40,23 @@ vi.mock('@my/app/provider/dynamodb/repositories/person-repository', () => ({
 }))
 
 const target = {
-  personId: 'person-georgina',
-  primaryEmail: 'bgrosewood@gmail.com',
+  personId: 'person-grace',
+  primaryEmail: 'member1@gmail.com',
   ecclesia: 'Toronto East Ecclesia',
-  firstName: 'Georgina',
+  firstName: 'Grace',
   lastName: 'Rose',
 }
 
-const ctx = () => ({ params: Promise.resolve({ email: 'bgrosewood@gmail.com' }) })
+const ctx = () => ({ params: Promise.resolve({ email: 'member1@gmail.com' }) })
 
 beforeEach(() => {
   vi.clearAllMocks()
   h.getByEmail.mockResolvedValue(target)
   h.getAddresses.mockResolvedValue([
-    { addressId: 'addr-old', isPrimary: true, verified: true, street1: '1443 Elizabeth Street' },
+    { addressId: 'addr-old', isPrimary: true, verified: true, street1: '2 Example St' },
   ])
   h.getPhones.mockResolvedValue([
-    { phoneId: 'ph-old', isPrimary: true, verified: true, number: '9057973415' },
+    { phoneId: 'ph-old', isPrimary: true, verified: true, number: '9055550108' },
   ])
   h.proposeAddress.mockResolvedValue({
     addressId: 'addr-new', type: 'home', street1: '12 New Rd', city: 'Peterborough',
@@ -91,7 +91,7 @@ describe('a contact edit is PROPOSED, not silently applied', () => {
     expect(data.record.supersedesId).toBe('addr-old')
     // The proposer is recorded, so "update pending" can say by whom.
     expect(h.proposeAddress).toHaveBeenCalledWith(
-      'person-georgina', expect.anything(), 'admin@x.z', 'addr-old'
+      'person-grace', expect.anything(), 'admin@x.z', 'addr-old'
     )
   })
 
@@ -122,10 +122,10 @@ describe('confirming a proposal — in-app, by the people who would know', () =>
 
     const res = await PATCH(patch({ type: 'address', id: 'addr-new' }), ctx())
     expect(res.status).toBe(200)
-    expect(h.verifyAddress).toHaveBeenCalledWith('person-georgina', 'addr-new', 'rb@x.z')
+    expect(h.verifyAddress).toHaveBeenCalledWith('person-grace', 'addr-new', 'rb@x.z')
     // The value is settled, so the community confirmations about it are spent.
     // Leaving them would show a stale "needs 1 more" on a confirmed address.
-    expect(h.clearContactVotes).toHaveBeenCalledWith('person-georgina', 'address', 'addr-new')
+    expect(h.clearContactVotes).toHaveBeenCalledWith('person-grace', 'address', 'addr-new')
   })
 
   it('an ordinary member cannot confirm', async () => {

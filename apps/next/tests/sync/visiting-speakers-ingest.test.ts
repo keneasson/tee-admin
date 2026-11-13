@@ -112,9 +112,9 @@ function fakePrivacy() {
 
 describe('splitSpeakerName', () => {
   it('strips honorifics, preserves casing, keeps last token as surname', () => {
-    expect(splitSpeakerName('Bro. Alan Markwith')).toEqual({
+    expect(splitSpeakerName('Bro. Alan Mockup')).toEqual({
       firstName: 'Alan',
-      lastName: 'Markwith',
+      lastName: 'Mockup',
     })
     expect(splitSpeakerName('John Michael Smith')).toEqual({
       firstName: 'John',
@@ -131,15 +131,15 @@ describe('readVisitingSpeakers', () => {
     const sheets = fakeSheets(
       ['Speaker', 'Home Ecclesia'],
       [
-        ['Alan Markwith', 'Greenaway Hamilton'],
+        ['Alan Mockup', 'Greenaway Hamilton'],
         ['  ', 'Ignored'], // blank name → dropped
-        ['Brad Stephens', 'Toronto East'],
+        ['Brad Tester', 'Toronto East'],
       ]
     )
     const out = await readVisitingSpeakers('sheet-1', sheets)
     expect(out).toEqual([
-      { name: 'Alan Markwith', ecclesia: 'Greenaway Hamilton', email: undefined, phone: undefined },
-      { name: 'Brad Stephens', ecclesia: 'Toronto East', email: undefined, phone: undefined },
+      { name: 'Alan Mockup', ecclesia: 'Greenaway Hamilton', email: undefined, phone: undefined },
+      { name: 'Brad Tester', ecclesia: 'Toronto East', email: undefined, phone: undefined },
     ])
   })
 
@@ -147,15 +147,15 @@ describe('readVisitingSpeakers', () => {
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'E-mail', 'Mobile'],
       [
-        ['Alan Markwith', 'Greenaway Hamilton', '  Alan.Markwith@Example.COM ', ' 416 555 1234 '],
-        ['Brad Stephens', 'Toronto East', '', ''], // blank contact cells → undefined
+        ['Alan Mockup', 'Greenaway Hamilton', '  Alan.Mockup@Example.COM ', ' 416 555 1234 '],
+        ['Brad Tester', 'Toronto East', '', ''], // blank contact cells → undefined
       ]
     )
     const out = await readVisitingSpeakers('sheet-1', sheets)
     expect(out[0]).toEqual({
-      name: 'Alan Markwith',
+      name: 'Alan Mockup',
       ecclesia: 'Greenaway Hamilton',
-      email: 'alan.markwith@example.com',
+      email: 'alan.mockup@example.com',
       phone: '416 555 1234',
     })
     expect(out[1].email).toBeUndefined()
@@ -163,9 +163,9 @@ describe('readVisitingSpeakers', () => {
   })
 
   it('falls back to the first column for the name when no header matches', async () => {
-    const sheets = fakeSheets(['Col A', 'Col B'], [['Alan Markwith', 'note']])
+    const sheets = fakeSheets(['Col A', 'Col B'], [['Alan Mockup', 'note']])
     const out = await readVisitingSpeakers('sheet-1', sheets)
-    expect(out[0].name).toBe('Alan Markwith')
+    expect(out[0].name).toBe('Alan Mockup')
     expect(out[0].ecclesia).toBeUndefined()
   })
 })
@@ -173,16 +173,16 @@ describe('readVisitingSpeakers', () => {
 // ---- syncVisitingSpeakers ---------------------------------------------------
 
 const ROWS = [
-  ['Brad Stephens', 'Toronto East'], // already in directory → skipped
-  ['Bro. Alan Markwith', 'Greenaway Hamilton'], // not-found → created
+  ['Brad Tester', 'Toronto East'], // already in directory → skipped
+  ['Bro. Alan Mockup', 'Greenaway Hamilton'], // not-found → created
   ['TBD', 'Somewhere'], // placeholder → skipped
-  ['Charlie Newman', ''], // not-found but no ecclesia → skipped
-  ['David Owens', 'Book Road'], // not-found → created
-  ['David Owens', 'Book Road'], // duplicate in same batch → skipped (idempotent)
+  ['Charlie Pattern', ''], // not-found but no ecclesia → skipped
+  ['David Draft', 'Book Road'], // not-found → created
+  ['David Draft', 'Book Road'], // duplicate in same batch → skipped (idempotent)
 ]
 
 function existingDirectory() {
-  return [personRecord('p1', 'Brad', 'Stephens', 'Toronto East')]
+  return [personRecord('p1', 'Brad', 'Tester', 'Toronto East')]
 }
 
 describe('syncVisitingSpeakers', () => {
@@ -199,15 +199,15 @@ describe('syncVisitingSpeakers', () => {
     // Only Alan + David created (David's duplicate resolves to the just-created
     // record and is skipped — no duplicate).
     expect(result.created.map((c) => c.name)).toEqual([
-      'Bro. Alan Markwith',
-      'David Owens',
+      'Bro. Alan Mockup',
+      'David Draft',
     ])
     expect(createInputs).toHaveLength(2)
 
     // Real writes: emailless visitor / guest with provenance, correct ecclesia.
     expect(createInputs[0]).toMatchObject({
       firstName: 'Alan',
-      lastName: 'Markwith',
+      lastName: 'Mockup',
       ecclesia: 'Greenaway Hamilton',
       memberStatus: 'visitor',
       role: 'guest',
@@ -219,10 +219,10 @@ describe('syncVisitingSpeakers', () => {
 
     // Skips carry a reason.
     const skipReasons = Object.fromEntries(result.skipped.map((s) => [s.name, s.reason]))
-    expect(skipReasons['Brad Stephens']).toMatch(/already in directory/)
+    expect(skipReasons['Brad Tester']).toMatch(/already in directory/)
     expect(skipReasons['TBD']).toMatch(/placeholder/)
-    expect(skipReasons['Charlie Newman']).toMatch(/no home ecclesia/)
-    expect(skipReasons['David Owens']).toMatch(/already in directory/)
+    expect(skipReasons['Charlie Pattern']).toMatch(/no home ecclesia/)
+    expect(skipReasons['David Draft']).toMatch(/already in directory/)
 
     // Created records carry a real personId.
     expect(result.created[0].personId).toBeTruthy()
@@ -244,8 +244,8 @@ describe('syncVisitingSpeakers', () => {
     expect(createInputs).toHaveLength(0)
     // Same set as a real run, but no personId (nothing written).
     expect(result.created.map((c) => c.name)).toEqual([
-      'Bro. Alan Markwith',
-      'David Owens',
+      'Bro. Alan Mockup',
+      'David Draft',
     ])
     expect(result.created.every((c) => c.personId === undefined)).toBe(true)
   })
@@ -255,7 +255,7 @@ describe('syncVisitingSpeakers', () => {
   it('creates a not-found visitor WITH email (normal create path), phone, and privacy', async () => {
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Bro. Alan Markwith', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
+      [['Bro. Alan Mockup', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
     )
     const { repo, createInputs, addPhoneCalls } = fakeRepo(existingDirectory())
     const { privacy, privacyCalls } = fakePrivacy()
@@ -289,7 +289,7 @@ describe('syncVisitingSpeakers', () => {
   it('creates an EMAILLESS visitor when the sheet has no email (keeps NOEMAIL# path)', async () => {
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Bro. Alan Markwith', 'Greenaway Hamilton', '', '']]
+      [['Bro. Alan Mockup', 'Greenaway Hamilton', '', '']]
     )
     const { repo, createInputs, addPhoneCalls } = fakeRepo(existingDirectory())
     const { privacy, privacyCalls } = fakePrivacy()
@@ -309,10 +309,10 @@ describe('syncVisitingSpeakers', () => {
   // ---- Change 3: backfill onto an existing auto-created visitor -------------
 
   it('backfills email + phone + privacy onto an existing schedule-import visitor', async () => {
-    const visitor = scheduleImportVisitor('v1', 'Alan', 'Markwith', 'Greenaway Hamilton')
+    const visitor = scheduleImportVisitor('v1', 'Alan', 'Mockup', 'Greenaway Hamilton')
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Bro. Alan Markwith', 'Greenaway Hamilton', 'Alan@Example.com', '4165551234']]
+      [['Bro. Alan Mockup', 'Greenaway Hamilton', 'Alan@Example.com', '4165551234']]
     )
     const { repo, createInputs, addEmailCalls, addPhoneCalls, updatePersonCalls } = fakeRepo([visitor])
     const { privacy, privacyCalls } = fakePrivacy()
@@ -349,7 +349,7 @@ describe('syncVisitingSpeakers', () => {
     // Report reflects the backfill.
     expect(result.backfilled).toHaveLength(1)
     expect(result.backfilled[0]).toEqual({
-      name: 'Bro. Alan Markwith',
+      name: 'Bro. Alan Mockup',
       ecclesia: 'Greenaway Hamilton',
       personId: 'v1',
       addedEmail: 'alan@example.com',
@@ -359,10 +359,10 @@ describe('syncVisitingSpeakers', () => {
   })
 
   it('dryRun reports a backfill WITHOUT writing', async () => {
-    const visitor = scheduleImportVisitor('v1', 'Alan', 'Markwith', 'Greenaway Hamilton')
+    const visitor = scheduleImportVisitor('v1', 'Alan', 'Mockup', 'Greenaway Hamilton')
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Bro. Alan Markwith', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
+      [['Bro. Alan Mockup', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
     )
     const { repo, addEmailCalls, addPhoneCalls, updatePersonCalls } = fakeRepo([visitor])
     const { privacy, privacyCalls } = fakePrivacy()
@@ -388,12 +388,12 @@ describe('syncVisitingSpeakers', () => {
   })
 
   it('does NOT add a phone when the visitor already has one (idempotent)', async () => {
-    const visitor = scheduleImportVisitor('v1', 'Alan', 'Markwith', 'Greenaway Hamilton', {
+    const visitor = scheduleImportVisitor('v1', 'Alan', 'Mockup', 'Greenaway Hamilton', {
       primaryEmail: 'alan@example.com', // already backfilled email
     })
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Bro. Alan Markwith', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
+      [['Bro. Alan Mockup', 'Greenaway Hamilton', 'alan@example.com', '4165551234']]
     )
     const { repo, addEmailCalls, addPhoneCalls } = fakeRepo([visitor], {
       v1: [{ phoneId: 'existing', number: '4165551234' }],
@@ -413,10 +413,10 @@ describe('syncVisitingSpeakers', () => {
 
   it('NEVER modifies a real member even when the sheet carries their email + phone', async () => {
     // Brad is a genuine member (no source, memberStatus 'member').
-    const member = personRecord('p1', 'Brad', 'Stephens', 'Toronto East')
+    const member = personRecord('p1', 'Brad', 'Tester', 'Toronto East')
     const sheets = fakeSheets(
       ['Name', 'Ecclesia', 'Email', 'Phone'],
-      [['Brad Stephens', 'Toronto East', 'brad@personal.com', '9055559999']]
+      [['Brad Tester', 'Toronto East', 'brad@personal.com', '9055559999']]
     )
     const { repo, createInputs, addEmailCalls, addPhoneCalls, updatePersonCalls } = fakeRepo([member])
     const { privacy, privacyCalls } = fakePrivacy()
@@ -432,6 +432,6 @@ describe('syncVisitingSpeakers', () => {
     expect(result.backfilled).toHaveLength(0)
 
     // Left untouched, reported as already present.
-    expect(result.skipped).toEqual([{ name: 'Brad Stephens', reason: 'already in directory' }])
+    expect(result.skipped).toEqual([{ name: 'Brad Tester', reason: 'already in directory' }])
   })
 })

@@ -60,3 +60,7 @@ thumbs.db
 # adds embedded git repositories to the index (nearly happened on #215).
 .claude/worktrees/
 tee-smtp-credentials_credentials.csv
+
+# Playwright output
+apps/next/test-results/
+apps/next/playwright-report/

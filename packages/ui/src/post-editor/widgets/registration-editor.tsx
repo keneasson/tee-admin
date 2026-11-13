@@ -13,7 +13,7 @@
  *     deadline reminders.
  *
  * Contact is a smart field (#254, ADR-0005): the first name is the safe
- * fallback an unidentified reader sees ("Contact Jessica — Sign in to view
+ * fallback an unidentified reader sees ("Contact Ann — Sign in to view
  * contact details"), so it is required whenever an email or phone is given.
  * The details panel forces itself open while that rule fails, so the field
  * blocking Publish is never hidden.
@@ -226,7 +226,7 @@ export function RegistrationEditor({ block, onChange }: RegistrationEditorProps)
                 minWidth={140}
                 value={contactPerson?.firstName ?? ''}
                 onChangeText={(t) => setContactName('firstName', t)}
-                placeholder="First name (e.g. Jessica)"
+                placeholder="First name (e.g. Ann)"
                 borderColor={contactError ? '$red8' : undefined}
                 aria-label="Contact first name"
               />

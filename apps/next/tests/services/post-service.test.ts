@@ -72,7 +72,7 @@ const legacyEvent = {
   title: 'Baptism',
   ownerEcclesia: 'Toronto East',
   createdBy: 'x',
-  candidate: { firstName: 'Josh', lastName: 'Archibald' },
+  candidate: { firstName: 'Josh', lastName: 'Fixture' },
   aboutCandidate: 'A heartfelt testimony',
   createdAt: new Date('2026-07-01T00:00:00.000Z'),
   updatedAt: new Date('2026-07-01T00:00:00.000Z'),
@@ -145,7 +145,7 @@ describe('getPostsForViewer', () => {
     expect(person(byId(posts, 'native-1')).lastName).toBe('Jones')
 
     const candidate = person(byId(posts, 'ev-1'))
-    expect(candidate.lastName).toBe('Archibald')
+    expect(candidate.lastName).toBe('Fixture')
     expect(candidate.bio).toBe('A heartfelt testimony')
 
     const news = byId(posts, 'nw-1')
