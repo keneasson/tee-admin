@@ -1,6 +1,6 @@
 import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } from '@react-email/components'
 import React from 'react'
-import { container, defaultText, globalCss, header, link, main } from '../styles'
+import { container, defaultText, globalCss, header, main } from '../styles'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { INVITE_TYPE_VERB } from '@my/app/provider/dynamodb/speaker-invite-types'
 import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
@@ -44,7 +44,7 @@ export interface SpeakerInvitationProps {
   dateOptions: SpeakerInvitationDateOption[]
   /** Optional personal note from the inviter. */
   note?: string
-  /** "View other open dates" link, when the inviter enabled it. */
+  /** "View more dates" button, when the inviter enabled it. */
   otherDatesUrl?: string
   /** Inviter's name for the sign-off, titled when known ("Brother Sample Inviter"). */
   inviterName: string
@@ -114,13 +114,12 @@ const SpeakerInvitation = ({
             </Section>
           ))}
           {otherDatesUrl ? (
-            <Text style={defaultText}>
-              {'Prefer a different date? ('}
-              <Link href={otherDatesUrl} style={link}>
+            <Section style={{ margin: '8px 0 12px 0' }}>
+              <Text style={{ ...defaultText, margin: '0 0 8px 0' }}>Prefer a different date?</Text>
+              <Link href={otherDatesUrl} style={buttonLink}>
                 {`View more dates at ${productNameFromHomeUrl(otherDatesUrl)}`}
               </Link>
-              {')'}
-            </Text>
+            </Section>
           ) : null}
         </Container>
 

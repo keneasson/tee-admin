@@ -196,7 +196,8 @@ describe('SpeakerInvitation opening lines', () => {
   it('no "each button" line; positive other-dates link; reach-out line with the phone', async () => {
     const text = (await render(React.createElement(SpeakerInvitation, base), { plainText: true })).replace(/\s+/g, ' ')
     expect(text).not.toContain('Each button opens')
-    expect(text).toContain('Prefer a different date? (View more dates at TEE-Admin')
+    expect(text).toContain('Prefer a different date? View more dates at TEE-Admin')
+    expect(text).not.toContain('(View more')
     expect(text).toContain('Feel free to reach out: reply to this email or give me a call at 555-0100.')
     expect(text).toContain('Brother Sample Inviter')
     const noPhone = (await render(React.createElement(SpeakerInvitation, { ...base, inviterPhone: undefined }), { plainText: true })).replace(/\s+/g, ' ')
