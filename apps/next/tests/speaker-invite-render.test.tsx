@@ -179,3 +179,25 @@ describe('speaker-invite-render helpers', () => {
     )
   })
 })
+
+describe('SpeakerInvitation opening lines', () => {
+  const base = SpeakerInvitation.PreviewProps
+  it.each([
+    ['memorial', 'exhort'],
+    ['bible_class', 'give a Bible class'],
+    ['lecture', 'lecture'],
+  ] as const)('%s: "We invite you to %s at …"', async (inviteType, verb) => {
+    // Plain text wraps at ~80 columns; compare with whitespace collapsed.
+    const text = (await render(React.createElement(SpeakerInvitation, { ...base, inviteType }), { plainText: true })).replace(/\s+/g, ' ')
+    expect(text).toContain(`Greetings in our Master’s name. We invite you to ${verb} at Example Ecclesia.`)
+    expect(text).toContain('Here are a few dates we have coming up:')
+  })
+
+  it('says "a date" when only one is offered', async () => {
+    const text = await render(
+      React.createElement(SpeakerInvitation, { ...base, dateOptions: base.dateOptions.slice(0, 1) }),
+      { plainText: true }
+    )
+    expect(text).toContain('Here is a date we have coming up:')
+  })
+})

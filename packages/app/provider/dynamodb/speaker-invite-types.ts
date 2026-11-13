@@ -216,6 +216,13 @@ export const INVITE_TYPE_PHRASE: Record<SpeakerInviteType, string> = {
   lecture: 'give a Lecture',
 }
 
+/** The invitation's opening line: "We invite you to {verb} at {ecclesia}." */
+export const INVITE_TYPE_VERB: Record<SpeakerInviteType, string> = {
+  memorial: 'exhort',
+  bible_class: 'give a Bible class',
+  lecture: 'lecture',
+}
+
 export const INVITE_STATUS_LABEL: Record<SpeakerInviteStatus, string> = {
   sent: 'Waiting for a reply',
   accepted: 'Accepted',

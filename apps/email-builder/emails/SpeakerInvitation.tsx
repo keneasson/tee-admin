@@ -2,6 +2,7 @@ import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } fr
 import React from 'react'
 import { container, defaultText, globalCss, header, link, main } from '../styles'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
+import { INVITE_TYPE_VERB } from '@my/app/provider/dynamodb/speaker-invite-types'
 import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import {
   PREVIEW_IDENTITY,
@@ -88,11 +89,14 @@ const SpeakerInvitation = ({
         <Container style={{ ...container, marginTop: '24px' }} className="container">
           <Text style={defaultText}>{greetingFor(inviteeName, greetingTitle)}</Text>
           <Text style={defaultText}>
-            {'We would love to have you '}
-            <strong>{phrase}</strong>
+            {'Greetings in our Master\u2019s name. We invite you to '}
+            <strong>{INVITE_TYPE_VERB[inviteType]}</strong>
             {' at '}
             <strong>{ecclesiaName}</strong>
-            {single ? '. Would this date suit you?' : '. Would one of these dates suit you?'}
+            {'.'}
+          </Text>
+          <Text style={defaultText}>
+            {single ? 'Here is a date we have coming up:' : 'Here are a few dates we have coming up:'}
           </Text>
           {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
         </Container>
