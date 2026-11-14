@@ -80,7 +80,7 @@ export async function renderSpeakerInvitation(
   const identity = await identityFor(tenant)
   return renderBoth(
     <SpeakerInvitation {...props} identity={identity} />,
-    speakerInvitationSubject(props.inviteType, props.ecclesiaName)
+    speakerInvitationSubject(props.inviteType, props.ecclesiaName, props.phrase)
   )
 }
 

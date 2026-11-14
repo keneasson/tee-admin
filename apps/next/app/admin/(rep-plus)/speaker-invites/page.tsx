@@ -14,7 +14,11 @@ function SpeakerInvitesPage() {
   if (!isHydrated) return <LoadingState label="invitations" />
   return (
     <YStack flex={1} padding="$4">
-      <SpeakerInvitesList justSent={justSent} onNew={() => router.push('/admin/speaker-invites/new')} />
+      <SpeakerInvitesList
+        justSent={justSent}
+        onNew={() => router.push('/admin/speaker-invites/new')}
+        onPrograms={() => router.push('/admin/speaker-invites/programs')}
+      />
     </YStack>
   )
 }

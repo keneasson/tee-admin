@@ -15,12 +15,8 @@ import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import type { ServiceOccurrenceOverrideRecord } from '@my/app/provider/dynamodb/service-override-types'
 import type { ScheduleRecord } from '@my/app/provider/dynamodb/types'
-import {
-  INVITE_TYPE_SLOT,
-  type Slot,
-  type SpeakerBookingRecord,
-  type SpeakerInviteType,
-} from '@my/app/provider/dynamodb/speaker-invite-types'
+import type { InviteProgramId, Slot, SpeakerBookingRecord } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteSlot, type ProgramSlot } from '@my/app/provider/dynamodb/invite-program-types'
 import { getEcclesiaByName } from '../dynamodb/locations'
 import { localHHmm } from './time'
 
@@ -107,18 +103,27 @@ export interface SlotContext {
   field: string
 }
 
+/** The slot a program id fills when the caller passed none: the core type's fixed slot. */
+function defaultSlot(type: InviteProgramId): ProgramSlot | null {
+  return inviteSlot({ type })
+}
+
 /**
- * Full slot detail for the service. `type` must be memorial or bible_class.
+ * Full slot detail for the service. `type` is the program id (it keys the
+ * bookings); `slot` is where the program books (its resolved link, §3a). When
+ * `slot` is omitted the core type's fixed slot is used (memorial → Exhort,
+ * bible_class → Speaker). A program with no slot has no schedule to scan.
  */
 export async function loadSlotDetails(
   ecclesia: string,
-  type: SpeakerInviteType,
+  type: InviteProgramId,
   from: string,
-  to: string
+  to: string,
+  slot?: ProgramSlot | null
 ): Promise<SlotContext> {
-  const mapping = INVITE_TYPE_SLOT[type]
+  const mapping = slot === undefined ? defaultSlot(type) : slot
   if (!mapping) throw new Error(`getSlots: ${type} has no schedule to scan`)
-  const scheduleType = mapping.scheduleType as ScheduleTypeKey
+  const scheduleType: ScheduleTypeKey = mapping.scheduleType
   const field = mapping.field
 
   const [rows, overrides, bookings, ecclesiaData] = await Promise.all([
@@ -225,11 +230,20 @@ export function toPublicSlot(s: SlotDetail): Slot {
 }
 
 /**
- * Spec §4: `getSlots(ecclesia, type, from, to)`. Lecture has no schedule and
- * returns [] (its dates are typed by the inviter).
+ * Spec §4: `getSlots(ecclesia, programId, from, to)`. The caller passes the
+ * program's resolved slot (`resolveProgram`); omitted = the core type's fixed
+ * slot. A program with no linked schedule (Lecture by default) returns [] —
+ * its dates are typed by the inviter.
  */
-export async function getSlots(ecclesia: string, type: SpeakerInviteType, from: string, to: string): Promise<Slot[]> {
-  if (!INVITE_TYPE_SLOT[type]) return []
-  const { slots } = await loadSlotDetails(ecclesia, type, from, to)
+export async function getSlots(
+  ecclesia: string,
+  type: InviteProgramId,
+  from: string,
+  to: string,
+  slot?: ProgramSlot | null
+): Promise<Slot[]> {
+  const mapping = slot === undefined ? defaultSlot(type) : slot
+  if (!mapping) return []
+  const { slots } = await loadSlotDetails(ecclesia, type, from, to, mapping)
   return slots.map(toPublicSlot)
 }

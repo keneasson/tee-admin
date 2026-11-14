@@ -9,26 +9,33 @@ import {
   type SpeakerWriteOp,
 } from '@my/app/provider/dynamodb/repositories/speaker-invite-repository'
 import {
-  INVITE_TYPE_SLOT,
-  SPEAKER_INVITE_TYPES,
   speakerInviteKeys,
   type CounterpartRole,
   type InviteFollowUp,
   type InviteHistoryAction,
   type InviteHistoryEntry,
+  type InviteProgramId,
   type InviteTrust,
   type OfferedDate,
   type ShortNotice,
   type SpeakerBookingRecord,
   type SpeakerInviteRecord,
   type SpeakerInviteStatus,
-  type SpeakerInviteType,
   type SpeakerSwapRecord,
   type SwapSide,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import {
+  builtInProgram,
+  inviteSlot,
+  inviteWording,
+  isEligibleFor,
+  snapshotOf,
+  type InviteProgram,
+  type InviteWho,
+  type ProgramSlot,
+} from '@my/app/provider/dynamodb/invite-program-types'
 import { createVisitorPerson } from '@my/app/provider/dynamodb/repositories/visitor-person'
-import { isInvitableSpeaker } from '@my/app/utils/speaker-eligibility'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import {
   sendCancellationEmail,
@@ -153,7 +160,7 @@ function nextInvite(
 
 function bookingRecord(
   ecclesia: string,
-  type: SpeakerInviteType,
+  type: InviteProgramId,
   date: string,
   personId: string,
   inviteId: string | undefined,
@@ -175,14 +182,15 @@ function bookingRecord(
 
 function bookingDetails(
   ecclesia: string,
-  type: SpeakerInviteType,
+  type: InviteProgramId,
   date: string,
   time: string,
   tz: string,
   personId: string,
-  inviteId?: string
+  inviteId?: string,
+  slot?: ProgramSlot | null
 ): SpeakerBookingDetails {
-  return { ecclesia, type, date, time, tz, personId, ...(inviteId ? { inviteId } : {}) }
+  return { ecclesia, type, date, time, tz, personId, ...(inviteId ? { inviteId } : {}), ...(slot !== undefined ? { slot } : {}) }
 }
 
 function acceptedDetails(invite: SpeakerInviteRecord): SpeakerBookingDetails | null {
@@ -194,8 +202,32 @@ function acceptedDetails(invite: SpeakerInviteRecord): SpeakerBookingDetails | n
     invite.acceptedTime ?? '',
     invite.acceptedTz ?? DEFAULT_TIMEZONE,
     invite.inviteePersonId,
-    invite.inviteId
+    invite.inviteId,
+    inviteSlot(invite)
   )
+}
+
+/**
+ * Where a program books, as the write helpers need it: the program id (keys
+ * the bookings) and the slot (kind + roster field) from the invite's snapshot,
+ * or the core type's fixed slot for invites sent before programs.
+ */
+interface SlotRef {
+  ecclesia: string
+  type: InviteProgramId
+  slot: ProgramSlot
+}
+
+function slotRefOf(invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type' | 'programSnapshot'>): SlotRef | null {
+  const slot = inviteSlot(invite)
+  return slot ? { ecclesia: invite.ecclesia, type: invite.type, slot } : null
+}
+
+/** A swap books where its invite did: the stored kind + field, else the core type's fixed slot. */
+function swapRefOf(swap: SpeakerSwapRecord): SlotRef {
+  const fixed = inviteSlot({ type: swap.type })
+  const scheduleType = swap.scheduleType ?? fixed?.scheduleType ?? 'memorial'
+  return { ecclesia: swap.ecclesia, type: swap.type, slot: { scheduleType, field: swap.field } }
 }
 
 /** Run an email after the write committed; on failure, log + record it. */
@@ -251,7 +283,8 @@ function inviteRange(invite: SpeakerInviteRecord): { from: string; to: string } 
  * class). Offered dates first-class; window dates when the inviter enabled them.
  */
 export async function inviteSlots(invite: SpeakerInviteRecord): Promise<{ offered: Slot[]; other: Slot[] }> {
-  if (!INVITE_TYPE_SLOT[invite.type]) {
+  const slot = inviteSlot(invite)
+  if (!slot) {
     return {
       offered: invite.offeredDates.map((d) => ({ date: d.date, time: d.time, tz: d.tz, state: 'OPEN' as const })),
       other: [],
@@ -259,7 +292,7 @@ export async function inviteSlots(invite: SpeakerInviteRecord): Promise<{ offere
   }
   const range = inviteRange(invite)
   if (!range) return { offered: [], other: [] }
-  const { slots } = await loadSlotDetails(invite.ecclesia, invite.type, range.from, range.to)
+  const { slots } = await loadSlotDetails(invite.ecclesia, invite.type, range.from, range.to, slot)
   const offeredSet = new Set(invite.offeredDates.map((d) => d.date))
   const offered = slots.filter((s) => offeredSet.has(s.date)).map(toPublicSlot)
   const w = invite.otherDatesWindow
@@ -274,14 +307,14 @@ async function remainingOpenDates(invite: SpeakerInviteRecord): Promise<Slot[]> 
   return [...offered, ...other].filter((s) => s.state === 'OPEN')
 }
 
-async function slotOn(invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>, date: string): Promise<SlotDetail | undefined> {
-  const { slots } = await loadSlotDetails(invite.ecclesia, invite.type, date, date)
+async function slotOn(ref: SlotRef, date: string): Promise<SlotDetail | undefined> {
+  const { slots } = await loadSlotDetails(ref.ecclesia, ref.type, date, date, ref.slot)
   return slots.find((s) => s.date === date)
 }
 
-/** Overlay write that names `person` on `date`. */
-function overlaySet(invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>, slot: SlotDetail, name: string, personId: string, by: string): SpeakerWriteOp {
-  const mapping = INVITE_TYPE_SLOT[invite.type]!
+/** Overlay write that names `person` on `date`, in the program's linked field. */
+function overlaySet(invite: SlotRef, slot: SlotDetail, name: string, personId: string, by: string): SpeakerWriteOp {
+  const mapping = invite.slot
   return {
     kind: 'override',
     put: serviceOverrideRepository.buildRoleFieldPut(slot.override ?? null, {
@@ -309,13 +342,13 @@ function overlaySet(invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>, slot
  * `sheetNamed` tells the caller to remind the inviter to clear the Sheet.
  */
 function overlayClear(
-  invite: Pick<SpeakerInviteRecord, 'ecclesia' | 'type'>,
+  invite: SlotRef | null,
   slot: SlotDetail | undefined,
   personId: string,
   by: string
 ): { op: SpeakerWriteOp | null; sheetNamed: boolean } {
-  const mapping = INVITE_TYPE_SLOT[invite.type]
-  if (!mapping || !slot) return { op: null, sheetNamed: false }
+  const mapping = invite?.slot
+  if (!invite || !mapping || !slot) return { op: null, sheetNamed: false }
   const overlayHasField = slot.override?.roleFields?.[mapping.field] !== undefined
   const ref = slot.override?.roleFieldRefs?.[mapping.field]
   // Without an overlay entry, the merged speaker IS the Sheet's value.
@@ -368,7 +401,7 @@ export interface NewInviteeInput {
    * shared one (#267) instead of being taken for its existing holder.
    */
   sharedEmailConfirmedNotSamePerson?: boolean
-  /** §9b: required, and must be 'male' (invitations to speak are for brethren). */
+  /** §9b: required. Brethren programs need 'male'; sisters programs 'female' (§3a "who"). */
   gender?: 'male' | 'female'
   /** §9b: true = Yes, false = No (refused), absent/null = not answered (left unset). */
   baptized?: boolean | null
@@ -378,7 +411,15 @@ export interface NewInviteeInput {
 
 export interface CreateInviteInput {
   ecclesia: string
-  type: SpeakerInviteType
+  /** The program id (§3a). */
+  type: InviteProgramId
+  /**
+   * The ecclesia's program for `type`, resolved by the route
+   * (`resolveProgram`). Omitted = the built-in core program of that id.
+   */
+  program?: InviteProgram
+  /** Where the program books (its resolved link). Omitted = the program's built-in link. */
+  slot?: ProgramSlot | null
   inviter: Actor
   invitee: { personId: string } | NewInviteeInput
   /** 1–3. memorial/bible_class: date only (time comes from the schedule). lecture: date + time (+ tz). */
@@ -399,8 +440,13 @@ const sameName = (p: Pick<PersonRecord, 'firstName' | 'lastName'>, first: string
   (p.firstName ?? '').trim().toLowerCase() === first.toLowerCase() &&
   (p.lastName ?? '').trim().toLowerCase() === last.toLowerCase()
 
-const notInvitable = () =>
-  fail('NOT_INVITABLE', 'Only brethren can be invited to speak, and this person isn’t recorded as one.')
+const NOT_INVITABLE_MESSAGE: Record<InviteWho, string> = {
+  brethren: 'Only brethren can be invited to speak, and this person isn’t recorded as one.',
+  sisters: 'This program invites sisters, and this person isn’t recorded as one.',
+  anyone: 'This person can’t be invited.',
+}
+
+const notInvitable = (who: InviteWho = 'brethren') => fail('NOT_INVITABLE', NOT_INVITABLE_MESSAGE[who])
 
 type ResolvedInvitee =
   | { ok: true; person: PersonRecord | null; name: string; email: string; followUp?: InviteFollowUp }
@@ -409,12 +455,13 @@ type ResolvedInvitee =
 async function resolveInvitee(
   invitee: CreateInviteInput['invitee'],
   create: boolean,
-  ctx: { inviteId: string; inviter: Actor }
+  ctx: { inviteId: string; inviter: Actor; who: InviteWho }
 ): Promise<ResolvedInvitee> {
+  const who = ctx.who
   if ('personId' in invitee) {
     const person = await personRepository.getById(invitee.personId)
     if (!person) return fail('INVITEE_NOT_FOUND', 'That person is not in the directory.')
-    if (!isInvitableSpeaker(person)) return notInvitable()
+    if (!isEligibleFor(who, person)) return notInvitable(who)
     if (!person.primaryEmail) return fail('INVITEE_NO_EMAIL', 'That person has no email address on file.')
     return { ok: true, person, name: personName(person), email: person.primaryEmail }
   }
@@ -427,12 +474,21 @@ async function resolveInvitee(
   const existing = await personRepository.getByEmail(email)
   const shared = !!existing && invitee.sharedEmailConfirmedNotSamePerson === true
   if (existing && !shared) {
-    if (!isInvitableSpeaker(existing)) return notInvitable()
+    if (!isEligibleFor(who, existing)) return notInvitable(who)
     return { ok: true, person: existing, name: personName(existing), email }
   }
-  // §9b: a person added here is added as a Brother, and not one recorded as unbaptized.
-  if (invitee.gender !== 'male') return fail('NOT_INVITABLE', 'Invitations to speak are for brethren. Choose Brother to continue.')
-  if (invitee.baptized === false) return notInvitable()
+  // §9b: a person added for a brethren program is added as a Brother, and not
+  // one recorded as unbaptized; for a sisters program, as a Sister (§3a "who").
+  if (who === 'brethren') {
+    if (invitee.gender !== 'male') return fail('NOT_INVITABLE', 'Invitations to speak are for brethren. Choose Brother to continue.')
+    if (invitee.baptized === false) return notInvitable()
+  } else if (who === 'sisters') {
+    if (invitee.gender !== 'female') return fail('NOT_INVITABLE', 'This program invites sisters. Choose Sister to continue.')
+    if (invitee.baptized === false) return notInvitable(who)
+  } else if (invitee.gender !== 'male' && invitee.gender !== 'female') {
+    return fail('INVALID_INPUT', 'Choose Brother or Sister.')
+  }
+  const gender: 'male' | 'female' = invitee.gender
   const baptismDate = invitee.baptismDate?.trim() || undefined
   if (baptismDate && !isISODate(baptismDate)) return fail('INVALID_INPUT', 'The baptism date must be YYYY-MM-DD.')
   if (existing && shared) {
@@ -458,7 +514,7 @@ async function resolveInvitee(
     // §9b: the inviting RB/Rep vouches they are aligned with an ecclesia, so
     // 'member' whatever the baptism answer (role and baptism are independent).
     role: 'member',
-    gender: 'male',
+    gender,
     ...(invitee.baptized === true ? { baptized: true, ...(baptismDate ? { baptismDate } : {}) } : {}),
   })
   return {
@@ -479,7 +535,9 @@ async function prepareInvite(
   input: CreateInviteInput,
   create: boolean
 ): Promise<{ ok: true; invite: SpeakerInviteRecord; inviteeName: string } | ServiceError> {
-  if (!SPEAKER_INVITE_TYPES.includes(input.type)) return fail('INVALID_INPUT', 'Unknown invitation type.')
+  const program = input.program ?? builtInProgram(input.type)
+  if (!program || program.programId !== input.type) return fail('INVALID_INPUT', 'Unknown invitation type.')
+  if (!program.active) return fail('INVALID_INPUT', 'That invitation program is switched off.')
   if (!input.ecclesia) return fail('INVALID_INPUT', 'An ecclesia is required.')
   const dates = input.dates ?? []
   if (dates.length < 1 || dates.length > 3) return fail('INVALID_INPUT', 'Offer between one and three dates.')
@@ -492,7 +550,12 @@ async function prepareInvite(
     seen.add(d.date)
   }
 
-  const mapping = INVITE_TYPE_SLOT[input.type]
+  const snapshot = snapshotOf(program)
+  if (input.slot !== undefined) {
+    if (input.slot) snapshot.slot = input.slot
+    else delete snapshot.slot
+  }
+  const mapping = snapshot.slot ?? null
   let offeredDates: OfferedDate[]
   let otherDatesWindow: { from: string; to: string } | undefined
 
@@ -505,10 +568,17 @@ async function prepareInvite(
       if (!isValidTimeZone(tz)) return fail('INVALID_INPUT', `Unknown timezone: ${tz}`)
       offeredDates.push({ date: d.date, time: d.time, tz })
     }
-    if (input.otherDatesWindow) return fail('INVALID_INPUT', 'Lectures have no other open dates to offer.')
+    if (input.otherDatesWindow) {
+      return fail(
+        'INVALID_INPUT',
+        input.type === 'lecture'
+          ? 'Lectures have no other open dates to offer.'
+          : 'This invitation has no schedule, so there are no other open dates to offer.'
+      )
+    }
   } else {
     const sorted = [...seen].sort()
-    const { slots } = await loadSlotDetails(input.ecclesia, input.type, sorted[0], sorted[sorted.length - 1])
+    const { slots } = await loadSlotDetails(input.ecclesia, input.type, sorted[0], sorted[sorted.length - 1], mapping)
     const byDate = new Map(slots.map((s) => [s.date, s]))
     const notOpen = sorted
       .map((date) => ({ date, state: byDate.get(date)?.state ?? 'NO_MEETING' }))
@@ -531,7 +601,7 @@ async function prepareInvite(
 
   // The id comes first: a person created for this invite records it (sourceRef).
   const inviteId = randomUUID()
-  const invitee = await resolveInvitee(input.invitee, create, { inviteId, inviter: input.inviter })
+  const invitee = await resolveInvitee(input.invitee, create, { inviteId, inviter: input.inviter, who: program.who })
   if (!invitee.ok) return invitee
 
   const now = nowFn().toISOString()
@@ -543,6 +613,7 @@ async function prepareInvite(
     inviteId,
     ecclesia: input.ecclesia,
     type: input.type,
+    programSnapshot: snapshot,
     status: 'sent',
     inviterPersonId: input.inviter.personId,
     inviteePersonId: invitee.person?.personId ?? '',
@@ -604,10 +675,9 @@ export type AcceptResult = { ok: true; invite: SpeakerInviteRecord; shortNotice?
 
 /** The §7.6 note for dates whose speaker just changed, if any is within 24h. */
 function shortNoticeIfDue(
-  type: SpeakerInviteType,
+  mapping: ProgramSlot | null,
   slots: Array<{ date: string; time: string; tz: string; row?: Record<string, any> }>
 ): ShortNotice[] | undefined {
-  const mapping = INVITE_TYPE_SLOT[type]
   if (!mapping || !isShortNotice(nowFn(), slots)) return undefined
   const notes = shortNoticesFor(mapping.field, slots)
   return notes.length > 0 ? notes : undefined
@@ -635,10 +705,10 @@ export async function acceptInvite(inviteId: string, date: string, actor: Actor)
   if (!isDateAllowed(invite, date)) return fail('DATE_NOT_OFFERED', 'That date is not part of this invitation.')
   if (date < todayISO()) return fail('DATE_IN_PAST', 'That date has passed.')
 
-  const mapping = INVITE_TYPE_SLOT[invite.type]
+  const ref = slotRefOf(invite)
   const entry = historyEntry('accepted', actor, { to: date })
 
-  if (!mapping) {
+  if (!ref) {
     const offered = invite.offeredDates.find((d) => d.date === date)!
     const updated = nextInvite(
       invite,
@@ -656,7 +726,7 @@ export async function acceptInvite(inviteId: string, date: string, actor: Actor)
   }
 
   // Re-check the merged slot is still OPEN, then take the booking (first wins).
-  const slot = await slotOn(invite, date)
+  const slot = await slotOn(ref, date)
   if (!slot || slot.state !== 'OPEN') return slotTaken(invite)
 
   const person = await personRepository.getById(invite.inviteePersonId)
@@ -669,7 +739,7 @@ export async function acceptInvite(inviteId: string, date: string, actor: Actor)
   try {
     await speakerInviteRepository.commit([
       { kind: 'putBooking', booking: bookingRecord(invite.ecclesia, invite.type, date, invite.inviteePersonId, inviteId), expect: 'absent' },
-      overlaySet(invite, slot, name, invite.inviteePersonId, actor.personId),
+      overlaySet(ref, slot, name, invite.inviteePersonId, actor.personId),
       { kind: 'putInvite', invite: updated, expect: { version: invite.version } },
     ])
   } catch (err) {
@@ -677,7 +747,7 @@ export async function acceptInvite(inviteId: string, date: string, actor: Actor)
     throw err
   }
 
-  const shortNotice = shortNoticeIfDue(invite.type, [slot])
+  const shortNotice = shortNoticeIfDue(ref.slot, [slot])
   await notifyAccepted(updated, actor, shortNotice)
   return { ok: true, invite: updated, ...(shortNotice ? { shortNotice } : {}) }
 }
@@ -710,10 +780,10 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
   if (!isDateAllowed(invite, newDate)) return fail('DATE_NOT_OFFERED', 'That date is not part of this invitation.')
   if (newDate < todayISO()) return fail('DATE_IN_PAST', 'That date has passed.')
 
-  const mapping = INVITE_TYPE_SLOT[invite.type]
+  const ref = slotRefOf(invite)
   const entry = historyEntry('changed', actor, { from: oldDate, to: newDate })
 
-  if (!mapping) {
+  if (!ref) {
     const offered = invite.offeredDates.find((d) => d.date === newDate)!
     const updated = nextInvite(invite, { acceptedDate: newDate, acceptedTime: offered.time, acceptedTz: offered.tz }, [entry])
     try {
@@ -727,8 +797,8 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
   }
 
   const [oldSlot, newSlot, oldBooking] = await Promise.all([
-    slotOn(invite, oldDate),
-    slotOn(invite, newDate),
+    slotOn(ref, oldDate),
+    slotOn(ref, newDate),
     speakerInviteRepository.getBooking(invite.ecclesia, invite.type, oldDate),
   ])
   if (!oldBooking || oldBooking.personId !== invite.inviteePersonId) {
@@ -741,7 +811,7 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
   const person = await personRepository.getById(invite.inviteePersonId)
   const name = personName(person) || invite.inviteeEmail
   const updated = nextInvite(invite, { acceptedDate: newDate, acceptedTime: newSlot.time, acceptedTz: newSlot.tz }, [entry])
-  const clear = overlayClear(invite, oldSlot, invite.inviteePersonId, actor.personId)
+  const clear = overlayClear(ref, oldSlot, invite.inviteePersonId, actor.personId)
   const reminder = sheetReminder(clear.sheetNamed, name, oldDate)
   try {
     // One transaction: release the old booking + overlay, take the new ones.
@@ -749,7 +819,7 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
       { kind: 'deleteBooking', ecclesia: invite.ecclesia, type: invite.type, date: oldDate, expect: heldBookingExpect(invite, lock) },
       ...(clear.op ? [clear.op] : []),
       { kind: 'putBooking', booking: bookingRecord(invite.ecclesia, invite.type, newDate, invite.inviteePersonId, inviteId), expect: 'absent' },
-      overlaySet(invite, newSlot, name, invite.inviteePersonId, actor.personId),
+      overlaySet(ref, newSlot, name, invite.inviteePersonId, actor.personId),
       { kind: 'putInvite', invite: updated, expect: { version: invite.version } },
     ])
   } catch (err) {
@@ -758,7 +828,7 @@ export async function changeDate(inviteId: string, newDate: string, actor: Actor
   }
 
   // Both dates' counterparts are affected: one gains this speaker, one loses him.
-  const shortNotice = shortNoticeIfDue(invite.type, [newSlot, ...(oldSlot ? [oldSlot] : [])])
+  const shortNotice = shortNoticeIfDue(ref.slot, [newSlot, ...(oldSlot ? [oldSlot] : [])])
   await notifyChanged(updated, actor, oldDate, reminder, shortNotice)
   return { ok: true, invite: updated, ...(shortNotice ? { shortNotice } : {}) }
 }
@@ -815,10 +885,11 @@ async function cancel(
   const ops: SpeakerWriteOp[] = []
   let reminder: InviterNoticeOptions['sheetReminder']
 
-  if (wasAccepted && INVITE_TYPE_SLOT[invite.type]) {
+  const ref = slotRefOf(invite)
+  if (wasAccepted && ref) {
     const date = invite.acceptedDate!
     const [slot, booking] = await Promise.all([
-      slotOn(invite, date),
+      slotOn(ref, date),
       speakerInviteRepository.getBooking(invite.ecclesia, invite.type, date),
     ])
     const lock = await swapLock(booking)
@@ -827,7 +898,7 @@ async function cancel(
     if (booking && booking.personId === invite.inviteePersonId && booking.inviteId === invite.inviteId) {
       ops.push({ kind: 'deleteBooking', ecclesia: invite.ecclesia, type: invite.type, date, expect: heldBookingExpect(invite, lock) })
     }
-    const clear = overlayClear(invite, slot, invite.inviteePersonId, actor.personId)
+    const clear = overlayClear(ref, slot, invite.inviteePersonId, actor.personId)
     if (clear.op) ops.push(clear.op)
     if (clear.sheetNamed) {
       const person = await personRepository.getById(invite.inviteePersonId)
@@ -947,8 +1018,8 @@ export async function requestSwap(
 ): Promise<SwapResult> {
   const invite = await speakerInviteRepository.getInvite(inviteId)
   if (!invite) return fail('NOT_FOUND', 'Invitation not found.')
-  const mapping = INVITE_TYPE_SLOT[invite.type]
-  if (!mapping) return fail('SWAP_NOT_AVAILABLE', 'Swaps are not available for this kind of invitation.')
+  const ref = slotRefOf(invite)
+  if (!ref) return fail('SWAP_NOT_AVAILABLE', 'Swaps are not available for this kind of invitation.')
   const guard = statusGuard(invite, 'accepted')
   if (guard) return guard
   const myDate = invite.acceptedDate!
@@ -957,7 +1028,7 @@ export async function requestSwap(
   if (targetDate < todayISO()) return fail('DATE_IN_PAST', 'That date has passed.')
 
   const [targetSlot, myBooking, targetBooking] = await Promise.all([
-    slotOn(invite, targetDate),
+    slotOn(ref, targetDate),
     speakerInviteRepository.getBooking(invite.ecclesia, invite.type, myDate),
     speakerInviteRepository.getBooking(invite.ecclesia, invite.type, targetDate),
   ])
@@ -1012,7 +1083,9 @@ export async function requestSwap(
     swapId,
     ecclesia: invite.ecclesia,
     type: invite.type,
-    field: mapping.field,
+    field: ref.slot.field,
+    scheduleType: ref.slot.scheduleType,
+    programName: inviteWording(invite).name,
     status: 'open',
     requester,
     target,
@@ -1113,7 +1186,7 @@ export async function respondSwap(swapId: string, response: 'accept' | 'decline'
   // ACCEPT — both sides must still be exactly as they were when requested.
   const R = swap.requester
   const T = swap.target
-  const ref = { ecclesia: swap.ecclesia, type: swap.type }
+  const ref = swapRefOf(swap)
   const [rBooking, tBooking, rSlot, tSlot, rInvite, tInvite, rPerson, tPerson] = await Promise.all([
     speakerInviteRepository.getBooking(swap.ecclesia, swap.type, R.date),
     speakerInviteRepository.getBooking(swap.ecclesia, swap.type, T.date),
@@ -1198,14 +1271,14 @@ export async function respondSwap(swapId: string, response: 'accept' | 'decline'
   await afterCommitEmail('confirmation', rInviteNext.inviteId, actor, () =>
     sendConfirmationEmail(
       rInviteNext,
-      bookingDetails(swap.ecclesia, swap.type, T.date, tSlot.time, tSlot.tz, R.personId, R.inviteId),
+      bookingDetails(swap.ecclesia, swap.type, T.date, tSlot.time, tSlot.tz, R.personId, R.inviteId, ref.slot),
       { reason: 'swapped', swapId: swap.swapId, previousDate: R.date, shortNotice: noticeFor(T.date) }
     )
   )
   await afterCommitEmail('confirmation', tInviteNext?.inviteId ?? null, actor, () =>
     sendConfirmationEmail(
       tInviteNext,
-      bookingDetails(swap.ecclesia, swap.type, R.date, rSlot.time, rSlot.tz, T.personId, T.inviteId),
+      bookingDetails(swap.ecclesia, swap.type, R.date, rSlot.time, rSlot.tz, T.personId, T.inviteId, ref.slot),
       { reason: 'swapped', swapId: swap.swapId, previousDate: T.date, shortNotice: noticeFor(R.date) }
     )
   )
@@ -1221,7 +1294,7 @@ export async function swapViewShortNotice(swap: SpeakerSwapRecord): Promise<Shor
   const at = swap.status === 'accepted' && swap.respondedAt ? new Date(swap.respondedAt) : nowFn()
   if (swap.status !== 'accepted' && effectiveSwapStatus(swap) !== 'open') return undefined
   if (!isShortNotice(at, [swap.requester, swap.target])) return undefined
-  const ref = { ecclesia: swap.ecclesia, type: swap.type }
+  const ref = swapRefOf(swap)
   const [r, t] = await Promise.all([slotOn(ref, swap.requester.date), slotOn(ref, swap.target.date)])
   return shortNoticesFor(swap.field, [r ?? { date: swap.requester.date }, t ?? { date: swap.target.date }])
 }

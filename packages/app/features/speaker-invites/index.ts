@@ -7,3 +7,5 @@ export type { InviteeInviteScreenProps, StepUpRenderArgs } from './invitee-invit
 export { SwapResponseScreen } from './swap-response-screen'
 export type { SwapResponseScreenProps } from './swap-response-screen'
 export type { InviteIdentitySlots } from './use-invite-identity'
+export { InviteProgramsScreen } from './programs-screen'
+export type { InviteProgramsScreenProps } from './programs-screen'

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { YStack, XStack, Text, Heading, Card, Paragraph, Button, TextArea, Anchor, Separator, Spinner } from '@my/ui'
 import { CalendarPlus, Download } from '@tamagui/lucide-icons'
 import { callApi, withToken } from './api'
-import { INVITE_TYPE_PHRASE } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteWording } from '@my/app/provider/dynamodb/invite-program-types'
 import { brotherName, formatDate, formatTime, formatWhen, slotLabel } from './format'
 import {
   DateChoice,
@@ -102,7 +102,9 @@ interface BodyProps extends InviteeInviteScreenProps {
 
 function InviteBody(props: BodyProps) {
   const { invite, shortNotice } = props
-  const intro = `An invitation to ${INVITE_TYPE_PHRASE[invite.type]} at ${invite.ecclesia}`
+  // The program's wording as sent (§3a); an older server's view falls back to the type's wording.
+  const phrase = invite.phrase || inviteWording({ type: invite.type }).phrase
+  const intro = `An invitation to ${phrase} at ${invite.ecclesia}`
 
   if (invite.status === 'cancelled' || invite.status === 'expired') {
     return (
@@ -120,6 +122,11 @@ function InviteBody(props: BodyProps) {
     <YStack gap="$4">
       <YStack gap="$2">
         <Text fontSize="$5">{intro}</Text>
+        {invite.about ? (
+          <Text fontSize="$3" color="$colorSecondary" testID="invite-about">
+            {invite.about}
+          </Text>
+        ) : null}
         {invite.note ? (
           <Card padding="$3" bordered>
             <Text fontStyle="italic">{invite.note}</Text>

@@ -7,7 +7,7 @@
 
 A Recording Brother or Rep of an ecclesia (or the owner) sends one person
 **"An invitation to {exhort at our Memorial Service | speak at our Bible Class | speak at a Public Lecture}"**
-(owner wording 2026-11-13; per-ecclesia wording is §3a).
+(owner wording 2026-11-13). These are the built-in core three; each ecclesia can reword them, switch them off, or add programs of its own (§3a).
 It offers **1–3 dates**, and the speaker accepts one by clicking it. After
 accepting they get a confirmation email with **Add to Google Calendar** and
 **.ics (Apple/Outlook)**, plus "If for any reason you need to change your
@@ -29,7 +29,7 @@ different date, swap with another speaker, or cancel**.
   (`person.ecclesia === ecclesia` AND (`isRecordingBrother` OR `role === 'rep'`)).
   The broader `checkEcclesiaEditPermission` is not reused.
 
-## 3. Invite types
+## 3. Invite types (the built-in core three, §3a)
 
 | Type | Schedule it fills | Slot field | Open-date scanning |
 |---|---|---|---|
@@ -40,64 +40,78 @@ different date, swap with another speaker, or cancel**.
 The type is stored as data, so when lecture rosters exist (#110 Slice D) lectures
 pick up scanning and swaps through the same code.
 
-## 3a. Ecclesia-configured invitation programs — PROPOSED, not approved (owner, 2026-11-13)
+## 3a. Ecclesia-configured invitation programs — APPROVED (owner, 2026-11-13)
 
-**Status:** draft for the owner's approval. Nothing here is built. Until it is
-approved the three types above stay fixed, with the owner's wording.
+**Status:** approved 2026-11-13 ("prioritize the per-ecclesia invitation where it
+makes sense with their schedule … make sure that's integrated"). The about line
+is written by hand (question 2, owner accepted the recommendation).
 
 **Why.** Each ecclesia offers different programs and words them differently.
 Examples: "An invitation to exhort at our Memorial Service", "…speak at our Bible
 Class", "…speak at a Public Lecture" (another ecclesia: "…share a message with our
 interested friends"), "…lead a CYC class", "…share a message at our Sister
-Class", or youth programs ("…share a meditation", "…organize an activity").
+Class", or youth programs ("…share a meditation").
 
-**What an RB/Rep configures**, per program, for their own ecclesia only, on a
-page `/admin/speaker-invites/programs`:
+**What an RB/Rep configures**, per program, for their own ecclesia only (owner:
+any ecclesia), on `/admin/speaker-invites/programs`:
 
 | Field | Example | Used in |
 |---|---|---|
-| Name | Bible Class | composer picker, lists |
-| Invitation phrase | speak at our Bible Class | email header "An invitation to {phrase}"; opening "We invite you to {phrase} at {Ecclesia}."; subject |
-| About line (optional) | Our Bible Class is held over Zoom, Wednesday evenings at 7:30 p.m. | the line after the opening |
-| Directory filter | **Who:** brethren / sisters / anyone. **From where:** our ecclesia / our region / anywhere | the picker's search (below); replaces the fixed §9b rule per program |
-| Linked schedule + roster field (optional) | Bible Class → Speaker | open-date scanning, booking writes, swaps (§4, §7). No link = the inviter types dates, like Lecture today |
-| Length | 90 min | calendar entries |
-| Active | on | hide a program without deleting its history |
+| Name | Bible Class | composer picker, lists, confirmation/calendar titles ("{Name} at {Ecclesia}") |
+| Invitation phrase | speak at our Bible Class | email header "An invitation to {phrase}"; opening "We invite you to {phrase} at {Ecclesia}."; subject; invitee page |
+| About line (optional, hand-written) | Our Bible Class is held over Zoom, Wednesday evenings at 7:30pm | the line right after the opening line (email and invitee page) |
+| Who | brethren / sisters / anyone | the picker's search AND the server (`NOT_INVITABLE`) |
+| From where | our ecclesia / our region / anywhere | the picker's first results (below) |
+| Linked schedule + roster field (optional) | CYC → Speaker | open-date scanning, booking writes, swaps (§4, §7). No link = the inviter types dates, no swaps (like Lecture) |
+| Length | 90 min | Google Calendar link and .ics |
+| Active | on | hide a program without deleting its history (programs are never deleted) |
 
-- **Directory filter (owner, 2026-11-13).** Each ecclesia decides who its
-  programs draw from. A sisters-only Sister Class: *sisters, our region*. Most
-  exhortations and lectures: *brethren, our region*. "Who" uses only recorded
-  facts (§9b: `gender`, `baptized`), never guesses. "Region" is the ecclesia's
-  existing region (`packages/app/config/regions.ts`, e.g. Canada East), so it is
-  coarser than "southern Ontario" until regions are split further.
-- **Widening as you type.** The picker first lists people inside the filter.
-  An inviter sometimes means someone further away (a brother from the UK they
-  know well). So when the typed name is specific (at least a first name plus
-  the start of a surname, e.g. "Sample Spe") and the in-filter list
-  has nothing left, just before it flips to "isn't listed, add them", it also
-  searches **every region** and shows those matches under their own heading,
-  "Outside {region}", each with their ecclesia. Picking one is a normal invite.
-  Only *where* widens; *who* never does (a Sister Class search never offers brethren,
-  and §9b's unbaptized / not-a-brother exclusions still hold for brethren programs).
-  "Add them" stays the last row, as now.
-- **Starting point.** Every ecclesia starts with the core three (Memorial, Bible
-  Class, Lecture), using the wording above. It can reword them, switch them off, or add more.
-- **Sent emails don't change.** An invite stores the program's id and a copy of its
-  phrase and about line at send time. Editing a program later doesn't rewrite
-  history, and doesn't change the links in emails already sent.
-- **Data.** `INVITE_PROGRAM#{ecclesia}` / `{programId}` in `tee-admin`. Same
-  RB/Rep-of-own-ecclesia gate as sending (§2).
+- **The link comes from the ecclesia's registered schedules** (docs/ECCLESIA_SCHEDULES.md,
+  `getScheduleRegistry(ecclesia)`). The picker lists every registered schedule's
+  fields marked "names a person" (`rosterRole`). So an ecclesia that registers a CYC
+  roster can invite into it, and the booking writes the CYC occurrence's overlay
+  field. With nothing registered the page says **"Connect a schedule first"** and
+  links to `/admin/ecclesia-schedules`. The server refuses a link to another
+  ecclesia's schedule or to a field that names no one, and refuses two **active**
+  programs filling the same `(schedule, field)`.
+- **Who** uses recorded facts only (§9b): brethren = `isInvitableSpeaker` (with the
+  "Not yet confirmed" group and "Confirm: baptized brother"); sisters =
+  `gender === 'female' && baptized !== false` (an unrecorded gender is not offered);
+  anyone = everyone except deceased / suspicious. "Add them" follows it: a brethren
+  program adds a Brother, a sisters program a Sister, anyone either. "Young people"
+  isn't a recorded fact, so a youth program uses *anyone* and the inviter chooses.
+- **From where, widening as you type.** "Region" is the ecclesia's region
+  (`EcclesiaData.region`, else `getDefaultRegion(country, province)`, from the cached
+  ecclesia list). The picker first lists people inside the filter. When nothing
+  inside matches **and** the typed name is specific (a first name plus the start of
+  another word, e.g. "Sample Spe"), it also returns matches from **every region**
+  under "Outside {region}" (or "Outside {Ecclesia}"), each with their ecclesia.
+  Only *where* widens; *who* never does. "Add them" stays the last row.
+- **Starting point, no seeding write.** The core three keep reserved ids
+  `memorial | bible_class | lecture`. With nothing stored, an ecclesia gets them as
+  built-in defaults computed at read time: today's wording, who = brethren,
+  where = anywhere (the picker always searched every ecclesia), links
+  memorial → memorial/Exhort and bible_class → bibleClass/Speaker (allowed with or
+  without a registered schedule), lecture unlinked, 90/90/60 minutes. Saving a core
+  program unchanged writes nothing; rewording one stores the ecclesia's own copy.
+- **Sent emails don't change.** An invite stores the program id as `type` and a
+  `programSnapshot` (name, phrase, about, length, who, and the resolved slot) at send
+  time. Editing a program later doesn't rewrite history, change links in emails
+  already sent, or move a booking to another field. Invites from before programs
+  carry no snapshot and read their type's fixed wording and slot (`inviteWording`,
+  `inviteSlot`). Booking keys stay `SPEAKER_BOOKING#{ecclesia}#{programId}`, so the
+  core three's keys are unchanged.
+- **Data.** `INVITE_PROGRAM#{ecclesiaId}` / `{programId}` in `tee-admin`
+  (pattern `invitePrograms`, `ecclesiaId` as in the schedule registry). API:
+  `GET/PUT /api/speaker-invites/programs`, same RB/Rep-of-own-ecclesia gate as
+  sending (§2). `slots` and `candidates` take `type={programId}`.
 - **Wording is plain text in fixed slots.** No template language and no HTML.
   The email layout, greeting, date buttons and sign-off stay the same for every program.
 
-**Questions for the owner before approval:**
-1. ~~Who can be invited~~ (answered 2026-11-13: the directory filter above,
-   set by each ecclesia). "Young people" isn't a recorded fact, so a youth
-   program uses *anyone* and the inviter chooses, until something like a birth year is recorded.
-2. Should the about line be written by hand, or filled in from the schedule
-   ("held {online|at the hall}, {Wednesdays} at {7:30 p.m.}") and editable?
-3. ~~Programs without a roster~~ (answered 2026-11-13: yes, for now. The
-   inviter types the dates and there are no swaps, as Lecture works today.)
+**Not now:** about lines filled in from the schedule; youth age facts; programs
+owned by organizations; links to custom-kind or second schedules of a kind
+(waits on docs/ECCLESIA_SCHEDULES.md custom kinds); online-meeting details for
+programs other than Memorial / Bible Class beyond the occurrence's own override.
 
 ## 4. "Is a meeting planned, and is the slot open?" — one function
 

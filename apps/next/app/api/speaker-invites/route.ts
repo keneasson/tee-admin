@@ -3,7 +3,7 @@ import { canSendSpeakerInvite } from '@/utils/speaker-invite-permissions'
 import { createInvite, listInvites, sendTestInvitation, type CreateInviteInput } from '@/utils/speaker-invites/service'
 import { inviterInviteView } from '@/utils/speaker-invites/views'
 import { forbidden, inviterContext, noStore, readJson, serviceErrorResponse } from '@/utils/speaker-invites/http'
-import { SPEAKER_INVITE_TYPES, type SpeakerInviteType } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { resolveProgram } from '@/utils/speaker-invites/programs'
 
 /**
  * Speaker invitations — inviter side (spec §2).
@@ -16,6 +16,8 @@ import { SPEAKER_INVITE_TYPES, type SpeakerInviteType } from '@my/app/provider/d
  *
  * Only the owner, or the Recording Brother / a Rep OF the ecclesia, may act.
  * The ecclesia defaults to the inviter's own; only the owner may name another.
+ * `type` is one of THAT ecclesia's invitation programs (§3a): its wording,
+ * who it invites and where it books are resolved here and copied onto the invite.
  */
 
 export async function GET(request: Request) {
@@ -40,8 +42,9 @@ export async function POST(request: Request) {
   const ecclesia: string = typeof body.ecclesia === 'string' && body.ecclesia ? body.ecclesia : ctx.person.ecclesia
   if (!canSendSpeakerInvite(ctx.person, ctx.role, ecclesia)) return forbidden()
 
-  const type = body.type as SpeakerInviteType
-  if (!SPEAKER_INVITE_TYPES.includes(type)) {
+  const type = typeof body.type === 'string' ? body.type : ''
+  const resolved = await resolveProgram(ecclesia, type)
+  if (!resolved || !resolved.program.active) {
     return NextResponse.json({ error: 'Unknown invitation type.', code: 'INVALID_INPUT' }, { status: 400 })
   }
   const invitee = body.invitee as CreateInviteInput['invitee'] | undefined
@@ -52,6 +55,8 @@ export async function POST(request: Request) {
   const input: CreateInviteInput = {
     ecclesia,
     type,
+    program: resolved.program,
+    slot: resolved.slot,
     inviter: { personId: ctx.person.personId, trust: ctx.trust },
     invitee,
     dates: Array.isArray(body.dates) ? body.dates : [],

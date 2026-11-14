@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { YStack, XStack, Text, Card, Heading, Paragraph, Button, Spinner } from '@my/ui'
 import { callApi, withToken } from './api'
-import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteWording } from '@my/app/provider/dynamodb/invite-program-types'
 import { firstWord, formatWhen, formatDate, titledFullName } from './format'
 import {
   InviteIdentityHeader,
@@ -95,7 +95,7 @@ export function SwapResponseScreen(props: SwapResponseScreenProps) {
 
       <Card padding="$4" gap="$3" bordered testID="swap-summary">
         <Text fontSize="$2" color="$colorSecondary" textTransform="uppercase">
-          {`${INVITE_TYPE_LABEL[swap.type]} at ${swap.ecclesia}`}
+          {`${swap.programName || inviteWording({ type: swap.type }).name} at ${swap.ecclesia}`}
         </Text>
         <Heading size="$6">
           {isTarget

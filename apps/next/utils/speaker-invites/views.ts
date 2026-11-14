@@ -4,7 +4,6 @@ import { firstNameOf } from '@my/app/utils/viewer-pii'
 import { titleFor } from '@my/app/utils/speaker-eligibility'
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import {
-  INVITE_TYPE_SLOT,
   type AppointmentPlaceView,
   type InviteeInviteView,
   type ShortNotice,
@@ -13,10 +12,11 @@ import {
   type SpeakerSwapRecord,
   type SwapView,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteSlot, inviteWording } from '@my/app/provider/dynamodb/invite-program-types'
 import type { Trust } from '../auth-trust'
 import { loadSlotDetails } from './slots'
 import { effectiveStatus, effectiveSwapStatus, inviteSlots } from './service'
-import { appointmentPlace, googleCalendarUrlFor, onlineMeetingsFor } from './appointment'
+import { appointmentPlace, appointmentWhenOf, googleCalendarUrlFor, onlineMeetingsFor } from './appointment'
 import { speakerEmailFor } from './contact'
 
 export type { InviteeInviteView, SwapView } from '@my/app/provider/dynamodb/speaker-invite-types'
@@ -94,11 +94,12 @@ async function appointmentExtras(
   invite: SpeakerInviteRecord
 ): Promise<{ place: AppointmentPlaceView; googleCalendarUrl: string }> {
   const date = invite.acceptedDate!
-  const when = { type: invite.type, date, time: invite.acceptedTime ?? '', tz: invite.acceptedTz ?? DEFAULT_TIMEZONE }
+  const when = appointmentWhenOf(invite, date, invite.acceptedTime ?? '', invite.acceptedTz ?? DEFAULT_TIMEZONE)
+  const slot = inviteSlot(invite)
   const [place, detail] = await Promise.all([
     appointmentPlace(invite.ecclesia),
-    INVITE_TYPE_SLOT[invite.type]
-      ? loadSlotDetails(invite.ecclesia, invite.type, date, date)
+    slot
+      ? loadSlotDetails(invite.ecclesia, invite.type, date, date, slot)
           .then((c) => c.slots.find((x) => x.date === date))
           .catch(() => undefined)
       : Promise.resolve(undefined),
@@ -131,10 +132,14 @@ export async function inviteeInviteView(
   const icsUrl = invite.acceptedDate
     ? `/api/invite/${invite.inviteId}/ics${opts.token ? `?token=${encodeURIComponent(opts.token)}` : ''}`
     : undefined
+  const wording = inviteWording(invite)
   return {
     inviteId: invite.inviteId,
     ecclesia: invite.ecclesia,
     type: invite.type,
+    programName: wording.name,
+    phrase: wording.phrase,
+    ...(wording.about ? { about: wording.about } : {}),
     status,
     invitee: {
       firstName: inviteePerson?.firstName ?? '',
@@ -150,7 +155,8 @@ export async function inviteeInviteView(
       ? redactSlots(await markReachable(live.offered, invite), trust)
       : invite.offeredDates.map((d) => ({ ...d, state: 'NO_MEETING' as const })),
     otherDates: live && invite.otherDatesWindow ? redactSlots(await markReachable(live.other, invite), trust) : null,
-    swapAvailable: invite.type !== 'lecture' && status === 'accepted',
+    // Swaps need a linked schedule (§3a): an unlinked program's booking lives on the invite only.
+    swapAvailable: !!inviteSlot(invite) && status === 'accepted',
     ...(extras ? extras : {}),
     ...(icsUrl && (status === 'accepted' || status === 'cancelled') ? { icsUrl } : {}),
   }
@@ -175,6 +181,7 @@ export function swapView(
     swapId: swap.swapId,
     ecclesia: swap.ecclesia,
     type: swap.type,
+    programName: swap.programName ?? inviteWording({ type: swap.type }).name,
     status: effectiveSwapStatus(swap),
     viewerRole: viewerPersonId !== null && viewerPersonId === swap.requester.personId ? 'requester' : 'target',
     ...(viewerTitle ? { viewerTitle } : {}),
