@@ -47,6 +47,12 @@ export interface LastSync {
 
 export interface RegistryEntry {
   ecclesiaId: string
+  /**
+   * The ecclesia NAME as written on its schedule rows (GSI1 `ECCLESIA#<name>`).
+   * Stored by the setup page so the nightly sync can write rows without a
+   * second lookup. Built-in entries leave it unset (they are never synced here).
+   */
+  ecclesia?: string
   /** The kind, this round (at most one schedule per kind per ecclesia). */
   scheduleId: string
   name: string
