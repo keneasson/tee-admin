@@ -6,6 +6,7 @@ import { Choice } from './choice'
 import { Notice } from './identity-parts'
 import { EcclesiaAutocomplete } from './ecclesia-autocomplete'
 import { NOT_AN_INVITER } from './format'
+import { SCHEDULE_TYPE_CATALOGUE, type ScheduleTypeKey } from '@my/app/config/schedule-fields'
 import {
   INVITE_WHERE,
   INVITE_WHERE_LABEL,
@@ -206,6 +207,14 @@ export function InviteProgramsScreen({ ownEcclesia, isOwner, onConnectSchedules,
   )
 }
 
+/** "Memorial Service · Exhort" for a link to a catalogue schedule, not the raw keys. */
+function builtInLinkLabel(link: { scheduleId: string; field: string }): string {
+  const def = SCHEDULE_TYPE_CATALOGUE[link.scheduleId as ScheduleTypeKey]
+  if (!def) return `${link.scheduleId} · ${link.field}`
+  const field = def.fields.find((f) => f.key === link.field)
+  return `${def.defaultLabel} · ${field?.defaultLabel ?? link.field}`
+}
+
 function ProgramCard({
   draft: d,
   options,
@@ -222,7 +231,7 @@ function ProgramCard({
     ...options.map((o) => ({ value: linkValue(o), label: `${o.scheduleName} · ${o.fieldLabel}` })),
   ]
   if (d.link && !options.some((o) => linkValue(o) === linkValue(d.link))) {
-    linkChoices.push({ value: linkValue(d.link), label: `${d.link.scheduleId} · ${d.link.field} (built in)` })
+    linkChoices.push({ value: linkValue(d.link), label: builtInLinkLabel(d.link) })
   }
   return (
     <Card padding="$4" gap="$3" bordered opacity={d.active ? 1 : 0.7} testID={`program-${testKey}`}>
@@ -272,7 +281,7 @@ function ProgramCard({
         <TextArea
           value={d.about ?? ''}
           onChangeText={(v) => onChange({ about: v })}
-          placeholder="Our Bible Class is held over Zoom, Wednesday evenings at 7:30pm"
+          placeholder="Optional. For example: when and where it meets, or how long it runs."
           numberOfLines={2}
           testID={`program-about-${testKey}`}
         />
