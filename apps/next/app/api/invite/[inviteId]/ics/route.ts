@@ -3,7 +3,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { DEFAULT_TIMEZONE } from '@my/app/utils/timezone'
 import { refuseActor, resolveInviteActor } from '@/utils/speaker-invites/actor'
 import { getInvite } from '@/utils/speaker-invites/service'
-import { appointmentPlace, baseUrlFor, icsFor, tenantForEcclesia } from '@/utils/speaker-invites/appointment'
+import { appointmentPlace, appointmentWhenOf, baseUrlFor, icsFor, tenantForEcclesia } from '@/utils/speaker-invites/appointment'
 import { noStore, readInviteToken } from '@/utils/speaker-invites/http'
 
 /**
@@ -44,7 +44,7 @@ export async function GET(request: Request, { params }: Params) {
   const manageUrl = `${baseUrlFor(tenant)}/invite/${invite.inviteId}`
   const body = icsFor(
     invite,
-    { type: invite.type, date: invite.acceptedDate, time: invite.acceptedTime ?? '', tz: invite.acceptedTz ?? DEFAULT_TIMEZONE },
+    appointmentWhenOf(invite, invite.acceptedDate, invite.acceptedTime ?? '', invite.acceptedTz ?? DEFAULT_TIMEZONE),
     place,
     tenant,
     {

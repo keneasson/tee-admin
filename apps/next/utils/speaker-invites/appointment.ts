@@ -2,10 +2,12 @@ import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { getTenantById, type TenantConfig } from '@my/app/config/tenants'
 import { getTimezoneCityName } from '@my/app/utils/timezone'
 import type {
+  InviteProgramId,
   OnlineMeeting,
   SpeakerInviteRecord,
   SpeakerInviteType,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { LEGACY_LENGTH_MINUTES, inviteWording } from '@my/app/provider/dynamodb/invite-program-types'
 import { inviteTypeNoun } from 'email-builder/components/SpeakerInviteParts'
 import { buildIcs } from '../calendar/ics'
 import { buildGoogleCalendarUrl } from '../calendar/google-calendar-link'
@@ -19,12 +21,8 @@ import type { SlotDetail } from './slots'
  * the hosted `.ics` route so the two can never disagree.
  */
 
-/** How long each kind of appointment is blocked out in a calendar. */
-export const SPEAKER_APPOINTMENT_MINUTES: Record<SpeakerInviteType, number> = {
-  memorial: 90,
-  bible_class: 90,
-  lecture: 60,
-}
+/** How long each core appointment is blocked out in a calendar (a program's own `lengthMinutes` wins). */
+export const SPEAKER_APPOINTMENT_MINUTES: Record<SpeakerInviteType, number> = LEGACY_LENGTH_MINUTES
 
 /**
  * The brand an ecclesia's speaker email goes out under (one From per brand):
@@ -66,7 +64,7 @@ export async function appointmentPlace(ecclesia: string): Promise<AppointmentPla
 }
 
 /** Ways to attend online: the occurrence's override first, as the heads-up does. */
-export function onlineMeetingsFor(type: SpeakerInviteType, ecclesia: string, slot: SlotDetail | undefined): OnlineMeeting[] {
+export function onlineMeetingsFor(type: InviteProgramId, ecclesia: string, slot: SlotDetail | undefined): OnlineMeeting[] {
   const options = (slot?.override?.attendOptions ?? []).filter((o) => o.mode !== 'in_person')
   if (options.length > 0) {
     return options.map((o) => ({
@@ -95,15 +93,30 @@ export function onlineMeetingsFor(type: SpeakerInviteType, ecclesia: string, slo
   return []
 }
 
-export function appointmentTitle(type: SpeakerInviteType, ecclesiaName: string): string {
+/** "{noun} at {Ecclesia}". `type` is a core id or a program name (see `inviteTypeNoun`). */
+export function appointmentTitle(type: InviteProgramId, ecclesiaName: string): string {
   return `${inviteTypeNoun(type)} at ${ecclesiaName}`
 }
 
 export interface AppointmentWhen {
-  type: SpeakerInviteType
+  type: InviteProgramId
   date: string // YYYY-MM-DD
   time: string // HH:mm ('' → schedule has no time)
   tz: string
+  /** The program's name as sent; omitted = the core type's label. */
+  name?: string
+  /** The program's length; omitted = the core type's length. */
+  lengthMinutes?: number
+}
+
+/** The invite's appointment as calendars describe it (wording + length from its program snapshot). */
+export function appointmentWhenOf(invite: SpeakerInviteRecord, date: string, time: string, tz: string): AppointmentWhen {
+  const w = inviteWording(invite)
+  return { type: invite.type, date, time, tz, name: w.name, lengthMinutes: w.lengthMinutes }
+}
+
+function minutesOf(w: AppointmentWhen): number {
+  return w.lengthMinutes ?? inviteWording({ type: w.type }).lengthMinutes
 }
 
 /** A start the calendar helpers accept; a missing time falls back to noon so the day is right. */
@@ -114,9 +127,9 @@ function zonedStartOf(w: AppointmentWhen) {
 export function googleCalendarUrlFor(w: AppointmentWhen, place: AppointmentPlace, description?: string): string {
   return buildGoogleCalendarUrl({
     start: zonedStartOf(w),
-    durationMinutes: SPEAKER_APPOINTMENT_MINUTES[w.type],
+    durationMinutes: minutesOf(w),
     timezone: w.tz,
-    title: appointmentTitle(w.type, place.ecclesiaName),
+    title: appointmentTitle(w.name ?? w.type, place.ecclesiaName),
     ...(description ? { description } : {}),
     ...(place.hallName ? { locationName: place.hallName } : {}),
     ...(place.address ? { address: place.address } : {}),
@@ -135,9 +148,9 @@ export function icsFor(
     sequence: icsSequence(invite),
     method: invite.status === 'cancelled' ? 'CANCEL' : 'PUBLISH',
     start: zonedStartOf(w),
-    durationMinutes: SPEAKER_APPOINTMENT_MINUTES[w.type],
+    durationMinutes: minutesOf(w),
     timezone: w.tz,
-    title: appointmentTitle(w.type, place.ecclesiaName),
+    title: appointmentTitle(w.name ?? w.type, place.ecclesiaName),
     ...(place.hallName ? { locationName: place.hallName } : {}),
     ...(place.address ? { address: place.address } : {}),
     ...(opts.url ? { url: opts.url } : {}),

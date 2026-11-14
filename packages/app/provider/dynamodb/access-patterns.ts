@@ -84,6 +84,7 @@ export const KEYS = {
   scheduleEntry: (scheduleId: string) => `SCHEDULE#${scheduleId}`,
   scheduleSourcesAll: () => 'SCHEDULE_SOURCES',
   scheduleSheetClaim: (spreadsheetId: string) => `SCHEDULE_SHEET_CLAIM#${spreadsheetId}`,
+  invitePrograms: (ecclesiaId: string) => `INVITE_PROGRAM#${ecclesiaId}`,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -363,6 +364,14 @@ export const PATTERNS = {
     shape: 'SCHEDULE_SOURCES / <ecclesiaId>#<scheduleId>  (ECCLESIA_SCHEDULES#<ecclesiaId> / SCHEDULE#<scheduleId>)',
     writer: 'packages/app/provider/dynamodb/repositories/schedule-registry-repository.ts',
   } as AccessPattern<void>,
+
+  // Invitation programs (INVITE_PROGRAM#<ecclesiaId> / <programId>), docs/SPEAKER_INVITATIONS.md §3a
+  invitePrograms: {
+    name: 'invitePrograms', ...onAdmin(),
+    pk: (a: { ecclesiaId: string }) => KEYS.invitePrograms(a.ecclesiaId),
+    shape: 'pkey INVITE_PROGRAM#<ecclesiaId> / skey <programId>',
+    writer: 'packages/app/provider/dynamodb/repositories/invite-program-repository.ts',
+  } as AccessPattern<{ ecclesiaId: string }>,
 
   // LEGACY (R8 deletes): the USER# NextAuth/credentials store
   legacyUserByEmail: {

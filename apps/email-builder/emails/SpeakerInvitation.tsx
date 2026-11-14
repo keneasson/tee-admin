@@ -33,7 +33,12 @@ export interface SpeakerInvitationDateOption {
 }
 
 export interface SpeakerInvitationProps {
+  /** A core program id, or (with `phrase`) any program (§3a). */
   inviteType: SpeakerInviteType
+  /** The program's invitation phrase ("speak at our Bible Class"). Omitted = the core type's built-in phrase. */
+  phrase?: string
+  /** The program's hand-written about line, shown right after the opening line. */
+  about?: string
   /** Invitee's full name; the greeting uses the surname with `greetingTitle`, else the first name (§9b). */
   inviteeName: string
   /** From the invitee's recorded gender. Absent = not recorded. */
@@ -56,16 +61,18 @@ export interface SpeakerInvitationProps {
 }
 
 /** "An invitation to speak at our Bible Class": the header line, under the ecclesia name. */
-export function speakerInvitationHeadline(type: SpeakerInviteType): string {
-  return `An invitation to ${inviteTypeVerbPhrase(type)}`
+export function speakerInvitationHeadline(type: SpeakerInviteType, phrase?: string): string {
+  return `An invitation to ${phrase?.trim() || inviteTypeVerbPhrase(type)}`
 }
 
-export function speakerInvitationSubject(type: SpeakerInviteType, ecclesiaName: string): string {
-  return `${speakerInvitationHeadline(type)} at ${ecclesiaName}`
+export function speakerInvitationSubject(type: SpeakerInviteType, ecclesiaName: string, phrase?: string): string {
+  return `${speakerInvitationHeadline(type, phrase)} at ${ecclesiaName}`
 }
 
 const SpeakerInvitation = ({
   inviteType,
+  phrase: programPhrase,
+  about,
   inviteeName,
   greetingTitle,
   ecclesiaName,
@@ -80,7 +87,7 @@ const SpeakerInvitation = ({
 }: SpeakerInvitationProps) => {
   const options = dateOptions.slice(0, 3)
   const single = options.length === 1
-  const phrase = inviteTypeVerbPhrase(inviteType)
+  const phrase = programPhrase?.trim() || inviteTypeVerbPhrase(inviteType)
 
   return (
     <Html lang="en">
@@ -91,7 +98,7 @@ const SpeakerInvitation = ({
       <Body style={main}>
         <Section style={header}>
           <Heading>{ecclesiaName}</Heading>
-          <Text style={defaultText}>{speakerInvitationHeadline(inviteType)}</Text>
+          <Text style={defaultText}>{speakerInvitationHeadline(inviteType, phrase)}</Text>
           <EmailBrandLinkContent identity={identity} />
         </Section>
 
@@ -104,6 +111,7 @@ const SpeakerInvitation = ({
             <strong>{ecclesiaName}</strong>
             {'.'}
           </Text>
+          {about?.trim() ? <Text style={defaultText}>{about.trim()}</Text> : null}
           {note?.trim() ? <Text style={defaultText}>{note.trim()}</Text> : null}
           <Text style={defaultText}>
             {single ? 'Here is a date we have coming up:' : 'Here are a few dates we have coming up:'}

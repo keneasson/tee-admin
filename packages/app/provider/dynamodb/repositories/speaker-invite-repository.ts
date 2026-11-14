@@ -8,7 +8,7 @@ import {
   type InviteHistoryEntry,
   type SpeakerBookingRecord,
   type SpeakerInviteRecord,
-  type SpeakerInviteType,
+  type InviteProgramId,
   type SpeakerSwapRecord,
 } from '../speaker-invite-types'
 
@@ -36,7 +36,7 @@ export type BookingExpectation =
 export type SpeakerWriteOp =
   | { kind: 'putInvite'; invite: SpeakerInviteRecord; expect: 'absent' | { version: number } }
   | { kind: 'putBooking'; booking: SpeakerBookingRecord; expect: BookingExpectation }
-  | { kind: 'deleteBooking'; ecclesia: string; type: SpeakerInviteType; date: string; expect: BookingExpectation }
+  | { kind: 'deleteBooking'; ecclesia: string; type: InviteProgramId; date: string; expect: BookingExpectation }
   | { kind: 'putSwap'; swap: SpeakerSwapRecord; expect: 'absent' | { version: number; status: string } }
   | { kind: 'override'; put: OverrideTransactPut }
 
@@ -99,14 +99,14 @@ export class SpeakerInviteRepository extends BaseRepository<Record<string, any>>
     })) as SpeakerInviteRecord[]
   }
 
-  async getBooking(ecclesia: string, type: SpeakerInviteType, date: string): Promise<SpeakerBookingRecord | null> {
+  async getBooking(ecclesia: string, type: InviteProgramId, date: string): Promise<SpeakerBookingRecord | null> {
     return (await this.get(speakerInviteKeys.bookingPk(ecclesia, type), date)) as SpeakerBookingRecord | null
   }
 
   /** Every booking of one ecclesia + type between two dates (inclusive), one partition. */
   async listBookings(
     ecclesia: string,
-    type: SpeakerInviteType,
+    type: InviteProgramId,
     from: string,
     to: string
   ): Promise<SpeakerBookingRecord[]> {

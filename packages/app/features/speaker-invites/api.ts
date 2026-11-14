@@ -5,7 +5,7 @@ import type { ApiResult, InviteApiError } from './types'
  * `{ ok, status, data | error }` so a screen can branch on the API's `code`
  * (SLOT_TAKEN, SESSION_MISMATCH, STEP_UP_REQUIRED, …) instead of throwing.
  */
-export async function callApi<T>(url: string, init?: { method?: 'GET' | 'POST'; body?: unknown }): Promise<ApiResult<T>> {
+export async function callApi<T>(url: string, init?: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown }): Promise<ApiResult<T>> {
   try {
     const res = await fetch(url, {
       method: init?.method ?? 'GET',

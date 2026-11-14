@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { YStack, XStack, Text, Card, Paragraph, Button, Separator, PageHeader, LoadingState } from '@my/ui'
 import { ChevronDown, ChevronRight, Plus } from '@tamagui/lucide-icons'
 import { callApi } from './api'
-import { INVITE_HISTORY_ACTION_LABEL, INVITE_STATUS_LABEL, INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { INVITE_HISTORY_ACTION_LABEL, INVITE_STATUS_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteWording } from '@my/app/provider/dynamodb/invite-program-types'
 import { formatDate, formatWhen } from './format'
 import { Notice } from './identity-parts'
 import { NOT_AN_INVITER } from './format'
@@ -14,11 +15,13 @@ import type { InviterInviteView } from './types'
  */
 export interface SpeakerInvitesListProps {
   onNew: () => void
+  /** Open the invitation programs page (§3a). */
+  onPrograms?: () => void
   /** Arrived straight from a successful send. */
   justSent?: boolean
 }
 
-export function SpeakerInvitesList({ onNew, justSent }: SpeakerInvitesListProps) {
+export function SpeakerInvitesList({ onNew, onPrograms, justSent }: SpeakerInvitesListProps) {
   const [invites, setInvites] = useState<InviterInviteView[] | null>(null)
   const [ecclesia, setEcclesia] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
@@ -44,9 +47,16 @@ export function SpeakerInvitesList({ onNew, justSent }: SpeakerInvitesListProps)
       <PageHeader
         title={ecclesia ? `Speaker invitations · ${ecclesia}` : 'Speaker invitations'}
         actions={
-          <Button variant="action" icon={Plus} onPress={onNew} testID="new-invite">
-            New invitation
-          </Button>
+          <XStack gap="$2" flexWrap="wrap">
+            {onPrograms ? (
+              <Button variant="outlined" onPress={onPrograms} testID="invite-programs">
+                Programs
+              </Button>
+            ) : null}
+            <Button variant="action" icon={Plus} onPress={onNew} testID="new-invite">
+              New invitation
+            </Button>
+          </XStack>
         }
       />
       {justSent ? <Notice tone="success">Invitation sent.</Notice> : null}
@@ -154,7 +164,7 @@ function InviteRow({ invite, onChanged }: { invite: InviterInviteView; onChanged
         <YStack flex={1} minWidth={200} gap="$1">
           <Text fontWeight="600">{name}</Text>
           <Text fontSize="$2" color="$colorSecondary">
-            {`${INVITE_TYPE_LABEL[invite.type]} · ${invite.acceptedDate ? 'Booked' : 'Offered'}: ${dateText}`}
+            {`${inviteWording(invite).name} · ${invite.acceptedDate ? 'Booked' : 'Offered'}: ${dateText}`}
           </Text>
         </YStack>
         <Text fontSize="$2" fontWeight="600" color={invite.status === 'accepted' ? '$green10' : invite.status === 'sent' ? '$blue10' : '$colorSecondary'}>

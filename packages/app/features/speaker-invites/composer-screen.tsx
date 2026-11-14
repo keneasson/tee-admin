@@ -16,12 +16,12 @@ import {
 } from '@my/ui'
 import { Check, Plus, Trash2 } from '@tamagui/lucide-icons'
 import { callApi } from './api'
-import { INVITE_TYPE_LABEL } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { builtInPrograms, type InviteProgram } from '@my/app/provider/dynamodb/invite-program-types'
 import { NOT_AN_INVITER, addDaysISO, formatDate, isISODate, slotLabel, slotWhen, todayISO, usualMeeting, type UsualMeeting } from './format'
 import { Notice } from './identity-parts'
 import { EcclesiaAutocomplete } from './ecclesia-autocomplete'
 import { InviteePicker, type InviteeChoice } from './invitee-picker'
-import type { Slot, InviterInviteView, SpeakerInviteType } from './types'
+import type { Slot, InviterInviteView } from './types'
 
 /**
  * Composer, `/admin/speaker-invites/new` (spec §9). The ecclesia is the
@@ -34,6 +34,8 @@ export interface SpeakerInviteComposerProps {
   isOwner: boolean
   /** Go to the invites list after a real send. */
   onSent: () => void
+  /** Open the invitation programs page (§3a). Omitted = no link shown. */
+  onManagePrograms?: () => void
 }
 
 const MAX_DATES = 3
@@ -45,13 +47,30 @@ const MAX_DATES = 3
  */
 const SEARCH_AHEAD_DAYS = 365
 const VISIBLE_RANGE_DAYS = 365
-const TYPES: SpeakerInviteType[] = ['memorial', 'bible_class', 'lecture']
 
 type LectureRow = { date: string; time: string }
 
-export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerInviteComposerProps) {
+export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent, onManagePrograms }: SpeakerInviteComposerProps) {
   const [ecclesia, setEcclesia] = useState(ownEcclesia ?? '')
-  const [type, setType] = useState<SpeakerInviteType>('memorial')
+  const [type, setType] = useState<string>('memorial')
+  // The ecclesia's invitation programs (§3a). The built-in core three until its own list loads.
+  const [programs, setPrograms] = useState<InviteProgram[]>(() => builtInPrograms())
+  useEffect(() => {
+    if (!ecclesia) return
+    let live = true
+    const params = isOwner ? `?ecclesia=${encodeURIComponent(ecclesia)}` : ''
+    void callApi<{ programs: InviteProgram[] }>(`/api/speaker-invites/programs${params}`).then((res) => {
+      if (!live || !res.ok) return
+      const active = res.data.programs.filter((p) => p.active)
+      if (active.length === 0) return
+      setPrograms(active)
+      setType((prev) => (active.some((p) => p.programId === prev) ? prev : active[0].programId))
+    })
+    return () => {
+      live = false
+    }
+  }, [ecclesia, isOwner])
+  const program = programs.find((p) => p.programId === type) ?? programs[0]
 
   // §9a: one "Start typing a name" field (InviteePicker) decides the invitee.
   const [choice, setChoice] = useState<InviteeChoice | null>(null)
@@ -65,7 +84,7 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   // the first open date (see loadSlots), so nobody pages past filled weeks.
   const [from, setFrom] = useState(todayISO())
   const [to, setTo] = useState(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
-  const autoRangedFor = useRef<SpeakerInviteType | null>(null)
+  const autoRangedFor = useRef<string | null>(null)
   const [slots, setSlots] = useState<Slot[] | null>(null)
   const [slotsError, setSlotsError] = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -82,7 +101,8 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const [forbidden, setForbidden] = useState(false)
-  const isLecture = type === 'lecture'
+  // A program with no linked schedule: the inviter types each date (§3a), like Lecture.
+  const isLecture = !program?.link
 
   const loadSlots = useCallback(async () => {
     if (isLecture || !ecclesia || !isISODate(from) || !isISODate(to) || from > to) return
@@ -152,7 +172,11 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
   if (!invitee) problems.push(choiceProblem ?? 'Pick who to invite.')
   if (dates.length === 0) problems.push('Offer at least one date.')
   if (isLecture && dates.some((d) => !isISODate(d.date) || !/^\d{2}:\d{2}$/.test(d.time ?? ''))) {
-    problems.push('Each lecture date needs a date (YYYY-MM-DD) and a time (HH:mm).')
+    problems.push(
+      type === 'lecture'
+        ? 'Each lecture date needs a date (YYYY-MM-DD) and a time (HH:mm).'
+        : 'Each date needs a date (YYYY-MM-DD) and a time (HH:mm).'
+    )
   }
   if (!isLecture && offerOthers && (!isISODate(windowFrom) || !isISODate(windowTo) || windowFrom > windowTo)) {
     problems.push('The other-dates window needs a valid start and end.')
@@ -233,33 +257,64 @@ export function SpeakerInviteComposer({ ownEcclesia, isOwner, onSent }: SpeakerI
 
       <Section title="Invitation for">
         <XStack gap="$2" flexWrap="wrap">
-          {TYPES.map((t) => (
+          {programs.map((p) => (
             <Button
-              key={t}
-              variant={type === t ? 'action' : 'outlined'}
+              key={p.programId}
+              variant={type === p.programId ? 'action' : 'outlined'}
               onPress={() => {
-                if (t === type) return
-                setType(t)
-                // A new type has its own schedule: search a year ahead again.
+                if (p.programId === type) return
+                setType(p.programId)
+                // A new program has its own schedule: search a year ahead again.
                 setFrom(todayISO())
                 setTo(addDaysISO(todayISO(), SEARCH_AHEAD_DAYS))
                 setSlots(null)
               }}
-              testID={`type-${t}`}
+              testID={`type-${p.programId}`}
             >
-              {INVITE_TYPE_LABEL[t]}
+              {p.name}
             </Button>
           ))}
         </XStack>
+        {program ? (
+          <YStack gap="$1" testID="program-preview">
+            <Text fontSize="$3">{`An invitation to ${program.phrase}`}</Text>
+            {program.about ? (
+              <Text fontSize="$2" color="$colorSecondary">
+                {program.about}
+              </Text>
+            ) : null}
+          </YStack>
+        ) : null}
+        {onManagePrograms ? (
+          <XStack>
+            <Button size="$2" variant="outlined" onPress={onManagePrograms} testID="manage-programs">
+              Set up invitation programs
+            </Button>
+          </XStack>
+        ) : null}
       </Section>
 
       <Section title="Who">
-        <InviteePicker onChange={onInviteeChange} />
+        <InviteePicker
+          onChange={onInviteeChange}
+          programId={program?.programId}
+          who={program?.who}
+          {...(isOwner && ecclesia ? { ecclesia } : {})}
+        />
       </Section>
 
       <Section title={`Dates to offer (up to ${MAX_DATES})`}>
         {isLecture ? (
-          <LectureRows rows={lectureRows} onChange={setLectureRows} notOpen={notOpen} />
+          <LectureRows
+            rows={lectureRows}
+            onChange={setLectureRows}
+            notOpen={notOpen}
+            hint={
+              type === 'lecture'
+                ? 'Lectures aren’t on a schedule yet, so type each date and start time.'
+                : `${program?.name ?? 'This invitation'} isn’t linked to a schedule, so type each date and start time.`
+            }
+          />
         ) : (
           <YStack gap="$3">
             <XStack gap="$2" alignItems="center" flexWrap="wrap">
@@ -453,16 +508,18 @@ function LectureRows({
   rows,
   onChange,
   notOpen,
+  hint,
 }: {
   rows: LectureRow[]
   onChange: (rows: LectureRow[]) => void
   notOpen: Record<string, string>
+  hint: string
 }) {
   const set = (i: number, patch: Partial<LectureRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   return (
     <YStack gap="$2">
       <Text fontSize="$2" color="$colorSecondary">
-        Lectures aren’t on a schedule yet, so type each date and start time.
+        {hint}
       </Text>
       {rows.map((r, i) => (
         <YStack key={i} gap="$1">

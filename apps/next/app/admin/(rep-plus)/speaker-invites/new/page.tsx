@@ -19,6 +19,7 @@ export default function NewSpeakerInvitePage() {
         ownEcclesia={ecclesia}
         isOwner={isOwner}
         onSent={() => router.push('/admin/speaker-invites?sent=1')}
+        onManagePrograms={() => router.push('/admin/speaker-invites/programs')}
       />
     </YStack>
   )

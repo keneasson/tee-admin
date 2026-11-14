@@ -1,4 +1,5 @@
 import type { ServiceOverrideType } from './service-override-types'
+import type { ProgramSnapshot } from './invite-program-types'
 
 /**
  * Speaker Invitations (docs/SPEAKER_INVITATIONS.md §5). All records live in the
@@ -6,10 +7,17 @@ import type { ServiceOverrideType } from './service-override-types'
  *
  *   SPEAKER_INVITE#{inviteId}            / META    → SpeakerInviteRecord
  *   SPEAKER_BOOKING#{ecclesia}#{type}    / {date}  → SpeakerBookingRecord (one per slot)
+ *
+ * `type` is the invitation program's id (§3a). The core three keep their ids
+ * (`memorial | bible_class | lecture`), so their booking keys never changed.
  *   SPEAKER_SWAP#{swapId}                / META    → SpeakerSwapRecord
  */
 
+/** The core three program ids (reserved; built-in defaults, §3a). */
 export type SpeakerInviteType = 'memorial' | 'bible_class' | 'lecture'
+
+/** Any invitation program id: a core id or an ecclesia-configured program (§3a). */
+export type InviteProgramId = string
 
 export const SPEAKER_INVITE_TYPES: readonly SpeakerInviteType[] = ['memorial', 'bible_class', 'lecture']
 
@@ -71,7 +79,14 @@ export interface SpeakerInviteRecord {
 
   inviteId: string
   ecclesia: string
-  type: SpeakerInviteType
+  /** The program id. */
+  type: InviteProgramId
+  /**
+   * The program's wording, length and slot at send time (§3a). Absent on
+   * invites sent before programs existed: `inviteWording` / `inviteSlot` fall
+   * back to the fixed wording and slot of their type.
+   */
+  programSnapshot?: ProgramSnapshot
   status: SpeakerInviteStatus
 
   inviterPersonId: string
@@ -113,7 +128,7 @@ export interface SpeakerBookingRecord {
   pkey: string // SPEAKER_BOOKING#{ecclesia}#{type}
   skey: string // {date}
   ecclesia: string
-  type: SpeakerInviteType
+  type: InviteProgramId
   date: string
   personId: string
   /** Absent when the booking was created for a Sheet-filled speaker by a swap. */
@@ -143,8 +158,12 @@ export interface SpeakerSwapRecord {
   skey: 'META'
   swapId: string
   ecclesia: string
-  type: SpeakerInviteType
+  type: InviteProgramId
   field: string
+  /** The schedule kind the field belongs to. Absent on older swaps: the type's fixed slot. */
+  scheduleType?: ServiceOverrideType
+  /** The program's name when the swap was asked. Absent on older swaps. */
+  programName?: string
   status: SpeakerSwapStatus
   requester: SwapSide
   target: SwapSide
@@ -167,7 +186,7 @@ export interface ShortNotice {
 
 export const speakerInviteKeys = {
   invitePk: (inviteId: string) => `SPEAKER_INVITE#${inviteId}`,
-  bookingPk: (ecclesia: string, type: SpeakerInviteType) => `SPEAKER_BOOKING#${ecclesia}#${type}`,
+  bookingPk: (ecclesia: string, type: InviteProgramId) => `SPEAKER_BOOKING#${ecclesia}#${type}`,
   swapPk: (swapId: string) => `SPEAKER_SWAP#${swapId}`,
   META: 'META' as const,
 }
@@ -202,7 +221,7 @@ export interface Slot {
   reasonNote?: string
 }
 
-/** What the inviter picks, and how lists name each type. */
+/** How lists name each core type (the built-in program names, §3a). */
 export const INVITE_TYPE_LABEL: Record<SpeakerInviteType, string> = {
   memorial: 'Memorial exhortation',
   bible_class: 'Bible Class',
@@ -211,8 +230,8 @@ export const INVITE_TYPE_LABEL: Record<SpeakerInviteType, string> = {
 
 /**
  * "An invitation to {phrase}" (email header) and "We invite you to {phrase} at
- * {ecclesia}." (opening line). Owner wording, 2026-11-13. Fixed for the core
- * three until ecclesias configure their own programs (spec §3a).
+ * {ecclesia}." (opening line). Owner wording, 2026-11-13. The built-in phrase
+ * of the core three; an ecclesia may reword them (spec §3a).
  */
 export const INVITE_TYPE_PHRASE: Record<SpeakerInviteType, string> = {
   memorial: 'exhort at our Memorial Service',
@@ -275,7 +294,11 @@ export interface InviteContactView {
 export interface InviteeInviteView {
   inviteId: string
   ecclesia: string
-  type: SpeakerInviteType
+  type: InviteProgramId
+  /** The program's wording as sent (§3a): "An invitation to {phrase}", then the about line. */
+  programName: string
+  phrase: string
+  about?: string
   status: SpeakerInviteStatus
   /** `gender` only when recorded (§9b): the page titles them by it, never by a guess. */
   invitee: { firstName: string; lastName: string; title?: 'Brother' | 'Sister' }
@@ -308,7 +331,8 @@ export interface SwapSideView {
 export interface SwapView {
   swapId: string
   ecclesia: string
-  type: SpeakerInviteType
+  type: InviteProgramId
+  programName: string
   status: SpeakerSwapStatus
   /** Who is looking: the speaker asked to trade, or the one who asked. */
   viewerRole: 'target' | 'requester'

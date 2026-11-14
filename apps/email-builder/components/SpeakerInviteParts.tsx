@@ -2,7 +2,8 @@ import { Link, Section, Text } from '@react-email/components'
 import {
   INVITE_TYPE_LABEL,
   INVITE_TYPE_PHRASE,
-  type SpeakerInviteType,
+  SPEAKER_INVITE_TYPES,
+  type SpeakerInviteType as CoreInviteType,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
 import React from 'react'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
@@ -17,17 +18,26 @@ import { defaultText, footer, footerLink, footerText, link } from '../styles'
  * a REAL preferences URL comes in as a prop.
  */
 
-/** What the speaker is invited to do. Stored on the invite as data (§3). */
-export type { SpeakerInviteType }
+/**
+ * What the speaker is invited to do, as the emails name it: a core program id
+ * (`memorial | bible_class | lecture`, which carry their built-in wording) or
+ * an ecclesia-configured program's name, shown as written (§3a).
+ */
+export type SpeakerInviteType = string
 
-/** "An invitation to {phrase} at {Ecclesia}". Labels are declared once in speaker-invite-types. */
+const coreType = (type: string): CoreInviteType | null =>
+  (SPEAKER_INVITE_TYPES as readonly string[]).includes(type) ? (type as CoreInviteType) : null
+
+/** "An invitation to {phrase} at {Ecclesia}". Built-in labels are declared once in speaker-invite-types. */
 export function inviteTypeVerbPhrase(type: SpeakerInviteType): string {
-  return INVITE_TYPE_PHRASE[type]
+  const core = coreType(type)
+  return core ? INVITE_TYPE_PHRASE[core] : type
 }
 
-/** The appointment as a noun: "Memorial exhortation", "Bible Class", "Lecture". */
+/** The appointment as a noun: "Memorial exhortation", "Bible Class", "Lecture", or the program's name. */
 export function inviteTypeNoun(type: SpeakerInviteType): string {
-  return INVITE_TYPE_LABEL[type]
+  const core = coreType(type)
+  return core ? INVITE_TYPE_LABEL[core] : type
 }
 
 /** One way to attend online (same shape as the heads-up's attend options). */

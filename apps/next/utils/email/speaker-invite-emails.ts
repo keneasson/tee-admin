@@ -2,13 +2,13 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { speakerInviteRepository } from '@my/app/provider/dynamodb/repositories/speaker-invite-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import type { TenantConfig } from '@my/app/config/tenants'
-import {
-  INVITE_TYPE_SLOT,
-  type ShortNotice,
-  type SpeakerInviteRecord,
-  type SpeakerInviteType,
-  type SpeakerSwapRecord,
+import type {
+  InviteProgramId,
+  ShortNotice,
+  SpeakerInviteRecord,
+  SpeakerSwapRecord,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
+import { inviteSlot, inviteWording, type ProgramSlot } from '@my/app/provider/dynamodb/invite-program-types'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
 import { sendEmail } from './sesClient'
 import { generateEcclesiaToken, generateEmailPreferencesUrl } from './ecclesia-token'
@@ -55,12 +55,29 @@ import { titleFor } from '@my/app/utils/speaker-eligibility'
 /** The appointment an email is about. Lecture bookings live on the invite only. */
 export interface SpeakerBookingDetails {
   ecclesia: string
-  type: SpeakerInviteType
+  /** The program id. */
+  type: InviteProgramId
   date: string // YYYY-MM-DD
   time: string // HH:mm local ('' if the schedule has no time)
   tz: string // IANA
   personId: string
   inviteId?: string
+  /** Where the program books; null = unlinked. Omitted = the core type's fixed slot. */
+  slot?: ProgramSlot | null
+}
+
+/**
+ * How the emails name the appointment ("{noun} at {Ecclesia}"): the program's
+ * name as sent. The templates' `inviteType` takes a core id or a name
+ * (`inviteTypeNoun` passes a name through), and the core three's built-in
+ * names are their old labels, so their emails read exactly as before.
+ */
+function programNoun(invite: Pick<SpeakerInviteRecord, 'type' | 'programSnapshot'> | null, type: InviteProgramId): string {
+  return inviteWording(invite ?? { type }).name
+}
+
+function swapNoun(swap: SpeakerSwapRecord): string {
+  return swap.programName ?? inviteWording({ type: swap.type }).name
 }
 
 export interface ConfirmationOptions {
@@ -126,6 +143,12 @@ function titleProp(p: PersonRecord | null | undefined): { greetingTitle?: 'Broth
   return t ? { greetingTitle: t } : {}
 }
 
+/** The test-send preview title for a person not yet created (brethren programs only, as before). */
+function previewTitle(invite: SpeakerInviteRecord): { greetingTitle?: 'Brother' } {
+  const who = invite.programSnapshot?.who ?? 'brethren'
+  return who === 'brethren' ? { greetingTitle: 'Brother' } : {}
+}
+
 async function person(personId: string): Promise<PersonRecord | null> {
   return personRepository.getById(personId).catch(() => null)
 }
@@ -188,10 +211,11 @@ function linker(base: string, token: string) {
   }
 }
 
-async function slotFor(b: Pick<SpeakerBookingDetails, 'ecclesia' | 'type' | 'date'>): Promise<SlotDetail | undefined> {
-  if (!INVITE_TYPE_SLOT[b.type]) return undefined
+async function slotFor(b: Pick<SpeakerBookingDetails, 'ecclesia' | 'type' | 'date' | 'slot'>): Promise<SlotDetail | undefined> {
+  const slot = b.slot === undefined ? inviteSlot({ type: b.type }) : b.slot
+  if (!slot) return undefined
   try {
-    const { slots } = await loadSlotDetails(b.ecclesia, b.type, b.date, b.date)
+    const { slots } = await loadSlotDetails(b.ecclesia, b.type, b.date, b.date, slot)
     return slots.find((s) => s.date === b.date)
   } catch (err) {
     console.error('[speaker-invites] could not load the slot for the email:', err)
@@ -228,11 +252,16 @@ export async function sendInvitationEmail(invite: SpeakerInviteRecord, options: 
 
   const token = await generateEcclesiaToken(to)
   const links = linker(base, token)
+  const wording = inviteWording(invite)
   const rendered = await renderSpeakerInvitation({
     inviteType: invite.type,
+    phrase: wording.phrase,
+    ...(wording.about ? { about: wording.about } : {}),
     inviteeName: options.inviteeName || fullName(invitee) || invite.inviteeEmail,
-    // A test send previews a person not yet created: they will be a Brother (§9b).
-    ...(options.inviteeName && !invitee ? { greetingTitle: 'Brother' as const } : titleProp(invitee)),
+    // A test send previews a person not yet created: only a baptism answer
+    // would title them, and the preview has none recorded, so a brethren
+    // program previews as a Brother (§9b) and other programs by first name.
+    ...(options.inviteeName && !invitee ? previewTitle(invite) : titleProp(invitee)),
     ecclesiaName: place.ecclesiaName,
     dateOptions: invite.offeredDates.map((d) => ({
       label: whenDisplay(d),
@@ -281,12 +310,20 @@ async function sendAppointmentEmail(
 
   const token = await generateEcclesiaToken(to)
   const links = linker(base, token)
-  const when = { type: booking.type, date: booking.date, time: booking.time, tz: booking.tz }
+  const wording = inviteWording(invite ?? { type: booking.type })
+  const when = {
+    type: booking.type,
+    date: booking.date,
+    time: booking.time,
+    tz: booking.tz,
+    name: wording.name,
+    lengthMinutes: wording.lengthMinutes,
+  }
   const inviteId = invite?.inviteId
 
   const rendered = await renderSpeakerConfirmation({
     variant,
-    inviteType: booking.type,
+    inviteType: programNoun(invite, booking.type),
     speakerName: fullName(speaker),
     ...titleProp(speaker),
     ecclesiaName: place.ecclesiaName,
@@ -379,7 +416,7 @@ export async function sendSwapRequestEmail(swap: SpeakerSwapRecord): Promise<voi
   const token = await generateEcclesiaToken(to)
   const links = linker(base, token)
   const rendered = await renderSpeakerSwapRequest({
-    inviteType: swap.type,
+    inviteType: swapNoun(swap),
     recipientName: fullName(target) || swap.target.name,
     ...titleProp(target),
     requesterName: fullName(requester) || swap.requester.name,
@@ -420,7 +457,7 @@ export async function sendSwapOutcomeEmail(swap: SpeakerSwapRecord, outcome: Swa
   const links = linker(base, token)
   const rendered = await renderSpeakerSwapOutcome({
     outcome,
-    inviteType: swap.type,
+    inviteType: swapNoun(swap),
     requesterName: fullName(requester) || swap.requester.name,
     ...titleProp(requester),
     // First name only: the other speaker's full name is not this reader's to see.
@@ -469,7 +506,7 @@ export async function sendInviterNotice(
   const dateText = date ? dateDisplay(date) : invite.offeredDates.map((d) => dateDisplay(d.date)).join(', ')
   const rendered = await renderSpeakerInviterNotice({
     kind: event,
-    inviteType: invite.type,
+    inviteType: programNoun(invite, invite.type),
     inviterName: inviter?.firstName ?? '',
     speakerName: fullName(speaker) || invite.inviteeEmail,
     ecclesiaName: place.ecclesiaName,

@@ -2,13 +2,15 @@ import type {
   InviteContactView,
   InviteHistoryEntry,
   InviteeInviteView,
+  InviteProgramId,
   InviteTrust,
   OfferedDate,
   ShortNotice,
   Slot,
   SpeakerInviteStatus,
-  SpeakerInviteType,
 } from '@my/app/provider/dynamodb/speaker-invite-types'
+
+import type { ProgramSnapshot } from '@my/app/provider/dynamodb/invite-program-types'
 
 /**
  * Screen-side types. The wire contract (Slot, InviteeInviteView, SwapView, …)
@@ -37,7 +39,8 @@ export type {
 export interface InviterInviteView {
   inviteId: string
   ecclesia: string
-  type: SpeakerInviteType
+  type: InviteProgramId
+  programSnapshot?: ProgramSnapshot
   status: SpeakerInviteStatus
   inviterPersonId: string
   inviteePersonId: string

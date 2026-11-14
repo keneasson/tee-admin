@@ -33,6 +33,17 @@ vi.mock('@/utils/email/ecclesia-token', () => ({ verifyEcclesiaToken: h.verifyEc
 // No household addresses here (see speaker-invites-household-api.test.ts).
 vi.mock('@/utils/sign-in-identity', () => ({ mayActAs: async () => false }))
 vi.mock('@/utils/speaker-invites/service', () => h.service)
+// The route resolves the ecclesia's invitation program (§3a); with nothing stored
+// that is the built-in core program, which is what these gate tests send.
+vi.mock('@/utils/speaker-invites/programs', async () => {
+  const { builtInProgram, slotForLink } = await import('@my/app/provider/dynamodb/invite-program-types')
+  return {
+    resolveProgram: async (_ecclesia: string, id: string) => {
+      const program = builtInProgram(id)
+      return program ? { program, slot: slotForLink(program.link) } : null
+    },
+  }
+})
 vi.mock('@/utils/speaker-invites/views', () => ({
   inviterInviteView: async (i: any) => i,
   inviteeInviteView: async (i: any) => ({ inviteId: i.inviteId }),
