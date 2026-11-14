@@ -80,6 +80,10 @@ export const KEYS = {
   youtubeOAuthAll: () => 'OAUTH#youtube',
   webAnalytics: () => 'ANALYTICS#WEB',
   speakerInvites: (ecclesia: string) => `SPEAKER_INVITES#${ecclesia}`,
+  ecclesiaSchedules: (ecclesiaId: string) => `ECCLESIA_SCHEDULES#${ecclesiaId}`,
+  scheduleEntry: (scheduleId: string) => `SCHEDULE#${scheduleId}`,
+  scheduleSourcesAll: () => 'SCHEDULE_SOURCES',
+  scheduleSheetClaim: (spreadsheetId: string) => `SCHEDULE_SHEET_CLAIM#${spreadsheetId}`,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -345,6 +349,21 @@ export const PATTERNS = {
     writer: 'packages/app/provider/dynamodb/repositories/speaker-invite-repository.ts',
   } as AccessPattern<{ ecclesia: string }>,
 
+  // Schedule registry (ECCLESIA_SCHEDULES#<ecclesiaId> / SCHEDULE#<scheduleId>), docs/ECCLESIA_SCHEDULES.md
+  scheduleRegistryByEcclesia: {
+    name: 'scheduleRegistryByEcclesia', ...onAdmin(),
+    pk: (a: { ecclesiaId: string }) => KEYS.ecclesiaSchedules(a.ecclesiaId),
+    sk: () => ({ beginsWith: 'SCHEDULE#' }),
+    shape: 'pkey ECCLESIA_SCHEDULES#<ecclesiaId> / skey SCHEDULE#<scheduleId>',
+    writer: 'packages/app/provider/dynamodb/repositories/schedule-registry-repository.ts',
+  } as AccessPattern<{ ecclesiaId: string }>,
+  scheduleSourcesAll: {
+    name: 'scheduleSourcesAll', ...onAdmin('gsi4'),
+    pk: () => KEYS.scheduleSourcesAll(),
+    shape: 'SCHEDULE_SOURCES / <ecclesiaId>#<scheduleId>  (ECCLESIA_SCHEDULES#<ecclesiaId> / SCHEDULE#<scheduleId>)',
+    writer: 'packages/app/provider/dynamodb/repositories/schedule-registry-repository.ts',
+  } as AccessPattern<void>,
+
   // LEGACY (R8 deletes): the USER# NextAuth/credentials store
   legacyUserByEmail: {
     name: 'legacyUserByEmail', ...onAdmin('gsi1'),
@@ -362,6 +381,13 @@ export const PATTERNS = {
     shape: 'PK SCHEDULE#<TYPE> / SK DATE#<iso>#<index>',
     writer: 'packages/app/provider/dynamodb/repositories/schedule-repository.ts',
   } as AccessPattern<{ type: string }>,
+  /** Rows of every ecclesia EXCEPT home (home stays in schedulesByType). Built only via `schedulePartitionFor`. */
+  schedulesBySource: {
+    name: 'schedulesBySource', table: SCHEDULES, index: undefined, pkAttr: 'PK', skAttr: 'SK',
+    pk: (a: { ecclesiaId: string; kind: string }) => `SCHEDULE#${a.ecclesiaId}#${a.kind}`,
+    shape: 'SCHEDULE#<ecclesiaId>#<kind> / DATE#<iso>#<index>  (PK/SK; non-home ecclesias)',
+    writer: 'packages/app/provider/dynamodb/repositories/schedule-repository.ts',
+  } as AccessPattern<{ ecclesiaId: string; kind: string }>,
   schedulesByEcclesia: {
     name: 'schedulesByEcclesia', table: SCHEDULES, index: 'GSI1', pkAttr: 'GSI1PK', skAttr: 'GSI1SK',
     pk: (a: { ecclesia: string }) => `ECCLESIA#${a.ecclesia}`,
