@@ -66,6 +66,8 @@ const contentManagerPages: MainPageType[] = [
 // a Recording Brother / Rep (of their own ecclesia; the API enforces that).
 // Admins and the legacy recorder role are not inviters (SPEAKER_INVITATIONS.md §2).
 const speakerInvitePage: MainPageType = { path: '/admin/speaker-invites', label: 'Speaker Invitations' }
+// Schedules setup: same people (canManageEcclesiaSchedules = canSendSpeakerInvite; ECCLESIA_SCHEDULES.md §6).
+const ecclesiaSchedulesPage: MainPageType = { path: '/admin/ecclesia-schedules', label: 'Schedules' }
 
 function canInviteSpeakers(user: UserSession | null | undefined): boolean {
   return !!user && (user.role === ROLES.OWNER || user.role === ROLES.REP || !!user.isRecordingBrother)
@@ -338,7 +340,7 @@ export const SimpleEnhancedNavigation: React.FC<SimpleEnhancedNavigationProps> =
             >
               Content
             </Text>
-            {(canInviteSpeakers(user) ? [...contentManagerPages, speakerInvitePage] : contentManagerPages).map((page) => (
+            {(canInviteSpeakers(user) ? [...contentManagerPages, speakerInvitePage, ecclesiaSchedulesPage] : contentManagerPages).map((page) => (
               <Button
                 variant="chromeless"
                 key={page.path}

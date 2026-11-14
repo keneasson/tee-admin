@@ -8,6 +8,7 @@ update it in the same PR when behaviour changes. Why this exists and the rules:
 | Spec | Covers | Prefix |
 |---|---|---|
 | [contact-details.md](contact-details.md) | See / ask / edit / correct / suggest / confirm a person's name, email, phone, address | `CONTACT-` |
+| [ecclesia-schedules.md](ecclesia-schedules.md) | Connect an ecclesia's schedule sheet, sync it, keep Toronto East unchanged | `ECSCHED-` |
 
 ## Writing a scenario
 - One row: **ID · scenario · status**. The ID is the spec prefix plus section and

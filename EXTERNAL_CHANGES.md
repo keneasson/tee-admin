@@ -11,6 +11,14 @@ Changes in this file flag code modifications that require **matching manual upda
 
 ## Pending
 
+### Scheduler — nightly ecclesia schedule sync (owner step, after this deploys)
+- **Date**: 2026-11-13
+- **Branch**: `feat/ecclesia-schedule-sources` (Refs #328)
+- **Code change**: new cron endpoint `GET /api/cron/schedule-sources` copies every active connected Google Sheet schedule (other ecclesias only; Toronto East stays on the sheet webhook) into that ecclesia's own rows. Bearer-authenticated with `EMAIL_SENDER_SECRET`, like the other cron endpoints. Without a scheduler entry, sheets only sync when someone presses "Save & sync" or "Sync now" on `/admin/ecclesia-schedules`.
+- **External action**: add a nightly EventBridge Scheduler (or Vercel cron) entry calling `GET https://tee-admin.com/api/cron/schedule-sources` with header `Authorization: Bearer $EMAIL_SENDER_SECRET`, e.g. `cron(0 7 * * ? *)` (03:00 Toronto). Same target pattern as the exhorter heads-up job.
+- **Also**: ecclesias share their sheet with the service account's `client_email` (shown on the setup page). No Google Cloud change is needed: the Sheets API is already enabled for the webhook.
+- **Status**: PENDING
+
 ### AWS EventBridge — email cron on :00/:30, hourly duplicate deleted — DONE 2026-10-25
 - `tee-email-cron`: `rate(5 minutes)` → `cron(0,30 * * * ? *)`. Sends set on the hour or half hour go out on time; any other minute waits for the next tick.
 - `tee-email-queue-processor` (hourly, same endpoint) deleted.
