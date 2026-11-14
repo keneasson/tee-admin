@@ -19,12 +19,9 @@ import { scheduleEcclesiaId } from '../dynamodb/repositories/schedule-repository
 import { scheduleRegistryRepository } from '../dynamodb/repositories/schedule-registry-repository'
 import type { RegistryEntry } from './types'
 
-/** Catalogue fields that name a person in the home ecclesia's built-in schedules. */
-export const BUILT_IN_ROSTER_ROLES: Readonly<Partial<Record<ScheduleTypeKey, readonly string[]>>> = {
-  memorial: ['Exhort', 'Preside', 'Reading1', 'Reading2'],
-  bibleClass: ['Presider', 'Speaker'],
-  cyc: ['speaker'],
-}
+import { BUILT_IN_ROSTER_ROLES } from './roster-roles'
+
+export { BUILT_IN_ROSTER_ROLES }
 
 interface SiteSheet {
   id: string
