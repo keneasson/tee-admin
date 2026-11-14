@@ -22,6 +22,7 @@ import {
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { PATTERNS, patternQuery } from '@my/app/provider/dynamodb/access-patterns'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
+import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
 
 const dbClientConfig = getAwsDbConfig()
 const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
@@ -70,7 +71,9 @@ export interface EcclesiaExternalLinks {
  * visible/labeled for each type.  Stored as a JSON attribute on the
  * ECCLESIA# record so it round-trips with every ecclesia read/write.
  */
-export type ScheduleTypeKey = 'memorial' | 'bibleClass' | 'sundaySchool' | 'cyc'
+// One definition (packages/app/config/schedule-fields.ts); re-exported here
+// for existing importers of this module.
+export type { ScheduleTypeKey }
 
 export interface ScheduleFieldConfig {
   key: string            // DB field name — consistent across all ecclesias

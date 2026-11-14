@@ -7,6 +7,33 @@ import type {
   DateRangeQuery,
 } from '../types'
 import type { ProgramTypeKeys, ProgramTypes } from '@my/app/types'
+import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
+import { slugifyEcclesia } from '../people-index/keys'
+
+/**
+ * The stable id an ecclesia's schedule rows and registry entries are keyed by:
+ * the slug of its (home-normalized) name. Pure and deterministic, so every
+ * writer and reader derives the same id from the `ecclesia` stored on a row.
+ */
+export function scheduleEcclesiaId(ecclesia: string): string {
+  return slugifyEcclesia(HOME_ECCLESIA.normalize(ecclesia))
+}
+
+/**
+ * THE one rule for which `tee-schedules` partition a schedule row lives in
+ * (docs/ECCLESIA_SCHEDULES.md §Storage).
+ *
+ *   home ecclesia  → `SCHEDULE#<TYPE>`                 (legacy; newsletter, /schedule,
+ *                                                       heads-up read it unchanged)
+ *   any other      → `SCHEDULE#<ecclesiaId>#<kind>`    (its own partition)
+ *
+ * Before this, every ecclesia's rows went into `SCHEDULE#<TYPE>`, so another
+ * ecclesia's manual row on the same date overwrote Toronto East's.
+ */
+export function schedulePartitionFor(ecclesia: string, kind: string): string {
+  if (HOME_ECCLESIA.isHomeEcclesia(ecclesia)) return PATTERNS.schedulesByType.pk({ type: kind })
+  return PATTERNS.schedulesBySource.pk({ ecclesiaId: scheduleEcclesiaId(ecclesia), kind })
+}
 
 export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
   constructor() {
@@ -17,10 +44,8 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     return `SHEET#${sheetId}` // Not typically used for this table design
   }
 
-  // Key builders for unified schedule/event table
-  private buildSchedulePK(type: string): string {
-    return PATTERNS.schedulesByType.pk({ type })
-  }
+  // Key builders for unified schedule/event table. Schedule rows: see
+  // `schedulePartitionFor` (module level) — the only PK builder for them.
 
   private buildEventPK(eventId: string): string {
     return `EVENT#${eventId}`
@@ -61,7 +86,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     sourceTimezone?: string  // IANA timezone identifier
   ): Promise<ScheduleRecord> {
     const record: ScheduleRecord = {
-      PK: this.buildSchedulePK(eventType),
+      PK: schedulePartitionFor(ecclesia, eventType),
       SK: this.buildScheduleSK(date, index),
       // GSI1 keys for per-ecclesia queries (multi-tenant schedule support)
       GSI1PK: this.buildEcclesiaGSI1PK(ecclesia),
@@ -207,7 +232,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     index: number = 0
   ): Promise<ScheduleRecord | null> {
     return this.get(
-      this.buildSchedulePK(eventType),
+      schedulePartitionFor(ecclesia, eventType),
       this.buildScheduleSK(date, index)
     )
   }
@@ -227,7 +252,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     index: number = 0
   ): Promise<ScheduleRecord> {
     return this.update(
-      this.buildSchedulePK(eventType),
+      schedulePartitionFor(ecclesia, eventType),
       this.buildScheduleSK(date, index),
       { data: data }  // Use 'data' not 'scheduleData'
     )
@@ -254,7 +279,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     index: number = 0
   ): Promise<void> {
     return this.delete(
-      this.buildSchedulePK(eventType),
+      schedulePartitionFor(ecclesia, eventType),
       this.buildScheduleSK(date, index)
     )
   }
@@ -304,12 +329,27 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
       return { successful: 0, failed: 0, errors: [] }
     }
 
-    // Existing records for this sheet: its type's partition, every page. A
-    // one-page read here left rows from page two behind as stale duplicates.
-    const existingItems = await this.queryPattern(PATTERNS.schedulesByType, { type: sheetType }, {
+    // One call replaces one ecclesia's rows of one type: the partition is
+    // decided by (ecclesia, type), so mixed input would diff the wrong rows.
+    const ecclesia = schedules[0].ecclesia
+    if (schedules.some((s) => s.ecclesia !== ecclesia || s.type !== sheetType)) {
+      return { successful: 0, failed: schedules.length, errors: ['replaceSheetSchedules: rows must share one ecclesia and type'] }
+    }
+
+    // Existing records for this sheet: its partition, every page. A one-page
+    // read here left rows from page two behind as stale duplicates. The home
+    // ecclesia keeps reading the legacy type partition (byte-identical query).
+    const filter = {
       filterExpression: 'sheetId = :sheetId',
       expressionAttributeValues: { ':sheetId': sheetId },
-    })
+    }
+    const existingItems = HOME_ECCLESIA.isHomeEcclesia(ecclesia)
+      ? await this.queryPattern(PATTERNS.schedulesByType, { type: sheetType }, filter)
+      : await this.queryPattern(
+          PATTERNS.schedulesBySource,
+          { ecclesiaId: scheduleEcclesiaId(ecclesia), kind: sheetType },
+          filter
+        )
 
     // Build a map of existing records by their checksum key for quick lookup
     // This allows us to preserve externally-managed fields like YouTube URLs
@@ -322,7 +362,7 @@ export class ScheduleRepository extends BaseRepository<ScheduleRecord> {
     // Create checksums for new data
     const newRecordsMap = new Map<string, ScheduleRecord>()
     const newRecords: ScheduleRecord[] = schedules.map((schedule, index) => {
-      const pk = this.buildSchedulePK(schedule.type)
+      const pk = schedulePartitionFor(schedule.ecclesia, schedule.type)
       const sk = this.buildScheduleSK(schedule.date, index)
       const checksumKey = `${pk}#${sk}`
 

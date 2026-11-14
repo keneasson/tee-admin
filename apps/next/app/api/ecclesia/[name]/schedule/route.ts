@@ -161,11 +161,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'type and date are required' }, { status: 400 })
     }
 
-    // Build the keys to delete
-    const PK = `SCHEDULE#${type.toUpperCase()}`
-    const SK = `DATE#${new Date(date).toISOString()}#0`
-
-    await scheduleRepo.delete(PK, SK)
+    // The row's partition is decided by (ecclesia, type) — never a hand-built
+    // `SCHEDULE#<TYPE>`, which deleted the home ecclesia's row for that date.
+    await scheduleRepo.deleteScheduleEvent(date, ecclesiaName, type)
 
     return NextResponse.json({ success: true })
   } catch (error) {
