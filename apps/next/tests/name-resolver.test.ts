@@ -101,3 +101,48 @@ describe('resolveScheduleName', () => {
     expect(r.status).toBe('not-found')
   })
 })
+
+describe('resolveScheduleName — preferred names (#332)', () => {
+  const benjamin: DirectoryPerson = {
+    personId: 'b1',
+    firstName: 'Benjamin',
+    lastName: 'Sample',
+    preferredFirstName: 'Ben',
+  }
+  const married: DirectoryPerson = {
+    personId: 'm1',
+    firstName: 'Jane',
+    lastName: 'Before',
+    preferredLastName: 'After',
+  }
+
+  it('matches the preferred first name with the legal last name', () => {
+    const m = resolveScheduleName('Ben Sample', [benjamin])
+    expect(m).toMatchObject({ status: 'matched', person: { personId: 'b1' } })
+  })
+
+  it('still matches the legal name', () => {
+    expect(resolveScheduleName('Benjamin Sample', [benjamin]).status).toBe('matched')
+  })
+
+  it('matches a preferred last name on its own', () => {
+    expect(resolveScheduleName('Jane After', [married])).toMatchObject({ status: 'matched', person: { personId: 'm1' } })
+    expect(resolveScheduleName('Jane Before', [married]).status).toBe('matched')
+  })
+
+  it('without a preferred name the short form is not a match', () => {
+    const noPref: DirectoryPerson = { personId: 'b2', firstName: 'Benjamin', lastName: 'Sample' }
+    expect(resolveScheduleName('Ben Sample', [noPref]).status).toBe('not-found')
+  })
+
+  it('a preferred name that collides with someone else is ambiguous, not a guess', () => {
+    const otherBen: DirectoryPerson = { personId: 'b3', firstName: 'Ben', lastName: 'Sample' }
+    const m = resolveScheduleName('Ben Sample', [benjamin, otherBen])
+    expect(m.status).toBe('ambiguous')
+  })
+
+  it('a typo is measured against the closest of the person\'s names', () => {
+    const m = resolveScheduleName('Ben Sampel', [benjamin])
+    expect(m).toMatchObject({ status: 'typo' })
+  })
+})

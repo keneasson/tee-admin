@@ -482,6 +482,12 @@ export interface PersonRecord extends BaseRecord {
   ecclesia: string
   memberStatus: MemberStatus
 
+  // The name the person goes by when it differs from the legal name (e.g. a
+  // schedule writes "Ben" for "Benjamin"). Either half may be set alone; ''
+  // means not set. Used by the schedule-name matcher; displayName is unchanged.
+  preferredFirstName?: string
+  preferredLastName?: string
+
   // Inter-ecclesia communications
   isInterEcclesiaRep?: boolean  // Flag: receives inter-ecclesia emails for their ecclesia
   isRecordingBrother?: boolean  // Flag: primary contact (Recording Brother) for their ecclesia — CANONICAL source of truth

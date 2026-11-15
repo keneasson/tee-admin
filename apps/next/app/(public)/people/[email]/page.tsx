@@ -27,6 +27,9 @@ interface MemberProfile {
   name?: string
   firstName?: string
   lastName?: string
+  /** Editors only: the name they go by, '' when not set. */
+  preferredFirstName?: string
+  preferredLastName?: string
   ecclesia?: string
   ecclesiaInfo?: {
     city: string
@@ -164,6 +167,8 @@ export default function MemberProfilePage() {
   const [editing, setEditing] = useState(false)
   const [editFirstName, setEditFirstName] = useState('')
   const [editLastName, setEditLastName] = useState('')
+  const [editPreferredFirstName, setEditPreferredFirstName] = useState('')
+  const [editPreferredLastName, setEditPreferredLastName] = useState('')
   const [editEcclesia, setEditEcclesia] = useState('')
   const [saving, setSaving] = useState(false)
   const [editMessage, setEditMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -383,6 +388,8 @@ export default function MemberProfilePage() {
     if (!profile) return
     setEditFirstName(profile.firstName || '')
     setEditLastName(profile.lastName || '')
+    setEditPreferredFirstName(profile.preferredFirstName || '')
+    setEditPreferredLastName(profile.preferredLastName || '')
     setEditEcclesia(profile.ecclesia || '')
     setEditMessage(null)
     setEditing(true)
@@ -438,6 +445,8 @@ export default function MemberProfilePage() {
         body: JSON.stringify({
           firstName: editFirstName,
           lastName: editLastName,
+          preferredFirstName: editPreferredFirstName,
+          preferredLastName: editPreferredLastName,
           ecclesia: editEcclesia,
         }),
       })
@@ -448,6 +457,8 @@ export default function MemberProfilePage() {
           name: data.profile.name,
           firstName: data.profile.firstName,
           lastName: data.profile.lastName,
+          preferredFirstName: data.profile.preferredFirstName,
+          preferredLastName: data.profile.preferredLastName,
           ecclesia: data.profile.ecclesia,
         } : null)
         setEditing(false)
@@ -997,6 +1008,31 @@ export default function MemberProfilePage() {
                     />
                   </YStack>
                 </XStack>
+                <YStack gap="$1">
+                  <Text fontSize="$2" fontWeight="600">Preferred name (optional)</Text>
+                  <Text fontSize="$2" theme="alt2">
+                    The name he or she goes by, if different (for example "Ben" for "Benjamin").
+                    Schedules can use either name. Leave a box empty to use the name above.
+                  </Text>
+                  <XStack gap="$3" flexWrap="wrap">
+                    <Input
+                      flex={1}
+                      minWidth={150}
+                      value={editPreferredFirstName}
+                      onChangeText={setEditPreferredFirstName}
+                      placeholder="Preferred first name"
+                      aria-label="Preferred first name"
+                    />
+                    <Input
+                      flex={1}
+                      minWidth={150}
+                      value={editPreferredLastName}
+                      onChangeText={setEditPreferredLastName}
+                      placeholder="Preferred last name"
+                      aria-label="Preferred last name"
+                    />
+                  </XStack>
+                </YStack>
                 <YStack gap="$1" position="relative" ref={ecclesiaContainerRef as any}>
                   <Text fontSize="$2" fontWeight="600">Ecclesia</Text>
                   <XStack position="relative">
@@ -1106,6 +1142,16 @@ export default function MemberProfilePage() {
                         />
                       )}
                     </XStack>
+                    {profile.preferredFirstName || profile.preferredLastName ? (
+                      <Text fontSize="$3" theme="alt2">
+                        {`Goes by ${[
+                          profile.preferredFirstName || profile.firstName,
+                          profile.preferredLastName || profile.lastName,
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}`}
+                      </Text>
+                    ) : null}
                     {profile.ecclesia ? (
                       <Text fontSize="$3" theme="alt2">{profile.ecclesia}</Text>
                     ) : null}

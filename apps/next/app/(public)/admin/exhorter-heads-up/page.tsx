@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Section, YStack, XStack, Text, Heading, Button, Card, Spinner } from '@my/ui'
+import { Section, YStack, XStack, Text, Heading, Button, Card, Spinner, Anchor } from '@my/ui'
+import { describeHeadsUpProblem, type HeadsUpProblem } from '@/utils/email/exhorter-heads-up-problem'
 import { Wrapper } from '@my/app/provider/wrapper'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
 import { Send, AlertTriangle, CheckCircle2, Ban, RefreshCw } from '@tamagui/lucide-icons'
@@ -83,6 +84,21 @@ export default function ExhorterHeadsUpReviewPage() {
    */
   const linkToken = params?.get('token') ?? ''
   const [token, setToken] = useState(linkToken)
+  /**
+   * `?date=YYYY-MM-DD` arrives from the "was not sent" warning email (#332):
+   * after fixing the schedule or the directory, the Recording Brother checks
+   * that Sunday again from here.
+   */
+  const rawCheckDate = params?.get('date') ?? ''
+  const checkDate = /^\d{4}-\d{2}-\d{2}$/.test(rawCheckDate) ? rawCheckDate : ''
+  const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState<
+    | { kind: 'parked'; redirectedTo?: string }
+    | { kind: 'problem'; problem: HeadsUpProblem }
+    | { kind: 'already-sent' }
+    | { kind: 'error'; message: string }
+    | null
+  >(null)
 
   const [data, setData] = useState<ConfirmData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -181,6 +197,42 @@ export default function ExhorterHeadsUpReviewPage() {
     }
   }
 
+  const checkAgain = async () => {
+    setChecking(true)
+    setCheckResult(null)
+    try {
+      const res = await fetch('/api/admin/exhorter-heads-up', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ date: checkDate }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || 'Could not check this Sunday.')
+      if (body.parked) {
+        setCheckResult({ kind: 'parked', redirectedTo: body.redirectedTo })
+        return
+      }
+      if (body.report?.status === 'skipped:already-sent') {
+        setCheckResult({ kind: 'already-sent' })
+        return
+      }
+      const problem = body.report ? describeHeadsUpProblem(body.report) : null
+      setCheckResult(
+        problem
+          ? { kind: 'problem', problem }
+          : { kind: 'error', message: 'The review copy could not be prepared.' }
+      )
+    } catch (err) {
+      setCheckResult({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not check this Sunday.',
+      })
+    } finally {
+      setChecking(false)
+    }
+  }
+
   const act = async (action: 'invalidate' | 'resend' | 'resend-after-bounce') => {
     setBusyAction(action)
     setSendError(null)
@@ -244,7 +296,77 @@ export default function ExhorterHeadsUpReviewPage() {
 
           {/* The ordinary case: nothing is waiting on a decision. Said plainly,
               because most visits to a findable page will look like this. */}
-          {nothingWaiting ? (
+          {checkDate ? (
+            <Card padding="$4" backgroundColor="$backgroundHover">
+              <YStack gap="$3">
+                <Text fontSize="$5" fontWeight="600">{readableDate(checkDate)}</Text>
+                <Text fontSize="$3">
+                  Fixed the schedule or the directory? Check this Sunday again. If everything is in
+                  order, the review copy is emailed to you as usual. Nothing goes to the exhorter
+                  from this button.
+                </Text>
+                <Button
+                  alignSelf="flex-start"
+                  icon={checking ? <Spinner size="small" /> : RefreshCw}
+                  disabled={checking}
+                  onPress={checkAgain}
+                >
+                  {checking ? 'Checking…' : 'Check again'}
+                </Button>
+
+                {checkResult?.kind === 'parked' ? (
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <CheckCircle2 size={18} color="$success" />
+                    <Text fontSize="$4">
+                      {`All good. The review copy is on its way to ${checkResult.redirectedTo || 'you'}.`}
+                    </Text>
+                  </XStack>
+                ) : null}
+
+                {checkResult?.kind === 'already-sent' ? (
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <CheckCircle2 size={18} color="$success" />
+                    <Text fontSize="$4">The heads-up for this Sunday has already been sent.</Text>
+                  </XStack>
+                ) : null}
+
+                {checkResult?.kind === 'error' ? (
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <AlertTriangle size={16} color="$warning" />
+                    <Text fontSize="$4">{checkResult.message}</Text>
+                  </XStack>
+                ) : null}
+
+                {checkResult?.kind === 'problem' ? (
+                  <YStack gap="$2">
+                    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                      <AlertTriangle size={16} color="$warning" />
+                      <Text fontSize="$4" fontWeight="600">{checkResult.problem.headline}</Text>
+                    </XStack>
+                    {checkResult.problem.details.map((d) => (
+                      <Text key={d} fontSize="$3">{d}</Text>
+                    ))}
+                    {checkResult.problem.candidates.map((c) => (
+                      <Anchor
+                        key={c.personId}
+                        href={`/people/${encodeURIComponent(c.personId)}`}
+                        color="$primary"
+                        fontSize="$3"
+                      >
+                        {c.ecclesia ? `${c.name} (${c.ecclesia})` : c.name}
+                      </Anchor>
+                    ))}
+                    <Text fontSize="$3" fontWeight="600">What to do</Text>
+                    {checkResult.problem.fix.map((f, i) => (
+                      <Text key={f} fontSize="$3">{`${i + 1}. ${f}`}</Text>
+                    ))}
+                  </YStack>
+                ) : null}
+              </YStack>
+            </Card>
+          ) : null}
+
+          {nothingWaiting && !checkDate ? (
             <Card padding="$3" backgroundColor="$backgroundHover">
               <YStack gap="$1">
                 <Text fontSize="$4">No email waiting to be verified.</Text>

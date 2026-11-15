@@ -214,6 +214,42 @@ describe('resolveAndSendExhorterHeadsUp — guards (no send)', () => {
     expect(h.sendEmail).not.toHaveBeenCalled()
   })
 
+  it('near-miss name → unresolved typo, with the close people as candidates (#332)', async () => {
+    h.getScheduleData.mockResolvedValue(memorialSchedule('Brad Testr'))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: false,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('unresolved')
+    expect(report.matchStatus).toBe('typo')
+    expect(report.candidates).toEqual([
+      { personId: 'p-brad', name: 'Brad Tester', ecclesia: 'Toronto East Ecclesia' },
+    ])
+    expect(h.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('a schedule written with the preferred name resolves to the person (#332)', async () => {
+    const benjamin = personRecord({
+      personId: 'p-benjamin',
+      firstName: 'Benjamin',
+      lastName: 'Sample',
+      ecclesia: 'Toronto East Ecclesia',
+      preferredFirstName: 'Ben',
+    })
+    h.listAll.mockResolvedValue({ items: [BRAD, benjamin], lastEvaluatedKey: undefined })
+    h.getById.mockResolvedValue(benjamin)
+    h.getScheduleData.mockResolvedValue(memorialSchedule('Ben Sample'))
+    const report = await resolveAndSendExhorterHeadsUp({
+      date: TARGET_DATE,
+      test: true,
+      dryRun: true,
+      requesterEmail: REQUESTER,
+    })
+    expect(report.status).toBe('dry-run')
+    expect(report.personId).toBe('p-benjamin')
+  })
+
   it('matched but empty primaryEmail → skipped:no-email', async () => {
     h.getById.mockResolvedValue(
       personRecord({

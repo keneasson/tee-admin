@@ -124,6 +124,11 @@ export interface ExhorterHeadsUpReport {
   zoomSource?: 'override' | 'default'
   /** When unresolved: the resolver outcome (typo | ambiguous | not-found). */
   matchStatus?: string
+  /**
+   * When unresolved as `typo` or `ambiguous`: the directory people the name
+   * could mean, so the person fixing it knows who to look at.
+   */
+  candidates?: Array<{ personId: string; name: string; ecclesia?: string }>
   /** When skipped:needs-review — the free-text signal a human should look at. */
   note?: string
 }
@@ -234,7 +239,23 @@ export async function resolveAndSendExhorterHeadsUp(
   const candidates = (await listAllPersons()).map(toDirectoryPerson)
   const match = resolveScheduleName(exhortName, candidates)
   if (match.status !== 'matched') {
-    return { ...base, status: 'unresolved', matchStatus: match.status }
+    const people =
+      match.status === 'typo'
+        ? match.suggestions.map((sug) => sug.person)
+        : match.status === 'ambiguous'
+          ? match.candidates
+          : []
+    const candidates = people.map((p) => ({
+      personId: p.personId,
+      name: p.displayName || `${p.firstName} ${p.lastName}`.trim(),
+      ecclesia: p.ecclesia,
+    }))
+    return {
+      ...base,
+      status: 'unresolved',
+      matchStatus: match.status,
+      ...(candidates.length > 0 ? { candidates } : {}),
+    }
   }
 
   // 4. Load the full record; an emailless (visiting) speaker has primaryEmail ''.
