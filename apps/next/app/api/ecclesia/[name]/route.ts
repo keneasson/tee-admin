@@ -12,6 +12,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { geocodeAndUpdateEcclesia } from '@/utils/geocode-ecclesia'
 import { officesOf, recordingBrotherOf } from '@/utils/ecclesia-offices'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
+import { addressFullName, hasPreferredName } from '@my/app/utils/preferred-name'
 
 /**
  * GET /api/ecclesia/[name] - Fetch a single ecclesia by name
@@ -167,7 +168,10 @@ export async function PATCH(
           // Send confirmation email to nominee instead of activating immediately
           await sendRBConfirmationEmail({
             recipientEmail: newRBEmail,
-            recipientName: resolvedPerson.displayName || newRBEmail,
+            recipientName:
+              (hasPreferredName(resolvedPerson) ? addressFullName(resolvedPerson) : '') ||
+              resolvedPerson.displayName ||
+              newRBEmail,
             ecclesiaName,
             emailPreference: 'personal',
             personId: resolvedPerson.personId,

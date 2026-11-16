@@ -314,3 +314,18 @@ describe('confirmation, cancellation, swap request, inviter notice', () => {
     expect(lastRender('inviter-notice').speakerNote).toBe('Unwell this week')
   })
 })
+
+describe('preferred names (#334)', () => {
+  it('greets the invitee and signs off as the inviter by the names they go by', async () => {
+    h.people.set('p-rb', { ...h.people.get('p-rb'), preferredFirstName: 'Robbie' })
+    h.people.set('p-a', { ...h.people.get('p-a'), preferredFirstName: 'Al' })
+    await sendInvitationEmail(invite())
+    expect(lastRender('invitation')).toMatchObject({ inviteeName: 'Al Speaker', inviterName: 'Robbie Recorder' })
+  })
+
+  it('the inviter notice greets the inviter by preferred first name', async () => {
+    h.people.set('p-rb', { ...h.people.get('p-rb'), preferredFirstName: 'Robbie' })
+    await sendInviterNotice(invite({ status: 'cancelled', acceptedDate: '2026-11-15', acceptedTime: '11:00' }), 'cancelled')
+    expect(lastRender('inviter-notice').inviterName).toBe('Robbie')
+  })
+})

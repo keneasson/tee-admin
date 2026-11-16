@@ -36,6 +36,7 @@ import {
 import { loadSlotDetails, type SlotDetail } from '../speaker-invites/slots'
 import { speakerEmailFor } from '../speaker-invites/contact'
 import { titleFor } from '@my/app/utils/speaker-eligibility'
+import { addressFirstName, addressFullName } from '@my/app/utils/preferred-name'
 
 /**
  * Email seam for speaker invitations (spec §8). The service calls these AFTER
@@ -113,9 +114,15 @@ function fromFor(tenant: TenantConfig): string {
   return `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
 }
 
-function fullName(p: Pick<PersonRecord, 'firstName' | 'lastName' | 'displayName'> | null | undefined): string {
+/** The name the person goes by (#334): preferred first/last when set, else legal. */
+function fullName(
+  p:
+    | Pick<PersonRecord, 'firstName' | 'lastName' | 'displayName' | 'preferredFirstName' | 'preferredLastName'>
+    | null
+    | undefined
+): string {
   if (!p) return ''
-  return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || p.displayName || ''
+  return addressFullName(p) || p.displayName || ''
 }
 
 /** "Brother Sample Inviter" for a sign-off: the recorded title (§9b), else the bare name. */
@@ -507,7 +514,7 @@ export async function sendInviterNotice(
   const rendered = await renderSpeakerInviterNotice({
     kind: event,
     inviteType: programNoun(invite, invite.type),
-    inviterName: inviter?.firstName ?? '',
+    inviterName: addressFirstName(inviter),
     speakerName: fullName(speaker) || invite.inviteeEmail,
     ecclesiaName: place.ecclesiaName,
     dateDisplay: dateText,

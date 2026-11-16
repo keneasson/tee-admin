@@ -29,6 +29,7 @@ import { renderExhorterHeadsUp } from './exhorter-heads-up-render'
 import { exhorterHeadsUpRepository } from '@my/app/provider/dynamodb/repositories/exhorter-headsup-repository'
 import { sendRecipientRepository } from '@my/app/provider/dynamodb/repositories/send-recipient-repository'
 import { generateEmailPreferencesUrl } from './ecclesia-token'
+import { addressFullName } from '@my/app/utils/preferred-name'
 
 /**
  * Exhorter heads-up service (#124, slice A).
@@ -365,10 +366,8 @@ export async function resolveAndSendExhorterHeadsUp(
     emailPreferencesUrl = `${process.env.NEXT_PUBLIC_AUTH_URL || 'https://tee-admin.com'}/email-preferences`
   }
 
-  const exhorterName =
-    [person.firstName, person.lastName].filter(Boolean).join(' ').trim() ||
-    person.displayName ||
-    person.firstName
+  // The name he goes by (#334): preferred first/last when set, else legal.
+  const exhorterName = addressFullName(person) || person.displayName || person.firstName
 
   /**
    * Sunday School that week — DERIVED, never assumed.
