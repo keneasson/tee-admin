@@ -32,6 +32,8 @@ export function toDirectoryPerson(p: PersonRecord): DirectoryPerson {
     lastName: p.lastName,
     ecclesia: p.ecclesia,
     displayName: p.displayName,
+    preferredFirstName: p.preferredFirstName || undefined,
+    preferredLastName: p.preferredLastName || undefined,
   }
 }
 

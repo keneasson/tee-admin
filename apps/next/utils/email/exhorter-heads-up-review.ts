@@ -11,6 +11,7 @@ import {
   EMAIL_TRACKING_CONFIG_SET,
   type ExhorterHeadsUpReport,
 } from './exhorter-heads-up'
+import { renderHeadsUpProblemEmail, type HeadsUpProblem } from './exhorter-heads-up-problem'
 
 /**
  * QA-by-redirect for the exhorter heads-up (#124, slice B).
@@ -118,6 +119,20 @@ function appendSendBlockText(text: string, v: SendBlock): string {
 }
 
 /**
+ * Who reviews the heads-up: the host ecclesia's Recording Brother (office
+ * address first), else the EXHORTER_HEADSUP_REVIEWER fallback. '' when neither.
+ */
+export async function resolveReviewerEmail(): Promise<string> {
+  const tenant = resolveTenantFromEnv()
+  const ecclesia = await getEcclesiaByName(tenant.homeEcclesiaName ?? '')
+  return (
+    (await recordingBrotherOf(ecclesia).catch(() => null))?.email ||
+    process.env.EXHORTER_HEADSUP_REVIEWER ||
+    ''
+  )
+}
+
+/**
  * Render the heads-up for a Sunday and redirect it to the reviewer for QA.
  *
  * Rendered with `renderOnly`, which resolves and renders but sends nothing and
@@ -128,12 +143,7 @@ export async function prepareHeadsUpForReview(
   params: PrepareHeadsUpForReviewParams
 ): Promise<PrepareHeadsUpForReviewResult> {
   const tenant = resolveTenantFromEnv()
-  const ecclesia = await getEcclesiaByName(tenant.homeEcclesiaName ?? '')
-  const reviewerEmail =
-    params.reviewerEmail ||
-    (await recordingBrotherOf(ecclesia).catch(() => null))?.email ||
-    process.env.EXHORTER_HEADSUP_REVIEWER ||
-    ''
+  const reviewerEmail = params.reviewerEmail || (await resolveReviewerEmail())
 
   // `test: false` so this is the REAL email — the live subject, the recipient's
   // own preferences link, no [TEST] prefix. Only the To: header differs.
@@ -148,7 +158,7 @@ export async function prepareHeadsUpForReview(
     // Every guard (unresolved name, placeholder, cancelled Sunday, past date)
     // reports without sending. The caller surfaces it; a job that silently does
     // nothing is indistinguishable from a job that is broken.
-    return { report, parked: false }
+    return { report, reviewerEmail: reviewerEmail || undefined, parked: false }
   }
 
   if (!reviewerEmail) {
@@ -163,6 +173,7 @@ export async function prepareHeadsUpForReview(
   if (await exhorterHeadsUpRepository.wasSent(report.date, report.personId)) {
     return {
       report: { ...report, status: 'skipped:already-sent' },
+      reviewerEmail,
       parked: false,
     }
   }
@@ -232,4 +243,42 @@ export async function prepareHeadsUpForReview(
   })
 
   return { report, reviewerEmail, parked: true, supersededCopies: superseded }
+}
+
+/**
+ * Tell the reviewer the heads-up could not be prepared (#332).
+ *
+ * The Saturday job's outcome otherwise only reaches the scheduler, which
+ * discards it — so a name that matched nobody meant no email at all, and the
+ * reminder was missed without anyone knowing. Returns false when there is no
+ * reviewer address to tell.
+ */
+export async function sendHeadsUpProblemNotice(params: {
+  date: string
+  problem: HeadsUpProblem
+  reviewerEmail?: string
+}): Promise<boolean> {
+  const to = params.reviewerEmail || (await resolveReviewerEmail())
+  if (!to) {
+    console.error('[exhorter-headsup] problem notice not sent: no reviewer address', {
+      date: params.date,
+      headline: params.problem.headline,
+    })
+    return false
+  }
+  const { subject, html, text } = renderHeadsUpProblemEmail({
+    problem: params.problem,
+    date: params.date,
+    baseUrl: baseUrl(),
+  })
+  await sendEmail({
+    to,
+    subject,
+    body: html,
+    textBody: text,
+    tenant: resolveTenantFromEnv(),
+    configurationSetName: EMAIL_TRACKING_CONFIG_SET,
+    emailTags: [{ Name: 'Reason', Value: 'exhorter-heads-up-problem' }],
+  })
+  return true
 }

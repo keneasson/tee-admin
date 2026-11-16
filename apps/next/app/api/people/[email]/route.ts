@@ -29,6 +29,9 @@ interface MemberProfile {
   name?: string
   firstName?: string
   lastName?: string
+  /** Editors only: the name they go by, '' when not set (#332). */
+  preferredFirstName?: string
+  preferredLastName?: string
   ecclesia?: string
   ecclesiaInfo?: {
     city: string
@@ -397,6 +400,8 @@ export async function GET(
       profile.firstName = targetPerson.firstName
       profile.lastName = targetPerson.lastName
       profile.canEdit = viewerCanEdit
+      profile.preferredFirstName = targetPerson.preferredFirstName ?? ''
+      profile.preferredLastName = targetPerson.preferredLastName ?? ''
       Object.assign(profile, speakerFactsOf(targetPerson))
       if (!isOwnProfile) {
         profile.personId = targetPerson.personId
@@ -420,6 +425,8 @@ export async function GET(
         profile.firstName = targetPerson.firstName
         profile.lastName = targetPerson.lastName
         profile.canEdit = viewerCanEdit
+        profile.preferredFirstName = targetPerson.preferredFirstName ?? ''
+        profile.preferredLastName = targetPerson.preferredLastName ?? ''
         Object.assign(profile, speakerFactsOf(targetPerson))
         profile.personId = targetPerson.personId
         profile.role = targetPerson.role || ROLES.GUEST
@@ -548,10 +555,12 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { firstName, lastName, ecclesia } = body as {
+    const { firstName, lastName, ecclesia, preferredFirstName, preferredLastName } = body as {
       firstName?: string
       lastName?: string
       ecclesia?: string
+      preferredFirstName?: string
+      preferredLastName?: string
     }
 
     // Build updates object with only provided fields
@@ -559,6 +568,9 @@ export async function PATCH(
     if (firstName !== undefined) updates.firstName = firstName.trim()
     if (lastName !== undefined) updates.lastName = lastName.trim()
     if (ecclesia !== undefined) updates.ecclesia = ecclesia.trim()
+    // '' clears a preferred name (= not set).
+    if (preferredFirstName !== undefined) updates.preferredFirstName = String(preferredFirstName).trim()
+    if (preferredLastName !== undefined) updates.preferredLastName = String(preferredLastName).trim()
 
     // Recorded facts (§9b): gender / baptized / baptismDate, null = Not set.
     // Same permission as the other fields on this form.
@@ -591,6 +603,8 @@ export async function PATCH(
       profile: {
         firstName: updated.firstName,
         lastName: updated.lastName,
+        preferredFirstName: updated.preferredFirstName ?? '',
+        preferredLastName: updated.preferredLastName ?? '',
         name: updated.displayName,
         ecclesia: updated.ecclesia,
         gender: updated.gender ?? null,

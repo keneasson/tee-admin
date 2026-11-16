@@ -23,6 +23,13 @@ export interface DirectoryPerson {
   lastName: string
   ecclesia?: string
   displayName?: string
+  /**
+   * The name the person goes by, when it differs from the legal name ("Ben" for
+   * "Benjamin"). Either half may be set alone; the other half falls back to the
+   * legal name. The matcher accepts the legal OR the preferred name.
+   */
+  preferredFirstName?: string
+  preferredLastName?: string
 }
 
 export type NameMatch =
@@ -93,8 +100,17 @@ export function editDistance(a: string, b: string): number {
 
 const TYPO_MAX_DISTANCE = 2
 
-function personName(p: DirectoryPerson): NormalizedName {
-  return normalizeName(`${p.firstName} ${p.lastName}`)
+/**
+ * Every name a person can be written under in a schedule: the legal name, plus
+ * the preferred name when one is set (deduplicated).
+ */
+export function personNames(p: DirectoryPerson): NormalizedName[] {
+  const legal = normalizeName(`${p.firstName} ${p.lastName}`)
+  const prefFirst = p.preferredFirstName?.trim()
+  const prefLast = p.preferredLastName?.trim()
+  if (!prefFirst && !prefLast) return [legal]
+  const preferred = normalizeName(`${prefFirst || p.firstName} ${prefLast || p.lastName}`)
+  return preferred.full === legal.full ? [legal] : [legal, preferred]
 }
 
 /**
@@ -108,10 +124,12 @@ export function resolveScheduleName(raw: string, candidates: DirectoryPerson[]):
     return { status: 'not-found', input }
   }
 
-  const scored = candidates.map((person) => ({ person, name: personName(person) }))
+  const scored = candidates.map((person) => ({ person, names: personNames(person) }))
 
-  // 1. Exact match on normalized first + last.
-  const exact = scored.filter((c) => c.name.first === input.first && c.name.last === input.last)
+  // 1. Exact match on normalized first + last — legal or preferred name.
+  const exact = scored.filter((c) =>
+    c.names.some((n) => n.first === input.first && n.last === input.last)
+  )
   if (exact.length === 1) {
     return { status: 'matched', person: exact[0].person, confidence: 'exact' }
   }
@@ -121,7 +139,10 @@ export function resolveScheduleName(raw: string, candidates: DirectoryPerson[]):
 
   // 2. No exact — look for close matches (typo). Distance on the full "first last".
   const near = scored
-    .map((c) => ({ person: c.person, distance: editDistance(input.full, c.name.full) }))
+    .map((c) => ({
+      person: c.person,
+      distance: Math.min(...c.names.map((n) => editDistance(input.full, n.full))),
+    }))
     .filter((c) => c.distance > 0 && c.distance <= TYPO_MAX_DISTANCE)
     .sort((a, b) => a.distance - b.distance)
 
