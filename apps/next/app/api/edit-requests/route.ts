@@ -6,6 +6,8 @@ import { editRequestRepository } from '@my/app/provider/dynamodb/repositories/ed
 import { sendEmail } from '../../../utils/email/sesClient'
 import EditRequestEmail from '../../../../email-builder/emails/EditRequest'
 import type { EditRequestField } from '@my/app/provider/dynamodb/types'
+import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { addressFirstName } from '@my/app/utils/preferred-name'
 
 const validFields: EditRequestField[] = ['email', 'phone', 'address', 'name']
 
@@ -202,8 +204,10 @@ export async function POST(request: NextRequest) {
       const rejectUrl = `${baseUrl}/api/edit-requests/approve?token=${editRequest.approvalToken}&action=reject`
       const viewAllUrl = `${baseUrl}/profile?tab=edit-requests`
 
-      // Get target user's name (use email if not available)
-      const targetName = targetEmail.split('@')[0] // Simple fallback
+      // Greet them by the name they go by (#334): their directory entry's
+      // preferred name, else their name, else the email's local part.
+      const targetPerson = await personRepository.getByEmail(targetEmail).catch(() => null)
+      const targetName = addressFirstName(targetPerson) || targetEmail.split('@')[0]
 
       const emailComponent = React.createElement(EditRequestEmail, {
         targetName,

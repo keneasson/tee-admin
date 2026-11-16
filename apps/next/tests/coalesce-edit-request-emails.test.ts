@@ -112,3 +112,22 @@ describe('edit-request notifications are coalesced', () => {
     expect(h.sendEmail).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('edit-request greeting (#334)', () => {
+  it('greets the person by preferred first name, else first name', async () => {
+    const { POST } = await import('../app/api/edit-requests/route')
+    h.getPendingRequests.mockResolvedValue([])
+    h.getByEmail.mockResolvedValue({ personId: 'p1', firstName: 'Margaret', preferredFirstName: 'Peggy' })
+    await POST(post('address'))
+    expect(h.render.mock.calls[0][0].props.targetName).toBe('Peggy')
+
+    vi.clearAllMocks()
+    h.render.mockResolvedValue('<html></html>')
+    h.createRequest.mockResolvedValue({ requestId: 'req-2', approvalToken: 'tok2' })
+    h.hasPendingRequestForField.mockResolvedValue(false)
+    h.getPendingRequests.mockResolvedValue([])
+    h.getByEmail.mockResolvedValue({ personId: 'p1', firstName: 'Margaret' })
+    await POST(post('phone'))
+    expect(h.render.mock.calls[0][0].props.targetName).toBe('Margaret')
+  })
+})

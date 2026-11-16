@@ -5,6 +5,7 @@ import {
 } from '../../../../utils/dynamodb/credentials-users'
 import { personForPasswordReset } from '../../../../utils/password-signin'
 import { sendPasswordResetEmail } from '../../../../utils/email/send-verification-email'
+import { addressFullName, hasPreferredName } from '@my/app/utils/preferred-name'
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,7 +52,9 @@ export async function POST(request: NextRequest) {
         console.log('Password reset token created:', resetToken)
         
         // Send password reset email
-        const userName = user.name || `${user.firstName} ${user.lastName}` || 'User'
+        // The name they go by (#334), when the directory has one.
+        const preferred = hasPreferredName(person) ? addressFullName(person) : ''
+        const userName = preferred || user.name || `${user.firstName} ${user.lastName}` || 'User'
         console.log('Attempting to send password reset email to:', email, 'for user:', userName)
         await sendPasswordResetEmail(email, resetToken, userName)
         console.log('Password reset email sent successfully')

@@ -755,3 +755,12 @@ describe('what was approved is what is sent', () => {
     expect(report.status).toBe('sent')
   })
 })
+
+describe('resolveAndSendExhorterHeadsUp — preferred name (#334)', () => {
+  it('greets the exhorter by the name he goes by', async () => {
+    h.getById.mockResolvedValue({ ...BRAD, preferredFirstName: 'Bo', preferredLastName: '' })
+    const report = await resolveAndSendExhorterHeadsUp({ date: TARGET_DATE, test: true, requesterEmail: REQUESTER })
+    expect(report.status).toBe('sent')
+    expect(h.renderExhorterHeadsUp.mock.calls[0][0].exhorterName).toBe('Bo Tester')
+  })
+})

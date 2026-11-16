@@ -12,6 +12,7 @@ import {
   type ExhorterHeadsUpReport,
 } from './exhorter-heads-up'
 import { renderHeadsUpProblemEmail, type HeadsUpProblem } from './exhorter-heads-up-problem'
+import { addressFullName, hasPreferredName } from '@my/app/utils/preferred-name'
 
 /**
  * QA-by-redirect for the exhorter heads-up (#124, slice B).
@@ -181,6 +182,7 @@ export async function prepareHeadsUpForReview(
   const person = await personRepository.getById(report.personId)
   const recipientEmail = person?.primaryEmail ?? ''
   const recipientName =
+    (hasPreferredName(person) ? addressFullName(person) : '') ||
     person?.displayName ||
     [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim() ||
     report.exhortName ||

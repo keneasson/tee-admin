@@ -6,6 +6,7 @@ import { personForSessionEmail } from '@/utils/session-person'
 import { maskEmail } from '@/utils/mask-email'
 import { getTenantFromHeaders, resolveTenantFromEnv } from '@my/app/config/tenants'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
+import { addressFirstName } from '@my/app/utils/preferred-name'
 import { mailingListRepository } from '@my/app/provider/dynamodb/repositories/mailing-list-repository'
 import { ecclesiaIdOf, slugifyEcclesia } from '@my/app/provider/dynamodb/people-index/keys'
 import { getDefaultRegion } from '@my/app/config/regions'
@@ -23,7 +24,8 @@ function tenantBrand(request: NextRequest) {
 async function firstNameForEmail(email: string): Promise<string | null> {
   try {
     const person = await personRepository.getByEmailForAuth(email)
-    return person?.firstName || null
+    // The name they go by (#334).
+    return addressFirstName(person) || null
   } catch {
     return null
   }
