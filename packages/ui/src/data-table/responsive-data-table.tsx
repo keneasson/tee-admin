@@ -106,6 +106,15 @@ export function ResponsiveDataTable<TData>({
     },
   })
 
+  // `initialState` is only read on the first render. Callers that size the page
+  // to their data (e.g. the schedule passes the loaded row count, which grows
+  // after "Show older events") need the table to follow later changes too.
+  React.useEffect(() => {
+    if (pageSize > 0 && table.getState().pagination.pageSize !== pageSize) {
+      table.setPageSize(pageSize)
+    }
+  }, [pageSize, table])
+
   // Mobile Card Layout
   const renderMobileCard = (row: any) => {
     const rowStyle = getRowStyle?.(row) ?? null
