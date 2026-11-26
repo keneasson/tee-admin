@@ -13,11 +13,62 @@ export function sundaySchoolNoClassNote(row: any): string {
 }
 
 /**
- * Whether Sunday School actually runs for this row: Refreshments filled and not
- * cancelled by an override. Same rule as the newsletter and Sunday School email.
+ * Text that clearly says there is NO class. Whole-word, case-insensitive and
+ * deliberately conservative: a family name or ordinary text must never match.
+ * A bare "Holiday" does NOT match (it could be a note about a class that still
+ * runs); it needs "holiday break" or similar.
  */
+const NO_CLASS_TEXT_RE = new RegExp(
+  [
+    'no\\s+(sunday\\s+)?school',
+    'no\\s+class(es)?',
+    'no\\s+ss',
+    'cancel(l)?ed',
+    'not\\s+(running|held|meeting)',
+    '(christmas|summer|march|holiday)\\s+break',
+  ]
+    .map((p) => `\\b${p}\\b`)
+    .join('|'),
+  'i'
+)
+
+/** Whether free text clearly says there is no class. */
+export function looksLikeNoClass(text: unknown): boolean {
+  return NO_CLASS_TEXT_RE.test(String(text ?? ''))
+}
+
+export interface SundaySchoolDecision {
+  /** Whether a class runs. */
+  runs: boolean
+  /** Why there is no class (empty when a class runs). */
+  note: string
+  /** Refreshments looks like a class but the Holidays note says no class. A class wins. */
+  conflict: boolean
+}
+
+/**
+ * THE one "does Sunday School run" decision, shared by the schedule page, the
+ * newsletter (email + web), the Sunday School email and the exhorter heads-up.
+ * Precedence: override 'cancelled' forces none, 'active' forces a class; else
+ * blank Refreshments, or Refreshments that says "no class", means none (the
+ * reason is the Holidays and Special Events text, or the Refreshments text).
+ */
+export function resolveSundaySchool(row: any): SundaySchoolDecision {
+  const refreshments = String(row?.Refreshments ?? '').trim()
+  const holiday = sundaySchoolNoClassNote(row)
+  const refreshmentsSaysNoClass = refreshments !== '' && looksLikeNoClass(refreshments)
+  const conflict = refreshments !== '' && !refreshmentsSaysNoClass && looksLikeNoClass(holiday)
+  const note = refreshmentsSaysNoClass ? (holiday || refreshments) : holiday
+
+  if (row?.overrideStatus === 'cancelled') return { runs: false, note, conflict: false }
+  if (row?.overrideStatus === 'active') return { runs: true, note: '', conflict: false }
+  if (refreshments === '' || refreshmentsSaysNoClass) return { runs: false, note, conflict: false }
+  return { runs: true, note: '', conflict }
+}
+
+/** Whether Sunday School actually runs for this row (see resolveSundaySchool). */
 export function sundaySchoolClassRuns(row: any): boolean {
-  return row?.overrideStatus !== 'cancelled' && !!String(row?.Refreshments ?? '').trim()
+  return resolveSundaySchool(row).runs
 }
 
 /**
@@ -43,11 +94,16 @@ export function isValidScheduleRow(event: any, type: string): boolean {
     case 'bibleClass':
       return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
     case 'sundaySchool': {
-      if (event.Refreshments?.toString().trim()) return true
-      // Blank Refreshments + text in "Holidays and Special Events" = no class that
-      // week (e.g. Christmas break). Keep the row so the schedule can say why.
-      if (sundaySchoolNoClassNote(event)) {
+      const decision = resolveSundaySchool(event)
+      if (decision.runs) {
+        if (decision.conflict) event.conflict = true
+        return true
+      }
+      // No class (blank Refreshments, or Refreshments saying so) with a reason
+      // somewhere: keep the row so the schedule can say why.
+      if (decision.note) {
         event.noClass = true
+        event.noClassNote = decision.note
         return true
       }
       return false

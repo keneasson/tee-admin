@@ -226,7 +226,7 @@ const createTextCell = (colors: any) => ({ row, getValue }: any) => {
 const createPlaceholderCell = (colors: any, isDate: boolean, showComingSoon: boolean) => ({ row, getValue }: any) => {
   // A no-class week (Sunday School holiday note) shows its reason instead of "Coming soon"
   const placeholderText: string = row.original.noClass
-    ? row.original.HolidaysAndSpecialEvents || row.original['Holidays and Special Events'] || 'No Sunday School'
+    ? row.original.noClassNote || row.original.HolidaysAndSpecialEvents || row.original['Holidays and Special Events'] || 'No Sunday School'
     : 'Coming soon'
   if (isDate) {
     const [year, month, day] = String(getValue()).split('-').map(Number)

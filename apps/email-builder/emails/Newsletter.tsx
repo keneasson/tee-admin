@@ -23,6 +23,7 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
+import { resolveSundaySchool } from '@my/app/utils/schedule-row-rules'
 import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { AttendOptions } from '../components/AttendOptions'
 
@@ -955,9 +956,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                     if (event.Key === 'sundaySchool') {
                       // Override precedence: 'cancelled' forces no-class; 'active' forces
                       // it to show; otherwise infer from Refreshments.
-                      const isCancelled = event.overrideStatus === 'cancelled'
-                      const isForcedActive = event.overrideStatus === 'active'
-                      const hasSundaySchool = isForcedActive || (!isCancelled && !!event.Refreshments)
+                      // Shared rule: also treats "No Sunday School" typed in Refreshments as no class.
+                      const ssDecision = resolveSundaySchool(event)
+                      const hasSundaySchool = ssDecision.runs
 
                       return (
                         <Section key={`ss-${index}`} style={program}>
@@ -974,7 +975,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </>
                           ) : (
                             <Text style={defaultText}>
-                              <strong>{event.overrideMessage || 'No Sunday school this week!'}</strong>
+                              <strong>{event.overrideMessage || ssDecision.note || 'No Sunday school this week!'}</strong>
                               {event.overrideNote ? (
                                 <>
                                   <br />

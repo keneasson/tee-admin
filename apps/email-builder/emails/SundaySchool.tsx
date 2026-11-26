@@ -24,6 +24,7 @@ import {
   program,
 } from '../styles'
 import React from 'react'
+import { resolveSundaySchool } from '@my/app/utils/schedule-row-rules'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { FooterContent } from '../components/FooterContent'
@@ -146,9 +147,8 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
   }
   // Override precedence: 'cancelled' forces no-class; 'active' forces the class to
   // show; otherwise infer from Refreshments.
-  const isCancelled = event.overrideStatus === 'cancelled'
-  const isForcedActive = event.overrideStatus === 'active'
-  const hasClass = isForcedActive || (!isCancelled && !!event.Refreshments)
+  const ssDecision = resolveSundaySchool(event)
+  const hasClass = ssDecision.runs
 
   if (hasClass) {
     return (
@@ -183,7 +183,7 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
           <Text style={defaultText}>
             <strong>{event.Date.toString()}</strong>
             <br />
-            {event.overrideMessage || event['Holidays and Special Events']}
+            {event.overrideMessage || ssDecision.note}
             {event.overrideNote ? (
               <>
                 <br />

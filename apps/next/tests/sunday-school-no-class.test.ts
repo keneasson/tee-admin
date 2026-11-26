@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { isValidScheduleRow, sundaySchoolClassRuns } from '@my/app/utils/schedule-row-rules'
+import { isValidScheduleRow, sundaySchoolClassRuns, resolveSundaySchool, looksLikeNoClass } from '@my/app/utils/schedule-row-rules'
 import { fillScheduleGaps } from '@my/app/utils/fill-schedule-gaps'
 
 const rows: Record<string, any>[] = [
@@ -62,5 +62,50 @@ describe('exhorter heads-up Sunday School', () => {
     expect(await resolveSundaySchoolForDate('2026-12-27', null)).toBeUndefined()
     expect(await resolveSundaySchoolForDate('2027-01-10', null)).toBeUndefined() // blank, no note
     expect(await resolveSundaySchoolForDate('2026-12-20', null)).toBeDefined()
+  })
+})
+
+describe('forgiving no-class detection (reason typed into Refreshments)', () => {
+  it.each([
+    'No Sunday School', 'no sunday school', 'No class', 'No classes', 'NO SS', 'Cancelled', 'canceled',
+    'Christmas break — no SS', 'Summer break', 'March Break', 'Holiday break', 'Not running', 'not held',
+  ])('treats %j as no class', (text) => {
+    expect(looksLikeNoClass(text)).toBe(true)
+    expect(sundaySchoolClassRuns({ Refreshments: text })).toBe(false)
+  })
+
+  it.each([
+    'Smith Family', 'Smiths & Joneses', 'Schooler', 'Classen', 'MacClass', 'Noschool', 'Cancel', 'Holiday',
+    'The Nosse family', 'Brother A & Sister B', 'Marchant', 'Summers',
+  ])('does not treat %j as no class', (text) => {
+    expect(looksLikeNoClass(text)).toBe(false)
+    expect(sundaySchoolClassRuns({ Refreshments: text })).toBe(true)
+  })
+
+  it('uses Holidays text as the note, else the Refreshments text', () => {
+    expect(resolveSundaySchool({ Refreshments: 'No class', 'Holidays and Special Events': 'Christmas break' }).note).toBe('Christmas break')
+    expect(resolveSundaySchool({ Refreshments: 'No Sunday School' }).note).toBe('No Sunday School')
+  })
+
+  it('keeps and marks a row whose Refreshments says no class', () => {
+    const e: any = { Refreshments: 'No Sunday School' }
+    expect(isValidScheduleRow(e, 'sundaySchool')).toBe(true)
+    expect(e.noClass).toBe(true)
+    expect(e.noClassNote).toBe('No Sunday School')
+  })
+
+  it('class-looking Refreshments + no-class Holidays note = class, flagged as conflict', () => {
+    const row = { Refreshments: 'Smith Family', 'Holidays and Special Events': 'Cancelled due to weather' }
+    expect(resolveSundaySchool(row)).toMatchObject({ runs: true, conflict: true })
+    const e: any = { ...row }
+    expect(isValidScheduleRow(e, 'sundaySchool')).toBe(true)
+    expect(e.conflict).toBe(true)
+    expect(e.noClass).toBeUndefined()
+  })
+
+  it('keeps override precedence', () => {
+    expect(resolveSundaySchool({ Refreshments: 'Smith Family', overrideStatus: 'cancelled' }).runs).toBe(false)
+    expect(resolveSundaySchool({ Refreshments: 'No class', overrideStatus: 'active' }).runs).toBe(true)
+    expect(resolveSundaySchool({ Refreshments: '', overrideStatus: 'active' }).runs).toBe(true)
   })
 })

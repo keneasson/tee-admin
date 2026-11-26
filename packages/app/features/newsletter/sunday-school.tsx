@@ -1,5 +1,6 @@
 import { SundaySchoolType } from '@my/app/types'
 import React from 'react'
+import { resolveSundaySchool } from '@my/app/utils/schedule-row-rules'
 import { Paragraph, YStack } from '@my/ui'
 import { Section } from '@my/app/features/newsletter/Section'
 
@@ -9,9 +10,8 @@ export type NextSundaySchoolProps = {
 export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => {
   // Override precedence: 'cancelled' forces no-class (with optional message);
   // 'active' forces the class to show; otherwise infer from Refreshments.
-  const isCancelled = event.overrideStatus === 'cancelled'
-  const isForcedActive = event.overrideStatus === 'active'
-  const noClass = isCancelled || (!isForcedActive && !event.Refreshments)
+  const ssDecision = resolveSundaySchool(event)
+  const noClass = !ssDecision.runs
 
   if (noClass) {
     return (
@@ -19,7 +19,7 @@ export const NextSundaySchool: React.FC<NextSundaySchoolProps> = ({ event }) => 
         <Paragraph size={'$5'} fontWeight={600}>
           {event.Date.toString()}
         </Paragraph>
-        <Paragraph>{event.overrideMessage || 'No Sunday School this week'}</Paragraph>
+        <Paragraph>{event.overrideMessage || ssDecision.note || 'No Sunday School this week'}</Paragraph>
         {event.overrideNote ? <Paragraph>{event.overrideNote}</Paragraph> : null}
       </YStack>
     )
