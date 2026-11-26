@@ -5,7 +5,6 @@ import {
   createEcclesia,
   getAllEcclesia,
   updateEcclesia,
-  deleteEcclesia,
   EcclesiaNameConflictError,
 } from '../../../utils/dynamodb/locations'
 
@@ -220,55 +219,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-    const callerRole = (session.user as any).role as string || ROLES.GUEST
-    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const name = searchParams.get('name')
-
-    if (!name) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Ecclesia name is required',
-        },
-        { status: 400 }
-      )
-    }
-
-    await deleteEcclesia(name)
-
-    return NextResponse.json({
-      success: true,
-      message: `Ecclesia "${name}" deleted successfully`,
-    })
-  } catch (error) {
-    console.error('Error deleting ecclesia:', error)
-
-    if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to delete ecclesia',
-      },
-      { status: 500 }
-    )
-  }
-}
+// No DELETE: an ecclesia is never deleted. One that stops meeting is CLOSED
+// (PATCH /api/ecclesia/[name] { status: 'closed' }); a duplicate record is
+// folded into the real one by POST /api/admin/ecclesias/merge, which alone
+// removes the merged duplicate.

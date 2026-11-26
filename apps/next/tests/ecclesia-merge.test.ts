@@ -194,7 +194,7 @@ function writers() {
     updateEventEcclesia: rec('updateEventEcclesia') as any,
     reassignListOwner: rec('reassignListOwner'),
     withdrawNomination: rec('withdrawNomination'),
-    deleteEcclesia: rec('deleteEcclesia'),
+    deleteMergedEcclesia: rec('deleteMergedEcclesia'),
     invalidateCaches: vi.fn(),
   }
   return { w, calls }
@@ -218,7 +218,7 @@ describe('applyMergePlan — the real run', () => {
       'updateEventEcclesia',
       'updateEcclesiaFields',
       'withdrawNomination',
-      'deleteEcclesia',
+      'deleteMergedEcclesia',
     ])
     expect(w.updateEcclesiaFields).toHaveBeenNthCalledWith(1, 'Example County', { phone: '555-0100' })
     expect(w.saveOffice).toHaveBeenCalledWith({ ecclesiaId: 'example-county', role: 'rb', email: 'rb-office@example.org' })
@@ -227,7 +227,7 @@ describe('applyMergePlan — the real run', () => {
     expect(w.rehomePost).toHaveBeenCalledWith('post-2', 'Example County', undefined)
     expect(w.updateEcclesiaFields).toHaveBeenNthCalledWith(2, 'Neighbour Ecclesia', { nearbyEcclesias: ['Example County', 'Other'] })
     expect(w.withdrawNomination).toHaveBeenCalledWith('Example County Ecclesia', 'nom-1')
-    expect(w.deleteEcclesia).toHaveBeenCalledWith('Example County Ecclesia')
+    expect(w.deleteMergedEcclesia).toHaveBeenCalledWith('Example County Ecclesia', 'Example County')
     expect(w.invalidateCaches).toHaveBeenCalled()
   })
 
@@ -248,7 +248,7 @@ describe('applyMergePlan — the real run', () => {
     ;(w.updatePerson as any).mockRejectedValueOnce(new Error('throttled'))
     const result = await applyMergePlan(buildMergePlan(snap), snap, w)
     expect(result.failed).toMatchObject({ step: { kind: 'person' }, error: 'throttled' })
-    expect(w.deleteEcclesia).not.toHaveBeenCalled()
+    expect(w.deleteMergedEcclesia).not.toHaveBeenCalled()
     expect(w.invalidateCaches).toHaveBeenCalled()
   })
 

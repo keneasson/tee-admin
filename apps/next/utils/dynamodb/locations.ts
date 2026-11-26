@@ -576,12 +576,35 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
   }
 }
 
-export async function deleteEcclesia(name: string): Promise<boolean> {
+/**
+ * Remove a DUPLICATE ecclesia record after it has been merged into another.
+ *
+ * We never delete an ecclesia: one that stops meeting is CLOSED (status), so
+ * its history keeps resolving. The only record ever removed is a merged
+ * duplicate, and only the merge (utils/ecclesia-merge-service.ts) calls this.
+ * It refuses unless the merge really happened: `mergedInto` must be another
+ * existing ecclesia, and nothing may still point at this one (no people, no
+ * offices). There is no API route or UI that reaches it.
+ */
+export async function deleteMergedEcclesia(name: string, opts: { mergedInto: string }): Promise<boolean> {
   try {
-    // First, get the ecclesia to find its key
-    const ecclesia = await getEcclesiaByName(name)
+    // Exact stored name only: never a normalized match for a delete.
+    const result = await client.query({ ...patternQuery(PATTERNS.ecclesiaByName, { name }), Limit: 1 })
+    const ecclesia = result.Items?.[0] ? mapItemToEcclesia(result.Items[0]) : null
     if (!ecclesia) {
       throw new Error(`Ecclesia "${name}" not found`)
+    }
+    const target = opts?.mergedInto ? await getEcclesiaByName(opts.mergedInto) : null
+    if (!target || ecclesiaIdOf(target) === ecclesiaIdOf(ecclesia)) {
+      throw new Error(`Refusing to delete "${name}": ecclesias are closed, not deleted; only a merged duplicate is removed`)
+    }
+    const { personRepository } = await import('@my/app/provider/dynamodb/repositories/person-repository')
+    const [people, offices] = await Promise.all([
+      personRepository.listByEcclesia(ecclesia.name, { limit: 1 }),
+      officeRepository.listOffices(ecclesiaIdOf(ecclesia)),
+    ])
+    if (people.items.length > 0 || offices.length > 0) {
+      throw new Error(`Refusing to delete "${name}": people or offices still point at it; merge it first`)
     }
 
     // Delete the record

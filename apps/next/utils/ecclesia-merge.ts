@@ -350,7 +350,7 @@ export interface MergeWriters {
   updateEventEcclesia(eventId: string, fields: Array<'hostingEcclesia' | 'ownerEcclesia'>, target: EcclesiaData): Promise<unknown>
   reassignListOwner(listId: string, ownerId: string): Promise<unknown>
   withdrawNomination(ecclesia: string, nominationId: string): Promise<unknown>
-  deleteEcclesia(name: string): Promise<unknown>
+  deleteMergedEcclesia(name: string, mergedInto: string): Promise<unknown>
   invalidateCaches(): void
 }
 
@@ -425,7 +425,7 @@ async function applyStep(step: MergeStep, plan: MergePlan, target: EcclesiaData,
       await w.withdrawNomination(plan.source.name, step.nominationId)
       return
     case 'delete-source':
-      await w.deleteEcclesia(step.name)
+      await w.deleteMergedEcclesia(step.name, plan.target.name)
       return
   }
 }

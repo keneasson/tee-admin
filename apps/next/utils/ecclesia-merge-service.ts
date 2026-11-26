@@ -4,7 +4,7 @@
  * Owner/admin only; the route enforces that.
  */
 import {
-  deleteEcclesia,
+  deleteMergedEcclesia,
   getAllEcclesia,
   getEcclesiaByName,
   invalidateEcclesiaCache,
@@ -132,7 +132,7 @@ export const defaultMergeWriters: MergeWriters = {
   },
   reassignListOwner: (listId, ownerId) => mailingListRepository.reassignOwner(listId, ownerId),
   withdrawNomination: (ecclesia, nominationId) => rbNominationRepository.withdraw(ecclesia, nominationId),
-  deleteEcclesia: (name) => deleteEcclesia(name),
+  deleteMergedEcclesia: (name, mergedInto) => deleteMergedEcclesia(name, { mergedInto }),
   invalidateCaches: () => {
     invalidateEcclesiaCache()
     invalidatePeopleCache()

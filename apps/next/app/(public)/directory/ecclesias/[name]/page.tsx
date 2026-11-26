@@ -10,8 +10,7 @@ import type { EcclesiaDetailData } from '@my/ui/src/ecclesia/ecclesia-detail-vie
 import type { DirectoryMember, Nomination, DirectoryAuthProps, EcclesiaListItem } from '@my/ui/src/directory/types'
 import { Button, Heading } from '@my/ui'
 import { ArrowLeft } from '@tamagui/lucide-icons'
-import { Dialog } from 'tamagui'
-import { brandColors } from '@my/ui/src/branding/brand-colors'
+import type { ClosureChange } from '@my/ui/src/directory/ecclesia-danger-zone'
 import { MergeEcclesiaDialog } from '@/features/ecclesia-merge/merge-ecclesia-dialog'
 
 export default function DirectoryEcclesiaDetailPage() {
@@ -42,9 +41,7 @@ export default function DirectoryEcclesiaDetailPage() {
   const [nearbyEcclesias, setNearbyEcclesias] = useState<Array<{ name: string; displayName?: string; distanceKm?: number; country?: string; province?: string }>>([])
   const [nearbyLoading, setNearbyLoading] = useState(false)
 
-  // Delete / merge state
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  // Merge state (ecclesias are closed, never deleted)
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
   const [allEcclesias, setAllEcclesias] = useState<EcclesiaListItem[]>([])
 
@@ -269,32 +266,23 @@ export default function DirectoryEcclesiaDetailPage() {
     setMergeDialogOpen(true)
   }
 
-  const handleDeleteClick = () => {
-    if (members.length > 0) {
-      // People are attached: merge it into the ecclesia they attend instead.
-      openMerge()
-    } else {
-      setDeleteConfirmOpen(true)
-    }
-  }
-
-  const handleConfirmDelete = async () => {
-    setIsDeleting(true)
+  // Close / reopen: an ecclesia that stops meeting is closed, never deleted.
+  const handleSetClosed = async (change: ClosureChange): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/ecclesia?name=${encodeURIComponent(ecclesiaName)}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/ecclesia/${encodeURIComponent(ecclesiaName)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(change),
       })
-      if (response.ok) {
-        setDeleteConfirmOpen(false)
-        router.push('/directory/ecclesias')
-      } else {
-        const data = await response.json()
-        alert(`Failed to delete: ${data.error}`)
+      if (!res.ok) {
+        console.error('Close/reopen failed:', (await res.json().catch(() => ({}))).error)
+        return false
       }
-    } catch {
-      alert('Failed to delete ecclesia')
-    } finally {
-      setIsDeleting(false)
+      await fetchEcclesia()
+      return true
+    } catch (err) {
+      console.error('Error closing/reopening ecclesia:', err)
+      return false
     }
   }
 
@@ -380,63 +368,13 @@ export default function DirectoryEcclesiaDetailPage() {
         onSecond={handleSecond}
         onDirectSet={isAdminOrOwner ? handleDirectSetRB : undefined}
         onResend={isAdminOrOwner ? handleResend : undefined}
-        onDelete={isAdminOrOwner ? handleDeleteClick : undefined}
+        onSetClosed={isAdminOrOwner ? handleSetClosed : undefined}
         onMerge={isAdminOrOwner ? openMerge : undefined}
-        canSetClosed={isAdminOrOwner}
-        isDeleting={isDeleting}
         showExternalLinks={showMultiTenant}
         nearbyEcclesiasData={nearbyEcclesias}
         nearbyLoading={nearbyLoading}
         onEcclesiaClick={(name) => router.push(`/directory/ecclesias/${encodeURIComponent(name)}`)}
       />
-
-      {/* Delete Confirmation Dialog (0 members) */}
-      <Dialog modal open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay
-            key="overlay"
-            animation="quick"
-            opacity={0.5}
-            enterStyle={{ opacity: 0 }}
-            exitStyle={{ opacity: 0 }}
-          />
-          <Dialog.Content
-            key="content"
-            bordered
-            elevate
-            animation="quick"
-            enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
-            exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
-            gap="$4"
-            padding="$4"
-          >
-            <Dialog.Title fontSize="$6" fontWeight="600">
-              Confirm Deletion
-            </Dialog.Title>
-            <Dialog.Description fontSize="$4" color="$gray11">
-              Are you sure you want to delete &quot;{ecclesiaName}&quot;? This action cannot be undone.
-            </Dialog.Description>
-            <XStack gap="$3" justifyContent="flex-end" marginTop="$2">
-              <Dialog.Close asChild>
-                <Button variant="outlined" borderWidth={2} borderColor="$textTertiary" disabled={isDeleting}>
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button
-                backgroundColor={brandColors.light.error}
-                color="white"
-                borderWidth={2}
-                borderColor={brandColors.light.error}
-                hoverStyle={{ backgroundColor: brandColors.light.error, opacity: 0.9 }}
-                onPress={handleConfirmDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Deleting...' : 'Delete Ecclesia'}
-              </Button>
-            </XStack>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog>
 
       {/* Merge into another ecclesia */}
       <MergeEcclesiaDialog
