@@ -545,8 +545,11 @@ export async function PATCH(
       )
     }
 
-    // Recorder/Rep/RB: enforce same-ecclesia restriction
-    if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
+    // Owner/Admin manage members of EVERY ecclesia — checked first, whatever
+    // other designation (e.g. Recording Brother) they also hold. Only a
+    // Recorder/Rep/RB without that role is limited to their own ecclesia.
+    const isSystemAdmin = viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN
+    if (!isSystemAdmin && (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP)) {
       const viewerPerson = await personForSessionEmail(session.user.email)
       if (!viewerPerson || !sameEcclesia(viewerPerson.ecclesia, targetPerson.ecclesia)) {
         return NextResponse.json(

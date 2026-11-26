@@ -8,8 +8,9 @@ import { isClosedEcclesia, isSameEcclesia as sameEcclesia } from '@my/app/utils/
  * Check if a user can edit a given ecclesia.
  *
  * Rules:
- * 1. System owner (role === 'owner') → can edit any ecclesia
- * 2. Same-ecclesia admin (role === 'admin' AND person.ecclesia === ecclesiaName)
+ * 1. System owner or admin (role 'owner' / 'admin') → can edit any ecclesia
+ *    (including closing it or merging a duplicate), checked first
+ * 2. (removed: admin is no longer limited to its own ecclesia)
  * 3. Same-ecclesia recording brother (person.isRecordingBrother === true AND person.ecclesia === ecclesiaName)
  * 4. Same-ecclesia rep (role === 'rep' AND person.ecclesia === ecclesiaName)
  *
@@ -20,8 +21,8 @@ export async function checkEcclesiaEditPermission(
   userRole: string,
   ecclesiaName: string
 ): Promise<boolean> {
-  // Owner can edit any ecclesia
-  if (userRole === ROLES.OWNER) {
+  // Owner and Admin manage every ecclesia
+  if (userRole === ROLES.OWNER || userRole === ROLES.ADMIN) {
     return true
   }
 
@@ -33,8 +34,8 @@ export async function checkEcclesiaEditPermission(
 
   const isSameEcclesia = sameEcclesia(person.ecclesia, ecclesiaName)
 
-  // Admin, legacy recorder role, or Rep of the same ecclesia
-  if ((userRole === ROLES.ADMIN || userRole === ROLES.RECORDER || userRole === ROLES.REP) && isSameEcclesia) {
+  // Legacy recorder role, or Rep of the same ecclesia
+  if ((userRole === ROLES.RECORDER || userRole === ROLES.REP) && isSameEcclesia) {
     return true
   }
 

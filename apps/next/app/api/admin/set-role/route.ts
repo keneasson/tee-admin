@@ -96,8 +96,10 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Recorder/Rep/RB: enforce same-ecclesia restriction
-    if (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP) {
+    // Owner/Admin act across every ecclesia (checked first, even if also a
+    // Recording Brother). Recorder/Rep/RB alone: same-ecclesia only.
+    const callerIsSystemAdmin = callerRole === ROLES.OWNER || callerRole === ROLES.ADMIN
+    if (!callerIsSystemAdmin && (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP)) {
       const callerPerson = await personForSessionEmail(session.user.email)
       if (!callerPerson) {
         return NextResponse.json(

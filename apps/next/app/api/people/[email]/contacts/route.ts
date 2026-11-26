@@ -126,9 +126,11 @@ async function checkPermission(session: any, targetPerson: any) {
     return { allowed: false as const, response: NextResponse.json({ error: 'Use the profile page to edit your own contact info' }, { status: 400 }) }
   }
 
-  // Recorder/Rep/RB: same-ecclesia only
+  // Owner/Admin manage members of every ecclesia (checked first, even if they
+  // are also a Recording Brother). Recorder/Rep/RB alone: same-ecclesia only.
+  const isSystemAdmin = viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN
   let viewerPerson = null
-  if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
+  if (!isSystemAdmin && (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP)) {
     viewerPerson = await personForSessionEmail(viewerEmail)
     if (!viewerPerson || !isSameEcclesia(viewerPerson.ecclesia, targetPerson.ecclesia)) {
       return { allowed: false as const, response: NextResponse.json({ error: 'You can only edit members of your own ecclesia' }, { status: 403 }) }
