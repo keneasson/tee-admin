@@ -8,6 +8,8 @@ import {
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb'
 import { EmailDraft, CreateEmailDraftInput } from '@my/app/types/email-draft'
+import { conditionFailure, EXISTS_AND_NOT_SENT } from '@/utils/email-draft-item'
+import { getDraftOwnerKeys, findOwnedDraft } from '@/utils/email-draft-owner'
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'ca-central-1',
@@ -28,20 +30,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userEmail = session.user.email
+    // Drafts belong to the PERSON: read under every one of their addresses.
+    const owner = await getDraftOwnerKeys(session.user)
+    const items: Record<string, any>[] = []
+    for (const pkey of owner.keys) {
+      let ExclusiveStartKey: Record<string, any> | undefined
+      do {
+        const response = await docClient.send(
+          new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: 'pkey = :pkey AND begins_with(skey, :skeyPrefix)',
+            ExpressionAttributeValues: {
+              ':pkey': pkey,
+              ':skeyPrefix': 'EMAIL_DRAFT#',
+            },
+            ExclusiveStartKey,
+          })
+        )
+        items.push(...(response.Items || []))
+        ExclusiveStartKey = response.LastEvaluatedKey
+      } while (ExclusiveStartKey)
+    }
 
-    // Query all drafts for this user
-    const command = new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'pkey = :pkey AND begins_with(skey, :skeyPrefix)',
-      ExpressionAttributeValues: {
-        ':pkey': `USER#${userEmail}`,
-        ':skeyPrefix': 'EMAIL_DRAFT#',
-      },
-    })
-
-    const response = await docClient.send(command)
-    const drafts: EmailDraft[] = (response.Items || []).map((item) => ({
+    const drafts: EmailDraft[] = items.map((item) => ({
       id: item.skey.replace('EMAIL_DRAFT#', ''),
       subject: item.subject,
       htmlContent: item.htmlContent,
@@ -100,11 +111,14 @@ export async function POST(request: NextRequest) {
       status: 'draft',
     }
 
+    // New drafts land with the person's existing ones (their primary address).
+    const owner = await getDraftOwnerKeys(session.user)
+
     // Save to DynamoDB
     const command = new PutCommand({
       TableName: TABLE_NAME,
       Item: {
-        pkey: `USER#${userEmail}`,
+        pkey: owner.writeKey,
         skey: `EMAIL_DRAFT#${draftId}`,
         ...draft,
       },
@@ -120,6 +134,9 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE - Delete a draft
+//
+// A SENT email is a permanent record of what went out and can't be deleted
+// (409), enforced in the delete's own condition. A missing draft is a 404.
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth()
@@ -127,7 +144,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userEmail = session.user.email
     const { searchParams } = new URL(request.url)
     const draftId = searchParams.get('id')
 
@@ -135,15 +151,36 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Draft ID is required' }, { status: 400 })
     }
 
+    const owner = await getDraftOwnerKeys(session.user)
+    const found = await findOwnedDraft(docClient, TABLE_NAME, owner, draftId)
+    if (!found) {
+      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    }
+
     const command = new DeleteCommand({
       TableName: TABLE_NAME,
-      Key: {
-        pkey: `USER#${userEmail}`,
-        skey: `EMAIL_DRAFT#${draftId}`,
-      },
+      Key: found.key,
+      ConditionExpression: EXISTS_AND_NOT_SENT,
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':sent': 'sent' },
+      ReturnValuesOnConditionCheckFailure: 'ALL_OLD',
     })
 
-    await docClient.send(command)
+    try {
+      await docClient.send(command)
+    } catch (error) {
+      const failure = conditionFailure(error)
+      if (failure === 'sent') {
+        return NextResponse.json(
+          { error: "Sent emails are kept as a permanent record and can't be deleted" },
+          { status: 409 }
+        )
+      }
+      if (failure === 'missing') {
+        return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+      }
+      throw error
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

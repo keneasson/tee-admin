@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { getDraftOwnerKeys, findOwnedDraft } from '@/utils/email-draft-owner'
 import type { EmailDraft } from '@my/app/types/email-draft'
 
 const client = new DynamoDBClient({
@@ -30,15 +31,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const userEmail = session.user.email
     const { id: sourceId } = await params
 
-    const source = await docClient.send(
-      new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { pkey: `USER#${userEmail}`, skey: `EMAIL_DRAFT#${sourceId}` },
-      })
-    )
-    if (!source.Item) {
+    // The source may sit under any of this person's addresses; the copy lands
+    // with their other drafts (primary address).
+    const owner = await getDraftOwnerKeys(session.user)
+    const found = await findOwnedDraft(docClient, TABLE_NAME, owner, sourceId)
+    if (!found) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
     }
+    const source = { Item: found.item }
 
     // Same id format as POST /api/email-drafts.
     const draftId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -61,7 +61,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
-          pkey: `USER#${userEmail}`,
+          pkey: owner.writeKey,
           skey: `EMAIL_DRAFT#${draftId}`,
           ...draft,
         },

@@ -3,6 +3,7 @@ import { auth } from '@/utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { conditionFailure, EXISTS_AND_NOT_SENT } from '@/utils/email-draft-item'
+import { getDraftOwnerKeys, findOwnedDraft } from '@/utils/email-draft-owner'
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'ca-central-1',
@@ -27,7 +28,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userEmail = session.user.email
     const { id: draftId } = await params
     const body = await request.json()
     const { action } = body // 'tested' or 'sent'
@@ -60,12 +60,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       )
     }
 
+    // The draft may sit under any of this person's addresses.
+    const owner = await getDraftOwnerKeys(session.user)
+    const found = await findOwnedDraft(docClient, TABLE_NAME, owner, draftId)
+    if (!found) {
+      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    }
+
     const command = new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: {
-        pkey: `USER#${userEmail}`,
-        skey: `EMAIL_DRAFT#${draftId}`,
-      },
+      Key: found.key,
       UpdateExpression: updateExpression,
       ConditionExpression: EXISTS_AND_NOT_SENT,
       ExpressionAttributeNames: attributeNames,

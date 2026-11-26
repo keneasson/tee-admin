@@ -62,10 +62,14 @@ export const copyDraft = async (id: string): Promise<EmailDraft> => {
 
 export const deleteDraft = async (id: string): Promise<void> => {
   const url = `${API_PATH}api/email-drafts?id=${id}`
-  await fetch(url, {
+  const response = await fetch(url, {
     method: 'DELETE',
     cache: 'no-store',
   })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data?.error || `Failed to delete draft (${response.status})`)
+  }
 }
 
 export const markDraftAsTested = async (id: string): Promise<void> => {

@@ -18,7 +18,7 @@ import {
   ScrollView,
   Spinner,
 } from '@my/ui'
-import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2, Copy } from '@tamagui/lucide-icons'
+import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2, Copy, Plus, RefreshCw } from '@tamagui/lucide-icons'
 import { EmailDraft } from '@my/app/types/email-draft'
 import {
   getDrafts,
@@ -329,12 +329,12 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
           <XStack justifyContent="space-between" alignItems="center">
             <Heading size={4}>Email Drafts</Heading>
             <XStack gap="$2">
-              <Button size="$3" variant="outlined" icon={Save} onPress={handleNewDraft}>
+              <Button size="$3" variant="outlined" icon={Plus} onPress={handleNewDraft}>
                 New Draft
               </Button>
               <Button
                 size="$3"
-                icon={loadingDrafts ? undefined : Save}
+                icon={loadingDrafts ? undefined : RefreshCw}
                 onPress={loadDrafts}
                 disabled={loadingDrafts}
               >
@@ -409,17 +409,19 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                       >
                         Copy
                       </Button>
-                    ) : null}
-                    <Button
-                      size="$2"
-                      variant="outlined"
-                      icon={Trash2}
-                      onPress={(e) => {
-                        e.stopPropagation()
-                        handleDeleteDraft(draft.id)
-                      }}
-                      circular
-                    />
+                    ) : (
+                      // Sent emails are a permanent record: no delete.
+                      <Button
+                        size="$2"
+                        variant="outlined"
+                        icon={Trash2}
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          handleDeleteDraft(draft.id)
+                        }}
+                        circular
+                      />
+                    )}
                   </XStack>
                 ))}
               </YStack>

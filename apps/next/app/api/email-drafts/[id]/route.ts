@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { getDraftOwnerKeys, findOwnedDraft } from '@/utils/email-draft-owner'
 import { UpdateEmailDraftInput } from '@my/app/types/email-draft'
 import { planDraftUpdate, SENT_EMAIL_LOCKED_MESSAGE } from '@my/app/utils/email-draft-update'
 import {
@@ -29,24 +30,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userEmail = session.user.email
     const { id: draftId } = await params
 
-    const command = new GetCommand({
-      TableName: TABLE_NAME,
-      Key: {
-        pkey: `USER#${userEmail}`,
-        skey: `EMAIL_DRAFT#${draftId}`,
-      },
-    })
-
-    const response = await docClient.send(command)
-
-    if (!response.Item) {
+    const owner = await getDraftOwnerKeys(session.user)
+    const found = await findOwnedDraft(docClient, TABLE_NAME, owner, draftId)
+    if (!found) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ draft: toEmailDraft(response.Item) })
+    return NextResponse.json({ draft: toEmailDraft(found.item) })
   } catch (error) {
     console.error('Error fetching draft:', error)
     return NextResponse.json({ error: 'Failed to fetch draft' }, { status: 500 })
@@ -68,26 +60,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userEmail = session.user.email
     const { id: draftId } = await params
     const body: Partial<UpdateEmailDraftInput> = await request.json()
-    const key = {
-      pkey: `USER#${userEmail}`,
-      skey: `EMAIL_DRAFT#${draftId}`,
-    }
 
-    const existing = await docClient.send(new GetCommand({ TableName: TABLE_NAME, Key: key }))
-    if (!existing.Item) {
+    // The draft may sit under any of this person's addresses; update it where it is.
+    const owner = await getDraftOwnerKeys(session.user)
+    const existing = await findOwnedDraft(docClient, TABLE_NAME, owner, draftId)
+    const key = existing?.key
+    if (!existing || !key) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
     }
 
     const plan = planDraftUpdate(
       {
-        subject: existing.Item.subject,
-        htmlContent: existing.Item.htmlContent,
-        selectedList: existing.Item.selectedList,
-        status: existing.Item.status || 'draft',
-        lastTestedAt: existing.Item.lastTestedAt,
+        subject: existing.item.subject,
+        htmlContent: existing.item.htmlContent,
+        selectedList: existing.item.selectedList,
+        status: existing.item.status || 'draft',
+        lastTestedAt: existing.item.lastTestedAt,
       },
       body
     )
