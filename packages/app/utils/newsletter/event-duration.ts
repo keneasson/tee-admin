@@ -386,6 +386,7 @@ export class EventDurationCalculator {
       'engagementDate',   // engagement - when the engagement occurred
       'startDate',        // general
       'dateRange.start',  // study-weekend
+      'electionStartDate', // election-cycle - voting opens
       'publishDate'       // fallback for events without specific dates
     ]
 
@@ -409,6 +410,7 @@ export class EventDurationCalculator {
     const endFields = [
       'endDate',
       'dateRange.end',
+      'electionEndDate', // election-cycle - stays visible until voting closes
     ]
 
     for (const field of endFields) {
