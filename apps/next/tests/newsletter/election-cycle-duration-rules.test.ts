@@ -7,8 +7,9 @@
  * the calculator fell back to publishDate, so the newsletter EMAIL dropped the
  * election the day after it was published while voting was still open.
  *
- * Dates are stored as "YYYY-MM-DD" (midnight UTC); "now" is the reader's local
- * time. Run with TZ=America/Toronto to exercise the real timezone.
+ * Dates here are "YYYY-MM-DD" (midnight UTC); "now" is a Toronto wall-clock
+ * instant. Elections end on the close day in the event timezone (Toronto), so
+ * results must not depend on the process timezone (run with TZ=UTC too).
  */
 
 import { describe, test, expect } from 'vitest'
@@ -29,8 +30,9 @@ function createElectionEvent() {
   }
 }
 
-// Local-time "now" (month is 0-based)
-const at = (year: number, month: number, day: number, hour = 9) => new Date(year, month, day, hour, 0)
+// Toronto wall-clock "now" (month is 0-based). Nov/Dec are EST = UTC-5, so
+// this is the same instant whatever the process timezone is.
+const at = (year: number, month: number, day: number, hour = 9) => new Date(Date.UTC(year, month, day, hour + 5, 0))
 
 function include(currentDate: Date): boolean {
   return EventDurationCalculator.shouldIncludeEvent({

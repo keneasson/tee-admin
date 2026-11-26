@@ -24,6 +24,7 @@ import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
 import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
+import { isElectionActive } from '@my/app/utils/newsletter/election-window'
 import { AttendOptions } from '../components/AttendOptions'
 
 type SundayEvents = MemorialServiceType &
@@ -499,17 +500,6 @@ const formatServiceDate = (date: Date | string | undefined): string => {
     year: 'numeric',
     timeZone: 'America/Toronto',
   })
-}
-
-// Helper function to check if an election-cycle event is currently active
-const isElectionActive = (event: Event): boolean => {
-  if (event.type !== 'election-cycle') return false
-  const electionEvent = event as any
-  if (!electionEvent.electionStartDate || !electionEvent.electionEndDate) return false
-  const now = new Date()
-  const start = new Date(electionEvent.electionStartDate)
-  const end = new Date(electionEvent.electionEndDate)
-  return now >= start && now <= end
 }
 
 // Helper function to display event dates for different event types
