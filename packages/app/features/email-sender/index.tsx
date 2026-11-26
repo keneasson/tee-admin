@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Adapt,
   Button,
@@ -319,8 +319,20 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     })
   }
 
+  // The custom-email creator awaits `onSend` to learn whether the email really
+  // went out (it marks its draft tested/sent only then). The dialog decides
+  // that later, so the answer is parked here until confirm/cancel.
+  const pendingCustomSendRef = useRef<((sent: boolean) => void) | null>(null)
+  const settlePendingCustomSend = (sent: boolean) => {
+    const resolve = pendingCustomSendRef.current
+    pendingCustomSendRef.current = null
+    if (resolve) resolve(sent)
+  }
+
   // Close confirmation dialog
   const closeConfirmDialog = () => {
+    // A custom-email send still waiting on this dialog was cancelled.
+    settlePendingCustomSend(false)
     setConfirmDialog(prev => ({ ...prev, isOpen: false }))
   }
 
@@ -497,15 +509,24 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     selectedList: string
     note: string
     draftId?: string
-  }) => {
+  }): Promise<boolean> => {
     const isTestSend =
       emailData.selectedList === 'testList' ||
       !!availableLists.find((l) => l.key === emailData.selectedList)?.isTest
     const listLabel = availableLists.find(l => l.key === emailData.selectedList)?.label || emailData.selectedList
 
-    showSendConfirmation(emailData.subject, 'Custom Email', () => {
-      closeConfirmDialog()
-      doSendCustomEmail(emailData, isTestSend, listLabel)
+    // Resolves true only once the email was confirmed AND sent without error;
+    // false if the dialog is cancelled or the send fails.
+    settlePendingCustomSend(false)
+    return new Promise<boolean>((resolve) => {
+      pendingCustomSendRef.current = resolve
+      showSendConfirmation(emailData.subject, 'Custom Email', async () => {
+        const settle = pendingCustomSendRef.current
+        pendingCustomSendRef.current = null
+        closeConfirmDialog()
+        const sent = await doSendCustomEmail(emailData, isTestSend, listLabel)
+        if (settle) settle(sent)
+      })
     })
   }
 
@@ -519,7 +540,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
     },
     isTestSend: boolean,
     _listLabel: string
-  ) => {
+  ): Promise<boolean> => {
     setSending(true)
     setReason('custom')
     try {
@@ -531,10 +552,13 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
       setEmail(response)
       // Switch to templates tab to show the response
       setActiveTab('templates')
+      // sendEmail reports a failed request as `{ error }` rather than throwing.
+      return !response?.error
     } catch (error) {
       console.error('Error sending custom email:', error)
       setEmail({ error: 'Failed to send custom email', details: error })
       setActiveTab('templates')
+      return false
     } finally {
       setSending(false)
       setReason(null)

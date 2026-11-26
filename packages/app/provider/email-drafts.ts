@@ -43,6 +43,9 @@ export const updateDraft = async (draft: UpdateEmailDraftInput): Promise<EmailDr
     cache: 'no-store',
   })
   const data = await response.json()
+  if (!response.ok || !data.draft) {
+    throw new Error(data?.error || `Failed to update draft (${response.status})`)
+  }
   return data.draft
 }
 

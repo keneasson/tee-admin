@@ -3,6 +3,7 @@ import { auth } from '@/utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { EmailDraft, UpdateEmailDraftInput } from '@my/app/types/email-draft'
+import { planDraftUpdate } from '@my/app/utils/email-draft-update'
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'ca-central-1',
@@ -62,6 +63,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 // PUT - Update a draft
+//
+// Changing what recipients receive (subject, body or list) on a draft that was
+// already tested or sent puts it back to `draft` and clears `lastTestedAt`, so
+// the new content needs a fresh test before it can be sent without a warning.
+// `sentAt` is kept as history: an earlier version really did go out then, and
+// the UI shows it as "previously sent", never as this content's send.
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
@@ -72,6 +79,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const userEmail = session.user.email
     const { id: draftId } = await params
     const body: Partial<UpdateEmailDraftInput> = await request.json()
+    const key = {
+      pkey: `USER#${userEmail}`,
+      skey: `EMAIL_DRAFT#${draftId}`,
+    }
+
+    const existing = await docClient.send(new GetCommand({ TableName: TABLE_NAME, Key: key }))
+    if (!existing.Item) {
+      return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+    }
+
+    const plan = planDraftUpdate(
+      {
+        subject: existing.Item.subject,
+        htmlContent: existing.Item.htmlContent,
+        selectedList: existing.Item.selectedList,
+        status: existing.Item.status || 'draft',
+        lastTestedAt: existing.Item.lastTestedAt,
+      },
+      body
+    )
 
     const now = new Date().toISOString()
 
@@ -109,19 +136,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     updates.push('#updatedAt = :updatedAt')
     attributeNames['#updatedAt'] = 'updatedAt'
 
-    const command = new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: {
-        pkey: `USER#${userEmail}`,
-        skey: `EMAIL_DRAFT#${draftId}`,
-      },
-      UpdateExpression: `SET ${updates.join(', ')}`,
-      ExpressionAttributeNames: attributeNames,
-      ExpressionAttributeValues: attributeValues,
-      ReturnValues: 'ALL_NEW',
-    })
+    let updateExpression = `SET ${updates.join(', ')}`
+    if (plan.resetToDraft) {
+      updates.push('#status = :draftStatus')
+      attributeNames['#status'] = 'status'
+      attributeNames['#lastTestedAt'] = 'lastTestedAt'
+      attributeValues[':draftStatus'] = 'draft'
+      updateExpression = `SET ${updates.join(', ')} REMOVE #lastTestedAt`
+    }
 
-    const response = await docClient.send(command)
+    let response
+    try {
+      response = await docClient.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: key,
+          UpdateExpression: updateExpression,
+          // Never create an item: a missing (or concurrently deleted) draft is a 404.
+          ConditionExpression: 'attribute_exists(skey)',
+          ExpressionAttributeNames: attributeNames,
+          ExpressionAttributeValues: attributeValues,
+          ReturnValues: 'ALL_NEW',
+        })
+      )
+    } catch (error) {
+      if ((error as { name?: string })?.name === 'ConditionalCheckFailedException') {
+        return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+      }
+      throw error
+    }
 
     if (!response.Attributes) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })

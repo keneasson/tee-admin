@@ -36,7 +36,7 @@ interface CustomEmailCreatorProps {
     selectedList: string
     note: string
     draftId?: string
-  }) => Promise<void>
+  }) => Promise<boolean> // true only if the email was confirmed and actually sent
   /** Registry lists: `key` = listId, `listKey` = the pre-R5 key (for old drafts). */
   availableLists: { key: string; label: string; isTest?: boolean; listKey?: string }[]
   sending: boolean
@@ -67,6 +67,10 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const [loadingDrafts, setLoadingDrafts] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+  // The editor text as last loaded/saved for the current draft. The body is
+  // stored as HTML and the HTML<->text conversion does not round-trip exactly,
+  // so "did the body change?" is answered against this, not the stored HTML.
+  const [savedContent, setSavedContent] = useState<string | null>(null)
 
   // Separate loading states for test vs production
   const [sendingTest, setSendingTest] = useState(false)
@@ -91,17 +95,44 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     }
   }
 
-  const handleSaveDraft = async () => {
+  const currentDraft = drafts.find((d) => d.id === currentDraftId)
+
+  // Unsaved changes to what recipients receive (subject, body, list). A note
+  // edit is not included: it never changes the draft's tested/sent state.
+  const hasUnsavedContentChanges = currentDraft
+    ? subject !== currentDraft.subject ||
+      content !== savedContent ||
+      findList(selectedList)?.key !== findList(currentDraft.selectedList)?.key
+    : false
+
+  // "Tested" only counts when the tested draft is exactly what is in the editor.
+  const needsFreshTest =
+    !currentDraft || currentDraft.status !== 'tested' || hasUnsavedContentChanges
+
+  const untestedWarning =
+    currentDraft?.status === 'sent' && !hasUnsavedContentChanges
+      ? '⚠️ This exact email was already sent - sending again delivers it a second time.'
+      : currentDraft?.sentAt
+        ? '⚠️ Changed since it was last sent - this version has not been tested. Send a test first.'
+        : '⚠️ Not tested yet - consider sending a test first.'
+
+  /** Saves the editor; returns the saved draft, or null if it was not saved. */
+  const handleSaveDraft = async (): Promise<EmailDraft | null> => {
     if (!subject.trim() || !content.trim()) {
       alert('Please fill in both subject and content before saving')
-      return
+      return null
     }
 
     setSavingDraft(true)
     try {
       const draftData = {
         subject,
-        htmlContent: convertToHtml(content),
+        // Untouched body: send the stored HTML back unchanged, so a note-only
+        // save is not mistaken by the server for a body change.
+        htmlContent:
+          currentDraft && content === savedContent
+            ? currentDraft.htmlContent
+            : convertToHtml(content),
         selectedList,
         note,
       }
@@ -119,20 +150,32 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
         setCurrentDraftId(savedDraft.id)
       }
 
+      // Show the server's answer (e.g. a SENT draft going back to DRAFT) at
+      // once, then refresh the list.
+      setDrafts((prev) =>
+        prev.some((d) => d.id === savedDraft.id)
+          ? prev.map((d) => (d.id === savedDraft.id ? savedDraft : d))
+          : [savedDraft, ...prev]
+      )
+      setSavedContent(content)
       setLastSaved(new Date().toLocaleTimeString())
       await loadDrafts()
+      return savedDraft
     } catch (error) {
       console.error('Failed to save draft:', error)
       alert('Failed to save draft')
+      return null
     } finally {
       setSavingDraft(false)
     }
   }
 
   const handleLoadDraft = (draft: EmailDraft) => {
+    const text = convertFromHtml(draft.htmlContent)
     setCurrentDraftId(draft.id)
     setSubject(draft.subject)
-    setContent(convertFromHtml(draft.htmlContent))
+    setContent(text)
+    setSavedContent(text)
     setSelectedList(draft.selectedList)
     setNote(draft.note || '')
     setShowPreview(false)
@@ -142,6 +185,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     setCurrentDraftId(null)
     setSubject('')
     setContent('')
+    setSavedContent(null)
     setSelectedList('newsletter')
     setNote('')
     setShowPreview(false)
@@ -173,26 +217,30 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
 
     setSendingTest(true)
     try {
-      // Save draft first if not already saved
-      if (!currentDraftId) {
-        await handleSaveDraft()
+      // Save first if new or edited, so "tested" is recorded against exactly
+      // the content that goes to the test list.
+      let draftId = currentDraftId
+      if (!draftId || hasUnsavedContentChanges) {
+        const saved = await handleSaveDraft()
+        if (!saved) return
+        draftId = saved.id
       }
 
       const htmlContent = convertToHtml(content)
 
       // Send to test list (test mode = true)
-      await onSend({
+      const sent = await onSend({
         subject,
         htmlContent,
         selectedList: 'testList', // Always use testList for testing
         note,
-        draftId: currentDraftId || undefined,
+        draftId,
       })
 
-      // Mark draft as tested
-      if (currentDraftId) {
+      // Mark draft as tested — only if the test really went out (not cancelled/failed)
+      if (sent) {
         try {
-          await markDraftAsTested(currentDraftId)
+          await markDraftAsTested(draftId)
           await loadDrafts()
         } catch (error) {
           console.error('Failed to mark draft as tested:', error)
@@ -209,10 +257,9 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       return
     }
 
-    const currentDraft = drafts.find((d) => d.id === currentDraftId)
-    if (currentDraft?.status !== 'tested') {
+    if (needsFreshTest) {
       const confirmSend = confirm(
-        'This email has not been tested yet. Are you sure you want to send it to the production list?'
+        `${untestedWarning} Are you sure you want to send it to the production list?`
       )
       if (!confirmSend) {
         return
@@ -221,20 +268,29 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
 
     setSendingProduction(true)
     try {
+      // Save first if new or edited, so "sent" is recorded against exactly
+      // the content that goes out.
+      let draftId = currentDraftId
+      if (!draftId || hasUnsavedContentChanges) {
+        const saved = await handleSaveDraft()
+        if (!saved) return
+        draftId = saved.id
+      }
+
       const htmlContent = convertToHtml(content)
 
-      await onSend({
+      const sent = await onSend({
         subject,
         htmlContent,
         selectedList,
         note,
-        draftId: currentDraftId || undefined,
+        draftId,
       })
 
-      // Mark draft as sent
-      if (currentDraftId) {
+      // Mark draft as sent — only if it really went out (not cancelled/failed)
+      if (sent) {
         try {
-          await markDraftAsSent(currentDraftId)
+          await markDraftAsSent(draftId)
           await loadDrafts()
         } catch (error) {
           console.error('Failed to mark draft as sent:', error)
@@ -244,8 +300,6 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       setSendingProduction(false)
     }
   }
-
-  const currentDraft = drafts.find((d) => d.id === currentDraftId)
 
   return (
     <YStack gap="$4">
@@ -318,6 +372,9 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                       <Text fontSize="$2" color="$gray11">
                         To: {findList(draft.selectedList)?.label} •
                         Updated: {new Date(draft.updatedAt).toLocaleString()}
+                        {draft.sentAt ? (draft.status === 'sent'
+                          ? ` • Sent: ${new Date(draft.sentAt).toLocaleString()}`
+                          : ` • Previously sent: ${new Date(draft.sentAt).toLocaleDateString()} (an earlier version)`) : null}
                       </Text>
                     </YStack>
                     <Button
@@ -608,8 +665,8 @@ Looking forward to seeing you!
               <Text fontSize="$3" color="$gray11">
                 Sending to: <strong>{findList(selectedList)?.label}</strong>
               </Text>
-              {currentDraft?.status !== 'tested' ? <Text fontSize="$2" color="$orange10" fontWeight="600">
-                  ⚠️ Not tested yet - consider sending a test first
+              {needsFreshTest ? <Text fontSize="$2" color="$orange10" fontWeight="600">
+                  {untestedWarning}
                 </Text> : null}
             </YStack>
             <Button
