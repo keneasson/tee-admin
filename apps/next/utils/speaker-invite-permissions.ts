@@ -1,5 +1,6 @@
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * Who may send a speaker invitation for `ecclesia` (spec §2).
@@ -18,6 +19,6 @@ export function canSendSpeakerInvite(
 ): boolean {
   if (role === ROLES.OWNER) return true
   if (!person || !ecclesia) return false
-  if (person.ecclesia !== ecclesia) return false
+  if (!isSameEcclesia(person.ecclesia, ecclesia)) return false
   return person.isRecordingBrother === true || role === ROLES.REP
 }

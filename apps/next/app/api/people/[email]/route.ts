@@ -22,6 +22,8 @@ import {
 import { resolvePersonParam } from '@my/app/utils/resolve-person-param'
 import { personForSessionEmail } from '@/utils/session-person'
 import { hasSpeakerFacts, parseSpeakerFactsEdit } from '@my/app/utils/speaker-eligibility'
+import { isSameEcclesia as sameEcclesia } from '@my/app/utils/ecclesia-name'
+import { refuseClosedEcclesia } from '@/utils/ecclesia-assignment'
 
 interface MemberProfile {
   email: string
@@ -198,7 +200,7 @@ export async function GET(
     const isRecorderOrRep =
       viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
     const isSameEcclesiaAsViewer = Boolean(
-      viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+      viewerEcclesia && targetEcclesia && sameEcclesia(viewerEcclesia, targetEcclesia)
     )
     const viewerCanEdit =
       viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN
@@ -244,7 +246,7 @@ export async function GET(
     }
 
     // Include inter-ecclesia flag
-    const isInterEcclesia = !isOwnProfile && !!viewerEcclesia && !!targetEcclesia && viewerEcclesia !== targetEcclesia
+    const isInterEcclesia = !isOwnProfile && !!viewerEcclesia && !!targetEcclesia && !sameEcclesia(viewerEcclesia, targetEcclesia)
     if (isInterEcclesia) {
       profile.isInterEcclesia = true
     }
@@ -420,7 +422,7 @@ export async function GET(
     // Recorder/Rep/RB data — same-ecclesia members only
     const isRecorderOrRepRole = viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
     if (isRecorderOrRepRole && !isOwnProfile) {
-      const isSameEcclesia = viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+      const isSameEcclesia = viewerEcclesia && targetEcclesia && sameEcclesia(viewerEcclesia, targetEcclesia)
       if (isSameEcclesia) {
         profile.firstName = targetPerson.firstName
         profile.lastName = targetPerson.lastName
@@ -440,7 +442,7 @@ export async function GET(
     const isPrivilegedViewer = viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN ||
       viewerIsRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
     if (isPrivilegedViewer && !isOwnProfile) {
-      const isSameEcclesiaForPrivacy = viewerEcclesia && targetEcclesia && viewerEcclesia === targetEcclesia
+      const isSameEcclesiaForPrivacy = viewerEcclesia && targetEcclesia && sameEcclesia(viewerEcclesia, targetEcclesia)
       // Owner/Admin see all; Recorder/Rep only see same-ecclesia
       if (viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN || isSameEcclesiaForPrivacy) {
         const privacySettings = await privacyRepository.getPrivacySettings(targetPerson.primaryEmail)
@@ -543,10 +545,13 @@ export async function PATCH(
       )
     }
 
-    // Recorder/Rep/RB: enforce same-ecclesia restriction
-    if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
+    // Owner/Admin manage members of EVERY ecclesia — checked first, whatever
+    // other designation (e.g. Recording Brother) they also hold. Only a
+    // Recorder/Rep/RB without that role is limited to their own ecclesia.
+    const isSystemAdmin = viewerRole === ROLES.OWNER || viewerRole === ROLES.ADMIN
+    if (!isSystemAdmin && (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP)) {
       const viewerPerson = await personForSessionEmail(session.user.email)
-      if (!viewerPerson || viewerPerson.ecclesia !== targetPerson.ecclesia) {
+      if (!viewerPerson || !sameEcclesia(viewerPerson.ecclesia, targetPerson.ecclesia)) {
         return NextResponse.json(
           { error: 'You can only edit members of your own ecclesia' },
           { status: 403 }
@@ -584,6 +589,9 @@ export async function PATCH(
         { status: 400 }
       )
     }
+
+    const closed = await refuseClosedEcclesia(updates.ecclesia, targetPerson.ecclesia)
+    if (closed) return closed
 
     if (hasSpeakerFacts(facts)) {
       const editor = await personForSessionEmail(session.user.email)

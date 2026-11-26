@@ -5,6 +5,8 @@ import { draftMemberRepository } from '@my/app/provider/dynamodb/repositories/dr
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../cache'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia as sameEcclesia } from '@my/app/utils/ecclesia-name'
+import { refuseClosedEcclesia } from '@/utils/ecclesia-assignment'
 
 /**
  * POST /api/people/add — Create a new member (direct or draft)
@@ -36,6 +38,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
     }
 
+    const closed = await refuseClosedEcclesia(ecclesia)
+    if (closed) return closed
+
     // Duplicate check
     const existing = await personRepository.getByEmail(email.toLowerCase())
     if (existing) {
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
     const isAdminOrOwner = viewerRole === ROLES.ADMIN || viewerRole === ROLES.OWNER
     const isRecordingBrother = !!(session.user as any).isRecordingBrother
     const isRecorderOrRep = isRecordingBrother || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP
-    const isSameEcclesia = viewerEcclesia === ecclesia
+    const isSameEcclesia = sameEcclesia(viewerEcclesia, ecclesia)
     const canDirectAdd = isAdminOrOwner || (isRecorderOrRep && isSameEcclesia)
 
     // Determine role: use requested role if provided and valid, otherwise default based on ecclesia

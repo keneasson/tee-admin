@@ -4,6 +4,7 @@ import { getEcclesiaByName } from '@/utils/dynamodb/locations'
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { haversineDistance, DEFAULT_SHARING_RADIUS_KM } from '@my/app/utils/geo'
+import { isActiveEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * GET /api/ecclesia/[name]/nearby
@@ -64,7 +65,9 @@ export async function GET(
     const results: NearbyEcclesia[] = []
     for (const c of candidates) {
       if (!c) continue
-      if (c.name === target.name) continue
+      if (isSameEcclesia(c, target)) continue
+      // Closed since the list was computed: never offer it as a neighbour.
+      if (!isActiveEcclesia(c)) continue
 
       let distanceKm: number | undefined = undefined
       if (

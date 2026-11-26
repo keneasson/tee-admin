@@ -9,6 +9,7 @@ import type { SharingEcclesiaData } from '@my/app/services/event-sharing-resolve
 import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-feature-flag-wrapper'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isActiveEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * GET /api/events/feed
@@ -76,7 +77,8 @@ export async function GET(request: NextRequest) {
         nearbyEcclesias: ecclesiaData?.nearbyEcclesias,
       }
 
-      const allEcclesias: SharingEcclesiaData[] = allEcclesiasRaw.map((e) => ({
+      // A closed ecclesia neither shares into nor receives a feed.
+      const allEcclesias: SharingEcclesiaData[] = allEcclesiasRaw.filter(isActiveEcclesia).map((e) => ({
         name: e.name,
         latitude: e.latitude,
         longitude: e.longitude,
@@ -118,7 +120,7 @@ export async function GET(request: NextRequest) {
       const eventEcclesia = event.hostingEcclesia?.name
       if (!eventEcclesia) return true // Events without an ecclesia are shown to everyone
       // membersOnly events from other ecclesias are hidden
-      if (event.membersOnly && eventEcclesia !== userEcclesia) return false
+      if (event.membersOnly && !isSameEcclesia(eventEcclesia, userEcclesia)) return false
       return allEcclesias.includes(eventEcclesia)
     })
 

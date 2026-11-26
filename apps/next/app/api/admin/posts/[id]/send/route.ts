@@ -9,6 +9,7 @@ import { getPostAnnouncementContent } from '../../../../../../utils/email/get-po
 import { emailSend } from '../../../../../../utils/email/email-send'
 import { resolveSendList, SendListError } from '../../../../../../utils/mailing-lists/send-target'
 import { isPostLive, isPostScheduled } from '@my/app/utils/post-lifecycle'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 export const config = {
   maxDuration: 60,
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Tenant isolation — a deployment may only send its own tenant's posts.
-    if (tenant.homeEcclesiaName && post.tenant !== tenant.homeEcclesiaName) {
+    if (tenant.homeEcclesiaName && !isSameEcclesia(post.tenant, tenant.homeEcclesiaName)) {
       return NextResponse.json(
         { error: `This post belongs to ${post.tenant}, not ${tenant.homeEcclesiaName}.` },
         { status: 403 }

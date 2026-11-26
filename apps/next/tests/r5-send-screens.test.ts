@@ -86,9 +86,9 @@ describe('GET /api/admin/mailing-lists/sendable', () => {
     h.auth.mockResolvedValue({ user: { email: 'o@example.org', role: 'owner' } })
     const body = await (await sendable(req())).json()
     expect(body.lists).toEqual([
-      { key: 'L-CAM', displayName: 'Cambridge Memorial Recap', defaultOptIn: true, listKey: 'memorial-recap', isTest: false },
-      { key: 'L-NEWS', displayName: 'Toronto East Newsletter', defaultOptIn: false, listKey: 'newsletter', isTest: false },
-      { key: 'L-TEST', displayName: 'Toronto East Test List', defaultOptIn: false, listKey: 'testList', isTest: true },
+      { key: 'L-CAM', displayName: 'Cambridge Ecclesia Memorial Recap', defaultOptIn: true, listKey: 'memorial-recap', isTest: false },
+      { key: 'L-NEWS', displayName: 'Toronto East Ecclesia Newsletter', defaultOptIn: false, listKey: 'newsletter', isTest: false },
+      { key: 'L-TEST', displayName: 'Toronto East Ecclesia Test List', defaultOptIn: false, listKey: 'testList', isTest: true },
     ])
     expect(body.defaultListId).toBe('L-NEWS')
   })

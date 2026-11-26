@@ -50,7 +50,8 @@ export async function GET() {
           subscribers: counts[i].length,
         }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
-      owners,
+      // The new-list owner picker: closed ecclesias are not offered.
+      owners: owners.filter((o) => !o.closed),
       regions: getRegionOptions(),
       continents: getContinentOptions(),
     })

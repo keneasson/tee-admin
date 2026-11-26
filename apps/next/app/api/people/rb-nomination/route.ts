@@ -7,6 +7,7 @@ import { sendRBConfirmationEmail } from '../../../../utils/email/send-rb-confirm
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { personForSessionEmail } from '@/utils/session-person'
 import { recordingBrotherOf } from '@/utils/ecclesia-offices'
+import { isClosedEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * GET /api/people/rb-nomination?ecclesia=X — Get open nominations for an ecclesia
@@ -76,6 +77,11 @@ export async function POST(request: NextRequest) {
         { error: 'ecclesia, nomineeEmail, and nomineeName are required' },
         { status: 400 }
       )
+    }
+
+    // No Recording Brother is nominated or set at a closed ecclesia.
+    if (isClosedEcclesia(await getEcclesiaByName(ecclesia))) {
+      return NextResponse.json({ error: `${ecclesia} is closed; offices can't be assigned there` }, { status: 409 })
     }
 
     // Default email preference to 'personal' if not provided
@@ -150,7 +156,7 @@ export async function POST(request: NextRequest) {
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null
     }
-    if (!viewerPerson || viewerPerson.ecclesia !== ecclesia) {
+    if (!viewerPerson || !isSameEcclesia(viewerPerson.ecclesia, ecclesia)) {
       return NextResponse.json(
         { error: 'You must be a member of this ecclesia to nominate' },
         { status: 403 }
@@ -169,7 +175,7 @@ export async function POST(request: NextRequest) {
 
     // Verify nominee is a member of this ecclesia
     const nominee = await personRepository.getByEmail(nomineeEmail.toLowerCase())
-    if (!nominee || nominee.ecclesia !== ecclesia) {
+    if (!nominee || !isSameEcclesia(nominee.ecclesia, ecclesia)) {
       return NextResponse.json(
         { error: 'The nominee must be a member of this ecclesia' },
         { status: 400 }

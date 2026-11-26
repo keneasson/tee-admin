@@ -6,6 +6,7 @@ import { unsubscribeContact } from '../../../../utils/email/contact'
 import { invalidatePeopleCache } from '../../people/cache'
 import { invalidateGuestCache } from '../../people/guests/cache'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 // Note: 'recorder' is deprecated as a role — RB is set via the nomination flow (isRecordingBrother boolean).
 // Kept in VALID_ROLES for backwards compat with existing data but not in ALLOWED_ASSIGNMENTS for new assignments.
@@ -95,8 +96,10 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Recorder/Rep/RB: enforce same-ecclesia restriction
-    if (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP) {
+    // Owner/Admin act across every ecclesia (checked first, even if also a
+    // Recording Brother). Recorder/Rep/RB alone: same-ecclesia only.
+    const callerIsSystemAdmin = callerRole === ROLES.OWNER || callerRole === ROLES.ADMIN
+    if (!callerIsSystemAdmin && (callerIsRB || callerRole === ROLES.RECORDER || callerRole === ROLES.REP)) {
       const callerPerson = await personForSessionEmail(session.user.email)
       if (!callerPerson) {
         return NextResponse.json(
@@ -105,7 +108,7 @@ export async function PUT(request: NextRequest) {
         )
       }
 
-      if (callerPerson.ecclesia !== targetPerson.ecclesia) {
+      if (!isSameEcclesia(callerPerson.ecclesia, targetPerson.ecclesia)) {
         return NextResponse.json(
           { error: 'You can only change roles for members of your own ecclesia' },
           { status: 403 }

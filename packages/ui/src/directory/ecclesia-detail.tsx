@@ -1,7 +1,7 @@
-import { YStack, XStack, Text, Card, Heading, View, ScrollView, Spinner, Separator } from 'tamagui'
+import { YStack, XStack, Text, Card, Heading, View, ScrollView, Spinner } from 'tamagui'
 import { Button } from '../Button'
-import { Church, ArrowLeft, Trash, UserPlus } from '@tamagui/lucide-icons'
-import { brandColors } from '../branding/brand-colors'
+import { Church, ArrowLeft, UserPlus } from '@tamagui/lucide-icons'
+import { EcclesiaDangerZone, type ClosureChange } from './ecclesia-danger-zone'
 import { EcclesiaDetailView } from '../ecclesia/ecclesia-detail-view'
 import type { EcclesiaDetailData } from '../ecclesia/ecclesia-detail-view'
 import { RecordingBrotherManager } from './recording-brother-manager'
@@ -41,9 +41,10 @@ interface EcclesiaDetailProps {
   onDirectSet?: (nomineeEmail: string, nomineeName: string) => Promise<void>
   /** Resend confirmation email for a nomination */
   onResend?: (nominationId: string) => Promise<void>
-  /** Delete ecclesia callback (admin/owner only) */
-  onDelete?: () => void
-  isDeleting?: boolean
+  /** Close / reopen the ecclesia (admin/owner only). Ecclesias are never deleted. */
+  onSetClosed?: (change: ClosureChange) => Promise<boolean>
+  /** Merge this duplicate record into another ecclesia (admin/owner only) */
+  onMerge?: () => void
   /** Show external links card (gated behind multi-tenant feature flag) */
   showExternalLinks?: boolean
   /** Enriched nearby ecclesias from API */
@@ -69,8 +70,8 @@ export function EcclesiaDetail({
   onSecond,
   onDirectSet,
   onResend,
-  onDelete,
-  isDeleting = false,
+  onSetClosed,
+  onMerge,
   showExternalLinks = false,
   nearbyEcclesiasData,
   nearbyLoading,
@@ -158,39 +159,9 @@ export function EcclesiaDetail({
           </YStack>
         </Card>
 
-        {/* Delete Ecclesia - Admin/Owner only */}
-        {authProps.isAdminOrOwner && onDelete ? (
-          <Card padding="$4" borderWidth={1} borderColor="$red6" backgroundColor="$red2">
-            <YStack gap="$3">
-              <Text fontSize="$4" fontWeight="600" color="$red10">Danger Zone</Text>
-              <Separator borderColor="$red6" />
-              <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$3">
-                <YStack flex={1} gap="$1">
-                  <Text fontSize="$3" fontWeight="600">Delete this ecclesia</Text>
-                  <Text fontSize="$3" color="$textSecondary">
-                    {members.length > 0
-                      ? `This ecclesia has ${members.length} member${members.length !== 1 ? 's' : ''}. You will need to transfer them first.`
-                      : 'This action cannot be undone.'}
-                  </Text>
-                </YStack>
-                <Button
-                  icon={isDeleting ? <Spinner size="small" width={16} height={16} /> : Trash}
-                  backgroundColor={brandColors.light.error}
-                  color="white"
-                  borderWidth={2}
-                  borderColor={brandColors.light.error}
-                  hoverStyle={{
-                    backgroundColor: brandColors.light.error,
-                    opacity: 0.9,
-                  }}
-                  onPress={onDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete Ecclesia'}
-                </Button>
-              </XStack>
-            </YStack>
-          </Card>
+        {/* Danger Zone - Admin/Owner only: close / reopen, or merge a duplicate. Never delete. */}
+        {authProps.isAdminOrOwner && (onSetClosed || onMerge) ? (
+          <EcclesiaDangerZone ecclesia={ecclesia} onSetClosed={onSetClosed} onMerge={onMerge} />
         ) : null}
       </YStack>
     </ScrollView>

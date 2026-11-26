@@ -14,6 +14,7 @@ import { ScheduleEditor } from './schedule-editor'
 import { ScheduleViewer } from './schedule-viewer'
 import { ScheduleConfigEditor } from './schedule-config-editor'
 import type { OfficeSummary, RecordingBrotherSummary } from '../directory/types'
+import { ClosedBadge } from './closed-badge'
 
 export interface EcclesiaDetailData {
   name: string
@@ -52,6 +53,10 @@ export interface EcclesiaDetailData {
   rbAlertPreference?: 'all' | 'major' | 'none'
   sharingRadiusKm?: number
   nearbyEcclesias?: string[]
+  /** Closed ecclesias stay findable, marked "Closed {year}". */
+  status?: 'active' | 'closed'
+  closedYear?: number | null
+  closedNote?: string | null
 }
 
 interface EcclesiaDetailViewProps {
@@ -145,6 +150,7 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
           {locationParts.length > 0 ? (
             <Text fontSize="$3" theme="alt2">{locationParts.join(', ')}</Text>
           ) : null}
+          <ClosedBadge ecclesia={ecclesia} showNote />
         </YStack>
       </Card>
 

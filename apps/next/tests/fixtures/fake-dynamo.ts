@@ -38,6 +38,8 @@ function matchClauses(item: Item, expr: string | undefined, names: Record<string
     }
     m = c.match(/^attribute_not_exists\(\s*([#\w]+)\s*\)$/i)
     if (m) return item[resolveName(m[1], names)] === undefined
+    m = c.match(/^attribute_exists\(\s*([#\w]+)\s*\)$/i)
+    if (m) return item[resolveName(m[1], names)] !== undefined
     m = c.match(/^([#\w]+)\s*=\s*(:\w+)$/)
     if (m) return item[resolveName(m[1], names)] === values[m[2]]
     throw new Error(`fake-dynamo: unsupported expression clause "${c}"`)
@@ -135,6 +137,30 @@ export function createFakeDynamo(): FakeDynamo {
       if (input.FilterExpression) rows = rows.filter((i) => matchClauses(i, input.FilterExpression, names, values))
       return { Items: clone(rows), Count: rows.length }
     },
+    /**
+     * All-or-nothing: every condition is checked against the current state
+     * first (a missing item is checked as `{}`), then every write is applied.
+     */
+    async TransactWrite(input) {
+      const failed = (input.TransactItems as any[]).some((ti) => {
+        const op = ti.Put || ti.Delete || ti.Update || ti.ConditionCheck
+        if (!op.ConditionExpression) return false
+        const key = ti.Put ? op.Item : op.Key
+        const existing = table(op.TableName).get(keyOf(key)) || {}
+        return !matchClauses(existing, op.ConditionExpression, op.ExpressionAttributeNames, op.ExpressionAttributeValues || {})
+      })
+      if (failed) {
+        const err: any = new Error('Transaction cancelled')
+        err.name = 'TransactionCanceledException'
+        throw err
+      }
+      for (const ti of input.TransactItems as any[]) {
+        if (ti.Put) await ops.Put({ ...ti.Put, ConditionExpression: undefined })
+        else if (ti.Delete) await ops.Delete(ti.Delete)
+        else if (ti.Update) await ops.Update(ti.Update)
+      }
+      return {}
+    },
     async BatchGet(input) {
       const Responses: Record<string, Item[]> = {}
       for (const [name, req] of Object.entries<any>(input.RequestItems)) {
@@ -157,6 +183,7 @@ export function createFakeDynamo(): FakeDynamo {
     delete: (input: any) => send({ __op: 'Delete', input }),
     query: (input: any) => send({ __op: 'Query', input }),
     scan: (input: any) => send({ __op: 'Scan', input }),
+    transactWrite: (input: any) => send({ __op: 'TransactWrite', input }),
     send: (cmd: any) => send(cmd),
   }
 
@@ -191,6 +218,7 @@ export function fakeLibDynamodb(fake: FakeDynamo) {
     ScanCommand: command('Scan'),
     BatchGetCommand: command('BatchGet'),
     BatchWriteCommand: command('BatchWrite'),
+    TransactWriteCommand: command('TransactWrite'),
   }
 }
 

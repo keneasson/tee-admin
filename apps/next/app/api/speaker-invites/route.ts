@@ -4,6 +4,8 @@ import { createInvite, listInvites, sendTestInvitation, type CreateInviteInput }
 import { inviterInviteView } from '@/utils/speaker-invites/views'
 import { forbidden, inviterContext, noStore, readJson, serviceErrorResponse } from '@/utils/speaker-invites/http'
 import { resolveProgram } from '@/utils/speaker-invites/programs'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
+import { getEcclesiaByName } from '@/utils/dynamodb/locations'
 
 /**
  * Speaker invitations — inviter side (spec §2).
@@ -41,6 +43,9 @@ export async function POST(request: Request) {
 
   const ecclesia: string = typeof body.ecclesia === 'string' && body.ecclesia ? body.ecclesia : ctx.person.ecclesia
   if (!canSendSpeakerInvite(ctx.person, ctx.role, ecclesia)) return forbidden()
+  if (isClosedEcclesia(await getEcclesiaByName(ecclesia))) {
+    return NextResponse.json({ error: `${ecclesia} is closed; it can't send invitations.`, code: 'ECCLESIA_CLOSED' }, { status: 409 })
+  }
 
   const type = typeof body.type === 'string' ? body.type : ''
   const resolved = await resolveProgram(ecclesia, type)

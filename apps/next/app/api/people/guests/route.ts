@@ -5,6 +5,7 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { loadDirectoryPeople } from '../load-directory'
 import { getCachedGuests, setCachedGuests, GUEST_CACHE_TTL_MS } from './cache'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 interface GuestListItem {
   id: string
@@ -99,7 +100,7 @@ export async function GET() {
     // Recorder: filter to their ecclesia only
     const filteredGuests = isAdminOrOwner
       ? allGuests
-      : allGuests.filter((g) => g.ecclesia === viewerEcclesia)
+      : allGuests.filter((g) => isSameEcclesia(g.ecclesia, viewerEcclesia))
 
     return NextResponse.json({
       success: true,

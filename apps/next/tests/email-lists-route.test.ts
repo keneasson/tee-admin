@@ -83,7 +83,7 @@ describe('GET /api/admin/email/search', () => {
     expect(body.people.map((p: any) => p.emails[0].sharedWith)).toEqual([['b'], ['a']])
     expect(body.findings.sharedAddresses).toEqual([{ email: 'shared@example.org', personIds: ['a', 'b'] }])
     expect(body.subscriptionSource).toBe('registry')
-    expect(body.topics.map((t: any) => t.displayName)).toEqual(['Toronto East Memorial Recap', 'Toronto East Newsletter'])
+    expect(body.topics.map((t: any) => t.displayName)).toEqual(['Toronto East Ecclesia Memorial Recap', 'Toronto East Ecclesia Newsletter'])
     // From the registry only: the SES 'memorial' opt-in is ignored.
     expect(body.people[0].emails[0].ses.topics).toEqual({ 'L-MEM': false, 'L-NEWS': true })
   })

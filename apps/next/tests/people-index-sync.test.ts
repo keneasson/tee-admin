@@ -33,7 +33,7 @@ import {
 } from '@my/app/provider/dynamodb/people-index'
 import {
   createEcclesia,
-  deleteEcclesia,
+  deleteMergedEcclesia,
   findRecordingBrotherEcclesia,
   getAllEcclesia,
   updateEcclesia,
@@ -181,10 +181,22 @@ describe('ecclesia projections follow every ecclesia write', () => {
     expect(await findRecordingBrotherEcclesia('legacy-rb@x.org')).toBeNull()
   })
 
-  it('delete removes the alias projection', async () => {
-    await seedEcclesia()
-    await deleteEcclesia('Toronto East Ecclesia')
-    expect(fake.items().filter((i) => i.pkey.startsWith('ECCLESIA_ID#'))).toEqual([])
+  it('deleting a merged duplicate removes its alias projection', async () => {
+    await seedEcclesia('Example Keeper', 'Placeville')
+    await seedEcclesia('Example Duplicate Record', 'Otherville')
+    await deleteMergedEcclesia('Example Duplicate Record', { mergedInto: 'Example Keeper' })
+    expect(fake.items().filter((i) => i.pkey.startsWith('ECCLESIA_ID#')).map((i) => i.ecclesiaId)).toEqual(['example-keeper'])
+  })
+
+  it('an ecclesia is never deleted outside a merge', async () => {
+    await seedEcclesia('Example Keeper', 'Placeville')
+    await seedEcclesia('Example Duplicate Record', 'Otherville')
+    await expect(deleteMergedEcclesia('Example Duplicate Record', { mergedInto: '' })).rejects.toThrow(/closed, not deleted/)
+    await expect(deleteMergedEcclesia('Example Keeper', { mergedInto: 'Example Keeper' })).rejects.toThrow(/closed, not deleted/)
+    // Something still points at it → refused.
+    await repo.create({ email: 'still-here@example.org', firstName: 'Still', lastName: 'Here', ecclesia: 'Example Duplicate Record' })
+    await expect(deleteMergedEcclesia('Example Duplicate Record', { mergedInto: 'Example Keeper' })).rejects.toThrow(/merge it first/)
+    expect((await getAllEcclesia()).length).toBe(2)
   })
 })
 

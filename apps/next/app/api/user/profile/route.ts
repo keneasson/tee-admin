@@ -3,6 +3,7 @@ import { auth } from '../../../../utils/auth'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { personForSessionEmail } from '@/utils/session-person'
 import { hasSpeakerFacts, parseSpeakerFactsEdit } from '@my/app/utils/speaker-eligibility'
+import { refuseClosedEcclesia } from '@/utils/ecclesia-assignment'
 
 export async function GET() {
   try {
@@ -142,6 +143,9 @@ export async function PATCH(request: NextRequest) {
         { status: 404 }
       )
     }
+
+    const closed = await refuseClosedEcclesia(updates.ecclesia, person.ecclesia)
+    if (closed) return closed
 
     if (hasSpeakerFacts(facts)) await personRepository.setSpeakerFacts(person.personId, facts, person.personId)
     const updated =

@@ -4,6 +4,7 @@ import { personRepository } from '@my/app/provider/dynamodb/repositories/person-
 import { rbNominationRepository } from '@my/app/provider/dynamodb/repositories/rb-nomination-repository'
 import { sendRBConfirmationEmail } from '../../../../../../utils/email/send-rb-confirmation'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * POST /api/people/rb-nomination/[nominationId]/second — Second a nomination
@@ -41,7 +42,7 @@ export async function POST(
       const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
       viewerPerson = persons[0] || null
     }
-    if (!viewerPerson || viewerPerson.ecclesia !== ecclesia) {
+    if (!viewerPerson || !isSameEcclesia(viewerPerson.ecclesia, ecclesia)) {
       return NextResponse.json(
         { error: 'You must be a member of this ecclesia to second a nomination' },
         { status: 403 }

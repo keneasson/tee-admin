@@ -246,7 +246,8 @@ export async function PUT(request: NextRequest) {
     const putAuthz = await authorizeContentEcclesia(
       session.user.email,
       putCallerRole,
-      eventData.ownerEcclesia || eventData.hostingEcclesia?.name || currentOwner
+      eventData.ownerEcclesia || eventData.hostingEcclesia?.name || currentOwner,
+      { current: oldEvent ? currentOwner : null }
     )
     if (!putAuthz.ok) {
       return NextResponse.json({ error: putAuthz.error }, { status: putAuthz.status })

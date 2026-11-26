@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { createEcclesia, getAllEcclesia, updateEcclesia, deleteEcclesia } from '../../../utils/dynamodb/locations'
+import {
+  createEcclesia,
+  getAllEcclesia,
+  updateEcclesia,
+  EcclesiaNameConflictError,
+} from '../../../utils/dynamodb/locations'
 
 export async function GET(request: NextRequest) {
   try {
@@ -116,13 +121,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating ecclesia:', error)
     
-    // Check if it's a duplicate key error
-    if (error instanceof Error && error.message.includes('ConditionalCheckFailedException')) {
+    // Same name as an existing ecclesia once "Ecclesia"/"Christadelphian(s)" endings are ignored
+    if (error instanceof EcclesiaNameConflictError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'An ecclesia with this name already exists',
-        },
+        { success: false, error: error.message, existingName: error.existingName },
         { status: 409 }
       )
     }
@@ -190,6 +192,13 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Error updating ecclesia:', error)
 
+    if (error instanceof EcclesiaNameConflictError) {
+      return NextResponse.json(
+        { success: false, error: error.message, existingName: error.existingName },
+        { status: 409 }
+      )
+    }
+
     if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json(
         {
@@ -210,55 +219,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-    const callerRole = (session.user as any).role as string || ROLES.GUEST
-    if (callerRole !== ROLES.ADMIN && callerRole !== ROLES.OWNER) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const name = searchParams.get('name')
-
-    if (!name) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Ecclesia name is required',
-        },
-        { status: 400 }
-      )
-    }
-
-    await deleteEcclesia(name)
-
-    return NextResponse.json({
-      success: true,
-      message: `Ecclesia "${name}" deleted successfully`,
-    })
-  } catch (error) {
-    console.error('Error deleting ecclesia:', error)
-
-    if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to delete ecclesia',
-      },
-      { status: 500 }
-    )
-  }
-}
+// No DELETE: an ecclesia is never deleted. One that stops meeting is CLOSED
+// (PATCH /api/ecclesia/[name] { status: 'closed' }); a duplicate record is
+// folded into the real one by POST /api/admin/ecclesias/merge, which alone
+// removes the merged duplicate.

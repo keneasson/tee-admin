@@ -5,6 +5,7 @@ import { officeRepository } from '@my/app/provider/dynamodb/repositories/office-
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { getAllEcclesia } from '@/utils/dynamodb/locations'
 import { officesOf, recordingBrothersOf } from '@/utils/ecclesia-offices'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,7 @@ export async function GET() {
         city: e.city,
         province: e.province,
         country: e.country,
+        closed: isClosedEcclesia(e),
         hasRecordingBrotherOffice: list.some((o) => o.kind === 'rb'),
         recordingBrother: rbs.get(id) || null,
         offices: list,

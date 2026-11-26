@@ -27,7 +27,10 @@ export async function GET(request: NextRequest) {
     }
 
     const limit = limitParam ? parseInt(limitParam, 10) : 5
-    const ecclesias = await searchEcclesia(query.trim(), limit)
+    // Pickers that assign people/content never offer a closed ecclesia; the
+    // directory (finding one, including that it closed) asks for them.
+    const includeClosed = ['1', 'true'].includes(searchParams.get('includeClosed') || '')
+    const ecclesias = await searchEcclesia(query.trim(), limit, { includeClosed })
     
     return NextResponse.json({
       success: true,

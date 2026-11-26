@@ -2,13 +2,15 @@ import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { getDefaultRegion } from '@my/app/config/regions'
 import { getEcclesiaByName, getAllEcclesia } from './dynamodb/locations'
 import { personForSessionEmail } from './session-person'
+import { isClosedEcclesia, isSameEcclesia as sameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * Check if a user can edit a given ecclesia.
  *
  * Rules:
- * 1. System owner (role === 'owner') → can edit any ecclesia
- * 2. Same-ecclesia admin (role === 'admin' AND person.ecclesia === ecclesiaName)
+ * 1. System owner or admin (role 'owner' / 'admin') → can edit any ecclesia
+ *    (including closing it or merging a duplicate), checked first
+ * 2. (removed: admin is no longer limited to its own ecclesia)
  * 3. Same-ecclesia recording brother (person.isRecordingBrother === true AND person.ecclesia === ecclesiaName)
  * 4. Same-ecclesia rep (role === 'rep' AND person.ecclesia === ecclesiaName)
  *
@@ -19,8 +21,8 @@ export async function checkEcclesiaEditPermission(
   userRole: string,
   ecclesiaName: string
 ): Promise<boolean> {
-  // Owner can edit any ecclesia
-  if (userRole === ROLES.OWNER) {
+  // Owner and Admin manage every ecclesia
+  if (userRole === ROLES.OWNER || userRole === ROLES.ADMIN) {
     return true
   }
 
@@ -30,10 +32,10 @@ export async function checkEcclesiaEditPermission(
     return false
   }
 
-  const isSameEcclesia = person.ecclesia === ecclesiaName
+  const isSameEcclesia = sameEcclesia(person.ecclesia, ecclesiaName)
 
-  // Admin, legacy recorder role, or Rep of the same ecclesia
-  if ((userRole === ROLES.ADMIN || userRole === ROLES.RECORDER || userRole === ROLES.REP) && isSameEcclesia) {
+  // Legacy recorder role, or Rep of the same ecclesia
+  if ((userRole === ROLES.RECORDER || userRole === ROLES.REP) && isSameEcclesia) {
     return true
   }
 
@@ -66,12 +68,12 @@ export async function checkRecordingBrotherPermission(
   // Legacy recorder role or RB designation — same-ecclesia only
   if (userRole === ROLES.RECORDER) {
     const person = await personForSessionEmail(userEmail)
-    return !!person && person.ecclesia === ecclesiaName
+    return !!person && sameEcclesia(person.ecclesia, ecclesiaName)
   }
 
   // isRecordingBrother designation — same-ecclesia only
   const person = await personForSessionEmail(userEmail)
-  if (person?.isRecordingBrother && person.ecclesia === ecclesiaName) {
+  if (person?.isRecordingBrother && sameEcclesia(person.ecclesia, ecclesiaName)) {
     return true
   }
 
@@ -120,7 +122,7 @@ export async function canAuthorForEcclesia(
 
   const isStaff =
     userRole === ROLES.ADMIN || userRole === ROLES.RECORDER || userRole === ROLES.REP
-  const isSameEcclesia = person.ecclesia === ecclesiaName
+  const isSameEcclesia = sameEcclesia(person.ecclesia, ecclesiaName)
 
   // Own ecclesia: staff roles, or the recording brother designation.
   if (isSameEcclesia && (isStaff || person.isRecordingBrother)) {
@@ -158,7 +160,9 @@ export type ContentEcclesiaAuth =
 export async function authorizeContentEcclesia(
   userEmail: string,
   userRole: string,
-  requestedEcclesia: string | null | undefined
+  requestedEcclesia: string | null | undefined,
+  /** The content's current owner: keeping it is allowed even if that ecclesia has since closed. */
+  opts: { current?: string | null } = {}
 ): Promise<ContentEcclesiaAuth> {
   let target = (requestedEcclesia || '').trim()
 
@@ -182,6 +186,11 @@ export async function authorizeContentEcclesia(
       status: 403,
       error: `You do not have permission to manage content for ${target}.`,
     }
+  }
+
+  // No new content is assigned to a closed ecclesia (existing content keeps it).
+  if (!(opts.current && sameEcclesia(target, opts.current)) && isClosedEcclesia(await getEcclesiaByName(target))) {
+    return { ok: false, status: 409, error: `${target} is closed; content can't be assigned to it.` }
   }
 
   return { ok: true, ecclesia: target }

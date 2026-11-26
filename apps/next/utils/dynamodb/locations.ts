@@ -1,4 +1,4 @@
-import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocument, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { getAwsDbConfig } from '../email/sesClient'
 import {
@@ -23,6 +23,7 @@ import { checkFeatureFlagFromDB } from '@my/app/features/feature-flags/use-featu
 import { PATTERNS, patternQuery } from '@my/app/provider/dynamodb/access-patterns'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
 import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { ClosedEcclesiaError, isActiveEcclesia, normalizeEcclesiaName, type EcclesiaStatus } from '@my/app/utils/ecclesia-name'
 
 const dbClientConfig = getAwsDbConfig()
 const client = DynamoDBDocument.from(new DynamoDB(dbClientConfig), {
@@ -137,8 +138,23 @@ export interface EcclesiaData {
   rbAlertPreference?: 'all' | 'major' | 'none'
   sharingRadiusKm?: number  // 100–1000 in 100km steps, or omit for default (300km)
   nearbyEcclesias?: string[]
+  /**
+   * Closed ecclesias stay findable (directory, search, history) with a
+   * "Closed {year}" badge, but are never chosen or sent to. Missing = active.
+   */
+  status?: EcclesiaStatus
+  closedYear?: number
+  closedNote?: string
   createdAt: Date
   updatedAt: Date
+}
+
+/** Another ecclesia already has this name once generic endings are ignored ("Brantford" vs "Brantford Ecclesia"). */
+export class EcclesiaNameConflictError extends Error {
+  constructor(public readonly requestedName: string, public readonly existingName: string) {
+    super(`An ecclesia named "${existingName}" already exists; "${requestedName}" would be a duplicate of it.`)
+    this.name = 'EcclesiaNameConflictError'
+  }
 }
 
 // Location functions
@@ -254,6 +270,9 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
     rbAlertPreference: item.rbAlertPreference,
     sharingRadiusKm: item.sharingRadiusKm,
     nearbyEcclesias: item.nearbyEcclesias,
+    status: item.status,
+    closedYear: item.closedYear,
+    closedNote: item.closedNote,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }
@@ -334,43 +353,65 @@ export async function createEcclesia(data: {
     }
   }
 
-  try {
-    await client.put({
-      TableName: TABLE_NAME,
-      Item: {
-        // New schema: Geographic hierarchy in PK for efficient geographic queries
-        pkey: `ECCLESIA#${data.country}|${data.province}`,
-        skey: `${data.city}#${data.name}`,
-        type: 'ECCLESIA',
-        // GSI1 for name-based lookups
-        gsi1pk: PATTERNS.ecclesiaByName.pk({ name: data.name }),
-        gsi1sk: `${data.country}|${data.province}|${data.city}`,
-        ...ecclesia,
-      },
-      ConditionExpression: 'attribute_not_exists(gsi1pk)', // Prevent duplicate names
-    })
+  // Duplicate prevention by MEANING, across every record: "Brantford" and
+  // "Brantford Ecclesia" are one ecclesia, whatever city or province each was
+  // filed under. (The key condition below only ever stopped an identical key.)
+  const [duplicate] = await findEcclesiasMatchingName(data.name)
+  if (duplicate) throw new EcclesiaNameConflictError(data.name, duplicate.name)
 
-    invalidateEcclesiaCache()
-    await syncEcclesiaProjections(ecclesiaKey(data))
-    return ecclesia
-  } catch (error: any) {
-    if (error.name === 'ConditionalCheckFailedException') {
-      // Ecclesia already exists - fetch and return the existing one
-      const existing = await getEcclesiaByName(data.name)
-      if (existing) {
-        return existing
-      }
-      throw new Error(`Ecclesia "${data.name}" already exists but could not be retrieved`)
-    }
-    throw error
+  await client.put({
+    TableName: TABLE_NAME,
+    Item: {
+      ...sourceItemKeys(data),
+      ...ecclesia,
+    },
+    ConditionExpression: 'attribute_not_exists(pkey)',
+  })
+
+  invalidateEcclesiaCache()
+  await syncEcclesiaProjections(ecclesiaKey(data))
+  return ecclesia
+}
+
+/** The key + index attributes of an ECCLESIA source item. */
+function sourceItemKeys(e: { country: string; province: string; city: string; name: string }) {
+  return {
+    // Geographic hierarchy in the base key for geographic queries
+    ...ecclesiaKey(e),
+    type: 'ECCLESIA',
+    // GSI1 for name-based lookups
+    gsi1pk: PATTERNS.ecclesiaByName.pk({ name: e.name }),
+    gsi1sk: `${e.country}|${e.province}|${e.city}`,
   }
 }
 
-// Helper function to get ecclesia by name using GSI1
-// Falls back to fuzzy search if exact name match fails (handles typos like "Ecclesial" vs "Ecclesia")
+/**
+ * Every ecclesia whose name means the same as `name` once generic endings are
+ * ignored (`normalizeEcclesiaName`). Reads the directory index fresh (not the
+ * picker cache): duplicate checks and merges must see the latest records.
+ */
+export async function findEcclesiasMatchingName(
+  name: string,
+  opts: { excludeEcclesiaId?: string } = {}
+): Promise<EcclesiaData[]> {
+  const key = normalizeEcclesiaName(name)
+  if (!key) return []
+  const all = await getEcclesiasFromIndex()
+  return all.filter(
+    (e) => normalizeEcclesiaName(e.name) === key && (!opts.excludeEcclesiaId || ecclesiaIdOf(e) !== opts.excludeEcclesiaId)
+  )
+}
+
+/**
+ * The ecclesia called `name`. An exact stored name wins (GSI1); otherwise the
+ * ONE ecclesia whose normalized name matches ("Barrie" finds "Barrie
+ * Ecclesia"). Never a partial match: "Brant" does not find "Brantford" or
+ * "Brant County". Two normalized matches are ambiguous → null (and logged), so
+ * a caller can never silently act on the wrong record.
+ */
 export async function getEcclesiaByName(name: string): Promise<EcclesiaData | null> {
   try {
-    // Try exact match first
+    if (!name || !name.trim()) return null
     const result = await client.query({
       ...patternQuery(PATTERNS.ecclesiaByName, { name }),
       Limit: 1,
@@ -380,18 +421,31 @@ export async function getEcclesiaByName(name: string): Promise<EcclesiaData | nu
       return mapItemToEcclesia(result.Items[0])
     }
 
-    // Fallback: fuzzy search (handles minor name mismatches from Google Sheets)
-    const fuzzyResults = await searchEcclesia(name, 1)
-    if (fuzzyResults.length > 0) {
-      console.log(`⚠️ Ecclesia "${name}" not found exactly, matched "${fuzzyResults[0].name}" via fuzzy search`)
-      return fuzzyResults[0]
+    const key = normalizeEcclesiaName(name)
+    const matches = (await getAllEcclesiasWithCache()).filter((e) => normalizeEcclesiaName(e.name) === key)
+    if (matches.length === 1) return matches[0]
+    if (matches.length > 1) {
+      console.warn(
+        `getEcclesiaByName: "${name}" matches ${matches.length} ecclesias (${matches.map((m) => m.name).join(', ')}); refusing to guess`
+      )
     }
-
     return null
   } catch (error) {
     console.error('Error getting ecclesia by name:', error)
     return null
   }
+}
+
+/**
+ * `getEcclesiaByName` for a write that attaches a person, office or content to
+ * the ecclesia: null if it doesn't exist, and a `ClosedEcclesiaError` if it is
+ * closed. A name that matches no record is not this function's business (free
+ * text ecclesia names are allowed for visitors); callers decide.
+ */
+export async function getAssignableEcclesia(name: string): Promise<EcclesiaData | null> {
+  const ecclesia = await getEcclesiaByName(name)
+  if (ecclesia && !isActiveEcclesia(ecclesia)) throw new ClosedEcclesiaError(ecclesia.name)
+  return ecclesia
 }
 
 // Server-side cache for the ecclesia list (pickers and search)
@@ -421,7 +475,16 @@ export function invalidateEcclesiaCache() {
   ecclesiaCacheExpiry = 0
 }
 
-export async function searchEcclesia(query: string, limit: number = 5): Promise<EcclesiaData[]> {
+/**
+ * Type-ahead over ecclesia names. Closed ecclesias are left out unless
+ * `includeClosed` — pickers that ASSIGN people/content must never offer one;
+ * the directory (finding an ecclesia, including that it closed) passes true.
+ */
+export async function searchEcclesia(
+  query: string,
+  limit: number = 5,
+  opts: { includeClosed?: boolean } = {}
+): Promise<EcclesiaData[]> {
   try {
     const allEcclesias = await getAllEcclesiasWithCache()
 
@@ -429,6 +492,7 @@ export async function searchEcclesia(query: string, limit: number = 5): Promise<
     const queryLower = query.toLowerCase()
     const filteredItems = allEcclesias
       .filter(item => item.name && item.name.toLowerCase().includes(queryLower))
+      .filter(item => opts.includeClosed || isActiveEcclesia(item))
 
     // Sort results: exact matches first, then prefix matches, then contains
     filteredItems.sort((a, b) => {
@@ -512,12 +576,35 @@ export async function getAllEcclesia(): Promise<EcclesiaData[]> {
   }
 }
 
-export async function deleteEcclesia(name: string): Promise<boolean> {
+/**
+ * Remove a DUPLICATE ecclesia record after it has been merged into another.
+ *
+ * We never delete an ecclesia: one that stops meeting is CLOSED (status), so
+ * its history keeps resolving. The only record ever removed is a merged
+ * duplicate, and only the merge (utils/ecclesia-merge-service.ts) calls this.
+ * It refuses unless the merge really happened: `mergedInto` must be another
+ * existing ecclesia, and nothing may still point at this one (no people, no
+ * offices). There is no API route or UI that reaches it.
+ */
+export async function deleteMergedEcclesia(name: string, opts: { mergedInto: string }): Promise<boolean> {
   try {
-    // First, get the ecclesia to find its key
-    const ecclesia = await getEcclesiaByName(name)
+    // Exact stored name only: never a normalized match for a delete.
+    const result = await client.query({ ...patternQuery(PATTERNS.ecclesiaByName, { name }), Limit: 1 })
+    const ecclesia = result.Items?.[0] ? mapItemToEcclesia(result.Items[0]) : null
     if (!ecclesia) {
       throw new Error(`Ecclesia "${name}" not found`)
+    }
+    const target = opts?.mergedInto ? await getEcclesiaByName(opts.mergedInto) : null
+    if (!target || ecclesiaIdOf(target) === ecclesiaIdOf(ecclesia)) {
+      throw new Error(`Refusing to delete "${name}": ecclesias are closed, not deleted; only a merged duplicate is removed`)
+    }
+    const { personRepository } = await import('@my/app/provider/dynamodb/repositories/person-repository')
+    const [people, offices] = await Promise.all([
+      personRepository.listByEcclesia(ecclesia.name, { limit: 1 }),
+      officeRepository.listOffices(ecclesiaIdOf(ecclesia)),
+    ])
+    if (people.items.length > 0 || offices.length > 0) {
+      throw new Error(`Refusing to delete "${name}": people or offices still point at it; merge it first`)
     }
 
     // Delete the record
@@ -538,6 +625,18 @@ export async function deleteEcclesia(name: string): Promise<boolean> {
   }
 }
 
+/**
+ * Edit an ecclesia's name/location (and address/postal code/venue).
+ *
+ * A change to name, city, province or country moves the record to a new key.
+ * That is ONE TransactWrite — Put the new item (every attribute of the old one
+ * carried over, plus the changed fields) and Delete the old key, both
+ * conditioned — so the record can never be lost half-way, and nothing on it
+ * (phone, website, schedule config, sharing, closed status…) is dropped. The
+ * stable id is persisted on the new item (`ecclesiaId` = the id it had), so
+ * offices, people cards, mailing lists and the schedule registry keep
+ * resolving. Any other edit updates in place; it never deletes anything.
+ */
 export async function updateEcclesia(
   originalName: string,
   data: {
@@ -551,41 +650,34 @@ export async function updateEcclesia(
   }
 ): Promise<EcclesiaData | null> {
   try {
-    // First, get the original ecclesia to find its key
     const original = await getEcclesiaByName(originalName)
     if (!original) {
       throw new Error(`Ecclesia "${originalName}" not found`)
     }
 
-    // If the key fields changed, we need to delete and recreate
+    for (const [field, value] of [
+      ['country', data.country],
+      ['province', data.province],
+      ['city', data.city],
+      ['name', data.name],
+    ] as const) {
+      if (typeof value !== 'string' || value.trim() === '') {
+        throw new Error(`updateEcclesia: '${field}' must be a non-empty string — it is part of the directory key.`)
+      }
+    }
+
+    const oldKey = ecclesiaKey(original)
     const keyChanged =
       original.country !== data.country ||
       original.province !== data.province ||
       original.city !== data.city ||
       original.name !== data.name
+    const now = new Date()
 
-    if (keyChanged) {
-      // Delete old record
-      await client.delete({
-        TableName: TABLE_NAME,
-        Key: {
-          pkey: `ECCLESIA#${original.country}|${original.province}`,
-          skey: `${original.city}#${original.name}`,
-        },
-      })
-
-      // Create new record with updated data, keeping the stable id: the alias
-      // is re-pointed at the new key by createEcclesia's projection refresh.
-      return await createEcclesia({ ...data, ecclesiaId: ecclesiaIdOf(original) })
-    } else {
-      // Only address/postalCode changed - can update in place
-      const now = new Date()
+    if (!keyChanged) {
       await client.update({
         TableName: TABLE_NAME,
-        Key: {
-          pkey: `ECCLESIA#${original.country}|${original.province}`,
-          skey: `${original.city}#${original.name}`,
-        },
+        Key: oldKey,
         UpdateExpression: 'SET address = :address, postalCode = :postalCode, venue = :venue, updatedAt = :updatedAt',
         ExpressionAttributeValues: {
           ':address': data.address || '',
@@ -596,15 +688,48 @@ export async function updateEcclesia(
       })
 
       invalidateEcclesiaCache()
-      await syncEcclesiaProjections(ecclesiaKey(original))
-      return {
-        ...original,
-        address: data.address,
-        postalCode: data.postalCode,
-        venue: data.venue,
-        updatedAt: now,
-      }
+      await syncEcclesiaProjections(oldKey)
+      return { ...original, address: data.address, postalCode: data.postalCode, venue: data.venue, updatedAt: now }
     }
+
+    const ecclesiaId = ecclesiaIdOf(original)
+    if (original.name !== data.name) {
+      const [duplicate] = await findEcclesiasMatchingName(data.name, { excludeEcclesiaId: ecclesiaId })
+      if (duplicate) throw new EcclesiaNameConflictError(data.name, duplicate.name)
+    }
+
+    // The whole stored item, not the mapped view: attributes the app no longer
+    // maps (legacy copies, anything added later) must survive the move too.
+    const stored = (await client.get({ TableName: TABLE_NAME, Key: oldKey })).Item
+    if (!stored) throw new Error(`Ecclesia "${originalName}" not found`)
+
+    const moved: Record<string, any> = {
+      ...stored,
+      ...sourceItemKeys(data),
+      name: data.name,
+      country: data.country,
+      province: data.province,
+      city: data.city,
+      ecclesiaId,
+      updatedAt: now.toISOString(),
+    }
+    if (data.address !== undefined) moved.address = data.address
+    if (data.postalCode !== undefined) moved.postalCode = data.postalCode
+    if (data.venue !== undefined) moved.venue = data.venue
+
+    await client.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: TABLE_NAME, Item: moved, ConditionExpression: 'attribute_not_exists(pkey)' } },
+          { Delete: { TableName: TABLE_NAME, Key: oldKey, ConditionExpression: 'attribute_exists(pkey)' } },
+        ],
+      })
+    )
+
+    invalidateEcclesiaCache()
+    // The alias follows the stable id to the new key.
+    await syncEcclesiaProjections(ecclesiaKey(data))
+    return mapItemToEcclesia(moved)
   } catch (error) {
     console.error('Error updating ecclesia:', error)
     throw error
@@ -635,6 +760,10 @@ export async function updateEcclesiaFields(
     rbAlertPreference?: 'all' | 'major' | 'none'
     sharingRadiusKm?: number
     nearbyEcclesias?: string[]
+    /** Owner/admin only (the route enforces it). Reopen with status 'active' + nulls. */
+    status?: EcclesiaStatus
+    closedYear?: number | null
+    closedNote?: string | null
   }
 ): Promise<EcclesiaData | null> {
   try {
@@ -669,11 +798,16 @@ export async function updateEcclesiaFields(
       { key: 'rbAlertPreference', attr: ':rbAlertPreference' },
       { key: 'sharingRadiusKm', attr: ':sharingRadiusKm' },
       { key: 'nearbyEcclesias', attr: ':nearbyEcclesias' },
+      { key: 'status', attr: ':status', exprName: '#status' },
+      { key: 'closedYear', attr: ':closedYear' },
+      { key: 'closedNote', attr: ':closedNote' },
     ]
 
-    for (const { key, attr } of fieldMap) {
+    for (const { key, attr, exprName } of fieldMap) {
       if ((updates as any)[key] !== undefined) {
-        expressions.push(`${key} = ${attr}`)
+        // `status` is a DynamoDB reserved word: it needs a name placeholder.
+        if (exprName) names[exprName] = key
+        expressions.push(`${exprName || key} = ${attr}`)
         values[attr] = (updates as any)[key] ?? null
       }
     }
@@ -694,6 +828,8 @@ export async function updateEcclesiaFields(
     return {
       ...ecclesia,
       ...updates,
+      closedYear: updates.closedYear === null ? undefined : (updates.closedYear ?? ecclesia.closedYear),
+      closedNote: updates.closedNote === null ? undefined : (updates.closedNote ?? ecclesia.closedNote),
       updatedAt: new Date(),
     }
   } catch (error) {

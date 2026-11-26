@@ -3,6 +3,8 @@ import { YStack, XStack, Text, Card, Input, ScrollView, Spinner, Heading, useMed
 import { Button } from '../Button'
 import { Church, MapPin, Phone, Mail, Globe, Plus, Eye, Users, Clock, Search } from '@tamagui/lucide-icons'
 import type { EcclesiaListItem, DirectoryAuthProps } from './types'
+import { ClosedBadge } from '../ecclesia/closed-badge'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
 
 interface EcclesiaListProps {
   ecclesias: EcclesiaListItem[]
@@ -25,15 +27,18 @@ export function EcclesiaList({
 }: EcclesiaListProps) {
   const media = useMedia()
 
-  const filteredEcclesias = ecclesias.filter((ecclesia) => {
-    if (!searchQuery) return true
-    const searchLower = searchQuery.toLowerCase()
-    return (
-      ecclesia.name.toLowerCase().includes(searchLower) ||
-      ecclesia.city?.toLowerCase().includes(searchLower) ||
-      ecclesia.province?.toLowerCase().includes(searchLower)
-    )
-  })
+  // Closed ecclesias stay findable (marked), listed after the active ones.
+  const filteredEcclesias = ecclesias
+    .filter((ecclesia) => {
+      if (!searchQuery) return true
+      const searchLower = searchQuery.toLowerCase()
+      return (
+        ecclesia.name.toLowerCase().includes(searchLower) ||
+        ecclesia.city?.toLowerCase().includes(searchLower) ||
+        ecclesia.province?.toLowerCase().includes(searchLower)
+      )
+    })
+    .sort((a, b) => Number(isClosedEcclesia(a)) - Number(isClosedEcclesia(b)))
 
   return (
     <YStack gap="$4" flex={1}>
@@ -115,6 +120,7 @@ export function EcclesiaList({
                             .join(', ')}
                         </Text>
                       ) : null}
+                      <ClosedBadge ecclesia={ecclesia} showNote />
                     </YStack>
                     <Button
                       size="$3"
