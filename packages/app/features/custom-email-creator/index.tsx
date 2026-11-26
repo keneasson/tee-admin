@@ -18,12 +18,13 @@ import {
   ScrollView,
   Spinner,
 } from '@my/ui'
-import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2 } from '@tamagui/lucide-icons'
+import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2, Copy } from '@tamagui/lucide-icons'
 import { EmailDraft } from '@my/app/types/email-draft'
 import {
   getDrafts,
   createDraft,
   updateDraft,
+  copyDraft,
   deleteDraft,
   markDraftAsTested,
   markDraftAsSent,
@@ -66,6 +67,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [loadingDrafts, setLoadingDrafts] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
+  const [copying, setCopying] = useState(false)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   // The editor text as last loaded/saved for the current draft. The body is
   // stored as HTML and the HTML<->text conversion does not round-trip exactly,
@@ -96,9 +98,11 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   }
 
   const currentDraft = drafts.find((d) => d.id === currentDraftId)
+  // A sent email is frozen: shown read-only, reusable only by copying it.
+  const isSent = currentDraft?.status === 'sent'
 
   // Unsaved changes to what recipients receive (subject, body, list). A note
-  // edit is not included: it never changes the draft's tested/sent state.
+  // edit is not included: it does not undo an unsent draft's test.
   const hasUnsavedContentChanges = currentDraft
     ? subject !== currentDraft.subject ||
       content !== savedContent ||
@@ -110,14 +114,13 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     !currentDraft || currentDraft.status !== 'tested' || hasUnsavedContentChanges
 
   const untestedWarning =
-    currentDraft?.status === 'sent' && !hasUnsavedContentChanges
-      ? '⚠️ This exact email was already sent - sending again delivers it a second time.'
-      : currentDraft?.sentAt
-        ? '⚠️ Changed since it was last sent - this version has not been tested. Send a test first.'
-        : '⚠️ Not tested yet - consider sending a test first.'
+    currentDraft?.status === 'tested' && hasUnsavedContentChanges
+      ? '⚠️ Changed since it was tested - send a test of this version first.'
+      : '⚠️ Not tested yet - consider sending a test first.'
 
   /** Saves the editor; returns the saved draft, or null if it was not saved. */
   const handleSaveDraft = async (): Promise<EmailDraft | null> => {
+    if (isSent) return null // frozen; the editor is not shown for sent emails
     if (!subject.trim() || !content.trim()) {
       alert('Please fill in both subject and content before saving')
       return null
@@ -179,6 +182,23 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     setSelectedList(draft.selectedList)
     setNote(draft.note || '')
     setShowPreview(false)
+  }
+
+  /** Copy a (usually sent) email into a new draft and open the copy. */
+  const handleCopyDraft = async (draft: EmailDraft) => {
+    setCopying(true)
+    try {
+      const copy = await copyDraft(draft.id)
+      setDrafts((prev) => [copy, ...prev.filter((d) => d.id !== copy.id)])
+      handleLoadDraft(copy)
+      setLastSaved(null)
+      await loadDrafts()
+    } catch (error) {
+      console.error('Failed to copy draft:', error)
+      alert('Failed to copy email')
+    } finally {
+      setCopying(false)
+    }
   }
 
   const handleNewDraft = () => {
@@ -371,12 +391,25 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                       </XStack>
                       <Text fontSize="$2" color="$gray11">
                         To: {findList(draft.selectedList)?.label} •
-                        Updated: {new Date(draft.updatedAt).toLocaleString()}
-                        {draft.sentAt ? (draft.status === 'sent'
-                          ? ` • Sent: ${new Date(draft.sentAt).toLocaleString()}`
-                          : ` • Previously sent: ${new Date(draft.sentAt).toLocaleDateString()} (an earlier version)`) : null}
+                        {draft.status === 'sent' && draft.sentAt
+                          ? `Sent: ${new Date(draft.sentAt).toLocaleString()}`
+                          : `Updated: ${new Date(draft.updatedAt).toLocaleString()}`}
                       </Text>
                     </YStack>
+                    {draft.status === 'sent' ? (
+                      <Button
+                        size="$2"
+                        icon={Copy}
+                        theme="blue"
+                        disabled={copying}
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          handleCopyDraft(draft)
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    ) : null}
                     <Button
                       size="$2"
                       variant="outlined"
@@ -406,13 +439,69 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
           <XStack gap="$2" alignItems="center">
             <Mail size={16} color="$blue10" />
             <Text fontSize="$3" flex={1}>
-              Editing: <strong>{currentDraft.subject}</strong>
+              {isSent ? 'Viewing sent email: ' : 'Editing: '}<strong>{currentDraft.subject}</strong>
             </Text>
             {lastSaved ? <Text fontSize="$2" color="$gray11">
                 Last saved: {lastSaved}
               </Text> : null}
           </XStack>
         </Card> : null}
+
+      {isSent && currentDraft ? (
+        // A sent email is a permanent record of what went out: fully
+        // read-only (subject, list, body and note). Copy it to reuse it.
+        <Card elevate bordered padding="$4" backgroundColor="$green2" borderColor="$green6">
+          <YStack gap="$3">
+            <XStack gap="$3" alignItems="center" flexWrap="wrap">
+              <Check size={20} color="$green10" />
+              <Text flex={1} fontSize="$4" fontWeight="600" color="$green11">
+                Sent {currentDraft.sentAt ? new Date(currentDraft.sentAt).toLocaleString() : ''} to{' '}
+                {findList(currentDraft.selectedList)?.label ?? currentDraft.selectedList}
+              </Text>
+              <Button
+                size="$4"
+                icon={copying ? undefined : Copy}
+                onPress={() => handleCopyDraft(currentDraft)}
+                disabled={copying}
+                theme="blue"
+              >
+                {copying ? <Spinner size="small" /> : 'Copy to a new draft'}
+              </Button>
+            </XStack>
+            <Text fontSize="$3" color="$gray11">
+              This email was already sent, so it can&apos;t be changed or sent again. Copy it to
+              make a new draft with the same subject, list and content.
+            </Text>
+            <Separator />
+            <Text fontSize="$2" color="$gray11">
+              Subject
+            </Text>
+            <Text fontSize="$4" fontWeight="600">
+              {currentDraft.subject}
+            </Text>
+            {currentDraft.note ? (
+              <YStack gap="$1">
+                <Text fontSize="$2" color="$gray11">
+                  Note
+                </Text>
+                <Text fontSize="$3">{currentDraft.note}</Text>
+              </YStack>
+            ) : null}
+            <Text fontSize="$2" color="$gray11">
+              Content
+            </Text>
+            <Card padding="$4" backgroundColor="$background" borderWidth={1} borderColor="$gray6">
+              <div
+                dangerouslySetInnerHTML={{ __html: currentDraft.htmlContent }}
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  lineHeight: '1.6',
+                }}
+              />
+            </Card>
+          </YStack>
+        </Card>
+      ) : (<>
 
       {/* Email Subject */}
       <Card elevate bordered padding="$4" backgroundColor="$background">
@@ -687,6 +776,7 @@ Looking forward to seeing you!
           </XStack>
         </Card>
       </YStack>
+      </>)}
     </YStack>
   )
 }

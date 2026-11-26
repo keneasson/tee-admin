@@ -16,6 +16,7 @@ export interface EmailDraft {
   createdBy: string // User email
   lastTestedAt?: string // ISO date string - when it was last sent to test list
   sentAt?: string // ISO date string - when it was sent to production list
+  copiedFrom?: string // id of the draft this one was copied from
   status: 'draft' | 'tested' | 'sent'
 }
 

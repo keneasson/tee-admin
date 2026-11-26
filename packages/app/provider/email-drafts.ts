@@ -49,6 +49,17 @@ export const updateDraft = async (draft: UpdateEmailDraftInput): Promise<EmailDr
   return data.draft
 }
 
+/** Copy a draft (typically a sent one) into a new, untested draft. */
+export const copyDraft = async (id: string): Promise<EmailDraft> => {
+  const url = `${API_PATH}api/email-drafts/${id}/copy`
+  const response = await fetch(url, { method: 'POST', cache: 'no-store' })
+  const data = await response.json()
+  if (!response.ok || !data.draft) {
+    throw new Error(data?.error || `Failed to copy draft (${response.status})`)
+  }
+  return data.draft
+}
+
 export const deleteDraft = async (id: string): Promise<void> => {
   const url = `${API_PATH}api/email-drafts?id=${id}`
   await fetch(url, {

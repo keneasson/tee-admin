@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       createdBy: item.createdBy,
       lastTestedAt: item.lastTestedAt,
       sentAt: item.sentAt,
+      copiedFrom: item.copiedFrom,
       status: item.status || 'draft',
     }))
 

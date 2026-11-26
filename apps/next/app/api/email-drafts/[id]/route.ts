@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { EmailDraft, UpdateEmailDraftInput } from '@my/app/types/email-draft'
-import { planDraftUpdate } from '@my/app/utils/email-draft-update'
+import { UpdateEmailDraftInput } from '@my/app/types/email-draft'
+import { planDraftUpdate, SENT_EMAIL_LOCKED_MESSAGE } from '@my/app/utils/email-draft-update'
+import {
+  toEmailDraft,
+  conditionFailure,
+  EXISTS_AND_NOT_SENT,
+} from '@/utils/email-draft-item'
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'ca-central-1',
@@ -41,21 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
     }
 
-    const draft: EmailDraft = {
-      id: response.Item.skey.replace('EMAIL_DRAFT#', ''),
-      subject: response.Item.subject,
-      htmlContent: response.Item.htmlContent,
-      selectedList: response.Item.selectedList,
-      note: response.Item.note,
-      createdAt: response.Item.createdAt,
-      updatedAt: response.Item.updatedAt,
-      createdBy: response.Item.createdBy,
-      lastTestedAt: response.Item.lastTestedAt,
-      sentAt: response.Item.sentAt,
-      status: response.Item.status || 'draft',
-    }
-
-    return NextResponse.json({ draft })
+    return NextResponse.json({ draft: toEmailDraft(response.Item) })
   } catch (error) {
     console.error('Error fetching draft:', error)
     return NextResponse.json({ error: 'Failed to fetch draft' }, { status: 500 })
@@ -64,11 +55,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 // PUT - Update a draft
 //
-// Changing what recipients receive (subject, body or list) on a draft that was
-// already tested or sent puts it back to `draft` and clears `lastTestedAt`, so
-// the new content needs a fresh test before it can be sent without a warning.
-// `sentAt` is kept as history: an earlier version really did go out then, and
-// the UI shows it as "previously sent", never as this content's send.
+// - A SENT email is a permanent, fully frozen record of what went out: any
+//   update (subject, body, list or note) is refused with 409 — copy it
+//   instead. Enforced atomically by the write's condition, not only the read.
+// - Changing the content of a TESTED draft puts it back to `draft` and removes
+//   `lastTestedAt`, so the new content must be tested again.
+// - Never creates an item: a missing draft is a 404.
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
@@ -99,32 +91,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       },
       body
     )
+    if (plan.locked) {
+      return NextResponse.json({ error: SENT_EMAIL_LOCKED_MESSAGE }, { status: 409 })
+    }
 
     const now = new Date().toISOString()
+    const updates: string[] = ['#updatedAt = :updatedAt']
+    const attributeNames: Record<string, string> = { '#updatedAt': 'updatedAt' }
+    const attributeValues: Record<string, any> = { ':updatedAt': now }
 
-    // Build update expression
-    const updates: string[] = []
-    const attributeNames: Record<string, string> = {}
-    const attributeValues: Record<string, any> = {
-      ':updatedAt': now,
-    }
-
-    if (body.subject !== undefined) {
-      updates.push('#subject = :subject')
-      attributeNames['#subject'] = 'subject'
-      attributeValues[':subject'] = body.subject
-    }
-
-    if (body.htmlContent !== undefined) {
-      updates.push('#htmlContent = :htmlContent')
-      attributeNames['#htmlContent'] = 'htmlContent'
-      attributeValues[':htmlContent'] = body.htmlContent
-    }
-
-    if (body.selectedList !== undefined) {
-      updates.push('#selectedList = :selectedList')
-      attributeNames['#selectedList'] = 'selectedList'
-      attributeValues[':selectedList'] = body.selectedList
+    // Only content fields that actually change are written, so the reset
+    // decision above matches what is stored.
+    for (const field of plan.changedContentFields) {
+      updates.push(`#${field} = :${field}`)
+      attributeNames[`#${field}`] = field
+      attributeValues[`:${field}`] = body[field]
     }
 
     if (body.note !== undefined) {
@@ -133,13 +114,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       attributeValues[':note'] = body.note
     }
 
-    updates.push('#updatedAt = :updatedAt')
-    attributeNames['#updatedAt'] = 'updatedAt'
+    // A draft may only change while it is not sent — checked again in the
+    // write itself, so a send landing between the read and the write still wins.
+    attributeNames['#status'] = 'status'
+    attributeValues[':sent'] = 'sent'
 
     let updateExpression = `SET ${updates.join(', ')}`
     if (plan.resetToDraft) {
       updates.push('#status = :draftStatus')
-      attributeNames['#status'] = 'status'
       attributeNames['#lastTestedAt'] = 'lastTestedAt'
       attributeValues[':draftStatus'] = 'draft'
       updateExpression = `SET ${updates.join(', ')} REMOVE #lastTestedAt`
@@ -152,15 +134,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           TableName: TABLE_NAME,
           Key: key,
           UpdateExpression: updateExpression,
-          // Never create an item: a missing (or concurrently deleted) draft is a 404.
-          ConditionExpression: 'attribute_exists(skey)',
+          ConditionExpression: EXISTS_AND_NOT_SENT,
           ExpressionAttributeNames: attributeNames,
           ExpressionAttributeValues: attributeValues,
           ReturnValues: 'ALL_NEW',
+          ReturnValuesOnConditionCheckFailure: 'ALL_OLD',
         })
       )
     } catch (error) {
-      if ((error as { name?: string })?.name === 'ConditionalCheckFailedException') {
+      const failure = conditionFailure(error)
+      if (failure === 'sent') {
+        return NextResponse.json({ error: SENT_EMAIL_LOCKED_MESSAGE }, { status: 409 })
+      }
+      if (failure === 'missing') {
         return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
       }
       throw error
@@ -170,21 +156,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
     }
 
-    const draft: EmailDraft = {
-      id: response.Attributes.skey.replace('EMAIL_DRAFT#', ''),
-      subject: response.Attributes.subject,
-      htmlContent: response.Attributes.htmlContent,
-      selectedList: response.Attributes.selectedList,
-      note: response.Attributes.note,
-      createdAt: response.Attributes.createdAt,
-      updatedAt: response.Attributes.updatedAt,
-      createdBy: response.Attributes.createdBy,
-      lastTestedAt: response.Attributes.lastTestedAt,
-      sentAt: response.Attributes.sentAt,
-      status: response.Attributes.status || 'draft',
-    }
-
-    return NextResponse.json({ draft })
+    return NextResponse.json({ draft: toEmailDraft(response.Attributes) })
   } catch (error) {
     console.error('Error updating draft:', error)
     return NextResponse.json({ error: 'Failed to update draft' }, { status: 500 })
