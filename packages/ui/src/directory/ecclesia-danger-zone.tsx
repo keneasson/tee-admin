@@ -75,10 +75,10 @@ export function EcclesiaDangerZone({
   } as const
 
   return (
-    <Card padding="$4" borderWidth={1} borderColor="$red6" backgroundColor="$red2">
+    <Card padding="$4" borderWidth={2} borderColor={red}>
       <YStack gap="$3">
-        <Text fontSize="$4" fontWeight="600" color="$red10">Danger Zone</Text>
-        <Separator borderColor="$red6" />
+        <Text fontSize="$4" fontWeight="600" color={red}>Danger Zone</Text>
+        <Separator borderColor={red} />
 
         {onSetClosed ? (
           <YStack gap="$3">
@@ -99,7 +99,7 @@ export function EcclesiaDangerZone({
             </XStack>
 
             {confirming ? (
-              <YStack gap="$3" padding="$3" borderRadius="$3" borderWidth={1} borderColor="$red6" backgroundColor="$background">
+              <YStack gap="$3" padding="$3" borderRadius="$3" borderWidth={1} borderColor={red} backgroundColor="$background">
                 {closed ? (
                   <Text fontSize="$3">Reopen {ecclesia.name}? The closed year and note are cleared.</Text>
                 ) : (
@@ -127,7 +127,7 @@ export function EcclesiaDangerZone({
                     </YStack>
                   </>
                 )}
-                {error ? <Text fontSize="$3" color="$red10">{error}</Text> : null}
+                {error ? <Text fontSize="$3" color={red}>{error}</Text> : null}
                 <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
                   <Button variant="outlined" borderWidth={2} borderColor="$textTertiary" onPress={() => setConfirming(false)} disabled={saving}>
                     Cancel
