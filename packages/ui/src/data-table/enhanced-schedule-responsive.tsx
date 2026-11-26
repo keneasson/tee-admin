@@ -24,6 +24,8 @@ export interface EnhancedScheduleEvent {
   isNextEvent?: boolean
   /** Weeks with no stored row: shown greyed as "Coming soon" (no roster data) */
   isPlaceholder?: boolean
+  /** Sunday School week with no class (blank Refreshments + holiday note) */
+  noClass?: boolean
   hasConflict?: boolean
   userHighlight?: boolean
   // Schedule-specific secondary data
@@ -222,6 +224,10 @@ const createTextCell = (colors: any) => ({ row, getValue }: any) => {
 
 // Placeholder cell for a week with no stored row: greyed date, "Coming soon", else blank
 const createPlaceholderCell = (colors: any, isDate: boolean, showComingSoon: boolean) => ({ row, getValue }: any) => {
+  // A no-class week (Sunday School holiday note) shows its reason instead of "Coming soon"
+  const placeholderText: string = row.original.noClass
+    ? row.original.HolidaysAndSpecialEvents || row.original['Holidays and Special Events'] || 'No Sunday School'
+    : 'Coming soon'
   if (isDate) {
     const [year, month, day] = String(getValue()).split('-').map(Number)
     const label = new Date(year, month - 1, day).toLocaleDateString('en-US', {
@@ -237,7 +243,7 @@ const createPlaceholderCell = (colors: any, isDate: boolean, showComingSoon: boo
   }
   return showComingSoon ? (
     <Text numberOfLines={1} color={colors.textTertiary} opacity={0.7} fontStyle="italic">
-      Coming soon
+      {placeholderText}
     </Text>
   ) : null
 }
@@ -272,7 +278,7 @@ const createEnhancedColumns = (
       header: col.header,
       // Placeholder weeks: greyed date, "Coming soon" in the first roster column, others blank
       cell: (ctx: any) =>
-        ctx.row.original.isPlaceholder
+        (ctx.row.original.isPlaceholder || ctx.row.original.noClass)
           ? createPlaceholderCell(colors, col.type === 'date', col.key === firstDataKey)(ctx)
           : realCell(ctx),
       ...sizing,
@@ -307,7 +313,7 @@ export function EnhancedScheduleResponsive({
   // Style override for special rows
   const getRowStyle = React.useCallback((row: any): RowStyleOverride | null => {
     // Weeks with no stored row: muted, greyed
-    if (row.isPlaceholder) {
+    if (row.isPlaceholder || row.noClass) {
       return {
         backgroundColor: colors.backgroundSecondary,
         backgroundColorHover: colors.backgroundSecondary,

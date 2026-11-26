@@ -60,6 +60,7 @@ function addScheduleSpecificFields(event: any, row: any, type: string): void {
       break
     case 'sundaySchool':
       event.Refreshments = row.Refreshments || ''
+      event.HolidaysAndSpecialEvents = row['Holidays and Special Events'] || ''
       break
     case 'cyc':
       event.speaker = row.speaker || row.Speaker || ''

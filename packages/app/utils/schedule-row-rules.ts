@@ -7,6 +7,19 @@
  * meeting" and "is this a cancelled / relocated occurrence". Pure, no I/O.
  */
 
+/** The "Holidays and Special Events" text on a Sunday School row (raw or transformed key). */
+export function sundaySchoolNoClassNote(row: any): string {
+  return String(row?.['Holidays and Special Events'] ?? row?.HolidaysAndSpecialEvents ?? '').trim()
+}
+
+/**
+ * Whether Sunday School actually runs for this row: Refreshments filled and not
+ * cancelled by an override. Same rule as the newsletter and Sunday School email.
+ */
+export function sundaySchoolClassRuns(row: any): boolean {
+  return row?.overrideStatus !== 'cancelled' && !!String(row?.Refreshments ?? '').trim()
+}
+
 /**
  * Whether a flattened schedule row is shown on the public schedule.
  *
@@ -29,8 +42,16 @@ export function isValidScheduleRow(event: any, type: string): boolean {
     }
     case 'bibleClass':
       return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
-    case 'sundaySchool':
-      return !!event.Refreshments
+    case 'sundaySchool': {
+      if (event.Refreshments?.toString().trim()) return true
+      // Blank Refreshments + text in "Holidays and Special Events" = no class that
+      // week (e.g. Christmas break). Keep the row so the schedule can say why.
+      if (sundaySchoolNoClassNote(event)) {
+        event.noClass = true
+        return true
+      }
+      return false
+    }
     case 'cyc':
       return !!(event.speaker || event.topic)
     default:

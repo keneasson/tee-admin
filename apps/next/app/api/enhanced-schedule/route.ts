@@ -6,6 +6,7 @@ import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-sched
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
 import { mergeWithCatalogue, type ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { isValidScheduleRow } from '@my/app/utils/schedule-row-rules'
 import { fillScheduleGaps } from '@my/app/utils/fill-schedule-gaps'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
@@ -193,8 +194,8 @@ function transformScheduleData(
         return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
 
       case 'sundaySchool':
-        // Sunday school must have refreshments assigned
-        return !!(event.Refreshments)
+        // Sunday school needs refreshments, or a holiday note explaining no class
+        return isValidScheduleRow(event, 'sundaySchool')
 
       case 'cyc':
         // CYC must have speaker or topic
@@ -268,6 +269,7 @@ function addScheduleSpecificFields(event: any, row: any, scheduleType: Exclude<G
     
     case 'sundaySchool':
       event.Refreshments = row.Refreshments || ''
+      event.HolidaysAndSpecialEvents = row['Holidays and Special Events'] || ''
       // Sunday School doesn't use secondary rows currently
       break
     
