@@ -5,7 +5,8 @@ import type { GoogleSheetTypes, GoogleSheetData, ProgramsTypes } from '@my/app/t
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
-import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { mergeWithCatalogue, type ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { fillScheduleGaps } from '@my/app/utils/fill-schedule-gaps'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
 import { resolveViewer } from '../../../utils/resolve-viewer'
@@ -413,6 +414,17 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+
+    // Weeks with no stored row get a greyed "Coming soon" placeholder (today -> last stored row only)
+    Object.keys(transformedData).forEach(type => {
+      const typeKey = SHEET_TO_SCHEDULE_KEY[type]
+      if (!typeKey) return
+      transformedData[type] = fillScheduleGaps(
+        transformedData[type],
+        mergeWithCatalogue(undefined)[typeKey].serviceTime.schedule,
+        { type, eventName: getScheduleConfig(type as Exclude<GoogleSheetTypes, 'directory'>).name }
+      )
+    })
 
     // Apply date filtering and pagination to each schedule type
     const filteredData: Record<string, EnhancedScheduleEvent[]> = {}
