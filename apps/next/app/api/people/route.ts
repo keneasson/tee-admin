@@ -8,6 +8,7 @@ import { loadDirectoryPeople } from './load-directory'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { personForSessionEmail } from '@/utils/session-person'
 import { recordingBrotherOf } from '@/utils/ecclesia-offices'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 interface MemberListItem {
   id: string // personId (UUID) — used for routing instead of email
@@ -157,7 +158,7 @@ export async function GET(request: NextRequest) {
     const viewerGuestCount = isAdminOrOwner
       ? guestTotal
       : (isRecorderOrRep
-        ? (guestCounts.find((g) => g.ecclesia === viewerEcclesia)?.count || 0)
+        ? (guestCounts.find((g) => isSameEcclesia(g.ecclesia, viewerEcclesia))?.count || 0)
         : 0)
 
     // Apply filters for response
@@ -177,7 +178,7 @@ export async function GET(request: NextRequest) {
       )
       membersResponse = filtered.map(({ lastName, ...rest }, i) => {
         // Recorder/Rep only see privacy indicators for same-ecclesia members
-        if (isRecorderOrRep && rest.ecclesia !== viewerEcclesia) {
+        if (isRecorderOrRep && !isSameEcclesia(rest.ecclesia, viewerEcclesia)) {
           return rest
         }
         return {
@@ -241,7 +242,7 @@ function applyFilters(
 ): MemberListItem[] {
   return members.filter(member => {
     // Apply ecclesia filter if provided
-    if (ecclesiaFilter && member.ecclesia !== ecclesiaFilter) return false
+    if (ecclesiaFilter && !isSameEcclesia(member.ecclesia, ecclesiaFilter)) return false
 
     // Apply search filter if provided. Null-guard every field: emailless
     // members exist (e.g. visiting-speaker records with a NOEMAIL# sentinel and

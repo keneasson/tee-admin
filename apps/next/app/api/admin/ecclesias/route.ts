@@ -7,6 +7,7 @@ import { getMemberCounts } from './cache'
 import { recordingBrothersOf } from '@/utils/ecclesia-offices'
 import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest) {
       phone: ecclesia.phone,
       contactEmail: ecclesia.contactEmail,
       ecclesiaId: ecclesiaIdOf(ecclesia),
+      status: ecclesia.status || 'active',
+      closedYear: ecclesia.closedYear,
+      closedNote: ecclesia.closedNote,
       recordingBrother: rbs.get(ecclesiaIdOf(ecclesia)) || null,
       memberCount: memberCounts[ecclesia.name] || 0,
       services: ecclesia.services || [],
@@ -154,6 +158,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Ecclesia not found' }, { status: 404 })
     }
     if (rbOfficeChange) {
+      if (isClosedEcclesia(ecclesia)) {
+        return NextResponse.json({ error: `${ecclesia.name} is closed; its offices can't be changed` }, { status: 409 })
+      }
       const email = typeof rbOfficeEmail === 'string' ? rbOfficeEmail.trim() || null : rbOfficeEmail
       const phone = typeof rbOfficePhone === 'string' ? rbOfficePhone.trim() || null : rbOfficePhone
       await officeRepository.saveOffice({

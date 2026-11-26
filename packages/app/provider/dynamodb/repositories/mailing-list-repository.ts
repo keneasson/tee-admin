@@ -143,6 +143,27 @@ export class MailingListRepository extends BaseRepository<MailingListRecord> {
     return record
   }
 
+  /**
+   * Hand a list to another owner — ONLY for an ecclesia merge. The list id
+   * (and so every subscription) is unchanged; the owner attributes and the
+   * owner-derived index keys are rewritten. An ecclesia-scoped list that was
+   * offered to the old owner's members is offered to the new owner's.
+   */
+  async reassignOwner(listId: string, newOwnerId: string): Promise<MailingListRecord> {
+    const list = await this.getList(listId)
+    if (!list) throw new Error(`Mailing list ${listId} not found`)
+    const scopeValue = list.scope === 'ecclesia' && list.scopeValue === list.ownerId ? newOwnerId : list.scopeValue
+    return this.update(this.listPk(listId), 'DETAILS', {
+      ownerId: newOwnerId,
+      scopeValue,
+      gsi1pk: this.tenantGsi1Pk(list.ownerType, newOwnerId),
+      gsi2pk: this.scopeGsi2Pk(list.scope, scopeValue),
+      gsi2sk: `${newOwnerId}#${list.name}`,
+      gsi4pk: MAILING_LISTS_GSI4PK,
+      gsi4sk: `${list.ownerType}#${newOwnerId}#${list.name}`,
+    } as Partial<MailingListRecord>)
+  }
+
   async getList(listId: string): Promise<MailingListRecord | null> {
     return this.get(this.listPk(listId), 'DETAILS')
   }

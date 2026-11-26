@@ -7,6 +7,7 @@
 import { findNearbyEcclesias, MAX_SHARING_RADIUS_KM } from '@my/app/utils/geo'
 import { getAllEcclesia, updateEcclesiaFields } from './dynamodb/locations'
 import type { EcclesiaData } from './dynamodb/locations'
+import { isActiveEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
 
@@ -100,7 +101,9 @@ export async function geocodeAndUpdateEcclesia(ecclesia: EcclesiaData): Promise<
 async function recomputeNearbyEcclesias(ecclesia: EcclesiaData): Promise<void> {
   if (!ecclesia.latitude || !ecclesia.longitude) return
 
-  const allEcclesias = await getAllEcclesia()
+  // A closed ecclesia is never offered as a neighbour (and needs no list).
+  const allEcclesias = (await getAllEcclesia()).filter(isActiveEcclesia)
+  if (!isActiveEcclesia(ecclesia)) return
 
   // Compute this ecclesia's nearby list at MAX radius (1000km).
   // Individual ecclesias filter down to their configured radius at query time.
@@ -119,7 +122,7 @@ async function recomputeNearbyEcclesias(ecclesia: EcclesiaData): Promise<void> {
 
   // Update neighbours that should now include/exclude this ecclesia
   for (const other of allEcclesias) {
-    if (other.name === ecclesia.name) continue
+    if (isSameEcclesia(other, ecclesia)) continue
     if (!other.latitude || !other.longitude) continue
 
     const otherNearby = findNearbyEcclesias(

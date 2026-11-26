@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../utils/auth'
 import { ROLES } from '@my/app/provider/auth/auth-roles'
-import { createEcclesia, getAllEcclesia, updateEcclesia, deleteEcclesia } from '../../../utils/dynamodb/locations'
+import {
+  createEcclesia,
+  getAllEcclesia,
+  updateEcclesia,
+  deleteEcclesia,
+  EcclesiaNameConflictError,
+} from '../../../utils/dynamodb/locations'
 
 export async function GET(request: NextRequest) {
   try {
@@ -116,13 +122,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating ecclesia:', error)
     
-    // Check if it's a duplicate key error
-    if (error instanceof Error && error.message.includes('ConditionalCheckFailedException')) {
+    // Same name as an existing ecclesia once "Ecclesia"/"Christadelphian(s)" endings are ignored
+    if (error instanceof EcclesiaNameConflictError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'An ecclesia with this name already exists',
-        },
+        { success: false, error: error.message, existingName: error.existingName },
         { status: 409 }
       )
     }
@@ -189,6 +192,13 @@ export async function PUT(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error updating ecclesia:', error)
+
+    if (error instanceof EcclesiaNameConflictError) {
+      return NextResponse.json(
+        { success: false, error: error.message, existingName: error.existingName },
+        { status: 409 }
+      )
+    }
 
     if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json(

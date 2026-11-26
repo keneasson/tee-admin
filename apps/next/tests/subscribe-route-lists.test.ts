@@ -113,11 +113,11 @@ describe('/api/subscribe — registry only', () => {
       {
         ownerType: 'ecclesia',
         ownerId: 'toronto-east-ecclesia',
-        ownerName: 'Toronto East',
+        ownerName: 'Toronto East Ecclesia',
         lists: [
           // SES still says OPT_IN for 'newsletter': ignored, the registry has no row.
-          { listId: 'L-NEWS', name: 'Toronto East Newsletter', description: 'Thursday', subscribed: false },
-          { listId: 'L-NEW', name: 'Toronto East Youth', description: '', subscribed: true },
+          { listId: 'L-NEWS', name: 'Toronto East Ecclesia Newsletter', description: 'Thursday', subscribed: false },
+          { listId: 'L-NEW', name: 'Toronto East Ecclesia Youth', description: '', subscribed: true },
         ],
       },
     ])

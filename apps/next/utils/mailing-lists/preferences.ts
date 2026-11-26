@@ -1,5 +1,5 @@
 import type { ConsentCategory, MailingListRecord } from '@my/app/provider/dynamodb/types'
-import { listDisplayName, shortOwnerName } from './owners'
+import { listDisplayName } from './owners'
 
 /**
  * Self-serve list preferences (R5): every list offered to a person, grouped by
@@ -53,7 +53,7 @@ export function buildListPreferences(input: BuildPreferencesInput): ListPreferen
     const group = groups.get(key) ?? {
       ownerType: l.ownerType,
       ownerId: l.ownerId,
-      ownerName: shortOwnerName(owner),
+      ownerName: owner,
       lists: [],
     }
     const row = input.registryStatus.get(l.listId)

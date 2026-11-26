@@ -14,6 +14,7 @@ import { listEcclesiasCached } from '@/utils/dynamodb/locations'
 import { buildListPreferences, planListSave, isSelfServe } from '@/utils/mailing-lists/preferences'
 import { ownerNamesFor, ownerNameOf } from '@/utils/mailing-lists/owners'
 import { defaultSubscriptionDeps, resolveSubscriber, setListSubscription } from '@/utils/mailing-lists/subscriptions'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /** Serving-tenant brand, so the page reads as a clear entrypoint into tee-admin.com OR echadhub.org. */
 function tenantBrand(request: NextRequest) {
@@ -95,7 +96,7 @@ async function loadListPreferences(email: string) {
   let ecclesiaId: string | null = null
   let region: string | null = null
   if (person?.ecclesia) {
-    const eccl = (await listEcclesiasCached()).find((e) => e.name === person.ecclesia)
+    const eccl = (await listEcclesiasCached()).find((e) => isSameEcclesia(e.name, person.ecclesia))
     ecclesiaId = eccl ? ecclesiaIdOf(eccl) : slugifyEcclesia(person.ecclesia)
     region = eccl ? eccl.region || getDefaultRegion(eccl.country, eccl.province) : null
   }

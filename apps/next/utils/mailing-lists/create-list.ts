@@ -37,8 +37,12 @@ export function validateNewList(
     return { ok: false, error: 'Choose an ecclesia or an organization as the owner.' }
   }
   const ownerId = typeof raw?.ownerId === 'string' ? raw.ownerId : ''
-  if (!owners.some((o) => o.ownerType === ownerType && o.ownerId === ownerId)) {
+  const owner = owners.find((o) => o.ownerType === ownerType && o.ownerId === ownerId)
+  if (!owner) {
     return { ok: false, error: 'That owner was not found.' }
+  }
+  if (owner.closed) {
+    return { ok: false, error: `${owner.name} is closed; it can't own a new list.` }
   }
   const name = typeof raw?.name === 'string' ? raw.name.trim() : ''
   if (name.length < 2 || name.length > 80) {

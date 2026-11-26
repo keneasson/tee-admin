@@ -18,6 +18,7 @@ import {
   cleanProvince,
 } from '@my/app/utils/clean-contact-field'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * The address fields an edit may change, cleaned.
@@ -129,7 +130,7 @@ async function checkPermission(session: any, targetPerson: any) {
   let viewerPerson = null
   if (viewerIsRB || viewerRole === ROLES.RECORDER || viewerRole === ROLES.REP) {
     viewerPerson = await personForSessionEmail(viewerEmail)
-    if (!viewerPerson || viewerPerson.ecclesia !== targetPerson.ecclesia) {
+    if (!viewerPerson || !isSameEcclesia(viewerPerson.ecclesia, targetPerson.ecclesia)) {
       return { allowed: false as const, response: NextResponse.json({ error: 'You can only edit members of your own ecclesia' }, { status: 403 }) }
     }
   }

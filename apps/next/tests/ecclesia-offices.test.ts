@@ -33,7 +33,7 @@ import { officeRepository, resetOfficesAssignedCache } from '@my/app/provider/dy
 import { PersonRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { clearEcclesiaIdCache, resetPeopleIndexReadyCache } from '@my/app/provider/dynamodb/people-index'
 import { FEATURE_FLAGS } from '@my/app/features/feature-flags/feature-flags'
-import { createEcclesia, getEcclesiaByName } from '../utils/dynamodb/locations'
+import { createEcclesia, getEcclesiaByName, updateEcclesiaFields } from '../utils/dynamodb/locations'
 import { officesOf, recordingBrotherOf, recordingBrothersOf } from '../utils/ecclesia-offices'
 import { interEcclesiaRecipientsFromOffices } from '../utils/email/inter-ecclesia-recipients'
 import { clearRecordingBrother, setRecordingBrother } from '../utils/rb-service'
@@ -207,12 +207,43 @@ describe('inter-ecclesia sends from offices (flagged)', () => {
     expect(await interEcclesiaRecipientsFromOffices(ses({ unsubscribedAll: ['recbro@x.org'] }) as any)).toEqual(['hal@x.org'])
   })
 
+  it('a closed ecclesia gets no inter-ecclesia mail, even with an RB office inbox', async () => {
+    await seedOffices()
+    h.flags.add(FEATURE_FLAGS.INTER_ECCLESIA_FROM_OFFICES)
+    await officeRepository.writeOfficesAssignedMarker({})
+    await updateEcclesiaFields('Barrie Ecclesia', { status: 'closed', closedYear: 2020 })
+    expect(await interEcclesiaRecipientsFromOffices(ses() as any)).toEqual(['recbro@x.org'])
+  })
+
   it('an SES error falls back to the topic rather than dropping the send', async () => {
     await seedOffices()
     h.flags.add(FEATURE_FLAGS.INTER_ECCLESIA_FROM_OFFICES)
     await officeRepository.writeOfficesAssignedMarker({})
     const client = { send: vi.fn(async () => { throw Object.assign(new Error('throttled'), { name: 'Throttling' }) }) }
     expect(await interEcclesiaRecipientsFromOffices(client as any)).toBeNull()
+  })
+})
+
+describe('closed ecclesias and offices', () => {
+  it('setRecordingBrother refuses a closed ecclesia; nothing is written', async () => {
+    const { barrie } = await seed()
+    const p = await persons.create({ email: 'nominee@x.org', firstName: 'Nom', lastName: 'Inee', ecclesia: barrie.name })
+    await updateEcclesiaFields(barrie.name, { status: 'closed' })
+    await expect(
+      setRecordingBrother({ ecclesiaName: barrie.name, newPersonId: p.personId, emailPreference: 'personal' } as any)
+    ).rejects.toThrow(/closed/)
+    expect(await officeRepository.listOffices('barrie-ecclesia')).toEqual([])
+  })
+
+  it('the offices page marks a closed ecclesia', async () => {
+    await seed()
+    await updateEcclesiaFields('Barrie Ecclesia', { status: 'closed' })
+    h.auth.mockResolvedValue({ user: { email: 'o@x.org', role: 'owner' } })
+    const body = await (await getOffices()).json()
+    expect(body.ecclesias.map((e: any) => [e.ecclesiaId, e.closed])).toEqual([
+      ['barrie-ecclesia', true],
+      [TEE, false],
+    ])
   })
 })
 

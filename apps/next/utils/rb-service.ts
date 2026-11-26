@@ -9,6 +9,7 @@ import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { PATTERNS } from '@my/app/provider/dynamodb/access-patterns'
 import { invalidatePeopleCache } from '../app/api/people/cache'
 import type { PersonRecord } from '@my/app/provider/dynamodb/types'
+import { ClosedEcclesiaError, isClosedEcclesia } from '@my/app/utils/ecclesia-name'
 
 interface SetRecordingBrotherParams {
   ecclesiaName: string
@@ -61,7 +62,7 @@ export async function setRecordingBrother(params: SetRecordingBrotherParams): Pr
   const oldRB = await findCurrentRB(ecclesiaName)
   const officeEmail = emailPreference === 'ecclesia' && rbEcclesiaEmail ? rbEcclesiaEmail.toLowerCase().trim() : null
 
-  const ecclesiaId = await ecclesiaIdFor(ecclesiaName)
+  const ecclesiaId = await ecclesiaIdFor(ecclesiaName, { forAssignment: true })
   await officeRepository.saveOffice({ ecclesiaId, role: OFFICE_ROLES.RECORDING_BROTHER, email: officeEmail })
   await officeRepository.assignHolder(ecclesiaId, OFFICE_ROLES.RECORDING_BROTHER, newPersonId)
 
@@ -115,9 +116,10 @@ export async function clearRecordingBrother(ecclesiaName: string): Promise<void>
   invalidatePeopleCache()
 }
 
-async function ecclesiaIdFor(ecclesiaName: string): Promise<string> {
+async function ecclesiaIdFor(ecclesiaName: string, opts: { forAssignment?: boolean } = {}): Promise<string> {
   const ecclesia = await getEcclesiaByName(ecclesiaName)
   if (!ecclesia) throw new Error(`Ecclesia "${ecclesiaName}" not found`)
+  if (opts.forAssignment && isClosedEcclesia(ecclesia)) throw new ClosedEcclesiaError(ecclesia.name)
   return ecclesiaIdOf(ecclesia)
 }
 

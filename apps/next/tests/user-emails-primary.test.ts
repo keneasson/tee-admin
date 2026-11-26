@@ -114,7 +114,7 @@ describe('GET /api/user/emails — the primary and its lists', () => {
   it('shows, per address, the mailing lists that send to it (opt-ins only)', async () => {
     const body = await (await GET()).json()
     const byEmail = Object.fromEntries(body.emails.map((e: any) => [e.email, e.mailingLists]))
-    expect(byEmail['real@example.org']).toEqual(['Toronto East Memorial Recap', 'Toronto East Newsletter'])
+    expect(byEmail['real@example.org']).toEqual(['Toronto East Ecclesia Memorial Recap', 'Toronto East Ecclesia Newsletter'])
     expect(byEmail['alias@example.org']).toEqual([])
   })
 

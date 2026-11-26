@@ -5,6 +5,8 @@ import { draftMemberRepository } from '@my/app/provider/dynamodb/repositories/dr
 import { ROLES } from '@my/app/provider/auth/auth-roles'
 import { invalidatePeopleCache } from '../../cache'
 import { personForSessionEmail } from '@/utils/session-person'
+import { isSameEcclesia } from '@my/app/utils/ecclesia-name'
+import { refuseClosedEcclesia } from '@/utils/ecclesia-assignment'
 
 /**
  * PATCH /api/people/drafts/[draftId] — Approve or reject a draft
@@ -60,7 +62,7 @@ export async function PATCH(
         const persons = await personRepository.getAllPersonsByEmail(viewerEmail)
         viewerPerson = persons[0] || null
       }
-      if (viewerPerson?.ecclesia !== ecclesia) {
+      if (!isSameEcclesia(viewerPerson?.ecclesia, ecclesia)) {
         return NextResponse.json(
           { error: 'You can only review drafts for your own ecclesia' },
           { status: 403 }
@@ -69,6 +71,8 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      const closed = await refuseClosedEcclesia(ecclesia)
+      if (closed) return closed
       const draft = await draftMemberRepository.approve(draftId, ecclesia, viewerEmail)
       invalidatePeopleCache()
       return NextResponse.json({ success: true, action: 'approved', draft })

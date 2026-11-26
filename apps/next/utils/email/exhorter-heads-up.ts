@@ -70,12 +70,6 @@ export function resolveLunchType(lunch?: string): ExhorterHeadsUpLunch | undefin
   return undefined
 }
 
-/** Trim a trailing "Christadelphians"/"Ecclesia" suffix → short display name. */
-export function shortEcclesiaName(name: string): string {
-  const short = name.replace(/\s+(christadelphians?|ecclesia)\s*$/i, '').trim()
-  return short || name
-}
-
 /** Best available full hall address for the "We're located at:" line. */
 export function resolveHallAddress(ecclesia: EcclesiaData | null): string | undefined {
   if (!ecclesia) return undefined
@@ -301,10 +295,10 @@ export async function resolveAndSendExhorterHeadsUp(
     zoomSource = 'default'
   }
 
-  // 6. Host ecclesia directory record → short name, hall address, and the
+  // 6. Host ecclesia directory record → its name (exactly as stored), hall address, and the
   //    Recording Brother signature + Reply-To (retires the hardcoded TODO).
   const ecclesia = await getEcclesiaByName(hostCanonical)
-  const shortName = shortEcclesiaName(hostPublicName)
+  const hostName = ecclesia?.name?.trim() || hostPublicName
   const hallAddress = resolveHallAddress(ecclesia)
   const rb = await recordingBrotherOf(ecclesia).catch((error) => {
     console.error('exhorter heads-up: Recording Brother office lookup failed; using the default reply-to', error)
@@ -389,7 +383,7 @@ export async function resolveAndSendExhorterHeadsUp(
     // email, not two renders that happen to agree.
     const content = {
       exhorterName,
-      hostEcclesiaName: shortName,
+      hostEcclesiaName: hostName,
       address: hallAddress,
       dateDisplay,
       timeDisplay,
@@ -409,7 +403,7 @@ export async function resolveAndSendExhorterHeadsUp(
       tenant,
     })
 
-    const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${shortName} on ${dateDisplay}`
+    const subject = `${test ? '[TEST] ' : ''}Your exhortation at ${hostName} on ${dateDisplay}`
     const from = `"${tenant.senderDisplayName}" <${SENDER_LOCAL_PART}@${tenant.senderDomain}>`
     const contentDigest = digestContent({ ...content, subject, recipient })
 

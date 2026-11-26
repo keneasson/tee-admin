@@ -1,5 +1,6 @@
 import type { MailingListOwnerType, MailingListRecord } from '@my/app/provider/dynamodb/types'
 import { slugifyEcclesia, ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index/keys'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * Mailing-list owners and display names (R5).
@@ -13,16 +14,17 @@ export interface ListOwner {
   ownerType: MailingListOwnerType
   ownerId: string
   name: string
+  /** A closed ecclesia: its existing lists keep their name, but it can't own a new one. */
+  closed?: boolean
 }
 
-/** "Toronto East Ecclesia" → "Toronto East" (the word adds nothing to a list name). */
-export function shortOwnerName(name: string): string {
-  return name.replace(/\s+ecclesia$/i, '').trim() || name
-}
-
-/** "<owner> <list>", e.g. "Toronto East" + "Newsletter" → "Toronto East Newsletter". */
+/**
+ * "<owner> <list>", the owner exactly as it styles itself: "Toronto East
+ * Ecclesia" + "Newsletter" → "Toronto East Ecclesia Newsletter". Never strip or
+ * add a word to an ecclesia's name for display.
+ */
 export function listDisplayName(ownerName: string, listName: string): string {
-  return `${shortOwnerName(ownerName)} ${listName}`.trim()
+  return `${ownerName} ${listName}`.trim()
 }
 
 /** An organization's id: the slug of its name (organizations carry no id field yet). */
@@ -49,7 +51,12 @@ export async function listOwners(): Promise<ListOwner[]> {
   ])
   const [ecclesias, orgs] = await Promise.all([listEcclesiasCached(), getAllOrganizations()])
   return [
-    ...ecclesias.map((e) => ({ ownerType: 'ecclesia' as const, ownerId: ecclesiaIdOf(e), name: e.name })),
+    ...ecclesias.map((e) => ({
+      ownerType: 'ecclesia' as const,
+      ownerId: ecclesiaIdOf(e),
+      name: e.name,
+      ...(isClosedEcclesia(e) ? { closed: true } : {}),
+    })),
     ...orgs.map((o) => ({ ownerType: 'organization' as const, ownerId: organizationIdOf(o), name: o.name })),
   ].sort((a, b) => a.name.localeCompare(b.name))
 }

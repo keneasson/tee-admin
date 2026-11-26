@@ -15,6 +15,7 @@ import { getAllEcclesia, type EcclesiaData } from '@/utils/dynamodb/locations'
 import { recordingBrothersOf } from '@/utils/ecclesia-offices'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { haversineDistance, DEFAULT_SHARING_RADIUS_KM } from '@my/app/utils/geo'
+import { isActiveEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /** Event types considered "major" for rbAlertPreference filtering */
 const MAJOR_EVENT_TYPES: Set<EventType> = new Set([
@@ -90,11 +91,15 @@ export async function notifyRBsOfSharedEvent(event: Event): Promise<void> {
 
     const allEcclesias = await getAllEcclesia()
 
-    const hostingEcclesia = allEcclesias.find((e) => e.name === hostingName)
+    const hostingEcclesia = allEcclesias.find((e) => isSameEcclesia(e.name, hostingName))
     if (!hostingEcclesia) return
 
+    // Never notify a closed ecclesia's Recording Brother.
     const candidates = allEcclesias.filter(
-      (ecclesia) => ecclesia.name !== hostingName && shouldNotifyEcclesia(ecclesia, hostingEcclesia, event, scope)
+      (ecclesia) =>
+        isActiveEcclesia(ecclesia) &&
+        !isSameEcclesia(ecclesia.name, hostingName) &&
+        shouldNotifyEcclesia(ecclesia, hostingEcclesia, event, scope)
     )
     // Each candidate's Recording Brother office (inbox, else holder's address)
     const rbs = await recordingBrothersOf(candidates)

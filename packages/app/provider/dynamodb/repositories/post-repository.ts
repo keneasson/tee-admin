@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
+import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { BaseRepository } from './base-repository'
+import { docClient, tableNames } from '../config'
 import type { Post } from '@my/app/types/post'
 import { normalizePost } from '../../../utils/normalize-post'
 import { storeReferences } from '../../../utils/post-references'
@@ -272,6 +274,58 @@ export class PostRepository extends BaseRepository<PostRecord> {
       updates
     )
     return PostRepository.toPost(record)
+  }
+
+  /**
+   * Move a post to another tenant — ONLY for an ecclesia merge (the tenant is
+   * otherwise immutable). The tenant is part of the base key, so this is one
+   * TransactWrite: Put the record under the new key (every attribute kept,
+   * tenant + tenant GSI re-derived, optional new `blocks`) and Delete the old
+   * key, conditioned on the version that was read.
+   */
+  async rehomePost(postId: string, newTenant: string, blocks?: Post['blocks']): Promise<Post> {
+    const old = (
+      await this.query(
+        'gsi1pk = :gsi1pk AND gsi1sk = :gsi1sk',
+        { ':gsi1pk': PATTERNS.postById.pk({ postId }), ':gsi1sk': 'POST' },
+        { indexName: PATTERNS.postById.index }
+      )
+    ).items[0]
+    if (!old) throw new Error(`Post ${postId} not found`)
+    if (old.tenant === newTenant) return PostRepository.toPost(old)
+
+    const now = new Date().toISOString()
+    const moved: PostRecord = {
+      ...old,
+      tenant: newTenant,
+      ...(blocks ? { blocks: storeReferences(blocks) } : {}),
+      updatedAt: now,
+      lastUpdated: now,
+      pkey: PostRepository.basePk(newTenant),
+      gsi2pk: PATTERNS.postsByTenant.pk({ tenant: newTenant }),
+      version: (old.version ?? 0) + 1,
+    }
+    await docClient.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: tableNames.admin, Item: moved, ConditionExpression: 'attribute_not_exists(pkey)' } },
+          {
+            Delete: {
+              TableName: tableNames.admin,
+              Key: { pkey: old.pkey, skey: old.skey },
+              ...(old.version === undefined
+                ? { ConditionExpression: 'attribute_exists(pkey)' }
+                : {
+                    ConditionExpression: '#v = :v',
+                    ExpressionAttributeNames: { '#v': 'version' },
+                    ExpressionAttributeValues: { ':v': old.version },
+                  }),
+            },
+          },
+        ],
+      })
+    )
+    return PostRepository.toPost(moved)
   }
 
   /** Archive a post (soft delete) — drops it out of the default list view. */

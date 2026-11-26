@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildListPreferences, planListSave } from '../utils/mailing-lists/preferences'
 import { setListSubscription, type SetSubscriptionDeps } from '../utils/mailing-lists/subscriptions'
-import { listDisplayName, shortOwnerName } from '../utils/mailing-lists/owners'
+import { listDisplayName } from '../utils/mailing-lists/owners'
 import { validateNewList } from '../utils/mailing-lists/create-list'
 import type { ListSubscriptionRecord, MailingListRecord, PersonRecord } from '@my/app/provider/dynamodb/types'
 
@@ -29,11 +29,11 @@ const OWNERS: Record<string, string> = {
 }
 
 describe('display names are derived from the owner, never stored', () => {
-  it('"<owner> <list>" without the word Ecclesia', () => {
-    expect(listDisplayName('Toronto East Ecclesia', 'Newsletter')).toBe('Toronto East Newsletter')
-    expect(listDisplayName('Cambridge Ecclesia', 'Memorial Recap')).toBe('Cambridge Memorial Recap')
+  it('"<owner> <list>" with the owner exactly as it styles itself (never trimmed)', () => {
+    expect(listDisplayName('Toronto East Ecclesia', 'Newsletter')).toBe('Toronto East Ecclesia Newsletter')
+    expect(listDisplayName('Cambridge Ecclesia', 'Memorial Recap')).toBe('Cambridge Ecclesia Memorial Recap')
+    expect(listDisplayName('Richmond Chapel Christadelphians', 'News')).toBe('Richmond Chapel Christadelphians News')
     expect(listDisplayName('Toronto Area', 'CYC')).toBe('Toronto Area CYC')
-    expect(shortOwnerName('Ecclesia')).toBe('Ecclesia')
   })
 })
 
@@ -64,8 +64,8 @@ describe('buildListPreferences — any number of lists, grouped by owner', () =>
   })
 
   it('groups by owner with derived names', () => {
-    expect(groups.map((g) => g.ownerName)).toEqual(['Cambridge', 'Toronto Area CYC', 'Toronto East'])
-    expect(groups[2].lists.map((l) => l.name)).toEqual(['Toronto East Bible Class', 'Toronto East Newsletter'])
+    expect(groups.map((g) => g.ownerName)).toEqual(['Cambridge Ecclesia', 'Toronto Area CYC', 'Toronto East Ecclesia'])
+    expect(groups[2].lists.map((l) => l.name)).toEqual(['Toronto East Ecclesia Bible Class', 'Toronto East Ecclesia Newsletter'])
   })
 
   it('state = the registry only (no SES topic is read): no row and no default → not subscribed', () => {

@@ -11,6 +11,8 @@ import {
 } from '@my/app/provider/dynamodb/invite-program-types'
 import { canSendSpeakerInvite } from '@/utils/speaker-invite-permissions'
 import { forbidden, inviterContext, noStore, readJson } from '@/utils/speaker-invites/http'
+import { isClosedEcclesia } from '@my/app/utils/ecclesia-name'
+import { getEcclesiaByName } from '@/utils/dynamodb/locations'
 
 /**
  * Invitation programs of one ecclesia (docs/SPEAKER_INVITATIONS.md §3a).
@@ -75,6 +77,9 @@ export async function PUT(request: Request) {
   if (!body) return NextResponse.json({ error: 'Invalid JSON body', code: 'INVALID_INPUT' }, { status: 400 })
   const c = await context(request, body.ecclesia)
   if (!c.ok) return c.response
+  if (isClosedEcclesia(await getEcclesiaByName(c.ecclesia))) {
+    return NextResponse.json({ error: `${c.ecclesia} is closed; it can't set up invitations.`, code: 'ECCLESIA_CLOSED' }, { status: 409 })
+  }
   if (!Array.isArray(body.programs) || body.programs.length === 0 || body.programs.length > 30) {
     return NextResponse.json({ error: 'Send between 1 and 30 programs.', code: 'INVALID_INPUT' }, { status: 400 })
   }

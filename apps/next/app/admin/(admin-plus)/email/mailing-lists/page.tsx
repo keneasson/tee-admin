@@ -135,7 +135,7 @@ export default function MailingListsAdminPage() {
         setFormError(j.error || 'Could not create the list.')
         return
       }
-      setCreated(`${owner.name.replace(/\s+ecclesia$/i, '')} ${name.trim()}`)
+      setCreated(`${owner.name} ${name.trim()}`)
       setName('')
       setDescription('')
       await load()

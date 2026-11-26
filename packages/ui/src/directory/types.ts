@@ -101,6 +101,10 @@ export interface EcclesiaListItem {
   venue?: string
   phone?: string
   ecclesiaId?: string
+  /** Closed ecclesias stay listed, marked "Closed {year}". */
+  status?: 'active' | 'closed'
+  closedYear?: number | null
+  closedNote?: string | null
   /** The ecclesia's Recording Brother OFFICE, resolved server-side (holder name + office inbox or holder address). */
   recordingBrother?: RecordingBrotherSummary | null
   services?: EcclesiaService[]

@@ -13,6 +13,7 @@ import { geocodeAndUpdateEcclesia } from '@/utils/geocode-ecclesia'
 import { officesOf, recordingBrotherOf } from '@/utils/ecclesia-offices'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import { addressFullName, hasPreferredName } from '@my/app/utils/preferred-name'
+import { parseClosure } from '@/utils/ecclesia-closure'
 
 /**
  * GET /api/ecclesia/[name] - Fetch a single ecclesia by name
@@ -110,6 +111,9 @@ export async function PATCH(
       sharingRadiusKm,
       excludedEcclesias,
       rbAlertPreference,
+      status,
+      closedYear,
+      closedNote,
     } = body as {
       address?: string
       venue?: string
@@ -127,6 +131,10 @@ export async function PATCH(
       sharingRadiusKm?: number
       excludedEcclesias?: string[]
       rbAlertPreference?: 'all' | 'major' | 'none'
+      /** Owner/admin only: mark the ecclesia closed (or reopen it with 'active'). */
+      status?: 'active' | 'closed'
+      closedYear?: number | string | null
+      closedNote?: string | null
     }
 
     const updates: Record<string, any> = {}
@@ -144,6 +152,16 @@ export async function PATCH(
     if (sharingRadiusKm !== undefined) updates.sharingRadiusKm = sharingRadiusKm
     if (excludedEcclesias !== undefined) updates.excludedEcclesias = excludedEcclesias
     if (rbAlertPreference !== undefined) updates.rbAlertPreference = rbAlertPreference
+
+    // Closed status: owner/admin only. Reopening clears the year and note.
+    if (status !== undefined || closedYear !== undefined || closedNote !== undefined) {
+      if (userRole !== ROLES.OWNER && userRole !== ROLES.ADMIN) {
+        return NextResponse.json({ error: 'Only an owner or admin can close or reopen an ecclesia' }, { status: 403 })
+      }
+      const closure = parseClosure({ status, closedYear, closedNote })
+      if (!closure.ok) return NextResponse.json({ error: closure.error }, { status: 400 })
+      Object.assign(updates, closure.updates)
+    }
 
     // Recording Brother office holder: elevated permission, through the RB service
     let rbTransferred = false

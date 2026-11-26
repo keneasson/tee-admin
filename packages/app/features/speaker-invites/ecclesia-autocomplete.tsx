@@ -3,6 +3,7 @@ import { YStack, XStack, Text, Button, Input } from '@my/ui'
 import { Check } from '@tamagui/lucide-icons'
 import { callApi } from './api'
 import { matchEcclesias } from './invitee-search'
+import { isActiveEcclesia } from '../../utils/ecclesia-name'
 
 /**
  * Ecclesia autocomplete (docs/SPEAKER_INVITATIONS.md §9a), used for the new
@@ -25,12 +26,17 @@ export interface EcclesiaAutocompleteProps {
 let cachedNames: Promise<string[]> | null = null
 function loadNames(): Promise<string[]> {
   if (!cachedNames) {
-    cachedNames = callApi<{ data?: Array<{ name?: string }> }>('/api/ecclesia').then((res) => {
+    cachedNames = callApi<{ data?: Array<{ name?: string; status?: 'active' | 'closed' }> }>('/api/ecclesia').then((res) => {
       if (!res.ok) {
         cachedNames = null
         return []
       }
-      return (res.data.data ?? []).map((e) => e.name ?? '').filter(Boolean).sort()
+      // A closed ecclesia is never offered for an invitation.
+      return (res.data.data ?? [])
+        .filter(isActiveEcclesia)
+        .map((e) => e.name ?? '')
+        .filter(Boolean)
+        .sort()
     })
   }
   return cachedNames

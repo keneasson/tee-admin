@@ -29,7 +29,7 @@
  * This repository is the office's only writer. Every write is conditional on
  * the item's version, so two concurrent holder changes cannot lose a term.
  */
-import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient, tableNames } from '../config'
 import { batchGetItems } from '../people-index/reader'
 import { ecclesiaIdPk, foldName } from '../people-index/keys'
@@ -468,6 +468,24 @@ export class OfficeRepository {
     const next = applyHolderChange(current, personId, at)
     if (next === current) return current
     return this.write(next, current.version)
+  }
+
+  /**
+   * Delete an office outright. Only the ecclesia merge calls this, AFTER it has
+   * moved the office's inbox, channels and holder onto the surviving
+   * ecclesia's office. Conditioned on the version that was read, so a
+   * concurrent edit fails the delete instead of being lost.
+   */
+  async deleteOffice(ecclesiaId: string, role: string, expectedVersion: number): Promise<void> {
+    await docClient.send(
+      new DeleteCommand({
+        TableName: TABLE,
+        Key: officeKey(ecclesiaId, role),
+        ConditionExpression: '#v = :v',
+        ExpressionAttributeNames: { '#v': 'version' },
+        ExpressionAttributeValues: { ':v': expectedVersion },
+      })
+    )
   }
 
   /** The office plus its holder (one BatchGet). Redact the holder per ADR-0005 before showing it. */

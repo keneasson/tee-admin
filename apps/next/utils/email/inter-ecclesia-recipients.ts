@@ -7,6 +7,7 @@ import { getAllEcclesia } from '../dynamodb/locations'
 import { getSuppressedSet } from './suppression'
 import { inputTemplate } from './contact-lists'
 import { getSesClient } from './sesClient'
+import { isActiveEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * Inter-ecclesia recipients resolved from OFFICES (R3), for the send path.
@@ -34,7 +35,8 @@ export async function interEcclesiaRecipientsFromOffices(
     if (!(await checkFeatureFlagFromDB(FEATURE_FLAGS.INTER_ECCLESIA_FROM_OFFICES, null))) return null
     if (!(await officeRepository.officesAssigned())) return null
 
-    const ecclesias = await getAllEcclesia()
+    // A closed ecclesia gets no inter-ecclesia mail, even if its office still has an inbox.
+    const ecclesias = (await getAllEcclesia()).filter(isActiveEcclesia)
     const contacts = await officeRepository.listAllInterEcclesiaContacts(ecclesias.map((e) => ecclesiaIdOf(e)))
     const addresses = [...new Set(contacts.flatMap((c) => (c.email ? [c.email.trim().toLowerCase()] : [])))].sort()
 

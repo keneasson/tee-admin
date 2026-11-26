@@ -14,6 +14,7 @@ import {
 import { officeRepository, OFFICE_ROLES } from '@my/app/provider/dynamodb/repositories/office-repository'
 import { ecclesiaIdOf } from '@my/app/provider/dynamodb/people-index'
 import type { EcclesiaData } from '@/utils/dynamodb/locations'
+import { isActiveEcclesia, isSameEcclesia } from '@my/app/utils/ecclesia-name'
 
 /**
  * Owner/admin assignment of Recording Brothers.
@@ -76,7 +77,8 @@ export async function GET() {
   if (gate.error) return gate.error
 
   const [ecclesias, contacts, rbs] = await Promise.all([
-    getAllEcclesia(),
+    // Office assignment never offers a closed ecclesia.
+    getAllEcclesia().then((all) => all.filter(isActiveEcclesia)),
     personRepository.listInterEcclesiaReps(),
     personRepository.listRecordingBrothers(),
   ])
@@ -111,6 +113,9 @@ export async function POST(request: NextRequest) {
   if (!ecclesia) {
     return NextResponse.json({ error: `No ecclesia named ${ecclesiaName}` }, { status: 404 })
   }
+  if (!isActiveEcclesia(ecclesia)) {
+    return NextResponse.json({ error: `${ecclesia.name} is closed; offices can't be assigned there` }, { status: 409 })
+  }
 
   // Ecclesia mail goes to the RB's own email, or stays at one of the
   // ecclesia's addresses on file (e.g. its shared mailbox). A named person's
@@ -128,7 +133,7 @@ export async function POST(request: NextRequest) {
     if (!person) {
       return NextResponse.json({ error: 'That person was not found' }, { status: 404 })
     }
-    if (person.ecclesia !== ecclesiaName) {
+    if (!isSameEcclesia(person.ecclesia, ecclesiaName)) {
       return NextResponse.json(
         { error: `${person.displayName || 'This person'} is recorded at ${person.ecclesia || 'no ecclesia'}, not ${ecclesiaName}` },
         { status: 400 }
@@ -151,7 +156,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
     }
     const holder = email ? await personRepository.getByEmail(email) : null
-    if (holder && !(personName(holder) === '' && holder.ecclesia === ecclesiaName)) {
+    if (holder && !(personName(holder) === '' && isSameEcclesia(holder.ecclesia, ecclesiaName))) {
       return NextResponse.json(
         { error: `${email} is already on ${personName(holder) || 'another record'}'s record` },
         { status: 409 }

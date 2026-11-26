@@ -14,6 +14,7 @@ import { ScheduleEditor } from './schedule-editor'
 import { ScheduleViewer } from './schedule-viewer'
 import { ScheduleConfigEditor } from './schedule-config-editor'
 import type { OfficeSummary, RecordingBrotherSummary } from '../directory/types'
+import { ClosedBadge } from './closed-badge'
 
 export interface EcclesiaDetailData {
   name: string
@@ -52,6 +53,10 @@ export interface EcclesiaDetailData {
   rbAlertPreference?: 'all' | 'major' | 'none'
   sharingRadiusKm?: number
   nearbyEcclesias?: string[]
+  /** Closed ecclesias stay findable, marked "Closed {year}". */
+  status?: 'active' | 'closed'
+  closedYear?: number | null
+  closedNote?: string | null
 }
 
 interface EcclesiaDetailViewProps {
@@ -60,6 +65,8 @@ interface EcclesiaDetailViewProps {
   onUpdate?: (updates: Partial<EcclesiaDetailData>) => Promise<boolean>
   onBack?: () => void
   initialEdit?: boolean
+  /** Owner/admin: the editor offers "This ecclesia has closed" */
+  canSetClosed?: boolean
   showExternalLinks?: boolean
   /** Enriched nearby ecclesias (with distance + metadata) from API */
   nearbyEcclesiasData?: NearbyEcclesiaItem[]
@@ -67,7 +74,7 @@ interface EcclesiaDetailViewProps {
   onEcclesiaClick?: (name: string) => void
 }
 
-export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false, showExternalLinks = false, nearbyEcclesiasData, nearbyLoading, onEcclesiaClick }: EcclesiaDetailViewProps) {
+export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initialEdit = false, canSetClosed = false, showExternalLinks = false, nearbyEcclesiasData, nearbyLoading, onEcclesiaClick }: EcclesiaDetailViewProps) {
   const [editing, setEditing] = useState(canEdit && initialEdit)
   const [saving, setSaving] = useState(false)
 
@@ -80,6 +87,9 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
   const [editContactEmail, setEditContactEmail] = useState(ecclesia.contactEmail || '')
   const [editRbName, setEditRbName] = useState(ecclesia.recordingBrother?.name || '')
   const [editRbEmail, setEditRbEmail] = useState(ecclesia.recordingBrother?.email || '')
+  const [editClosed, setEditClosed] = useState(ecclesia.status === 'closed')
+  const [editClosedYear, setEditClosedYear] = useState(ecclesia.closedYear ? String(ecclesia.closedYear) : '')
+  const [editClosedNote, setEditClosedNote] = useState(ecclesia.closedNote || '')
 
   const startEditing = () => {
     setEditName(ecclesia.name)
@@ -90,6 +100,9 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
     setEditContactEmail(ecclesia.contactEmail || '')
     setEditRbName(ecclesia.recordingBrother?.name || '')
     setEditRbEmail(ecclesia.recordingBrother?.email || '')
+    setEditClosed(ecclesia.status === 'closed')
+    setEditClosedYear(ecclesia.closedYear ? String(ecclesia.closedYear) : '')
+    setEditClosedNote(ecclesia.closedNote || '')
     setEditing(true)
   }
 
@@ -110,6 +123,14 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
         contactEmail: editContactEmail,
         // Only a changed address nominates (or, when emptied, vacates) the RB office holder
         ...(editRbEmail.trim() !== (ecclesia.recordingBrother?.email || '') ? { rbNomineeEmail: editRbEmail.trim() } : {}),
+        // Closed status: only an owner/admin sees (and so sends) it
+        ...(canSetClosed
+          ? editClosed
+            ? { status: 'closed' as const, closedYear: editClosedYear.trim() ? Number(editClosedYear.trim()) : null, closedNote: editClosedNote.trim() || null }
+            : ecclesia.status === 'closed'
+              ? { status: 'active' as const }
+              : {}
+          : {}),
       })
       if (success) {
         setEditing(false)
@@ -145,6 +166,7 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
           {locationParts.length > 0 ? (
             <Text fontSize="$3" theme="alt2">{locationParts.join(', ')}</Text>
           ) : null}
+          <ClosedBadge ecclesia={ecclesia} showNote />
         </YStack>
       </Card>
 
@@ -210,6 +232,60 @@ export function EcclesiaDetailView({ ecclesia, canEdit, onUpdate, onBack, initia
                   />
                 </YStack>
               </XStack>
+
+              {canSetClosed ? (
+                <YStack gap="$2">
+                  <Separator />
+                  <Text fontSize="$4" fontWeight="600">Status</Text>
+                  <XStack gap="$2" flexWrap="wrap">
+                    <Button
+                      size="$3"
+                      theme={editClosed ? undefined : 'blue'}
+                      variant={editClosed ? 'outlined' : undefined}
+                      onPress={() => setEditClosed(false)}
+                      disabled={saving}
+                    >
+                      Active
+                    </Button>
+                    <Button
+                      size="$3"
+                      theme={editClosed ? 'blue' : undefined}
+                      variant={editClosed ? undefined : 'outlined'}
+                      onPress={() => setEditClosed(true)}
+                      disabled={saving}
+                    >
+                      Closed
+                    </Button>
+                  </XStack>
+                  {editClosed ? (
+                    <YStack gap="$2">
+                      <Text fontSize="$3" color="$gray11">
+                        A closed ecclesia stays in the directory and search, marked closed. It is not offered for
+                        new members, offices, invitations, mailing lists or event sharing.
+                      </Text>
+                      <YStack gap="$1">
+                        <Text fontSize="$3" fontWeight="600">Year closed (optional)</Text>
+                        <Input
+                          value={editClosedYear}
+                          onChangeText={(t) => setEditClosedYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                          placeholder="e.g. 2024"
+                          keyboardType="number-pad"
+                          maxWidth={160}
+                        />
+                      </YStack>
+                      <YStack gap="$1">
+                        <Text fontSize="$3" fontWeight="600">Note (optional)</Text>
+                        <Input
+                          value={editClosedNote}
+                          onChangeText={setEditClosedNote}
+                          placeholder="e.g. Members now meet with a nearby ecclesia"
+                          maxLength={280}
+                        />
+                      </YStack>
+                    </YStack>
+                  ) : null}
+                </YStack>
+              ) : null}
 
               <XStack gap="$2" justifyContent="flex-end">
                 <Button icon={X} onPress={cancelEditing} disabled={saving}>

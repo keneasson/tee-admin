@@ -397,7 +397,8 @@ describe('resolveAndSendExhorterHeadsUp — content from directory', () => {
     })
     expect(report.status).toBe('sent')
     const props = h.renderExhorterHeadsUp.mock.calls[0][0]
-    expect(props.hostEcclesiaName).toBe('Toronto East') // "Christadelphians"/"Ecclesia" trimmed
+    // The ecclesia's name exactly as it styles itself — never trimmed for display.
+    expect(props.hostEcclesiaName).toBe('Toronto East Ecclesia')
     expect(props.exhorterName).toBe('Brad Tester') // formal full name, not first-name-only
     expect(props.address).toContain('975 Cosburn')
     expect(props.signatoryName).toBe('Ken Example')
