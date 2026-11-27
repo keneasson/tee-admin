@@ -8,7 +8,6 @@
  *
  * The key is only ever compared on the server and never sent to the client.
  */
-import { createHash, timingSafeEqual } from 'node:crypto'
 import { TEST_PERSONAS, findTestPersonaByEmail, type TestPersona } from '@my/app/utils/test-personas'
 
 type Env = Record<string, string | undefined>
@@ -39,11 +38,19 @@ export function devAuthKey(env: Env = process.env): string | undefined {
   return env.DEV_AUTH_SERVER_KEY || undefined
 }
 
-/** Constant-time string comparison (hashes first so lengths never leak). */
+/**
+ * Constant-time string comparison. Plain JS, no `node:crypto`: auth.ts (which
+ * imports this) is also bundled where Node built-ins aren't available. Walks
+ * the longer length every time and folds the length difference in, so neither
+ * content nor length short-circuits.
+ */
 export function safeEqual(a: string, b: string): boolean {
-  const ha = createHash('sha256').update(a).digest()
-  const hb = createHash('sha256').update(b).digest()
-  return timingSafeEqual(new Uint8Array(ha), new Uint8Array(hb))
+  const len = Math.max(a.length, b.length)
+  let diff = a.length ^ b.length
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
+  }
+  return diff === 0
 }
 
 export function verifyTestSigninKey(given: unknown, env: Env = process.env): boolean {
