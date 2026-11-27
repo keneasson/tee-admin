@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SignJWT } from 'jose'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 
-const DEV_KEY = process.env.DEV_AUTH_SERVER_KEY
+import { devAuthKey, safeEqual } from '@/utils/test-signin'
 
 /**
  * POST /api/auth/dev-token - Exchange server key for a Bearer token
@@ -16,6 +16,8 @@ const DEV_KEY = process.env.DEV_AUTH_SERVER_KEY
  *   curl -H "Authorization: Bearer <access_token>" http://localhost:4000/api/people
  */
 export async function POST(request: NextRequest) {
+  // Never on production, even if the key is set there by mistake (#349).
+  const DEV_KEY = devAuthKey()
   if (!DEV_KEY) {
     return NextResponse.json(
       { error: 'Dev auth not configured' },
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Constant-time comparison to prevent timing attacks
-    if (key.length !== DEV_KEY.length || !timingSafeEqual(key, DEV_KEY)) {
+    if (typeof key !== 'string' || !safeEqual(key, DEV_KEY)) {
       return NextResponse.json(
         { error: 'Invalid key' },
         { status: 401 }
@@ -80,14 +82,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-/** Constant-time string comparison */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return result === 0
 }

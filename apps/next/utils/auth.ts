@@ -25,6 +25,13 @@ import { tokenRepository } from '@my/app/provider/dynamodb/repositories/token-re
 import { verifyEcclesiaToken } from './email/ecclesia-token'
 import { findRecordingBrotherEcclesia, signInOfficeFlags } from './dynamodb/locations'
 import { identityAtSignIn, switchIdentity } from './sign-in-identity'
+import {
+  devAuthKey,
+  isTestSigninEnabled,
+  recordTestSignin,
+  resolveTestSigninTarget,
+  verifyTestSigninKey,
+} from './test-signin'
 
 // Feature flag for unified people system - uses PersonRecord instead of scan-based USER# lookups
 const USE_UNIFIED_PEOPLE = process.env.UNIFIED_PEOPLE_AUTH === 'true'
@@ -64,6 +71,54 @@ if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
     FacebookProvider({
       clientId: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+    })
+  )
+}
+
+// Test sign-in (#349): registered ONLY on a preview build or local development
+// with TEST_SIGNIN_KEY set. On production the provider does not exist, even if
+// the key is set there by mistake.
+if (isTestSigninEnabled()) {
+  authProviders.push(
+    CredentialsProvider({
+      id: 'test-signin',
+      name: 'Test sign-in',
+      credentials: {
+        email: { label: 'Test person', type: 'text' },
+        key: { label: 'Key', type: 'password' },
+      },
+      async authorize(credentials) {
+        // Re-checked per request: the gate is never just "the module loaded".
+        if (!isTestSigninEnabled()) return null
+        if (!verifyTestSigninKey(credentials?.key)) return null
+        const target = resolveTestSigninTarget(credentials?.email)
+        if (!target) return null
+        const email = target.kind === 'persona' ? target.persona.email : target.email
+
+        const person = await personRepository.getByEmail(email)
+        if (!person) return null
+        // A persona address must belong to a record flagged as a test persona.
+        if (target.kind === 'persona' && !person.isTestPersona) return null
+
+        try {
+          await recordTestSignin({ who: email, kind: target.kind })
+        } catch (e) {
+          console.error('Test sign-in refused: could not record the audit entry', e)
+          return null
+        }
+
+        return {
+          id: person.personId,
+          email: person.primaryEmail,
+          name: person.displayName || person.primaryEmail,
+          role: person.role || 'guest',
+          provider: 'credentials',
+          assurance: 'authenticated',
+          identified: true,
+          signInEmail: email,
+          testSignin: true,
+        }
+      },
     })
   )
 }
@@ -226,7 +281,9 @@ export const authOptions: NextAuthConfig = {
       trigger?: 'signIn' | 'signUp' | 'update'
       session?: { personId?: string }
     }) {
-      const t = token as JWT & { personId?: string; signInEmail?: string; chooseIdentity?: boolean }
+      const t = token as JWT & { personId?: string; signInEmail?: string; chooseIdentity?: boolean; testSignin?: boolean }
+      // A test session is void wherever test sign-in is off (e.g. production).
+      if (t.testSignin && !isTestSigninEnabled()) return null as unknown as JWT
       // On sign-in, try to get role from the user object (set by signIn callback)
       if (user) {
         const userRole = (user as User & { role?: string }).role
@@ -243,6 +300,9 @@ export const authOptions: NextAuthConfig = {
         ;(token as JWT & { assuranceLevel?: string }).assuranceLevel =
           userAssurance === 'recognized' ? 'recognized' : 'authenticated'
         ;(token as JWT & { authTime?: number }).authTime = Date.now()
+        // Test sign-in (#349): carried in the token so every page can show the banner.
+        ;(token as JWT & { testSignin?: boolean }).testSignin =
+          (user as User & { testSignin?: boolean }).testSignin === true ? true : undefined
 
         // R2: who is signed in. The proven address authorizes; when more than
         // one person can use it, the session asks "Are you A or B?" (/auth/who).
@@ -546,6 +606,8 @@ export const authOptions: NextAuthConfig = {
         ;(session.user as any).personId = tokenWithRole?.personId ?? null
         ;(session.user as any).chooseIdentity = !!tokenWithRole?.chooseIdentity
         ;(session.user as any).signInEmail = tokenWithRole?.signInEmail ?? null
+        // Test sign-in banner (#349)
+        ;(session.user as any).testSignin = (tokenWithRole as { testSignin?: boolean } | undefined)?.testSignin === true
         return session
       } catch (error) {
         const msg = error instanceof Error ? error.message : error
@@ -665,7 +727,8 @@ export function auth(...args: any[]): any {
 }
 
 async function getSessionWithBearer(): Promise<Session | null> {
-  const devKey = process.env.DEV_AUTH_SERVER_KEY
+  // undefined on production: Bearer dev tokens are refused there (#349).
+  const devKey = devAuthKey()
   if (devKey) {
     try {
       const headersList = await headers()

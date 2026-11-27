@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signIn, getSession } from 'next-auth/react'
 import { useHydrated } from '@my/app/hooks/use-hydrated'
+import { TestSigninBox } from '@/components/test-signin-box'
 import { getBrand } from '@my/app/config/brand'
 import type { GestureResponderEvent } from 'react-native'
 
@@ -378,6 +379,9 @@ function SignInPageContent() {
         {error ? (
           <Paragraph color="$red10" textAlign="center">{error}</Paragraph>
         ) : null}
+
+        {/* Test sign-in: renders only when the server says it is on (preview / local) */}
+        <TestSigninBox returnTo={returnTo} onDone={(path) => router.push(path)} />
 
         {/* Footer links */}
         <XStack justifyContent="center" gap="$2">

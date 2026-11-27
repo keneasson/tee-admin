@@ -48,6 +48,8 @@ export interface CreatePersonInput {
    * still defaults to the existing holder and asks "Are you A or B?".
    */
   emailLoginExcluded?: boolean
+  /** A made-up test person (#349): never listed, counted, searched or sent to. */
+  isTestPersona?: boolean
   /** Recorded facts (§9b), set by whoever vouches (`*SetByPersonId`). Never inferred. */
   gender?: 'male' | 'female'
   genderSetByPersonId?: string
@@ -168,6 +170,16 @@ export function chooseSignInHolder(
 
 /** Re-derives a person's projections (CARD, NAMETOK#, REP office refs). */
 export type PersonProjectionSync = (personId: string) => Promise<unknown>
+
+/**
+ * Drop made-up test personas (#349) from a list of people. Every list the
+ * repository returns goes through this, so new callers inherit it. Point
+ * lookups (`getById`, `getByEmail`) are NOT filtered: sign-in as a test persona
+ * needs them.
+ */
+export function withoutTestPersonas<T extends { isTestPersona?: boolean }>(items: T[]): T[] {
+  return items.filter((p) => p.isTestPersona !== true)
+}
 
 export class PersonRepository extends BaseRepository<PersonRecord> {
   /**
@@ -334,7 +346,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       }
     )
     return {
-      items: result.items,
+      items: withoutTestPersonas(result.items),
       lastEvaluatedKey: result.lastEvaluatedKey,
     }
   }
@@ -353,7 +365,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
 
     const result = await this.query(keyCondition, values, { indexName: PATTERNS.personsByLastName.index })
     return {
-      items: result.items,
+      items: withoutTestPersonas(result.items),
       lastEvaluatedKey: result.lastEvaluatedKey,
     }
   }
@@ -400,6 +412,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       userId: input.userId,
       source: input.source,
       sourceRef: input.sourceRef,
+      ...(input.isTestPersona ? { isTestPersona: true } : {}),
       ...(input.createdByPersonId ? { createdByPersonId: input.createdByPersonId } : {}),
       ...(input.gender
         ? { gender: input.gender, genderSetAt: now, ...(input.genderSetByPersonId ? { genderSetByPersonId: input.genderSetByPersonId } : {}) }
@@ -1296,6 +1309,8 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
         KeyConditionExpression: 'gsi2pk = :gsi2pk',
         ExpressionAttributeValues: { ':gsi2pk': PATTERNS.personsByEcclesiaName.pk({ ecclesia }) },
         Select: 'COUNT',
+        // Test personas (#349) are never counted.
+        FilterExpression: 'attribute_not_exists(isTestPersona)',
         ExclusiveStartKey: lastKey,
       })
 
@@ -1327,7 +1342,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
     )
     const cards = page.items as unknown as PersonCard[]
     return {
-      items: await this.profilesInOrder(cards.map((c) => c.personId)),
+      items: withoutTestPersonas(await this.profilesInOrder(cards.map((c) => c.personId))),
       lastEvaluatedKey: page.lastEvaluatedKey,
     }
   }
@@ -1362,7 +1377,7 @@ export class PersonRepository extends BaseRepository<PersonRecord> {
       expressionAttributeValues: { ':on': true },
     })) as unknown as PersonCard[]
     // The PROFILE is the source; the card only finds the candidates.
-    return (await this.profilesInOrder(cards.map((c) => c.personId))).filter((p) => p[flag] === true)
+    return withoutTestPersonas(await this.profilesInOrder(cards.map((c) => c.personId))).filter((p) => p[flag] === true)
   }
 
   /** PROFILE items for these ids, in the given order (missing ones dropped). */

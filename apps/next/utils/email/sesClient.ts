@@ -1,3 +1,4 @@
+import { shouldSkipRecipient } from './send-guard'
 import { SESv2Client, SESv2ClientConfig, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
@@ -144,6 +145,12 @@ export async function sendEmail({
     console.log(
       `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
     )
+    return
+  }
+
+  // Never send to a test persona / undeliverable address (#349).
+  if (shouldSkipRecipient(to)) {
+    console.log('[sendEmail] Skipped — undeliverable (.invalid) or test-persona address')
     return
   }
 

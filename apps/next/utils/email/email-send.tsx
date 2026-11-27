@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 // import { getSesClient, SendEmailCommand } from './MockSesSendEmail'
 import { emailsEnabled, getSesClient } from './sesClient'
+import { shouldSkipRecipient } from './send-guard'
 import { inputTemplate } from './contact-lists'
 import { interEcclesiaRecipientsFromOffices } from './inter-ecclesia-recipients'
 import { resolveSendAudience, safetyNetState } from '../mailing-lists/registry-send'
@@ -412,6 +413,9 @@ async function chunkSend({
   try {
     for (let i = 0; i < toArray.length; i++) {
       const recipientEmail = toArray[i]
+
+      // Never send to a test persona / undeliverable address (#349).
+      if (shouldSkipRecipient(recipientEmail)) continue
 
       // Per-recipient tokenized links. Each placeholder is substituted only when
       // the template actually contains it, so a token is minted lazily and

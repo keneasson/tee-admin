@@ -145,8 +145,23 @@ export interface EcclesiaData {
   status?: EcclesiaStatus
   closedYear?: number
   closedNote?: string
+  /**
+   * A made-up TEST ecclesia for preview sign-in (#349). Hidden from every list,
+   * picker, search, sharing and send; only a direct lookup by name finds it.
+   */
+  isTest?: boolean
   createdAt: Date
   updatedAt: Date
+}
+
+/**
+ * Drop made-up test ecclesias (#349). Every ecclesia LIST (directory, pickers,
+ * search, sharing, mailing-list owners) goes through `getEcclesiasFromIndex`
+ * or the province/city queries, which call this. Lookup by exact name is not
+ * filtered: the seed script and test sign-in need it.
+ */
+export function withoutTestEcclesias<T extends { isTest?: boolean }>(list: T[]): T[] {
+  return list.filter((e) => e.isTest !== true)
 }
 
 /** Another ecclesia already has this name once generic endings are ignored ("Brantford" vs "Brantford Ecclesia"). */
@@ -273,6 +288,7 @@ function mapItemToEcclesia(item: Record<string, any>): EcclesiaData {
     status: item.status,
     closedYear: item.closedYear,
     closedNote: item.closedNote,
+    isTest: item.isTest === true ? true : undefined,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }
@@ -312,7 +328,7 @@ const ecclesiaKey = (e: { country: string; province: string; city: string; name:
 async function getEcclesiasFromIndex(filter: { country?: string } = {}): Promise<EcclesiaData[]> {
   const entries = await listEcclesiaDirectory(filter)
   const items = await getEcclesiaItems(entries)
-  return items.map(mapItemToEcclesia)
+  return withoutTestEcclesias(items.map(mapItemToEcclesia))
 }
 
 // Ecclesia functions
@@ -325,6 +341,8 @@ export async function createEcclesia(data: {
   address?: string
   postalCode?: string
   venue?: string
+  /** A made-up test ecclesia (#349). */
+  isTest?: boolean
 }): Promise<EcclesiaData> {
   const now = new Date()
   const ecclesia: EcclesiaData = {
@@ -540,7 +558,7 @@ export async function getEcclesiaByProvince(country: string, province: string): 
 
     if (!result.Items) return []
 
-    return result.Items.map(mapItemToEcclesia)
+    return withoutTestEcclesias(result.Items.map(mapItemToEcclesia))
   } catch (error) {
     console.error('Error getting ecclesia by province:', error)
     return []
@@ -560,7 +578,7 @@ export async function getEcclesiaByCity(country: string, province: string, city:
 
     if (!result.Items) return []
 
-    return result.Items.map(mapItemToEcclesia)
+    return withoutTestEcclesias(result.Items.map(mapItemToEcclesia))
   } catch (error) {
     console.error('Error getting ecclesia by city:', error)
     return []

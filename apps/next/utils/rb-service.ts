@@ -131,7 +131,7 @@ async function findCurrentRB(ecclesiaName: string): Promise<PersonRecord | null>
   const office = await officeRepository.getOffice(await ecclesiaIdFor(ecclesiaName), OFFICE_ROLES.RECORDING_BROTHER)
   if (office) return office.holderPersonId ? personRepository.getById(office.holderPersonId) : null
   const people = await personRepository.queryPattern(PATTERNS.personsByEcclesiaName, { ecclesia: ecclesiaName }, {
-    filterExpression: 'isRecordingBrother = :isRB AND skey = :profile',
+    filterExpression: 'isRecordingBrother = :isRB AND skey = :profile AND attribute_not_exists(isTestPersona)',
     expressionAttributeValues: { ':isRB': true, ':profile': 'PROFILE' },
   })
   return people[0] || null

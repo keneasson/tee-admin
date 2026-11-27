@@ -496,6 +496,12 @@ export interface PersonRecord extends BaseRecord {
   rbEmailPreference?: 'personal' | 'ecclesia'  // Which email to use for inter-ecclesia
   rbEcclesiaEmail?: string                      // Ecclesia-specific RB email (only when preference is 'ecclesia')
 
+  // Made-up test person for preview-build sign-in (#349). Hidden from every
+  // list, count, search and send: no CARD/NAMETOK projection is written, the
+  // list queries drop it, and the send guard skips it. Seeded only by
+  // scripts/seed-test-personas.ts.
+  isTestPersona?: boolean
+
   // Auth fields (unified from USER# records)
   userId?: string        // Links to existing USER#{email} auth record (for backwards compat)
   role?: 'owner' | 'admin' | 'recorder' | 'rep' | 'member' | 'guest' | 'deceased'

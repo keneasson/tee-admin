@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { FeatureGatedNavigation } from '@my/app/features/feature-gated-navigation'
 import { HeaderEcclesiaProvider } from '@my/app/provider/ecclesia/header-ecclesia-context'
 import { config } from '@my/ui'
+import { TestSigninBanner } from '../components/test-signin-banner'
 import { ThemeProvider, ThemeAwareProvider } from '@my/ui'
 
 if (process.env.NODE_ENV === 'production') {
@@ -82,6 +83,11 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <>
+    <TestSigninBanner
+      testSignin={(session?.user as { testSignin?: boolean } | undefined)?.testSignin === true}
+      name={session?.user?.name}
+    />
     <FeatureGatedNavigation
       user={user}
       onSignOut={handleSignOut}
@@ -92,6 +98,7 @@ function NavigationWithAuth({ children }: { children: React.ReactNode }) {
         {children}
       </HeaderEcclesiaProvider>
     </FeatureGatedNavigation>
+    </>
   )
 }
 
