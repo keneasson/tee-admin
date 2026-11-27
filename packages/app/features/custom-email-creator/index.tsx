@@ -18,12 +18,13 @@ import {
   ScrollView,
   Spinner,
 } from '@my/ui'
-import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2 } from '@tamagui/lucide-icons'
+import { Check, Send, AlertCircle, Eye, Save, Trash2, Mail, TestTube2, Copy, Plus, RefreshCw } from '@tamagui/lucide-icons'
 import { EmailDraft } from '@my/app/types/email-draft'
 import {
   getDrafts,
   createDraft,
   updateDraft,
+  copyDraft,
   deleteDraft,
   markDraftAsTested,
   markDraftAsSent,
@@ -36,7 +37,7 @@ interface CustomEmailCreatorProps {
     selectedList: string
     note: string
     draftId?: string
-  }) => Promise<void>
+  }) => Promise<boolean> // true only if the email was confirmed and actually sent
   /** Registry lists: `key` = listId, `listKey` = the pre-R5 key (for old drafts). */
   availableLists: { key: string; label: string; isTest?: boolean; listKey?: string }[]
   sending: boolean
@@ -52,13 +53,16 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const [content, setContent] = useState('')
   // A listId once lists load ('newsletter' until then: the server reads an old
   // key as that owner's list, and the effect below swaps it for the listId).
-  const [selectedList, setSelectedList] = useState<string>('newsletter')
+  // No default audience: a real send goes only to a list someone chose.
+  const [selectedList, setSelectedList] = useState<string>('')
   const findList = (ref: string) => availableLists.find((l) => l.key === ref || l.listKey === ref)
   useEffect(() => {
     const match = findList(selectedList)
     if (match && match.key !== selectedList) setSelectedList(match.key)
   }, [availableLists, selectedList])
   const [note, setNote] = useState('')
+  /** What the last test/real send did, shown under the send buttons. */
+  const [sendResult, setSendResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
   // Draft management state
@@ -66,7 +70,12 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [loadingDrafts, setLoadingDrafts] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
+  const [copying, setCopying] = useState(false)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+  // The editor text as last loaded/saved for the current draft. The body is
+  // stored as HTML and the HTML<->text conversion does not round-trip exactly,
+  // so "did the body change?" is answered against this, not the stored HTML.
+  const [savedContent, setSavedContent] = useState<string | null>(null)
 
   // Separate loading states for test vs production
   const [sendingTest, setSendingTest] = useState(false)
@@ -91,17 +100,49 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     }
   }
 
-  const handleSaveDraft = async () => {
+  const currentDraft = drafts.find((d) => d.id === currentDraftId)
+  // A sent email is frozen: shown read-only, reusable only by copying it.
+  const isSent = currentDraft?.status === 'sent'
+
+  // Unsaved changes to what recipients receive (subject, body, list). A note
+  // edit is not included: it does not undo an unsent draft's test.
+  const hasUnsavedContentChanges = currentDraft
+    ? subject !== currentDraft.subject ||
+      content !== savedContent ||
+      findList(selectedList)?.key !== findList(currentDraft.selectedList)?.key
+    : false
+
+  // "Tested" only counts when the tested draft is exactly what is in the editor.
+  const needsFreshTest =
+    !currentDraft || currentDraft.status !== 'tested' || hasUnsavedContentChanges
+
+  const untestedWarning =
+    currentDraft?.status === 'tested' && hasUnsavedContentChanges
+      ? '⚠️ Changed since it was tested - send a test of this version first.'
+      : '⚠️ Not tested yet - consider sending a test first.'
+
+  /** Saves the editor; returns the saved draft, or null if it was not saved. */
+  const handleSaveDraft = async (): Promise<EmailDraft | null> => {
+    if (isSent) return null // frozen; the editor is not shown for sent emails
     if (!subject.trim() || !content.trim()) {
       alert('Please fill in both subject and content before saving')
-      return
+      return null
+    }
+    if (!findList(selectedList)) {
+      alert('Choose the list this email is for before saving.')
+      return null
     }
 
     setSavingDraft(true)
     try {
       const draftData = {
         subject,
-        htmlContent: convertToHtml(content),
+        // Untouched body: send the stored HTML back unchanged, so a note-only
+        // save is not mistaken by the server for a body change.
+        htmlContent:
+          currentDraft && content === savedContent
+            ? currentDraft.htmlContent
+            : convertToHtml(content),
         selectedList,
         note,
       }
@@ -119,30 +160,62 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
         setCurrentDraftId(savedDraft.id)
       }
 
+      // Show the server's answer (e.g. a SENT draft going back to DRAFT) at
+      // once, then refresh the list.
+      setDrafts((prev) =>
+        prev.some((d) => d.id === savedDraft.id)
+          ? prev.map((d) => (d.id === savedDraft.id ? savedDraft : d))
+          : [savedDraft, ...prev]
+      )
+      setSavedContent(content)
       setLastSaved(new Date().toLocaleTimeString())
       await loadDrafts()
+      return savedDraft
     } catch (error) {
       console.error('Failed to save draft:', error)
       alert('Failed to save draft')
+      return null
     } finally {
       setSavingDraft(false)
     }
   }
 
   const handleLoadDraft = (draft: EmailDraft) => {
+    setSendResult(null)
+    const text = convertFromHtml(draft.htmlContent)
     setCurrentDraftId(draft.id)
     setSubject(draft.subject)
-    setContent(convertFromHtml(draft.htmlContent))
+    setContent(text)
+    setSavedContent(text)
     setSelectedList(draft.selectedList)
     setNote(draft.note || '')
     setShowPreview(false)
   }
 
+  /** Copy a (usually sent) email into a new draft and open the copy. */
+  const handleCopyDraft = async (draft: EmailDraft) => {
+    setCopying(true)
+    try {
+      const copy = await copyDraft(draft.id)
+      setDrafts((prev) => [copy, ...prev.filter((d) => d.id !== copy.id)])
+      handleLoadDraft(copy)
+      setLastSaved(null)
+      await loadDrafts()
+    } catch (error) {
+      console.error('Failed to copy draft:', error)
+      alert('Failed to copy email')
+    } finally {
+      setCopying(false)
+    }
+  }
+
   const handleNewDraft = () => {
+    setSendResult(null)
     setCurrentDraftId(null)
     setSubject('')
     setContent('')
-    setSelectedList('newsletter')
+    setSavedContent(null)
+    setSelectedList('')
     setNote('')
     setShowPreview(false)
     setLastSaved(null)
@@ -173,26 +246,31 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
 
     setSendingTest(true)
     try {
-      // Save draft first if not already saved
-      if (!currentDraftId) {
-        await handleSaveDraft()
+      // Save first if new or edited, so "tested" is recorded against exactly
+      // the content that goes to the test list.
+      let draftId = currentDraftId
+      if (!draftId || hasUnsavedContentChanges) {
+        const saved = await handleSaveDraft()
+        if (!saved) return
+        draftId = saved.id
       }
 
       const htmlContent = convertToHtml(content)
 
       // Send to test list (test mode = true)
-      await onSend({
+      const sent = await onSend({
         subject,
         htmlContent,
         selectedList: 'testList', // Always use testList for testing
         note,
-        draftId: currentDraftId || undefined,
+        draftId,
       })
 
-      // Mark draft as tested
-      if (currentDraftId) {
+      setSendResult(sent ? { ok: true, text: '✓ Test sent to the Test List.' } : { ok: false, text: 'Test not sent (cancelled or failed).' })
+      // Mark draft as tested — only if the test really went out (not cancelled/failed)
+      if (sent) {
         try {
-          await markDraftAsTested(currentDraftId)
+          await markDraftAsTested(draftId)
           await loadDrafts()
         } catch (error) {
           console.error('Failed to mark draft as tested:', error)
@@ -208,11 +286,15 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       alert('Please fill in both subject and content')
       return
     }
+    const target = findList(selectedList)
+    if (!target || target.isTest) {
+      alert('Choose the list to send to first.')
+      return
+    }
 
-    const currentDraft = drafts.find((d) => d.id === currentDraftId)
-    if (currentDraft?.status !== 'tested') {
+    if (needsFreshTest) {
       const confirmSend = confirm(
-        'This email has not been tested yet. Are you sure you want to send it to the production list?'
+        `${untestedWarning} Are you sure you want to send it to the production list?`
       )
       if (!confirmSend) {
         return
@@ -221,20 +303,31 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
 
     setSendingProduction(true)
     try {
+      // Save first if new or edited, so "sent" is recorded against exactly
+      // the content that goes out.
+      let draftId = currentDraftId
+      if (!draftId || hasUnsavedContentChanges) {
+        const saved = await handleSaveDraft()
+        if (!saved) return
+        draftId = saved.id
+      }
+
       const htmlContent = convertToHtml(content)
 
-      await onSend({
+      const sent = await onSend({
         subject,
         htmlContent,
         selectedList,
         note,
-        draftId: currentDraftId || undefined,
+        draftId,
       })
 
-      // Mark draft as sent
-      if (currentDraftId) {
+      const label = findList(selectedList)?.label || 'the selected list'
+      setSendResult(sent ? { ok: true, text: `✓ Sent to ${label}.` } : { ok: false, text: 'Not sent (cancelled or failed).' })
+      // Mark draft as sent — only if it really went out (not cancelled/failed)
+      if (sent) {
         try {
-          await markDraftAsSent(currentDraftId)
+          await markDraftAsSent(draftId)
           await loadDrafts()
         } catch (error) {
           console.error('Failed to mark draft as sent:', error)
@@ -245,8 +338,6 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
     }
   }
 
-  const currentDraft = drafts.find((d) => d.id === currentDraftId)
-
   return (
     <YStack gap="$4">
       {/* Draft Management Section */}
@@ -255,12 +346,12 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
           <XStack justifyContent="space-between" alignItems="center">
             <Heading size={4}>Email Drafts</Heading>
             <XStack gap="$2">
-              <Button size="$3" variant="outlined" icon={Save} onPress={handleNewDraft}>
+              <Button size="$3" variant="outlined" icon={Plus} onPress={handleNewDraft}>
                 New Draft
               </Button>
               <Button
                 size="$3"
-                icon={loadingDrafts ? undefined : Save}
+                icon={loadingDrafts ? undefined : RefreshCw}
                 onPress={loadDrafts}
                 disabled={loadingDrafts}
               >
@@ -317,19 +408,37 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
                       </XStack>
                       <Text fontSize="$2" color="$gray11">
                         To: {findList(draft.selectedList)?.label} •
-                        Updated: {new Date(draft.updatedAt).toLocaleString()}
+                        {draft.status === 'sent' && draft.sentAt
+                          ? `Sent: ${new Date(draft.sentAt).toLocaleString()}`
+                          : `Updated: ${new Date(draft.updatedAt).toLocaleString()}`}
                       </Text>
                     </YStack>
-                    <Button
-                      size="$2"
-                      variant="outlined"
-                      icon={Trash2}
-                      onPress={(e) => {
-                        e.stopPropagation()
-                        handleDeleteDraft(draft.id)
-                      }}
-                      circular
-                    />
+                    {draft.status === 'sent' ? (
+                      <Button
+                        size="$2"
+                        icon={Copy}
+                        theme="blue"
+                        disabled={copying}
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          handleCopyDraft(draft)
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    ) : (
+                      // Sent emails are a permanent record: no delete.
+                      <Button
+                        size="$2"
+                        variant="outlined"
+                        icon={Trash2}
+                        onPress={(e) => {
+                          e.stopPropagation()
+                          handleDeleteDraft(draft.id)
+                        }}
+                        circular
+                      />
+                    )}
                   </XStack>
                 ))}
               </YStack>
@@ -349,13 +458,69 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
           <XStack gap="$2" alignItems="center">
             <Mail size={16} color="$blue10" />
             <Text fontSize="$3" flex={1}>
-              Editing: <strong>{currentDraft.subject}</strong>
+              {isSent ? 'Viewing sent email: ' : 'Editing: '}<strong>{currentDraft.subject}</strong>
             </Text>
             {lastSaved ? <Text fontSize="$2" color="$gray11">
                 Last saved: {lastSaved}
               </Text> : null}
           </XStack>
         </Card> : null}
+
+      {isSent && currentDraft ? (
+        // A sent email is a permanent record of what went out: fully
+        // read-only (subject, list, body and note). Copy it to reuse it.
+        <Card elevate bordered padding="$4" backgroundColor="$green2" borderColor="$green6">
+          <YStack gap="$3">
+            <XStack gap="$3" alignItems="center" flexWrap="wrap">
+              <Check size={20} color="$green10" />
+              <Text flex={1} fontSize="$4" fontWeight="600" color="$green11">
+                Sent {currentDraft.sentAt ? new Date(currentDraft.sentAt).toLocaleString() : ''} to{' '}
+                {findList(currentDraft.selectedList)?.label ?? currentDraft.selectedList}
+              </Text>
+              <Button
+                size="$4"
+                icon={copying ? undefined : Copy}
+                onPress={() => handleCopyDraft(currentDraft)}
+                disabled={copying}
+                theme="blue"
+              >
+                {copying ? <Spinner size="small" /> : 'Copy to a new draft'}
+              </Button>
+            </XStack>
+            <Text fontSize="$3" color="$gray11">
+              This email was already sent, so it can&apos;t be changed or sent again. Copy it to
+              make a new draft with the same subject, list and content.
+            </Text>
+            <Separator />
+            <Text fontSize="$2" color="$gray11">
+              Subject
+            </Text>
+            <Text fontSize="$4" fontWeight="600">
+              {currentDraft.subject}
+            </Text>
+            {currentDraft.note ? (
+              <YStack gap="$1">
+                <Text fontSize="$2" color="$gray11">
+                  Note
+                </Text>
+                <Text fontSize="$3">{currentDraft.note}</Text>
+              </YStack>
+            ) : null}
+            <Text fontSize="$2" color="$gray11">
+              Content
+            </Text>
+            <Card padding="$4" backgroundColor="$background" borderWidth={1} borderColor="$gray6">
+              <div
+                dangerouslySetInnerHTML={{ __html: currentDraft.htmlContent }}
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  lineHeight: '1.6',
+                }}
+              />
+            </Card>
+          </YStack>
+        </Card>
+      ) : (<>
 
       {/* Email Subject */}
       <Card elevate bordered padding="$4" backgroundColor="$background">
@@ -606,17 +771,24 @@ Looking forward to seeing you!
                 Send to Production List
               </Text>
               <Text fontSize="$3" color="$gray11">
-                Sending to: <strong>{findList(selectedList)?.label}</strong>
+                Sending to: <strong>{findList(selectedList)?.label ?? 'no list chosen'}</strong>
               </Text>
-              {currentDraft?.status !== 'tested' ? <Text fontSize="$2" color="$orange10" fontWeight="600">
-                  ⚠️ Not tested yet - consider sending a test first
-                </Text> : null}
+              {needsFreshTest ? <Text fontSize="$2" color="$orange10" fontWeight="600">
+                  {untestedWarning}
+                </Text> : <Text fontSize="$2" color="$green10" fontWeight="600">
+                  ✓ Tested — ready to send to {findList(selectedList)?.label}
+                </Text>}
+              {sendResult ? (
+                <Text fontSize="$2" fontWeight="600" color={sendResult.ok ? '$green10' : '$red10'}>
+                  {sendResult.text}
+                </Text>
+              ) : null}
             </YStack>
             <Button
               size="$4"
               icon={sendingProduction ? undefined : Send}
               onPress={handleSendProduction}
-              disabled={sendingTest || sendingProduction || !subject.trim() || !content.trim()}
+              disabled={sendingTest || sendingProduction || !subject.trim() || !content.trim() || !findList(selectedList) || !!findList(selectedList)?.isTest}
             >
               {sendingProduction ? (
                 <XStack gap="$2" alignItems="center">
@@ -630,6 +802,7 @@ Looking forward to seeing you!
           </XStack>
         </Card>
       </YStack>
+      </>)}
     </YStack>
   )
 }
