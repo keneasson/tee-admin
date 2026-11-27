@@ -18,6 +18,8 @@ export interface DirectoryMember {
   canViewDetails?: boolean
   privacy?: MemberPrivacy
   emails?: Array<{ email: string; emailType: string }>
+  /** The record has no name; `name` holds the "Name not set" placeholder. */
+  nameMissing?: boolean
 }
 
 export interface DraftMember {
