@@ -303,18 +303,28 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
   // the actual audience it will send to on a live send (the shared composer
   // overrides the default full-subscriber list); test sends always show the
   // test list.
+  //
+  // `target` is for a caller whose destination is NOT the page's test-mode
+  // toggle (the custom-email composer: its "Send test" and "Send Email"
+  // buttons choose the list themselves). The dialog must show exactly the
+  // destination that will be sent to; it never re-derives it from `test`.
   const showSendConfirmation = (
     emailName: string,
     emailType: string,
     onConfirm: () => void,
-    liveListName?: string
+    liveListName?: string,
+    target?: { isTest: boolean; listName: string }
   ) => {
     setConfirmDialog({
       isOpen: true,
       emailName,
       emailType,
-      listName: test ? getListDisplayName(true) : (liveListName ?? getListDisplayName(false)),
-      isTest: test,
+      listName: target
+        ? target.listName
+        : test
+          ? getListDisplayName(true)
+          : (liveListName ?? getListDisplayName(false)),
+      isTest: target ? target.isTest : test,
       onConfirm,
     })
   }
@@ -526,6 +536,11 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
         closeConfirmDialog()
         const sent = await doSendCustomEmail(emailData, isTestSend, listLabel)
         if (settle) settle(sent)
+      }, undefined, {
+        // The same isTestSend that goes in the request: what the dialog shows
+        // is what is sent, whatever the page's test-mode switch says.
+        isTest: isTestSend,
+        listName: isTestSend ? getListDisplayName(true) : listLabel,
       })
     })
   }
@@ -550,14 +565,14 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
         selectedList: emailData.selectedList,
       })
       setEmail(response)
-      // Switch to templates tab to show the response
-      setActiveTab('templates')
+      // Stay on the composer: switching tabs unmounted it, which threw away
+      // the open draft (blank form, list back to its default). The composer
+      // shows the result itself.
       // sendEmail reports a failed request as `{ error }` rather than throwing.
       return !response?.error
     } catch (error) {
       console.error('Error sending custom email:', error)
       setEmail({ error: 'Failed to send custom email', details: error })
-      setActiveTab('templates')
       return false
     } finally {
       setSending(false)
@@ -1182,7 +1197,7 @@ export const EmailSender: React.FC<EmailSenderProps> = ({ session, status = 'aut
                   </XStack>
                   {!confirmDialog.isTest ? (
                     <Text fontSize="$3" color="$red10">
-                      This will send to ALL subscribers!
+                      This is a real send to {confirmDialog.listName}.
                     </Text>
                   ) : null}
                 </YStack>

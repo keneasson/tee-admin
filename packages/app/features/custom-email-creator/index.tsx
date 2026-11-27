@@ -53,13 +53,16 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const [content, setContent] = useState('')
   // A listId once lists load ('newsletter' until then: the server reads an old
   // key as that owner's list, and the effect below swaps it for the listId).
-  const [selectedList, setSelectedList] = useState<string>('newsletter')
+  // No default audience: a real send goes only to a list someone chose.
+  const [selectedList, setSelectedList] = useState<string>('')
   const findList = (ref: string) => availableLists.find((l) => l.key === ref || l.listKey === ref)
   useEffect(() => {
     const match = findList(selectedList)
     if (match && match.key !== selectedList) setSelectedList(match.key)
   }, [availableLists, selectedList])
   const [note, setNote] = useState('')
+  /** What the last test/real send did, shown under the send buttons. */
+  const [sendResult, setSendResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
   // Draft management state
@@ -125,6 +128,10 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
       alert('Please fill in both subject and content before saving')
       return null
     }
+    if (!findList(selectedList)) {
+      alert('Choose the list this email is for before saving.')
+      return null
+    }
 
     setSavingDraft(true)
     try {
@@ -174,6 +181,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   }
 
   const handleLoadDraft = (draft: EmailDraft) => {
+    setSendResult(null)
     const text = convertFromHtml(draft.htmlContent)
     setCurrentDraftId(draft.id)
     setSubject(draft.subject)
@@ -202,11 +210,12 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   }
 
   const handleNewDraft = () => {
+    setSendResult(null)
     setCurrentDraftId(null)
     setSubject('')
     setContent('')
     setSavedContent(null)
-    setSelectedList('newsletter')
+    setSelectedList('')
     setNote('')
     setShowPreview(false)
     setLastSaved(null)
@@ -257,6 +266,7 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
         draftId,
       })
 
+      setSendResult(sent ? { ok: true, text: '✓ Test sent to the Test List.' } : { ok: false, text: 'Test not sent (cancelled or failed).' })
       // Mark draft as tested — only if the test really went out (not cancelled/failed)
       if (sent) {
         try {
@@ -274,6 +284,11 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
   const handleSendProduction = async () => {
     if (!subject.trim() || !content.trim()) {
       alert('Please fill in both subject and content')
+      return
+    }
+    const target = findList(selectedList)
+    if (!target || target.isTest) {
+      alert('Choose the list to send to first.')
       return
     }
 
@@ -307,6 +322,8 @@ export const CustomEmailCreator: React.FC<CustomEmailCreatorProps> = ({
         draftId,
       })
 
+      const label = findList(selectedList)?.label || 'the selected list'
+      setSendResult(sent ? { ok: true, text: `✓ Sent to ${label}.` } : { ok: false, text: 'Not sent (cancelled or failed).' })
       // Mark draft as sent — only if it really went out (not cancelled/failed)
       if (sent) {
         try {
@@ -754,17 +771,24 @@ Looking forward to seeing you!
                 Send to Production List
               </Text>
               <Text fontSize="$3" color="$gray11">
-                Sending to: <strong>{findList(selectedList)?.label}</strong>
+                Sending to: <strong>{findList(selectedList)?.label ?? 'no list chosen'}</strong>
               </Text>
               {needsFreshTest ? <Text fontSize="$2" color="$orange10" fontWeight="600">
                   {untestedWarning}
-                </Text> : null}
+                </Text> : <Text fontSize="$2" color="$green10" fontWeight="600">
+                  ✓ Tested — ready to send to {findList(selectedList)?.label}
+                </Text>}
+              {sendResult ? (
+                <Text fontSize="$2" fontWeight="600" color={sendResult.ok ? '$green10' : '$red10'}>
+                  {sendResult.text}
+                </Text>
+              ) : null}
             </YStack>
             <Button
               size="$4"
               icon={sendingProduction ? undefined : Send}
               onPress={handleSendProduction}
-              disabled={sendingTest || sendingProduction || !subject.trim() || !content.trim()}
+              disabled={sendingTest || sendingProduction || !subject.trim() || !content.trim() || !findList(selectedList) || !!findList(selectedList)?.isTest}
             >
               {sendingProduction ? (
                 <XStack gap="$2" alignItems="center">
