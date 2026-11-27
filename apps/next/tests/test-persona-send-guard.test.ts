@@ -101,3 +101,15 @@ describe('the 1:1 / transactional path (sendEmail)', () => {
     expect(h.sesSend).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('email is off on preview builds (#349)', () => {
+  it('preview: off unless PREVIEW_EMAILS_ENABLED=true; production/local: on unless EMAILS_ENABLED=false', async () => {
+    const { emailsEnabled } = await import('../utils/email/sesClient')
+    expect(emailsEnabled({ VERCEL_ENV: 'preview' })).toBe(false)
+    expect(emailsEnabled({ VERCEL_ENV: 'preview', PREVIEW_EMAILS_ENABLED: 'true' })).toBe(true)
+    expect(emailsEnabled({ VERCEL_ENV: 'preview', PREVIEW_EMAILS_ENABLED: 'true', EMAILS_ENABLED: 'false' })).toBe(false)
+    expect(emailsEnabled({ VERCEL_ENV: 'production' })).toBe(true)
+    expect(emailsEnabled({ VERCEL_ENV: 'production', EMAILS_ENABLED: 'false' })).toBe(false)
+    expect(emailsEnabled({})).toBe(true)
+  })
+})
