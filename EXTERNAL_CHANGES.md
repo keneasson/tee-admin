@@ -19,7 +19,12 @@ Changes in this file flag code modifications that require **matching manual upda
   1. **Vercel, Preview environment only**: set `TEST_SIGNIN_KEY` to a long random value (e.g. `openssl rand -base64 32`). Do NOT set it on Production (the code ignores it there, but keep it out).
   2. **Optional, Preview environment only**: `TEST_SIGNIN_REAL_ALLOWLIST` = comma-separated real addresses you may sign in as yourself on a preview. Leave unset to allow the made-up test people only.
   3. **Vercel, Production environment**: remove `DEV_AUTH_SERVER_KEY` if it is set there. The code now refuses it on production anyway; this just removes the key.
-  4. **Vercel + DNS**: add the preview domain `*.preview.tee-admin.com` (Vercel project domain plus a wildcard DNS record), so preview addresses identify themselves as test sites.
+  4. **Staging address `staging.tee-admin.com`** (a fixed test address, so you stay signed in across deploys and the address itself says it is a test site):
+     - **Vercel** → tee-admin → Settings → Domains: add `staging.tee-admin.com`, Git Branch = `staging`. Every push to the `staging` branch then deploys there (`git push origin <branch>:staging --force` to test a PR). It still runs as a Preview build, so email stays off and test sign-in stays on.
+     - **DNS**: add the CNAME Vercel shows for `staging` (usually `cname.vercel-dns.com`).
+     - **Google Cloud Console** → the OAuth client: add redirect URI `https://staging.tee-admin.com/api/auth/callback/google`.
+     - **Vercel, Preview env**: if `AUTH_URL` / `NEXTAUTH_URL` is set to a fixed address, set it to `https://staging.tee-admin.com` or remove it. Keep `AUTH_SECRET` unchanged so sessions survive deploys.
+     - Signing in yourself there: use Google or password. Emailed sign-in codes will not arrive, because email is off on previews.
   5. **Prod data, after you approve**: take a backup of the `tee-admin` table to the `tee-admin-backups` bucket, then `npx tsx scripts/seed-test-personas.ts` (dry run: lists the 12 changes) and `npx tsx scripts/seed-test-personas.ts --apply`. It creates 7 flagged test people (all `@test-personas.invalid`), the flagged "Test Ecclesia (preview)" and its Recording Brother and Rep offices. It is idempotent and never touches a real person or ecclesia.
 - **Email is OFF on preview builds** (code, no setting needed): previews share the production database and test sign-in can act as an owner, so `emailsEnabled()` returns false when `VERCEL_ENV=preview` unless `PREVIEW_EMAILS_ENABLED=true` is set on Preview. That includes sign-in codes and test-list sends from previews. Send tests from tee-admin.com instead.
 - **Audit**: each test sign-in is recorded as an `AUDIT#TEST_SIGNIN` item in `tee-admin` (who, when, deployment).
