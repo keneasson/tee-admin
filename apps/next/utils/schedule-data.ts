@@ -9,6 +9,8 @@ import { CACHE_TAGS } from './cache'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
 import { ANONYMOUS_VIEWER } from '@my/app/utils/viewer-pii'
 import { isValidScheduleRow } from '@my/app/utils/schedule-row-rules'
+import { fillScheduleGaps } from '@my/app/utils/fill-schedule-gaps'
+import { mergeWithCatalogue } from '@my/app/config/schedule-fields'
 
 // ── Helpers ──
 
@@ -58,6 +60,7 @@ function addScheduleSpecificFields(event: any, row: any, type: string): void {
       break
     case 'sundaySchool':
       event.Refreshments = row.Refreshments || ''
+      event.HolidaysAndSpecialEvents = row['Holidays and Special Events'] || ''
       break
     case 'cyc':
       event.speaker = row.speaker || row.Speaker || ''
@@ -167,7 +170,16 @@ async function fetchScheduleTab(tab: string): Promise<{
   // drop host addresses — BEFORE they enter the unstable_cache wrapper, so the
   // SSR'd HTML an anonymous visitor sees can't leak full names. (The /api/enhanced
   // -schedule client re-fetch is already redacted; this closes the SSR path.)
-  const safeEvents = redactScheduleData(futureEvents, ANONYMOUS_VIEWER, 'public-web')
+  // Weeks with no stored row get a greyed "Coming soon" placeholder (never skipped silently).
+  const typeKey = SHEET_TO_SCHEDULE_KEY[tab]
+  const filledEvents = typeKey
+    ? fillScheduleGaps(futureEvents, mergeWithCatalogue(undefined)[typeKey].serviceTime.schedule, {
+        type: tab,
+        eventName: getScheduleConfig(tab as Exclude<GoogleSheetTypes, 'directory'>).name,
+        today: todayStr,
+      })
+    : futureEvents
+  const safeEvents = redactScheduleData(filledEvents, ANONYMOUS_VIEWER, 'public-web')
 
   return { events: safeEvents, hasOlder, lastUpdated: data.lastUpdated || new Date().toISOString() }
 }

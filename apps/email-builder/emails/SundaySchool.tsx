@@ -24,6 +24,7 @@ import {
   program,
 } from '../styles'
 import React from 'react'
+import { resolveSundaySchool } from '@my/app/utils/schedule-row-rules'
 import type { NextSundaySchoolProps, SundaySchoolType } from '@my/app/types'
 import { ProgramsTypes } from '@my/app/types'
 import { FooterContent } from '../components/FooterContent'
@@ -63,8 +64,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps & { identity?: EmailIdentity 
         </Section>
 
         {/* Optional Note Section */}
-        {note && note.trim() && (
-          <Section style={{
+        {note && note.trim() ? <Section style={{
             backgroundColor: '#fff3cd',
             padding: '16px',
             marginTop: '20px',
@@ -85,8 +85,7 @@ const SundaySchool: React.FC<NextSundaySchoolProps & { identity?: EmailIdentity 
             }}>
               <AutoLinkText text={note} />
             </Text>
-          </Section>
-        )}
+          </Section> : null}
 
         <Container style={container} className="container">
           <Section style={program}>
@@ -96,8 +95,8 @@ const SundaySchool: React.FC<NextSundaySchoolProps & { identity?: EmailIdentity 
           </Section>
           <Row>
             <Column>
-              {sundaySchoolEvents[0] && <SundaySchoolProgram event={sundaySchoolEvents[0]} />}
-              {sundaySchoolEvents[1] && <SundaySchoolProgram event={sundaySchoolEvents[1]} />}
+              {sundaySchoolEvents[0] ? <SundaySchoolProgram event={sundaySchoolEvents[0]} /> : null}
+              {sundaySchoolEvents[1] ? <SundaySchoolProgram event={sundaySchoolEvents[1]} /> : null}
             </Column>
           </Row>
           <Section style={info}>
@@ -146,9 +145,8 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
   }
   // Override precedence: 'cancelled' forces no-class; 'active' forces the class to
   // show; otherwise infer from Refreshments.
-  const isCancelled = event.overrideStatus === 'cancelled'
-  const isForcedActive = event.overrideStatus === 'active'
-  const hasClass = isForcedActive || (!isCancelled && !!event.Refreshments)
+  const ssDecision = resolveSundaySchool(event)
+  const hasClass = ssDecision.runs
 
   if (hasClass) {
     return (
@@ -166,12 +164,10 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
                 {event.overrideNote}
               </>
             ) : null}
-            {event['Holidays and Special Events'] && (
-              <>
+            {event['Holidays and Special Events'] ? <>
                 <br />
                 {event['Holidays and Special Events']}
-              </>
-            )}
+              </> : null}
           </Text>
         </Column>
       </Row>
@@ -183,7 +179,7 @@ export const SundaySchoolProgram = ({ event }: EventProps) => {
           <Text style={defaultText}>
             <strong>{event.Date.toString()}</strong>
             <br />
-            {event.overrideMessage || event['Holidays and Special Events']}
+            {event.overrideMessage || ssDecision.note}
             {event.overrideNote ? (
               <>
                 <br />

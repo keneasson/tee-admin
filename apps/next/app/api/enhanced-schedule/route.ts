@@ -5,7 +5,9 @@ import type { GoogleSheetTypes, GoogleSheetData, ProgramsTypes } from '@my/app/t
 import type { EnhancedScheduleEvent } from '@my/ui/src/data-table/enhanced-schedule-responsive'
 import type { ScheduleTab } from '@my/ui/src/data-table/schedule-tabs'
 import { resolveServiceTime } from '@my/app/config/service-time-resolver'
-import type { ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { mergeWithCatalogue, type ScheduleTypeKey } from '@my/app/config/schedule-fields'
+import { isValidScheduleRow } from '@my/app/utils/schedule-row-rules'
+import { fillScheduleGaps } from '@my/app/utils/fill-schedule-gaps'
 import { getEcclesiaByName } from '../../../utils/dynamodb/locations'
 import { redactScheduleData } from '@my/app/utils/redact-schedule'
 import { resolveViewer } from '../../../utils/resolve-viewer'
@@ -192,8 +194,8 @@ function transformScheduleData(
         return !!(event.Presider?.trim() || event.Speaker?.trim() || event.Host?.trim())
 
       case 'sundaySchool':
-        // Sunday school must have refreshments assigned
-        return !!(event.Refreshments)
+        // Sunday school needs refreshments, or a holiday note explaining no class
+        return isValidScheduleRow(event, 'sundaySchool')
 
       case 'cyc':
         // CYC must have speaker or topic
@@ -267,6 +269,7 @@ function addScheduleSpecificFields(event: any, row: any, scheduleType: Exclude<G
     
     case 'sundaySchool':
       event.Refreshments = row.Refreshments || ''
+      event.HolidaysAndSpecialEvents = row['Holidays and Special Events'] || ''
       // Sunday School doesn't use secondary rows currently
       break
     
@@ -413,6 +416,17 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+
+    // Weeks with no stored row get a greyed "Coming soon" placeholder (today -> last stored row only)
+    Object.keys(transformedData).forEach(type => {
+      const typeKey = SHEET_TO_SCHEDULE_KEY[type]
+      if (!typeKey) return
+      transformedData[type] = fillScheduleGaps(
+        transformedData[type],
+        mergeWithCatalogue(undefined)[typeKey].serviceTime.schedule,
+        { type, eventName: getScheduleConfig(type as Exclude<GoogleSheetTypes, 'directory'>).name }
+      )
+    })
 
     // Apply date filtering and pagination to each schedule type
     const filteredData: Record<string, EnhancedScheduleEvent[]> = {}

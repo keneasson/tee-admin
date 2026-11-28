@@ -23,6 +23,7 @@ import { EmailBrandLinkContent } from '../components/EmailBrandLinkContent'
 import type { EmailIdentity } from '@my/app/types/brand-profile'
 import { AutoLinkText } from '../components/AutoLinkText'
 import { ReplacementEventCard, findReplacementEvent } from '../components/ReplacementEventCard'
+import { resolveSundaySchool } from '@my/app/utils/schedule-row-rules'
 import { resolveNoInPersonServicesMessage } from '@my/app/config/service-messages'
 import { AttendOptions } from '../components/AttendOptions'
 
@@ -881,8 +882,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
         </Section>
 
         {/* Optional Note Section */}
-        {note && note.trim() && (
-          <Section
+        {note && note.trim() ? <Section
             style={{
               backgroundColor: '#fff3cd',
               padding: '16px',
@@ -909,8 +909,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
             >
               <AutoLinkText text={note} />
             </Text>
-          </Section>
-        )}
+          </Section> : null}
 
         {/* Regular Services Section */}
         {Object.entries(groupedByDate).map(([date, events], dateIndex) => {
@@ -934,13 +933,10 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
           return (
             <React.Fragment key={date}>
               {/* Sunday Services Container */}
-              {sundayEvents.length > 0 && (
-                <Container style={{ ...container, marginTop: '24px' }} className="container">
-                  {dateIndex > 0 && (
-                    <hr
+              {sundayEvents.length > 0 ? <Container style={{ ...container, marginTop: '24px' }} className="container">
+                  {dateIndex > 0 ? <hr
                       style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }}
-                    />
-                  )}
+                    /> : null}
 
                   <Heading style={defaultText}>Arrangements for {date}</Heading>
 
@@ -955,9 +951,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                     if (event.Key === 'sundaySchool') {
                       // Override precedence: 'cancelled' forces no-class; 'active' forces
                       // it to show; otherwise infer from Refreshments.
-                      const isCancelled = event.overrideStatus === 'cancelled'
-                      const isForcedActive = event.overrideStatus === 'active'
-                      const hasSundaySchool = isForcedActive || (!isCancelled && !!event.Refreshments)
+                      // Shared rule: also treats "No Sunday School" typed in Refreshments as no class.
+                      const ssDecision = resolveSundaySchool(event)
+                      const hasSundaySchool = ssDecision.runs
 
                       return (
                         <Section key={`ss-${index}`} style={program}>
@@ -974,7 +970,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </>
                           ) : (
                             <Text style={defaultText}>
-                              <strong>{event.overrideMessage || 'No Sunday school this week!'}</strong>
+                              <strong>{event.overrideMessage || ssDecision.note || 'No Sunday school this week!'}</strong>
                               {event.overrideNote ? (
                                 <>
                                   <br />
@@ -983,16 +979,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               ) : null}
                             </Text>
                           )}
-                          {index < sundayEvents.length - 1 && (
-                            <hr
+                          {index < sundayEvents.length - 1 ? <hr
                               style={{
                                 borderWidth: '0',
                                 background: '#ddd',
                                 color: '#ddd',
                                 height: '1px',
                               }}
-                            />
-                          )}
+                            /> : null}
                         </Section>
                       )
                     }
@@ -1035,8 +1029,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                     return null
                   })
                   )}
-                </Container>
-              )}
+                </Container> : null}
 
               {/* Bible Class - Standalone without "Arrangements" header */}
               {/* EXCEPTION: If Toronto East Business Meeting is on the same night, show that instead */}
@@ -1092,12 +1085,10 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           </Link>
                           <br />
                           {EventDateDisplay(businessMeetingEvent)}
-                          {businessMeetingEvent.description && (
-                            <>
+                          {businessMeetingEvent.description ? <>
                               <br />
                               <TextWithLineBreaks text={businessMeetingEvent.description} />
-                            </>
-                          )}
+                            </> : null}
                           <br />
                           <em>(Replaces regular Bible Class for this date)</em>
                           <br />
@@ -1374,8 +1365,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
               {specialEvents.map((event, index) => (
                 <React.Fragment key={event.id}>
-                  {index > 0 && (
-                    <hr
+                  {index > 0 ? <hr
                       style={{
                         borderWidth: '0',
                         background: '#000',
@@ -1383,12 +1373,10 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         height: '2px',
                         margin: '16px 0',
                       }}
-                    />
-                  )}
+                    /> : null}
                   <Section style={program}>
                     {/* Skip title for engagements - the announcement blurb serves as intro */}
-                    {event.type !== 'engagement' && (
-                      <Heading style={defaultText}>
+                    {event.type !== 'engagement' ? <Heading style={defaultText}>
                         <Link
                           href={`${process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:4000'}/events/${event.id}`}
                           style={{
@@ -1399,27 +1387,22 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         >
                           {event.title}
                         </Link>
-                      </Heading>
-                    )}
+                      </Heading> : null}
                     <Text style={defaultText}>
                       {/* Don't show date at top for funerals or engagements - shown in their specific sections */}
                       {event.type !== 'funeral' &&
-                        event.type !== 'engagement' &&
-                        EventDateDisplay(event)}
+                        event.type !== 'engagement' ? EventDateDisplay(event) : null}
                       {/* Baptism-specific wording */}
-                      {event.type === 'baptism' && baptismCandidateNames(event) && (
-                        <>
+                      {event.type === 'baptism' && baptismCandidateNames(event) ? <>
                           <br />
                           <br />
                           After a good confession of Faith,{' '}
                           <strong>{baptismCandidateNames(event)}</strong>{' '}
                           will be baptized into the saving name of our Lord.
-                        </>
-                      )}
+                        </> : null}
                       {/* Baptism - About the Candidate with optional photo */}
                       {event.type === 'baptism' &&
-                        ((event as any).aboutCandidate || (event as any).candidatePhoto) && (
-                          <>
+                        ((event as any).aboutCandidate || (event as any).candidatePhoto) ? <>
                             <br />
                             <br />
                             {(event as any).candidatePhoto ? (
@@ -1442,27 +1425,23 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                     }}
                                   />
                                 </Column>
-                                {(event as any).aboutCandidate && (
-                                  <Column style={{ verticalAlign: 'top' }}>
+                                {(event as any).aboutCandidate ? <Column style={{ verticalAlign: 'top' }}>
                                     <Text
                                       style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}
                                     >
                                       <AutoLinkText text={(event as any).aboutCandidate} />
                                     </Text>
-                                  </Column>
-                                )}
+                                  </Column> : null}
                               </Row>
                             ) : (event as any).aboutCandidate ? (
                               <Text style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}>
                                 <AutoLinkText text={(event as any).aboutCandidate} />
                               </Text>
                             ) : null}
-                          </>
-                        )}
+                          </> : null}
                       {/* Baptism Location */}
                       {event.type === 'baptism' &&
-                        (event as any).location &&
-                        (() => {
+                        (event as any).location ? (() => {
                           const location = (event as any).location
 
                           if (typeof location === 'string') {
@@ -1480,34 +1459,27 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               <br />
                               <br />
                               <strong>{location.name || location.placeName}</strong>
-                              {location.address && (
-                                <>
+                              {location.address ? <>
                                   <br />
                                   {location.address}
-                                </>
-                              )}
-                              {(location.city || location.province) && (
-                                <>
+                                </> : null}
+                              {(location.city || location.province) ? <>
                                   <br />
                                   {[location.city, location.province, location.postalCode]
                                     .filter(Boolean)
                                     .join(', ')}
-                                </>
-                              )}
-                              {location.mapsUrl && (
-                                <>
+                                </> : null}
+                              {location.mapsUrl ? <>
                                   <br />
                                   <Link href={location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
                                     Get Directions
                                   </Link>
-                                </>
-                              )}
+                                </> : null}
                             </>
                           ) : null
-                        })()}
+                        })() : null}
                       {/* Wedding-specific wording */}
-                      {event.type === 'wedding' && (event as any).couple && (
-                        <>
+                      {event.type === 'wedding' && (event as any).couple ? <>
                           <br />
                           <br />
                           <strong>
@@ -1515,11 +1487,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             {' & '}
                             {`${(event as any).couple.groom?.firstName || ''} ${(event as any).couple.groom?.lastName || ''}`.trim()}
                           </strong>
-                        </>
-                      )}
+                        </> : null}
                       {/* Engagement-specific wording */}
-                      {event.type === 'engagement' && (
-                        <>
+                      {event.type === 'engagement' ? <>
                           {/* Rings image + Congratulations! header */}
                           <Row>
                             <Column
@@ -1552,28 +1522,24 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             </Column>
                           </Row>
                           {/* Announcement blurb */}
-                          {(event as any).engagementAnnouncement && (
-                            <>
+                          {(event as any).engagementAnnouncement ? <>
                               <br />
                               <Text style={{ ...defaultText, margin: 0, whiteSpace: 'pre-wrap' }}>
                                 <AutoLinkText text={(event as any).engagementAnnouncement} />
                               </Text>
-                            </>
-                          )}
+                            </> : null}
                           {/* Engagement line */}
                           <br />
                           <Text style={{ ...defaultText, margin: 0 }}>
                             <strong>{(event as any).engagementProposed || ''}</strong> is engaged to{' '}
                             <strong>{(event as any).engagementTo || ''}</strong>
-                            {(event as any).engagementDate && (
-                              <>
+                            {(event as any).engagementDate ? <>
                                 ,{' '}
                                 {new Date((event as any).engagementDate).toLocaleDateString(
                                   'en-US',
                                   { month: 'short', day: 'numeric', year: 'numeric' }
                                 )}
-                              </>
-                            )}
+                              </> : null}
                             .
                           </Text>
                           {/* Congratulations and scripture */}
@@ -1586,12 +1552,10 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                             2 and walk in the way of love, just as Christ loved us and gave himself
                             up for us as a fragrant offering and sacrifice to God."
                           </Text>
-                        </>
-                      )}
+                        </> : null}
                       {/* Funeral - Photo and shortened about (first paragraph only) */}
                       {event.type === 'funeral' &&
-                        ((event as any).aboutDeceased || (event as any).deceasedPhoto) && (
-                          <>
+                        ((event as any).aboutDeceased || (event as any).deceasedPhoto) ? <>
                             {(event as any).deceasedPhoto ? (
                               <Row>
                                 <Column
@@ -1612,15 +1576,13 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                     }}
                                   />
                                 </Column>
-                                {(event as any).aboutDeceased && (
-                                  <Column style={{ verticalAlign: 'top' }}>
+                                {(event as any).aboutDeceased ? <Column style={{ verticalAlign: 'top' }}>
                                     <Text style={{ ...defaultText, margin: 0 }}>
                                       <AutoLinkText
                                         text={getFirstParagraph((event as any).aboutDeceased)}
                                       />
                                     </Text>
-                                  </Column>
-                                )}
+                                  </Column> : null}
                               </Row>
                             ) : (event as any).aboutDeceased ? (
                               <Text style={{ ...defaultText, margin: 0 }}>
@@ -1629,11 +1591,9 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 />
                               </Text>
                             ) : null}
-                          </>
-                        )}
+                          </> : null}
                       {/* Funeral Service Details - Visitation, Service, Graveside with times and locations */}
-                      {event.type === 'funeral' &&
-                        (() => {
+                      {event.type === 'funeral' ? (() => {
                           const funeralEvent = event as any
                           const serviceDate = funeralEvent.serviceDate
                           // Support both old (viewingDate) and new (visitationDate) field names
@@ -1664,8 +1624,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           return (
                             <>
                               {/* Visitation (Optional) - shown BEFORE service */}
-                              {hasVisitation &&
-                                (() => {
+                              {hasVisitation ? (() => {
                                   const visLoc =
                                     funeralEvent.viewingLocation || locations?.visitation
                                   const visStartTime = visitationDate && formatServiceTime(visitationDate)
@@ -1677,23 +1636,20 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                       <br />
                                       <strong>Visitation</strong>
                                       <br />
-                                      {visDate && (
-                                        <>
+                                      {visDate ? <>
                                           {visDate}
                                           <br />
-                                        </>
-                                      )}
+                                        </> : null}
                                       {funeralEvent.viewingTime ||
                                         (visStartTime && visEndTime
                                           ? `${visStartTime} - ${visEndTime}`
                                           : visStartTime)}
-                                      {visLoc && ` at ${formatLocation(visLoc)}`}
+                                      {visLoc ? ` at ${formatLocation(visLoc)}` : null}
                                     </>
                                   )
-                                })()}
+                                })() : null}
                               {/* Service/Funeral/Celebration of Life */}
-                              {hasService &&
-                                (() => {
+                              {hasService ? (() => {
                                   const serviceLoc = locations?.service || simpleLocation
                                   const serviceTime =
                                     funeralEvent.serviceTime ||
@@ -1706,26 +1662,21 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                       <br />
                                       <strong>Service</strong>
                                       <br />
-                                      {formattedDate && (
-                                        <>
+                                      {formattedDate ? <>
                                           {formattedDate}
                                           <br />
-                                        </>
-                                      )}
+                                        </> : null}
                                       {serviceTime}
-                                      {serviceLoc && ` at ${formatLocation(serviceLoc)}`}
+                                      {serviceLoc ? ` at ${formatLocation(serviceLoc)}` : null}
                                       {serviceLoc &&
                                         typeof serviceLoc !== 'string' &&
-                                        serviceLoc.address && (
-                                          <>
+                                        serviceLoc.address ? <>
                                             <br />
                                             {serviceLoc.address}
-                                          </>
-                                        )}
+                                          </> : null}
                                       {serviceLoc &&
                                         typeof serviceLoc !== 'string' &&
-                                        (serviceLoc.city || serviceLoc.province) && (
-                                          <>
+                                        (serviceLoc.city || serviceLoc.province) ? <>
                                             <br />
                                             {[
                                               serviceLoc.city,
@@ -1734,14 +1685,12 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                             ]
                                               .filter(Boolean)
                                               .join(', ')}
-                                          </>
-                                        )}
+                                          </> : null}
                                     </>
                                   )
-                                })()}
+                                })() : null}
                               {/* Graveside Service (Optional) */}
-                              {hasGraveside &&
-                                (() => {
+                              {hasGraveside ? (() => {
                                   const graveLoc = locations?.graveside
                                   return (
                                     <>
@@ -1751,19 +1700,18 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                       <br />
                                       {funeralEvent.gravesideTime ||
                                         (gravesideDate && formatServiceTime(gravesideDate))}
-                                      {graveLoc && ` at ${formatLocation(graveLoc)}`}
+                                      {graveLoc ? ` at ${formatLocation(graveLoc)}` : null}
                                     </>
                                   )
-                                })()}
+                                })() : null}
                             </>
                           )
-                        })()}
+                        })() : null}
                       {/* Location - for non-funeral events.
                           Weddings save the venue on ceremonyLocation (the editor
                           leaves location empty), so resolve that first with
                           location as a legacy fallback. */}
-                      {event.type !== 'funeral' &&
-                        (() => {
+                      {event.type !== 'funeral' ? (() => {
                           const resolvedLoc =
                             event.type === 'wedding'
                               ? (event as any).ceremonyLocation || (event as any).location
@@ -1781,34 +1729,25 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 resolvedLoc
                               ) : (
                                 <>
-                                  {(resolvedLoc.name || resolvedLoc.placeName) && (
-                                    <strong>{resolvedLoc.name || resolvedLoc.placeName}</strong>
-                                  )}
-                                  {resolvedLoc.address && (
-                                    <>
+                                  {(resolvedLoc.name || resolvedLoc.placeName) ? <strong>{resolvedLoc.name || resolvedLoc.placeName}</strong> : null}
+                                  {resolvedLoc.address ? <>
                                       <br />
                                       {resolvedLoc.address}
-                                    </>
-                                  )}
-                                  {resolvedLoc.directions && (
-                                    <>
+                                    </> : null}
+                                  {resolvedLoc.directions ? <>
                                       <br />
                                       <em>{resolvedLoc.directions}</em>
-                                    </>
-                                  )}
-                                  {resolvedLoc.mapsUrl && (
-                                    <>
+                                    </> : null}
+                                  {resolvedLoc.mapsUrl ? <>
                                       <br />
                                       <Link href={resolvedLoc.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
                                         Get Directions
                                       </Link>
-                                    </>
-                                  )}
+                                    </> : null}
                                 </>
                               )}
                               {/* Online meeting (wedding hybrid/online ceremonies) */}
-                              {onlineMeeting && onlineMeeting.link && (
-                                <>
+                              {onlineMeeting && onlineMeeting.link ? <>
                                   <br />
                                   <br />
                                   <strong>Join Online</strong>
@@ -1816,43 +1755,32 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                   <Link href={onlineMeeting.link} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
                                     {onlineMeeting.link}
                                   </Link>
-                                  {onlineMeeting.platform && (
-                                    <>
+                                  {onlineMeeting.platform ? <>
                                       <br />
                                       Platform: {onlineMeeting.platform}
-                                    </>
-                                  )}
-                                  {onlineMeeting.meetingId && (
-                                    <>
+                                    </> : null}
+                                  {onlineMeeting.meetingId ? <>
                                       <br />
                                       Meeting ID: {onlineMeeting.meetingId}
-                                    </>
-                                  )}
-                                  {onlineMeeting.password && (
-                                    <>
+                                    </> : null}
+                                  {onlineMeeting.password ? <>
                                       <br />
                                       Password: {onlineMeeting.password}
-                                    </>
-                                  )}
-                                  {onlineMeeting.additionalInfo && (
-                                    <>
+                                    </> : null}
+                                  {onlineMeeting.additionalInfo ? <>
                                       <br />
                                       <em>{onlineMeeting.additionalInfo}</em>
-                                    </>
-                                  )}
-                                </>
-                              )}
+                                    </> : null}
+                                </> : null}
                             </>
                           )
-                        })()}
+                        })() : null}
                       {/* Description if provided */}
-                      {event.description && (
-                        <>
+                      {event.description ? <>
                           <br />
                           <br />
                           <TextWithLineBreaks text={event.description} />
-                        </>
-                      )}
+                        </> : null}
                       <br />
                       <br />
                       <Link
@@ -1872,8 +1800,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
               {/* News items (Issue #41) — appended to Announcements, no extra heading, dateless */}
               {newsItems.map((item, index) => (
                 <React.Fragment key={item.id}>
-                  {(index > 0 || specialEvents.length > 0) && (
-                    <hr
+                  {(index > 0 || specialEvents.length > 0) ? <hr
                       style={{
                         borderWidth: '0',
                         background: '#000',
@@ -1881,8 +1808,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                         height: '2px',
                         margin: '16px 0',
                       }}
-                    />
-                  )}
+                    /> : null}
                   <Section style={program}>
                     <Heading style={defaultText}>{item.title}</Heading>
                     <Text style={{ ...defaultText, margin: 0 }}>
@@ -2013,16 +1939,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
         })()}
 
         {/* Events Section - Personal, no redundant headers */}
-        {allUpcomingEvents.length > 0 && (
-          <Container style={container} className="container">
+        {allUpcomingEvents.length > 0 ? <Container style={container} className="container">
             <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
             {Object.entries(groupedEvents).map(([eventType, typeEvents], groupIndex) => (
               <React.Fragment key={eventType}>
                 {typeEvents.map((event, eventIndex) => (
                   <React.Fragment key={event.id}>
                     {/* Add separator line between different events (not between event types) */}
-                    {(groupIndex > 0 || eventIndex > 0) && (
-                      <hr
+                    {(groupIndex > 0 || eventIndex > 0) ? <hr
                         style={{
                           borderWidth: '0',
                           background: '#ccc',
@@ -2030,8 +1954,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           height: '1px',
                           margin: '16px 0',
                         }}
-                      />
-                    )}
+                      /> : null}
                     <Section style={program}>
                       {/* Special rendering for study-weekend events */}
                       {event.type === 'study-weekend' ? (
@@ -2051,17 +1974,14 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           {EventDateDisplay(event)}
 
                           {/* Theme */}
-                          {(event as any).theme && (
-                            <>
+                          {(event as any).theme ? <>
                               <br />
                               <br />
                               <strong>{(event as any).theme}</strong>
-                            </>
-                          )}
+                            </> : null}
 
                           {/* Speakers */}
-                          {event.speakers && event.speakers.length > 0 && (
-                            <>
+                          {event.speakers && event.speakers.length > 0 ? <>
                               <br />
                               Speaker{event.speakers.length > 1 ? 's' : ''}:{' '}
                               {event.speakers
@@ -2073,25 +1993,20 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 })
                                 .filter((name) => name.length > 0)
                                 .join(', ') || 'TBA'}
-                            </>
-                          )}
+                            </> : null}
 
                           {/* Location - just the name, full details on event page */}
-                          {(event as any).location && typeof (event as any).location !== 'string' && ((event as any).location.name || (event as any).location.placeName) && (
-                            <>
+                          {(event as any).location && typeof (event as any).location !== 'string' && ((event as any).location.name || (event as any).location.placeName) ? <>
                               <br />
                               <br />
                               <strong>Location:</strong> {(event as any).location.name || (event as any).location.placeName}
-                              {(event as any).location.mapsUrl && (
-                                <>
+                              {(event as any).location.mapsUrl ? <>
                                   {' — '}
                                   <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
                                     Directions
                                   </Link>
-                                </>
-                              )}
-                            </>
-                          )}
+                                </> : null}
+                            </> : null}
 
                           {/* Multi-section events: condensed summary with "View Details" link */}
                           {(event as any).sections && (event as any).sections.length > 0 ? (
@@ -2115,18 +2030,16 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                     const showDayLabel = dayLabel !== 'Schedule'
                                     return (
                                       <React.Fragment key={dayLabel}>
-                                        {showDayLabel && (
-                                          <>
+                                        {showDayLabel ? <>
                                             <br />
                                             <span style={{ color: '#cc0000', fontWeight: 'bold' }}>{dayLabel}</span>
-                                          </>
-                                        )}
+                                          </> : null}
                                         {items.map((item: any, idx: number) => {
                                           const time = formatScheduleTime(item.time || item.startTime)
                                           return (
                                             <React.Fragment key={idx}>
                                               <br />
-                                              &nbsp;&nbsp;&nbsp;&nbsp;{time && `${time}  `}
+                                              &nbsp;&nbsp;&nbsp;&nbsp;{time ? `${time}  ` : null}
                                               {item.activity || ''}
                                               {item.title ? ` ${item.title}` : ''}
                                             </React.Fragment>
@@ -2141,22 +2054,18 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           )}
 
                           {/* Parking info */}
-                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.parkingInfo && (
-                            <>
+                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.parkingInfo ? <>
                               <br />
                               <br />
                               <em>Parking: {(event as any).location.parkingInfo}</em>
-                            </>
-                          )}
+                            </> : null}
 
                           {/* Online Info */}
-                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.onlineMeeting && (
-                            <>
+                          {(event as any).location && typeof (event as any).location !== 'string' && (event as any).location.onlineMeeting ? <>
                               <br />
                               <br />
                               <strong>Online Info</strong>
-                              {(event as any).location.onlineMeeting.link && (
-                                <>
+                              {(event as any).location.onlineMeeting.link ? <>
                                   <br />
                                   Streaming:{' '}
                                   <Link
@@ -2165,32 +2074,23 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                   >
                                     {(event as any).location.onlineMeeting.link}
                                   </Link>
-                                </>
-                              )}
-                              {(event as any).location.onlineMeeting.meetingId && (
-                                <>
+                                </> : null}
+                              {(event as any).location.onlineMeeting.meetingId ? <>
                                   <br />
                                   Meeting ID: {(event as any).location.onlineMeeting.meetingId}
-                                </>
-                              )}
-                              {(event as any).location.onlineMeeting.password && (
-                                <>
+                                </> : null}
+                              {(event as any).location.onlineMeeting.password ? <>
                                   <br />
                                   Password: {(event as any).location.onlineMeeting.password}
-                                </>
-                              )}
-                              {(event as any).location.onlineMeeting.dialInNumber && (
-                                <>
+                                </> : null}
+                              {(event as any).location.onlineMeeting.dialInNumber ? <>
                                   <br />
                                   Dial-in: {(event as any).location.onlineMeeting.dialInNumber}
-                                </>
-                              )}
-                            </>
-                          )}
+                                </> : null}
+                            </> : null}
 
                           {/* Registration info */}
-                          {(event as any).registration?.registrationUrl && (
-                            <>
+                          {(event as any).registration?.registrationUrl ? <>
                               <br />
                               <br />
                               {(event as any).registration.required && (event as any).registration.required !== 'false'
@@ -2203,8 +2103,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               >
                                 {(event as any).registration.registrationUrl}
                               </Link>
-                            </>
-                          )}
+                            </> : null}
 
                           <br />
                           <br />
@@ -2236,24 +2135,20 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                           >
                             {event.title}
                           </Link>
-                          {(event as any).theme && ` - ${(event as any).theme}`}
+                          {(event as any).theme ? ` - ${(event as any).theme}` : null}
                           {/* Only show date line if there is a date */}
-                          {EventDateDisplay(event) && (
-                            <>
+                          {EventDateDisplay(event) ? <>
                               <br />
                               {EventDateDisplay(event)}
-                            </>
-                          )}
+                            </> : null}
                           {/* Baptism-specific wording */}
-                          {event.type === 'baptism' && baptismCandidateNames(event) && (
-                            <>
+                          {event.type === 'baptism' && baptismCandidateNames(event) ? <>
                               <br />
                               <br />
                               After a good confession of Faith,{' '}
                               <strong>{baptismCandidateNames(event)}</strong>{' '}
                               will be baptized into the saving name of our Lord.
-                            </>
-                          )}
+                            </> : null}
                           {/* Location for events that have it */}
                           {(event as any).sections && (event as any).sections.length > 0 ? (
                             <>
@@ -2269,18 +2164,13 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                 (event as any).location
                               ) : (
                                 <>
-                                  {((event as any).location.name || (event as any).location.placeName) && (
-                                    <strong>{(event as any).location.name || (event as any).location.placeName}</strong>
-                                  )}
-                                  {(event as any).location.address && (
-                                    <>
+                                  {((event as any).location.name || (event as any).location.placeName) ? <strong>{(event as any).location.name || (event as any).location.placeName}</strong> : null}
+                                  {(event as any).location.address ? <>
                                       <br />
                                       {(event as any).location.address}
-                                    </>
-                                  )}
+                                    </> : null}
                                   {((event as any).location.city ||
-                                    (event as any).location.province) && (
-                                    <>
+                                    (event as any).location.province) ? <>
                                       <br />
                                       {[
                                         (event as any).location.city,
@@ -2289,37 +2179,29 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                                       ]
                                         .filter(Boolean)
                                         .join(', ')}
-                                    </>
-                                  )}
-                                  {(event as any).location.directions && (
-                                    <>
+                                    </> : null}
+                                  {(event as any).location.directions ? <>
                                       <br />
                                       <em>{(event as any).location.directions}</em>
-                                    </>
-                                  )}
-                                  {(event as any).location.mapsUrl && (
-                                    <>
+                                    </> : null}
+                                  {(event as any).location.mapsUrl ? <>
                                       <br />
                                       <Link href={(event as any).location.mapsUrl} style={{ color: '#2b6cb0', textDecoration: 'underline', fontSize: '14px' }}>
                                         Get Directions
                                       </Link>
-                                    </>
-                                  )}
+                                    </> : null}
                                 </>
                               )}
                             </>
                           ) : null}
                           {/* Description for non-baptism events (baptism uses the formal wording above) */}
-                          {event.type !== 'baptism' && event.description && (
-                            <>
+                          {event.type !== 'baptism' && event.description ? <>
                               <br />
                               <br />
                               <TextWithLineBreaks text={event.description} />
-                            </>
-                          )}
+                            </> : null}
                           {/* Registration info */}
-                          {(event as any).registration?.registrationUrl && (
-                            <>
+                          {(event as any).registration?.registrationUrl ? <>
                               <br />
                               <br />
                               {(event as any).registration.required && (event as any).registration.required !== 'false'
@@ -2332,8 +2214,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                               >
                                 {(event as any).registration.registrationUrl}
                               </Link>
-                            </>
-                          )}
+                            </> : null}
                           <br />
                           <br />
                           <Link
@@ -2357,12 +2238,10 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 ))}
               </React.Fragment>
             ))}
-          </Container>
-        )}
+          </Container> : null}
 
         {/* Daily Bible Reading Section */}
-        {allReadings.length > 0 && (
-          <Container style={container} className="container">
+        {allReadings.length > 0 ? <Container style={container} className="container">
             <hr style={{ borderWidth: '0', background: '#000', color: '#000', height: '2px' }} />
             <Heading style={defaultText}>Daily Bible Reading Planner</Heading>
 
@@ -2497,8 +2376,7 @@ const Newsletter: React.FC<EmailNewsletterProps> = ({
                 ))}
               </div>
             </Section>
-          </Container>
-        )}
+          </Container> : null}
 
         <FooterContent identity={identity} />
       </Body>

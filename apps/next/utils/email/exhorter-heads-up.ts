@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { ScheduleService } from '@my/app/provider/dynamodb/schedule-service'
 import { personRepository } from '@my/app/provider/dynamodb/repositories/person-repository'
 import { resolveScheduleName, isPlaceholderName } from '@my/app/utils/name-resolver'
-import { detectSpecialOccasion } from '@my/app/utils/schedule-row-rules'
+import { detectSpecialOccasion, sundaySchoolClassRuns } from '@my/app/utils/schedule-row-rules'
 import { toDirectoryPerson } from '@my/app/utils/name-resolver-directory'
 import { HOME_ECCLESIA } from '@my/app/config/home-ecclesia'
 import { resolveTenantFromEnv } from '@my/app/config/tenants'
@@ -481,10 +481,9 @@ export async function resolveAndSendExhorterHeadsUp(
 /**
  * Sunday School details for a given Sunday, or undefined when there is none.
  *
- * The `sundaySchool` schedule carries a row only for the weeks the classes
- * actually run, so the presence of a row for that date IS the signal — exactly
- * how the newsletter decides whether to show a Sunday School block. Absence
- * means no class, and the caller omits the line.
+ * A class runs when the date's row has Refreshments filled (blank Refreshments
+ * with a holiday note = no class) — exactly how the newsletter decides whether
+ * to show a Sunday School block. Otherwise the caller omits the line.
  *
  * Start and end come from the ecclesia's seasonal service-time definitions
  * (`resolveServiceTime`), not from constants, so a summer/winter time change
@@ -497,8 +496,9 @@ export async function resolveSundaySchoolForDate(
   try {
     const schedule = await scheduleService.getScheduleData('sundaySchool')
     const rows = (schedule?.content ?? []) as Array<Record<string, any>>
+    // A row with blank Refreshments is a no-class week (holiday note), as in the newsletter.
     const runsThisWeek = rows.some(
-      (r) => normalizeToISODate(r.DateTime || r.Date || r.date) === targetISO
+      (r) => normalizeToISODate(r.DateTime || r.Date || r.date) === targetISO && sundaySchoolClassRuns(r)
     )
     if (!runsThisWeek) return undefined
 

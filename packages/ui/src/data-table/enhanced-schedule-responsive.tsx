@@ -22,6 +22,10 @@ export interface EnhancedScheduleEvent {
   location: string
   type: 'memorial' | 'sunday-school' | 'bible-class' | 'cyc'
   isNextEvent?: boolean
+  /** Weeks with no stored row: shown greyed as "Coming soon" (no roster data) */
+  isPlaceholder?: boolean
+  /** Sunday School week with no class (blank Refreshments + holiday note) */
+  noClass?: boolean
   hasConflict?: boolean
   userHighlight?: boolean
   // Schedule-specific secondary data
@@ -218,6 +222,32 @@ const createTextCell = (colors: any) => ({ row, getValue }: any) => {
   )
 }
 
+// Placeholder cell for a week with no stored row: greyed date, "Coming soon", else blank
+const createPlaceholderCell = (colors: any, isDate: boolean, showComingSoon: boolean) => ({ row, getValue }: any) => {
+  // A no-class week (Sunday School holiday note) shows its reason instead of "Coming soon"
+  const placeholderText: string = row.original.noClass
+    ? row.original.noClassNote || row.original.HolidaysAndSpecialEvents || row.original['Holidays and Special Events'] || 'No Sunday School'
+    : 'Coming soon'
+  if (isDate) {
+    const [year, month, day] = String(getValue()).split('-').map(Number)
+    const label = new Date(year, month - 1, day).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: '2-digit',
+    })
+    return (
+      <Text numberOfLines={1} color={colors.textTertiary} opacity={0.7}>
+        {label}
+      </Text>
+    )
+  }
+  return showComingSoon ? (
+    <Text numberOfLines={1} color={colors.textTertiary} opacity={0.7} fontStyle="italic">
+      {placeholderText}
+    </Text>
+  ) : null
+}
+
 // Column width configuration: sizes tuned to fit content with comfortable padding
 const COLUMN_SIZES: Record<string, { size: number; minSize: number; maxSize: number }> = {
   date:   { size: 130, minSize: 110, maxSize: 160 },
@@ -234,16 +264,23 @@ const createEnhancedColumns = (
   const config = SCHEDULE_COLUMN_CONFIG[scheduleType as keyof typeof SCHEDULE_COLUMN_CONFIG] ||
                  SCHEDULE_COLUMN_CONFIG.memorial // Default to memorial
 
+  const firstDataKey = config.find((c) => c.type !== 'date')?.key
+
   return config.map((col) => {
     const sizing = COLUMN_SIZES[col.type] || COLUMN_SIZES.text
+    const realCell = col.type === 'date'
+      ? createDateCell(colors)
+      : col.type === 'person'
+        ? createPersonCell(colors, currentUser)
+        : createTextCell(colors)
     return {
       accessorKey: col.key,
       header: col.header,
-      cell: col.type === 'date'
-        ? createDateCell(colors)
-        : col.type === 'person'
-          ? createPersonCell(colors, currentUser)
-          : createTextCell(colors),
+      // Placeholder weeks: greyed date, "Coming soon" in the first roster column, others blank
+      cell: (ctx: any) =>
+        (ctx.row.original.isPlaceholder || ctx.row.original.noClass)
+          ? createPlaceholderCell(colors, col.type === 'date', col.key === firstDataKey)(ctx)
+          : realCell(ctx),
       ...sizing,
     }
   })
@@ -275,6 +312,16 @@ export function EnhancedScheduleResponsive({
 
   // Style override for special rows
   const getRowStyle = React.useCallback((row: any): RowStyleOverride | null => {
+    // Weeks with no stored row: muted, greyed
+    if (row.isPlaceholder || row.noClass) {
+      return {
+        backgroundColor: colors.backgroundSecondary,
+        backgroundColorHover: colors.backgroundSecondary,
+        textColor: colors.textTertiary,
+        textColorSecondary: colors.textTertiary,
+        borderColor: colors.border,
+      }
+    }
     // "No service at hall" memorial rows
     if (row.noServiceAtHall) {
       return {
