@@ -35,10 +35,15 @@ Each ecclesia's Recording Brother or Rep edits their own schedules (Memorial, Bi
 
 **Mouse and touch:** click a cell to select it, double-click to edit, and drag the corner to fill down (e.g. Lunch "yes" for four weeks).
 
-**Rows:**
-- The grid shows every cadence date from 4 weeks back to 26 weeks ahead, and you can scroll further either way.
+**Rows** (owner, 2026-11-28):
+- **How far ahead:** a "Show" menu offers **3, 6, 9 … up to 24 months** ahead, in 3-month steps. The default is **6 months**, and the editor's choice is remembered on their device. 4 weeks of past meetings show above, and you can scroll further back.
+- Within that window, every cadence date is a row (the **sequential** rows).
 - A date with nothing entered is a greyed row marked "Coming soon", the same rule as the Schedules page (#344).
-- **Add a date** for an extra meeting (e.g. a special Sunday-afternoon Memorial).
+- **Add a date** for an extra meeting (e.g. a special Sunday-afternoon Memorial) or a **one-off booking years ahead**, such as a speaker reserved for a special occasion. Any date can be added, with no upper limit.
+- **Booked further ahead:** every stored entry dated after the end of the sequential rows is listed below them, in date order. These are the far-future one-offs.
+  - They're styled differently so they stand out: a different background colour and a thicker separator above the section and between entries.
+  - They're edited exactly like any other row.
+  - When the window is widened to cover one of them, it moves up into its place among the sequential rows.
 - **No meeting this week** marks a date as cancelled, with an optional note ("Christmas break"). This uses the existing occurrence-override "cancelled" state, so the Schedules page, newsletter and heads-up already understand it.
 
 **Columns:**
@@ -66,7 +71,7 @@ Every catalogue field gets a type. The type decides the editor, the check, and h
 
 **Fields per schedule type.** The catalogue (`schedule-fields.ts`) stays the one list. This adds a type to each field, plus the fields the owner asked for that don't exist yet (**new**):
 
-- **Memorial:** Exhort (person), Preside (person), Reading 1 and Reading 2 (person, see §10 Q1), Organist, Steward, Doorkeeper, Collection (person), the four hymns (hymn), Lunch (yes/no), Activities (text), YouTube (link), **Location** (place, new; blank means the usual hall), **Meeting connection** (meeting, new).
+- **Memorial:** Exhort (person), Preside (person), **Reader 1 and Reader 2** (person; these are the existing `Reading1` / `Reading2` keys, which already hold the brother who reads, now labelled "Reader"), **Reading 1 and Reading 2** (passage, new keys `Passage1` / `Passage2`, owner 2026-11-28), Organist, Steward, Doorkeeper, Collection (person), the four hymns (hymn), Lunch (yes/no), Activities (text), YouTube (link), **Location** (place, new; blank means the usual hall), **Meeting connection** (meeting, new).
 - **Bible Class:** Presider and Speaker (person), Topic (text), Host (place; today it's plain text), **Meeting connection** (meeting; replaces the separate ZoomURL / MeetingID / MeetingPwd).
 - **Sunday School:** Refreshments (text), Holidays and Special Events (text). Words like "No Sunday School" or "Christmas break" keep meaning "no class" (the forgiving rule from #345).
 - **CYC:** Location (place), Speaker (person), Topic (text).
@@ -120,7 +125,8 @@ The invitation programs (#331) already link each program to a schedule and a rol
 
 ## 9. Acceptance criteria
 
-1. A Recording Brother of X opens X's Memorial schedule and sees every cadence date from 4 weeks back to 26 weeks ahead. Empty dates appear greyed as "Coming soon".
+1. A Recording Brother of X opens X's Memorial schedule and sees every cadence date from 4 weeks back to 6 months ahead. Empty dates appear greyed as "Coming soon". "Show" offers 3 to 24 months in 3-month steps, and the choice is remembered.
+1a. Adding a one-off date 3 years ahead and filling the Exhort cell saves it. The entry appears under "Booked further ahead", below the sequential rows, in the distinct style, and moves into the sequential rows when the window covers it.
 2. They can't open or save another ecclesia's schedule (the server returns 403); the owner can.
 3. Typing a name in Exhort and picking a person saves name + personId. The Schedules page and the next newsletter show it.
 4. An unmatched pasted name shows "Not matched" and can be resolved in two clicks.
@@ -135,10 +141,10 @@ The invitation programs (#331) already link each program to a schedule and a rol
 13. Keyboard only: arrows, Tab, Enter, Esc, typing, Delete and Undo all work as in §3.
 14. Works on a phone-width browser (horizontal scroll inside the grid only, date column pinned).
 
-## 10. Questions for the owner
+## 10. Owner decisions (2026-11-28)
 
-1. **Readings:** in Toronto East's Memorial, Reading 1 and Reading 2 hold the **brother who reads**. Should each also take the **passage** (e.g. "Rom 8")? Proposal: yes, an optional passage shown under the reader's chip.
-2. **How far ahead** should the grid open by default: 26 weeks, or to the end of the year?
+1. **Readings:** both. **Reader** is a person and **Reading** is the passage, one pair for each of the two readings (§4).
+2. **How far ahead:** 3 to 24 months in 3-month steps, default 6. Far-future one-offs are listed under "Booked further ahead" (§3).
 
 ## 11. Next (known follow-ons, each with its issue and when)
 
@@ -155,4 +161,4 @@ The invitation programs (#331) already link each program to a schedule and a rol
 
 ## 12. Definition of done
 
-Merged, deployed behind the flag, acceptance criteria 1–14 checked in production on the test ecclesia (using test sign-in on staging first), the flag turned on for Toronto East and one other ecclesia, #110 updated, and this doc's status set to DONE.
+Merged, deployed behind the flag, acceptance criteria 1, 1a and 2–14 checked in production on the test ecclesia (using test sign-in on staging first), the flag turned on for Toronto East and one other ecclesia, #110 updated, and this doc's status set to DONE.
