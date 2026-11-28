@@ -16,19 +16,9 @@ import { Event, isEventActive } from '@my/app/types/events'
 import type { NewsItem } from '@my/app/types/news'
 import { isNewsActive } from '@my/app/types/news'
 import { EventDurationCalculator } from '@my/app/utils/newsletter/event-duration'
+import { isElectionActive } from '@my/app/utils/newsletter/election-window'
 import { EventSummaryCard } from '@my/ui/src/events/event-summary-card'
 import { Vote } from '@tamagui/lucide-icons'
-
-// Helper function to check if an election-cycle event is currently active
-const isElectionActive = (event: Event): boolean => {
-  if (event.type !== 'election-cycle') return false
-  const electionEvent = event as any
-  if (!electionEvent.electionStartDate || !electionEvent.electionEndDate) return false
-  const now = new Date()
-  const start = new Date(electionEvent.electionStartDate)
-  const end = new Date(electionEvent.electionEndDate)
-  return now >= start && now <= end
-}
 
 type NewsletterScreenProps = {
   userRole?: string

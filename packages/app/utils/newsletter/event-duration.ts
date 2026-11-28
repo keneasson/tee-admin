@@ -1,5 +1,6 @@
 import { DisplayDuration, EventTypeRule, DurationCalculationResult, EventDurationContext } from '@my/app/types/newsletter-rules'
 import { getThursdayBefore, isSameDay, isUserDateOnOrBefore } from './date-helpers'
+import { isOnOrBeforeElectionClose } from './election-window'
 
 /**
  * Event Duration Calculator
@@ -81,7 +82,10 @@ export class EventDurationCalculator {
     // - currentDate uses user's local timezone (browser's new Date())
     // - eventDate uses UTC (stored as midnight UTC from "YYYY-MM-DD" strings)
     // This ensures events show until midnight in the user's timezone
-    const shouldInclude = this.isUserDateOnOrBefore(currentDate, displayUntilDate)
+    // Elections: end on the close day in the event timezone (same edge as the
+    // Election Notice), not on the server clock's calendar day.
+    const electionOpen = event.type === 'election-cycle' ? isOnOrBeforeElectionClose(event, currentDate) : null
+    const shouldInclude = electionOpen ?? this.isUserDateOnOrBefore(currentDate, displayUntilDate)
 
     return {
       shouldInclude,
@@ -386,6 +390,7 @@ export class EventDurationCalculator {
       'engagementDate',   // engagement - when the engagement occurred
       'startDate',        // general
       'dateRange.start',  // study-weekend
+      'electionStartDate', // election-cycle - voting opens
       'publishDate'       // fallback for events without specific dates
     ]
 
@@ -409,6 +414,7 @@ export class EventDurationCalculator {
     const endFields = [
       'endDate',
       'dateRange.end',
+      'electionEndDate', // election-cycle - stays visible until voting closes
     ]
 
     for (const field of endFields) {
