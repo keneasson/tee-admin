@@ -1,3 +1,4 @@
+import { shouldSkipRecipient } from './send-guard'
 import { SESv2Client, SESv2ClientConfig, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb'
 import { resolveTenantFromEnv, type TenantConfig } from '@my/app/config/tenants'
@@ -84,8 +85,15 @@ export function getSesClient(): SESv2Client {
 // non-production deployments (e.g. echadhub pre-prod) to prevent any
 // outbound mail — both bulk sends (emailSend) and transactional sends
 // (sendEmail). Default behaviour is enabled.
-export function emailsEnabled(): boolean {
-  return process.env.EMAILS_ENABLED !== 'false'
+//
+// Preview builds are OFF by default (#349): they share the production
+// database, and test sign-in can act as an owner there, so a preview must not
+// be able to mail real people. Set PREVIEW_EMAILS_ENABLED=true on a preview
+// to deliberately allow it.
+export function emailsEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.EMAILS_ENABLED === 'false') return false
+  if (env.VERCEL_ENV === 'preview' && env.PREVIEW_EMAILS_ENABLED !== 'true') return false
+  return true
 }
 
 export interface SendEmailProps {
@@ -144,6 +152,12 @@ export async function sendEmail({
     console.log(
       `[sendEmail] Skipped — EMAILS_ENABLED=false (deployment=${process.env.DEPLOYMENT_NAME ?? 'unknown'}, to=${to})`
     )
+    return
+  }
+
+  // Never send to a test persona / undeliverable address (#349).
+  if (shouldSkipRecipient(to)) {
+    console.log('[sendEmail] Skipped — undeliverable (.invalid) or test-persona address')
     return
   }
 

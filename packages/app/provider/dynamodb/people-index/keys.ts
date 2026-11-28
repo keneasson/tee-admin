@@ -105,6 +105,8 @@ export interface ProfileSource {
   role?: string
   isRecordingBrother?: boolean
   isInterEcclesiaRep?: boolean
+  /** Made-up test person (#349): gets NO card or name tokens, so it is in no list, count or search. */
+  isTestPersona?: boolean
   createdAt?: string
 }
 
@@ -197,6 +199,9 @@ export function derivePersonProjections(input: {
 }): ProjectionItem[] {
   const { profile, emails, phones, ecclesiaId } = input
   if (!profile) return []
+  // Test personas (#349) are never projected: every card/typeahead/roster
+  // reader (directory, counts, search, pickers) is built from these items.
+  if (profile.isTestPersona === true) return []
   const personId = profile.personId
   const pkey = `PERSON#${personId}`
   const firstName = profile.firstName || ''
