@@ -149,6 +149,8 @@ export function EcclesiaDetail({
                   <View key={member.id} width={260} minWidth={200} flexGrow={1} maxWidth={380}>
                     <PersonCard
                       name={member.name}
+                      nameMuted={!!member.nameMissing}
+                      subtitle={member.nameMissing && (canEdit || authProps.isAdminOrOwner) ? member.email : undefined}
                       hideEcclesia
                       onPress={() => onMemberClick(member.id)}
                     />
